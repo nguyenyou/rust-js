@@ -1,0 +1,43 @@
+# Spike: rust-js, with rustc's front end, built as a WASI program.
+#
+# The native build links rustc's crates from the toolchain (`rustc_private`).
+# Those only exist for the host, so here we build them from source instead:
+# `./rustc` is a git worktree of rust-lang/rust at the exact pinned commit.
+#
+# - `rustc_driver` is a shared library, which Wasm doesn't support. It only
+#   re-exports `rustc_driver_impl`, so we link that statically, under the
+#   same name so `src/main.rs` doesn't change.
+# - No `llvm` feature anywhere: rustc falls back to its `dummy` backend.
+# - `patches/` holds the small changes rustc needs to run without threads
+#   or dynamic libraries; apply them to `./rustc` before building.
+
+[package]
+name = "rust-js-wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "rust-js"
+path = "../src/main.rs"
+
+[dependencies]
+rustc_driver = { path = "rustc/compiler/rustc_driver_impl", package = "rustc_driver_impl" }
+rustc_ast = { path = "rustc/compiler/rustc_ast" }
+rustc_hir = { path = "rustc/compiler/rustc_hir" }
+rustc_interface = { path = "rustc/compiler/rustc_interface" }
+rustc_middle = { path = "rustc/compiler/rustc_middle" }
+rustc_span = { path = "rustc/compiler/rustc_span" }
+oxc_allocator = "=0.151.0"
+oxc_ast = "=0.151.0"
+oxc_codegen = "=0.151.0"
+oxc_sourcemap = "=8.1.2"
+oxc_span = "=0.151.0"
+oxc_syntax = "=0.151.0"
+
+# Standalone: not part of the rust-js package one directory up.
+[workspace]
+
+[profile.release]
+debug = false
+strip = true

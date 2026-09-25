@@ -1,0 +1,82 @@
+# rust-js as WebAssembly (spike S1)
+
+This builds rust-js, **together with rustc's front end**, as one WASI
+program: `rust-js.wasm`. It compiles Rust to the same JavaScript as the
+native build, byte for byte, with no rustc installed where it runs.
+
+It's the first step toward an in-browser playground. See
+[docs/research/in-browser-playground.md](../docs/research/in-browser-playground.md).
+
+## Build
+
+You need the pinned toolchain (`rust-toolchain.toml` one level up) and a
+rust-lang/rust clone to take rustc's source from:
+
+```bash
+git -C <rust clone> worktree add --no-checkout "$PWD/rustc" 362211dc29abc4e8f8cfc384740237f144929b03
+git -C rustc sparse-checkout set --cone compiler library/proc_macro
+git -C rustc checkout
+./build.sh
+```
+
+`build.sh` applies `patches/`, builds `target/wasm32-wasip1/release/rust-js.wasm`
+and stages `sysroot/`, the official `wasm32-unknown-unknown` metadata that
+programs are type-checked against.
+
+## Run
+
+With [wasmtime](https://wasmtime.dev):
+
+```bash
+wasmtime run --env RUSTC_ICE=0 \
+  --dir ../examples::/in --dir out::/out --dir sysroot::/sysroot \
+  target/wasm32-wasip1/release/rust-js.wasm \
+  /in/fib.rs -o /out/fib.js -- --target wasm32-unknown-unknown --sysroot /sysroot
+```
+
+`RUSTC_ICE=0` stops rustc from naming a crash-report file after the process
+id, which WASI doesn't have.
+
+## How it's put together
+
+- rustc's crates are built from source (`./rustc`, a worktree at the pinned
+  commit), because `rustc_private` only ships them for the host. They're
+  linked statically: `rustc_driver` is a shared library, which Wasm doesn't
+  have, so we depend on `rustc_driver_impl` under the name `rustc_driver`.
+- No `llvm` feature: rustc falls back to its built-in `dummy` backend, which
+  is the front end only. That's all rust-js needs.
+- `Cargo.lock` starts as a copy of rust's own lockfile, so every dependency
+  version matches the one rustc was built and tested with.
+- `.cargo/config.toml` sets the variables rustc's build system (bootstrap)
+  normally provides. `CFG_VERSION` must match the official nightly exactly,
+  or rustc refuses the shipped `core`/`std` metadata.
+- Target `wasm32-wasip1`, **without threads**: wasmtime 49 removed the
+  `wasi-threads` support that `wasm32-wasip1-threads` needs, and a
+  thread-less module needs no `SharedArrayBuffer` in a browser. The main
+  stack is linked at 32 MB, since rustc normally gets 8 MB on a spawned thread.
+
+## Patches to rustc
+
+Small, and each only changes behavior on Wasm:
+
+| Patch | Why |
+|---|---|
+| `0001-no-dylib-loading-on-wasm` | Loading proc macros or codegen backends needs shared libraries. On Wasm, fail with a clear error instead of not compiling at all. |
+| `0002-run-on-current-thread-without-threads` | rustc runs everything on a spawned thread. Without threads, run on the current one. |
+| `0003-wasi-default-sysroot-fallback` | rustc computes a default sysroot even when `--sysroot` is given, and panics on WASI. Fall back to `/sysroot`. |
+| `0004-no-jobserver-helper-thread-without-threads` | The jobserver always starts a helper thread. It's only needed for extra compiler threads, which can't exist here. |
+| `0005-no-stack-switching-on-wasm` | `stacker` can't find the stack limit on Wasm, so it would allocate a new stack on every call. Use the fixed stack. *Its speed benefit wasn't measured separately.* |
+
+Not a patch, but `build.sh` handles it: `psm` bundles a precompiled
+`wasm32.o` with `ar`, and Apple's `ar` silently produces an empty archive.
+`build.sh` uses LLVM's `ar` from the toolchain.
+
+## Known gaps
+
+- **Errors exit with 134 (a trap), not 1.** Panics can't unwind on
+  `wasm32-wasip1`, and rustc unwinds to bail out after errors. The
+  diagnostics are printed first and no JS is written. In a browser, start a
+  fresh instance per compile.
+- **wasmtime on macOS takes ~3.7 s to exit** after a run, unregistering
+  unwind info for the 60 MB module (`CodeMemory::drop` → `__deregister_frame`).
+  That's the runtime's cost, not rust-js's. The compile itself takes ~30 ms.

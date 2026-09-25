@@ -1,0 +1,18 @@
+diff --git a/compiler/rustc_data_structures/src/jobserver.rs b/compiler/rustc_data_structures/src/jobserver.rs
+index 3ed1ea7543f4..581ac077513d 100644
+--- a/compiler/rustc_data_structures/src/jobserver.rs
++++ b/compiler/rustc_data_structures/src/jobserver.rs
+@@ -100,6 +100,13 @@ pub fn new() -> Arc<Self> {
+             wake_pending: Condvar::new(),
+             helper: OnceLock::new(),
+         });
++        // WebAssembly without threads can't start a helper thread, and needs
++        // none: tokens are only requested for extra compiler threads (by the
++        // parallel front end's thread pool), which can't exist there either.
++        // (Patched in by rust-js.)
++        if cfg!(all(target_family = "wasm", not(target_feature = "atomics"))) {
++            return proxy;
++        }
+         let proxy_ = Arc::clone(&proxy);
+         let helper = proxy
+             .client

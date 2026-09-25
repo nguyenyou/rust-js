@@ -1,0 +1,20 @@
+diff --git a/compiler/rustc_session/src/filesearch.rs b/compiler/rustc_session/src/filesearch.rs
+index 12b294e124c8..837033d8edc3 100644
+--- a/compiler/rustc_session/src/filesearch.rs
++++ b/compiler/rustc_session/src/filesearch.rs
+@@ -251,6 +251,13 @@ fn from_env_args_next() -> Option<PathBuf> {
+         rustlib_path.exists().then_some(p)
+     }
+ 
+-    from_env_args_next()
+-        .unwrap_or_else(|| default_from_rustc_driver_dll().expect("Failed finding sysroot"))
++    from_env_args_next().unwrap_or_else(|| {
++        // WASI has no dll to find the sysroot from, but this default is
++        // computed even when `--sysroot` is given. Fall back to a fixed path
++        // instead of panicking. (Patched in by rust-js.)
++        if cfg!(target_os = "wasi") {
++            return default_from_rustc_driver_dll().unwrap_or_else(|_| PathBuf::from("/sysroot"));
++        }
++        default_from_rustc_driver_dll().expect("Failed finding sysroot")
++    })
+ }

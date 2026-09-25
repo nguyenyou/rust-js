@@ -1,8 +1,60 @@
 # Research: an in-browser rust-js playground
 
-Status: **Research note**, not a decision. September 2026. Measurements
+Status: **Research note**, not a decision. September 2026. **Spike S1
+done; see the update below.** Measurements
 use rustc `nightly-2026-03-25` (commit `362211dc2`), the version rust-js
 is pinned to.
+
+## Update: spike S1 worked
+
+**rust-js, with rustc's front end, now runs as a WASI program.** Under
+wasmtime, `rust-js.wasm` compiles `examples/fib.rs` to JS that is
+**byte-identical** to the native build, source map included. Borrow errors
+and unsupported features produce rustc's normal diagnostics. The build is
+in [`wasm/`](../../wasm/README.md).
+
+Measured, replacing the estimates below:
+
+| | Estimate | Measured |
+|---|---|---|
+| `rust-js.wasm` | 13–20 MB brotli | **60.6 MB raw, 8.3 MB brotli** |
+| Sysroot (only what rustc loads) | 11.5 MB brotli | **15 crates, 56.7 MB raw, 12.8 MB brotli** |
+| **First visit** | 25–32 MB | **~21 MB** brotli, plus the WASI shim |
+| Compile `fib.rs` | "well under a second" | **~30 ms** (native: 20 ms) |
+| Module load, cached / cold | n/a | 0.29 s / 7.7 s (wasmtime's compiler; browsers compile differently) |
+
+How the open questions resolved:
+
+1. **Static linking**: works. We depend on `rustc_driver_impl` directly.
+2. **The rustc thread**: `wasm32-wasip1-threads` is a dead end. **wasmtime 49
+   removed `wasi-threads` support.** We use `wasm32-wasip1` instead, with a
+   15-line patch to run on the current thread. That also removes the need for
+   COOP/COEP headers in the browser.
+3. **Stack depth**: `stacker` can't find the stack limit on Wasm, and `psm`'s
+   precompiled `wasm32.o` gets lost when Apple's `ar` archives it. We fixed
+   the archive (use LLVM's `ar`), link a fixed 32 MB stack, and skip stack
+   switching on Wasm.
+4. **C dependencies**: only `psm`, handled by using LLVM's `ar`.
+5. **Build environment**: `RUSTC_BOOTSTRAP=1` plus the `CFG_*` variables.
+   `CFG_VERSION` must match the official nightly exactly.
+
+**Five small patches in total** (54 lines, each only affecting Wasm), listed
+in [`wasm/README.md`](../../wasm/README.md). Two problems nobody predicted:
+the jobserver's helper thread, and a default-sysroot lookup that panics on
+WASI even when `--sysroot` is given.
+
+**A detour worth recording.** Warm runs first took 4.2 s, which looked like
+a 200× slowdown. It wasn't rustc. Timestamps on WASI calls showed the compile
+takes ~30 ms. The remaining 3.7 s is wasmtime *on macOS* unregistering unwind
+info for the 60 MB module at exit (seen with `sample`:
+`CodeMemory::drop` → `__deregister_frame`). Browsers don't do that.
+
+**Known gaps**: errors end in a trap (exit 134) rather than exit code 1,
+because panics can't unwind on `wasm32-wasip1`. This run also didn't isolate
+the program's own memory from wasmtime's; S2 will measure it in the browser.
+
+**Next: S2**, the same `.wasm` in a browser via browser_wasi_shim, with no
+threads fork or special headers needed now.
 
 ## The question
 

@@ -1,0 +1,34 @@
+diff --git a/compiler/rustc_interface/src/util.rs b/compiler/rustc_interface/src/util.rs
+index 0cd0275f96bb..ff89e27666fa 100644
+--- a/compiler/rustc_interface/src/util.rs
++++ b/compiler/rustc_interface/src/util.rs
+@@ -130,6 +130,7 @@ fn init_stack_size(early_dcx: &EarlyDiagCtxt) -> usize {
+     })
+ }
+ 
++#[cfg(not(all(target_family = "wasm", not(target_feature = "atomics"))))]
+ fn run_in_thread_with_globals<F: FnOnce(CurrentGcx, Arc<Proxy>) -> R + Send, R: Send>(
+     thread_stack_size: usize,
+     edition: Edition,
+@@ -169,6 +170,21 @@ fn run_in_thread_with_globals<F: FnOnce(CurrentGcx, Arc<Proxy>) -> R + Send, R:
+     })
+ }
+ 
++/// WebAssembly without threads can't spawn one, so run on the current thread.
++/// Its stack size is then set when linking, not here. (Patched in by rust-js.)
++#[cfg(all(target_family = "wasm", not(target_feature = "atomics")))]
++fn run_in_thread_with_globals<F: FnOnce(CurrentGcx, Arc<Proxy>) -> R + Send, R: Send>(
++    _thread_stack_size: usize,
++    edition: Edition,
++    sm_inputs: SourceMapInputs,
++    extra_symbols: &[&'static str],
++    f: F,
++) -> R {
++    rustc_span::create_session_globals_then(edition, extra_symbols, Some(sm_inputs), || {
++        f(CurrentGcx::new(), Proxy::new())
++    })
++}
++
+ pub(crate) fn run_in_thread_pool_with_globals<
+     F: FnOnce(CurrentGcx, Arc<Proxy>) -> R + Send,
+     R: Send,

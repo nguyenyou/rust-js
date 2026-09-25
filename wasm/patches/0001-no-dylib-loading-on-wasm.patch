@@ -1,0 +1,48 @@
+diff --git a/compiler/rustc_metadata/src/creader.rs b/compiler/rustc_metadata/src/creader.rs
+index 4000f12459a9..547fe1abc842 100644
+--- a/compiler/rustc_metadata/src/creader.rs
++++ b/compiler/rustc_metadata/src/creader.rs
+@@ -1360,10 +1360,12 @@ fn visit_item(&mut self, item: &'ast ast::Item) {
+     f.spans
+ }
+ 
++#[cfg(not(target_family = "wasm"))]
+ fn format_dlopen_err(e: &(dyn std::error::Error + 'static)) -> String {
+     e.sources().map(|e| format!(": {e}")).collect()
+ }
+ 
++#[cfg(not(target_family = "wasm"))]
+ fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Error> {
+     #[cfg(target_os = "aix")]
+     if let Some(ext) = path.extension()
+@@ -1387,6 +1389,7 @@ fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Er
+     unsafe { libloading::Library::new(&path) }
+ }
+ 
++#[cfg(not(target_family = "wasm"))]
+ // On Windows the compiler would sometimes intermittently fail to open the
+ // proc-macro DLL with `Error::LoadLibraryExW`. It is suspected that something in the
+ // system still holds a lock on the file, so we retry a few times before calling it
+@@ -1454,6 +1457,7 @@ fn from(err: DylibError) -> CrateError {
+     }
+ }
+ 
++#[cfg(not(target_family = "wasm"))]
+ pub unsafe fn load_symbol_from_dylib<T: Copy>(
+     path: &Path,
+     sym_name: &str,
+@@ -1473,3 +1477,14 @@ pub unsafe fn load_symbol_from_dylib<T: Copy>(
+ 
+     Ok(*sym)
+ }
++
++/// WebAssembly has no dynamic libraries, so neither proc-macro crates nor
++/// codegen backends can be loaded from them. (Patched in by rust-js.)
++#[cfg(target_family = "wasm")]
++pub unsafe fn load_symbol_from_dylib<T: Copy>(
++    path: &Path,
++    _sym_name: &str,
++) -> Result<T, DylibError> {
++    let err = "loading dynamic libraries is not supported on WebAssembly".to_string();
++    Err(DylibError::DlOpen(path.display().to_string(), err))
++}

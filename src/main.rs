@@ -11,7 +11,8 @@
 //!                          errors? stop here ◄───┘
 //! ```
 //!
-//! Usage: `rust-js <input.rs> [-o <output.js>]`. Also writes `<output.js>.map`.
+//! Usage: `rust-js <input.rs> [-o <output.js>] [-- <rustc flags>]`. Also writes
+//! `<output.js>.map`. Flags after `--` go to rustc unchanged.
 
 #![feature(rustc_private)]
 
@@ -98,21 +99,27 @@ impl RustJs {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (input, output) = match args.as_slice() {
+    // Anything after `--` goes to rustc as-is, e.g. `-- --sysroot /sysroot`.
+    let (ours, to_rustc) = match args.iter().position(|a| a == "--") {
+        Some(i) => (&args[..i], &args[i + 1..]),
+        None => (&args[..], &[][..]),
+    };
+    let (input, output) = match ours {
         [input] => (PathBuf::from(input), PathBuf::from(input).with_extension("js")),
         [input, flag, output] if flag == "-o" => (PathBuf::from(input), PathBuf::from(output)),
         _ => {
-            eprintln!("usage: rust-js <input.rs> [-o <output.js>]");
+            eprintln!("usage: rust-js <input.rs> [-o <output.js>] [-- <rustc flags>]");
             return ExitCode::FAILURE;
         }
     };
 
-    let rustc_args = vec![
+    let mut rustc_args = vec![
         "rust-js".to_string(), // argv[0], ignored by rustc
         input.display().to_string(),
         "--crate-type=lib".to_string(),
         "--edition=2024".to_string(),
     ];
+    rustc_args.extend(to_rustc.iter().cloned());
     let mut callbacks = RustJs { input, output };
     rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))
 }
