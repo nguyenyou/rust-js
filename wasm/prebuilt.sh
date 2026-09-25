@@ -3,14 +3,16 @@
 # workflow can skip compiling rustc's front end (many minutes on CI).
 #
 #   prebuilt.sh hash      print the hash of the inputs that determine rust-js.wasm
-#   prebuilt.sh publish   upload the local build as release `wasm-<hash>`
+#   prebuilt.sh publish   upload the local build as release `wasm-<hash>`,
+#                         then delete the previous `wasm-*` releases
 #   prebuilt.sh fetch     download the build for the current inputs, if published
 #   prebuilt.sh stamp     (build.sh) record which inputs the local build came from
 #
 # The hash covers committed content only (`git ls-tree`), so it's the same on
 # any machine for the same commit. A binary can only be published for the
 # exact, pushed inputs it was built from, so CI never deploys a stale one:
-# if nothing matches, it builds from source instead.
+# if nothing matches, it builds from source instead. That's also why only
+# the newest release is kept: deploying an older commit just builds it.
 set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
@@ -52,10 +54,17 @@ case "${1:-}" in
     if ! gh release view "$tag" >/dev/null 2>&1; then
       gh release create "$tag" --target "$(git rev-parse HEAD)" --prerelease \
         --title "rust-js.wasm $hash" \
-        --notes "rust-js.wasm built by \`wasm/build.sh\` from $(git rev-parse --short HEAD). The *Deploy playground* workflow downloads it instead of building. Safe to delete: the workflow then builds from source."
+        --notes "rust-js.wasm built by \`wasm/build.sh\` from $(git rev-parse --short HEAD). The *Deploy playground* workflow downloads it instead of building. \`wasm/prebuilt.sh publish\` deletes it when a newer one is published; the workflow then builds older commits from source."
     fi
     gh release upload "$tag" "$WASM" --clobber
     echo "published: $tag"
+    # Now that the new one is up, delete the ones before it (only ours: `wasm-*`).
+    gh release list --limit 100 --json tagName \
+      --jq ".[].tagName | select(startswith(\"wasm-\") and . != \"$tag\")" |
+      while read -r previous; do
+        gh release delete "$previous" --cleanup-tag --yes
+        echo "deleted previous: $previous"
+      done
     ;;
   fetch)
     tag="wasm-$(inputs_hash)"

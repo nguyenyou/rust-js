@@ -71,7 +71,9 @@ The hash covers the committed inputs (`src/`, `wasm/Cargo.*`, `.cargo/`,
 the matching binary in seconds. If there isn't one, for example after
 changing `src/` without publishing, it builds from source, so a stale binary
 is never deployed. `publish` refuses a binary that wasn't built from exactly
-the committed, pushed inputs. `bun build.ts` writes the same
+the committed, pushed inputs. Once the new one is uploaded, it deletes the
+previous `wasm-*` releases (and their tags), so only the newest is kept; an
+older commit simply builds from source if deployed. `bun build.ts` writes the same
 static site to `web/dist`, and `bun preview.ts` serves it under `/rust-js/`,
 as Pages does. Each click
 gets a fresh instance of the already-compiled module, because rustc keeps
