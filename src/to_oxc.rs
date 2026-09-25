@@ -306,6 +306,10 @@ impl<'a> Cx<'a> {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));
                 Expression::new_call_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), false, b)
             }
+            ExprKind::New(callee, args) => {
+                let args = args.iter().map(|a| Argument::from(self.expr(a)));
+                Expression::new_new_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), b)
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 # 0021. JS interop: `extern` blocks name what JS has
 
-Status: Accepted
+Status: Accepted. The DOM itself comes generated, in the `web` crate: see
+[0024](0024-web-crate.md), which also adds property and constructor forms.
 
 ## Context
 
@@ -78,8 +79,8 @@ can't hide one: a local named `console` becomes `console$1`.
 - A signature is a promise: if JS returns `null` where Rust says
   `&'static Element`, nothing checks it. `Option` (with enums with fields)
   will make that expressible.
-- Property access (`el.value`, `el.textContent = ..`) and `new` aren't
-  expressible yet. The counter uses methods (`replaceChildren`) instead.
+- Property access and `new` came later, as `#[link_name]` forms (`"get value"`,
+  `"set value"`, `"new Event"`): see ADR 0024.
 - Importing from a JS module isn't expressible yet. `#[link(name = "..")]`
   would be the obvious spelling, but rustc ignores it on a `"Rust"` block
   (with a warning), so imports will need a spelling of their own.

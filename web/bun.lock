@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "rust-js-web-generator",
+      "devDependencies": {
+        "@webref/idl": "3.84.0",
+        "webidl2": "24.5.0",
+      },
+    },
+  },
+  "packages": {
+    "@webref/idl": ["@webref/idl@3.84.0", "", { "peerDependencies": { "webidl2": "^24.5.0" } }, "sha512-P0lA2Eyckt/z9Y6GBJyb67g0FEIauoICmFUxeRjBP5X66uvAvb3e19Y3N3uZtDz4wrGJvcfyNCftcgp8JiLbGQ=="],
+
+    "webidl2": ["webidl2@24.5.0", "", {}, "sha512-fxOigKkIem1iAgQ9t4cFOP+kWEA8y6Be/uh50FpJh0FijoeeT/VMrOyJzNLUgjy0rGMEcHeReKDCqj0g9dIe9A=="],
+  }
+}

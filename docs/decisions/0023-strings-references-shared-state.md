@@ -29,12 +29,13 @@ meaning.
 | `Cell<T>`, `Cell::new(x)` | `{ value: x }` |
 | `c.get()`, `c.set(v)` | `c.value`, `c.value = v` |
 | `n.to_string()` (integers, `bool`) | `String(n)` |
+| `s + &t` (`String`) | `s + t` |
 | `s.to_string()` (`&str`, `String`) | `s` |
 | `Deref` of `String` or `Rc` | the value itself |
 
 rust-js recognizes these std items by their rustc diagnostic items and lang
 items (`box_new`, `to_string_method`, `deref_method`, `Rc`, `Cell`,
-`CloneFn`), not by name. Anything else from std is reported as not
+`CloneFn`, `Add`), not by name. Anything else from std is reported as not
 supported, with its path.
 
 ## Why

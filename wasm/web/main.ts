@@ -4,6 +4,7 @@
 //   /in/lib.rs, /in/stats.rs, ...   the crate, from the Rust editor
 //   /out/lib.js, /out/stats.js, ... what rust-js writes (plus .js.map files)
 //   /sysroot/...                    the std metadata rustc type-checks against
+//   /web/libweb.rmeta               the web crate's metadata (ADR 0024)
 //
 // Each compile gets a fresh instance of the (compiled once) module: rustc
 // keeps global state, and a failed compile ends in a trap.
@@ -301,6 +302,7 @@ type Result = {
 async function compile(
   module: WebAssembly.Module,
   sysroot: Map<string, Inode>,
+  webCrate: File,
   sources: Map<string, string>,
   rootFile: string,
 ): Promise<Result> {
@@ -316,9 +318,12 @@ async function compile(
       "/sysroot",
       new Map([["lib", dir({ rustlib: dir({ "wasm32-unknown-unknown": dir({ lib: new Directory(sysroot) }) }) })]]),
     ),
+    new PreopenDirectory("/web", new Map([["libweb.rmeta", webCrate]])),
   ];
   const outFile = `/out/${rootFile.replace(/\.rs$/, ".js")}`;
   const args = ["rust-js", `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
+  // Every program may use the web crate; rustc only reads it if one does.
+  args.push("--extern", "web=/web/libweb.rmeta");
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
   const wasi = new WASI(args, ["RUSTC_ICE=0"], fds);
 
@@ -457,7 +462,7 @@ addEventListener("message", (e) => {
 
 async function load() {
   const start = performance.now();
-  const [module, sysroot, examples] = await Promise.all([
+  const [module, sysroot, webCrate, examples] = await Promise.all([
     WebAssembly.compileStreaming(fetch("./rust-js.wasm")).then((m) => {
       stat("download + compile rust-js.wasm", ms(performance.now() - start));
       return m;
@@ -477,10 +482,16 @@ async function load() {
         stat("download sysroot", `${ms(performance.now() - start)} (${entries.length} files, ${mb(size)})`);
         return new Map(entries);
       }),
+    fetch("./web/libweb.rmeta")
+      .then((r) => r.arrayBuffer())
+      .then((bytes) => {
+        stat("download web crate", `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
+        return new File(new Uint8Array(bytes), { readonly: true });
+      }),
     fetch("./examples.json").then((r) => r.json() as Promise<Example[]>),
   ]);
   stat("ready after", ms(performance.now() - start));
-  return { module, sysroot, examples };
+  return { module, sysroot, webCrate, examples };
 }
 
 async function loadExample(example: Example) {
@@ -499,7 +510,7 @@ async function loadExample(example: Example) {
   runProgram(new Map(), rootJs());
 }
 
-const { module, sysroot, examples } = await load();
+const { module, sysroot, webCrate, examples } = await load();
 for (const example of examples) exampleSelect.add(new Option(example.title, example.name));
 exampleSelect.addEventListener("change", async () => {
   await loadExample(examples.find((e) => e.name === exampleSelect.value)!);
@@ -516,7 +527,7 @@ async function onCompile() {
   compiling = true;
   button.disabled = true;
   setStatus("Compiling…");
-  const r = await compile(module, sysroot, crateSources(), root);
+  const r = await compile(module, sysroot, webCrate, crateSources(), root);
   runs++;
   const ok = r.exit === 0;
   if (ok) {

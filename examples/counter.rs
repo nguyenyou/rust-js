@@ -1,34 +1,17 @@
-// A counter, written against the DOM directly: JS interop (ADR 0021),
-// closures (ADR 0022), and strings, references and shared state (ADR 0023).
-#![feature(extern_types)]
+// A counter, written against the DOM through the `web` crate: bindings
+// generated from W3C's WebIDL (ADR 0024). Also closures (ADR 0022), and
+// strings, references and shared state (ADR 0023).
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-// What we use from JS. `type` declares an opaque JS value, a `static` a
-// global, and a `fn` a function. A first parameter named `this` makes a
-// method call: `create_element(document, "p")` is `document.createElement("p")`.
-unsafe extern "Rust" {
-    type Document;
-    type Element;
-
-    safe static document: &'static Document;
-
-    #[link_name = "getElementById"]
-    safe fn get_element_by_id(this: &Document, id: &str) -> &'static Element;
-    #[link_name = "createElement"]
-    safe fn create_element(this: &Document, tag: &str) -> &'static Element;
-    safe fn append(this: &Element, child: &Element);
-    /// Replaces the element's contents with `text`.
-    #[link_name = "replaceChildren"]
-    safe fn set_text(this: &Element, text: &str);
-    #[link_name = "addEventListener"]
-    safe fn add_event_listener(this: &Element, event: &str, listener: Box<dyn FnMut()>);
-}
+// Each DOM interface is a type and a module of its members:
+// `document::create_element(document, "p")` is `document.createElement("p")`.
+use web::{Element, document, element, event_target, node};
 
 fn button(label: &str) -> &'static Element {
-    let b = create_element(document, "button");
-    set_text(b, label);
+    let b = document::create_element(document, "button");
+    node::set_text_content(b, label);
     b
 }
 
@@ -36,21 +19,22 @@ fn button(label: &str) -> &'static Element {
 fn stepper(label: &str, by: i32, count: &Rc<Cell<i32>>, output: &'static Element) -> &'static Element {
     let b = button(label);
     let count = count.clone();
-    add_event_listener(b, "click", Box::new(move || {
+    event_target::add_event_listener(b, "click", Box::new(move |_| {
         count.set(count.get() + by);
-        set_text(output, &count.get().to_string());
+        node::set_text_content(output, &count.get().to_string());
     }));
     b
 }
 
 pub fn main() {
-    let app = get_element_by_id(document, "app");
+    let app = document::get_element_by_id(document, "app");
     // Both buttons change one count, so they share it: `Rc` to share, `Cell`
     // to change it through a shared reference.
     let count = Rc::new(Cell::new(0));
-    let output = create_element(document, "output");
-    set_text(output, "0");
-    append(app, stepper("-", -1, &count, output));
-    append(app, output);
-    append(app, stepper("+", 1, &count, output));
+    let output = document::create_element(document, "output");
+    node::set_text_content(output, "0");
+    // An `Element` is a `Node` (`Deref`), so it goes where `append` wants a `Node`.
+    element::append(app, stepper("-", -1, &count, output));
+    element::append(app, output);
+    element::append(app, stepper("+", 1, &count, output));
 }

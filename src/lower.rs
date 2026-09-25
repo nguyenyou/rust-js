@@ -111,15 +111,21 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         all_bodies.iter().partition(|body| tcx.def_kind(body.def_id) == DefKind::Fn);
     let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
 
-    // JS globals the crate uses: every module reserves them, so a local
-    // named `document` can't hide the real one.
-    let globals: HashSet<String> = tcx
-        .hir_crate_items(())
-        .foreign_items()
-        .map(|item| item.owner_id.to_def_id())
-        .filter(|&def_id| !is_method(tcx, def_id))
-        .map(|def_id| js_name(tcx, def_id).split('.').next().unwrap_or_default().to_string())
-        .collect();
+    // JS globals the crate uses, whether declared here or in another crate
+    // (`web`, ADR 0024): every module reserves them, so a local named
+    // `console` can't hide the real one.
+    let mut globals: HashSet<String> = HashSet::new();
+    for body in all_bodies {
+        for expr in body.thir.exprs.iter() {
+            let def_id = match (&expr.kind, expr.ty.kind()) {
+                (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) | (ExprKind::StaticRef { def_id, .. }, _) => *def_id,
+                _ => continue,
+            };
+            if tcx.is_foreign_item(def_id) {
+                globals.extend(js_global(tcx, def_id));
+            }
+        }
+    }
 
     // The modules that get a JS file: the root, then every module with a
     // function, in the order their first function appears.
@@ -274,6 +280,48 @@ fn is_method(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
         && matches!(tcx.fn_arg_idents(def_id).first(), Some(Some(ident)) if ident.name.as_str() == "this")
 }
 
+/// How a call to a JS function is written, from its `#[link_name]` (ADR 0024).
+enum JsForm {
+    /// `name(..)`, or `this.name(..)` for a method.
+    Call(String),
+    /// `this.name`.
+    Get(String),
+    /// `this.name = value`.
+    Set(String),
+    /// `new Name(..)`.
+    New(String),
+    /// `this` itself: an unchecked cast.
+    This,
+}
+
+fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
+    let name = js_name(tcx, def_id);
+    if name == "this" {
+        return JsForm::This;
+    }
+    let forms: [(&str, fn(String) -> JsForm); 3] = [("get ", JsForm::Get), ("set ", JsForm::Set), ("new ", JsForm::New)];
+    for (prefix, form) in forms {
+        if let Some(rest) = name.strip_prefix(prefix) {
+            return form(rest.to_string());
+        }
+    }
+    JsForm::Call(name)
+}
+
+/// The JS global a JS item refers to, if any: `document`, `console` for
+/// `console.log`, `Event` for `new Event`. Methods and properties have none.
+fn js_global(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
+    let root = |name: &str| name.split('.').next().unwrap_or_default().to_string();
+    match tcx.def_kind(def_id) {
+        DefKind::Static { .. } => Some(root(&js_name(tcx, def_id))),
+        DefKind::Fn if !is_method(tcx, def_id) => match js_form(tcx, def_id) {
+            JsForm::Call(name) | JsForm::New(name) => Some(root(&name)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// A module's path below the crate root, e.g. `["math", "stats"]`.
 fn module_path(tcx: TyCtxt<'_>, module: LocalModDefId) -> Vec<String> {
     if module == LocalModDefId::CRATE_DEF_ID {
@@ -373,6 +421,8 @@ enum Std {
     CellGet,
     CellSet,
     ToString,
+    /// `String + &str`.
+    Concat,
     /// `Deref::deref` on a `String` or an `Rc`.
     Deref,
 }
@@ -1108,6 +1158,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(values)
     }
 
+    /// Does calling `fun` become an assignment statement?
+    fn is_assignment_call(&self, fun: ExprId) -> bool {
+        if matches!(self.std_fn(fun), Some(Std::CellSet)) {
+            return true;
+        }
+        let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else { return false };
+        self.tcx.is_foreign_item(def_id) && matches!(js_form(self.tcx, def_id), JsForm::Set(_))
+    }
+
     /// Is `e` a Rust expression that JS can only write as statements?
     fn is_control_flow(&self, e: ExprId) -> bool {
         matches!(
@@ -1153,9 +1212,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Binary { lhs, rhs, .. } | ExprKind::LogicalOp { lhs, rhs, .. } => {
                 self.is_simple(lhs) && self.is_simple(rhs)
             }
-            // `cell.set(v)` is an assignment statement.
+            // `cell.set(v)` and JS property setters are assignment statements.
             ExprKind::Call { fun, ref args, .. } => {
-                !matches!(self.std_fn(fun), Some(Std::CellSet))
+                !self.is_assignment_call(fun)
                     && self.is_simple(fun)
                     && args.iter().all(|&a| self.is_simple(a))
             }
@@ -1354,14 +1413,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.tcx.is_foreign_item(def_id) {
             let mut args = self.operands(args, out)?;
-            let name = js_name(self.tcx, def_id);
-            let callee = if is_method(self.tcx, def_id) {
-                let this = args.remove(0);
-                Expr::member(this, name)
-            } else {
-                global(&name)
-            };
-            return Ok(Expr::call(callee.or_at(fun_span), args));
+            let this = is_method(self.tcx, def_id).then(|| args.remove(0));
+            return Ok(match (js_form(self.tcx, def_id), this) {
+                (JsForm::Call(name), Some(this)) => Expr::call(Expr::member(this, name).or_at(fun_span), args),
+                (JsForm::Call(name), None) => Expr::call(global(&name).or_at(fun_span), args),
+                (JsForm::New(name), None) => Expr::new_(global(&name).or_at(fun_span), args),
+                (JsForm::Get(name), Some(this)) if args.is_empty() => Expr::member(this, name),
+                (JsForm::Set(name), Some(this)) if args.len() == 1 => {
+                    let value = args.remove(0);
+                    out.push(StmtKind::Assign(Expr::member(this, name), value).at(self.js_span(span)));
+                    Expr::undefined()
+                }
+                (JsForm::This, Some(this)) if args.is_empty() => this,
+                _ => {
+                    let what = format!("the `#[link_name]` of `{}` with this signature", self.tcx.def_path_str(def_id));
+                    return Err(self.unsupported(self.thir[fun].span, &what));
+                }
+            });
         }
         // Calling a closure, `f(a, b)`, is `Fn::call(&f, (a, b))`: in JS, `f(a, b)`.
         if let Some(fn_trait) = self.tcx.trait_of_assoc(def_id)
@@ -1394,6 +1462,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::BoxNew | Std::RcNew | Std::RcClone | Std::Deref => first,
             // A `Cell` is `{ value }`, so everyone sharing it sees a `set`.
             Std::CellNew => Expr::object(vec![Prop::Field("value".into(), first)]),
+            Std::Concat => Expr::bin(Op::Add, first, values.next().expect("`+` takes two operands")),
             Std::CellGet => self.copy_if_needed(Expr::member(first, "value"), generic_args.type_at(0)),
             Std::CellSet => {
                 let value = values.next().expect("`Cell::set` takes a value");
@@ -1427,7 +1496,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let self_ty = args.types().next();
         if diagnostic("deref_method") {
             let ty = self_ty?;
-            return (self.is_lang_adt(ty, LangItem::String) || self.is_std_adt(ty, sym::Rc)).then_some(Std::Deref);
+            // A JS object's `Deref` goes to the interface it inherits from:
+            // the same object (ADR 0024).
+            let identity = self.is_lang_adt(ty, LangItem::String) || self.is_std_adt(ty, sym::Rc) || self.is_js_object(ty);
+            return identity.then_some(Std::Deref);
+        }
+        if tcx.trait_of_assoc(def_id).is_some_and(|t| tcx.is_lang_item(t, LangItem::Add)) {
+            return self.is_lang_adt(self_ty?, LangItem::String).then_some(Std::Concat);
         }
         if tcx.is_lang_item(def_id, LangItem::CloneFn) {
             return self.is_std_adt(self_ty?, sym::Rc).then_some(Std::RcClone);
@@ -1457,6 +1532,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || self.is_lang_adt(ty, LangItem::String)
             || self.is_std_adt(ty, sym::Rc)
             || self.is_std_adt(ty, sym::Cell)
+    }
+
+    /// A struct that stands for a JS object, like `web::Element` (ADR 0024):
+    /// its only field is `PhantomData` of an extern type. Rust never builds
+    /// one; it only holds references to them, which are the JS objects.
+    fn is_js_object(&self, ty: Ty<'tcx>) -> bool {
+        let ty::Adt(adt, args) = ty.kind() else { return false };
+        if !adt.is_struct() || adt.non_enum_variant().fields.len() != 1 {
+            return false;
+        }
+        let field = adt.non_enum_variant().fields.iter().next().expect("one field").ty(self.tcx, args);
+        matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
+            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))
     }
 
     // ── Closures (ADR 0022) ─────────────────────────────────────────────
@@ -1628,7 +1716,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// How a struct or tuple type looks in JS.
     fn shape(&self, ty: Ty<'tcx>) -> Shape<'tcx> {
-        if self.is_std_wrapper(ty) {
+        if self.is_std_wrapper(ty) || self.is_js_object(ty) {
             return Shape::Other;
         }
         match ty.kind() {
@@ -1851,6 +1939,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             // A JS value from an `extern` block, and closures: JS functions.
             ty::Foreign(_) | ty::Closure(..) => return None,
+            ty::Adt(..) if self.is_js_object(ty) => return None,
             ty::Dynamic(traits, ..)
                 if traits.principal_def_id().is_some_and(|t| self.tcx.fn_trait_kind_from_def_id(t).is_some()) =>
             {

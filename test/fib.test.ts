@@ -40,7 +40,11 @@ beforeAll(async () => {
   structs = await import(join(target, "structs.js"));
   run([join(target, "debug", "rust-js"), "examples/closures.rs", "-o", join(target, "closures.js")]);
   closures = await import(join(target, "closures.js"));
-  run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js")]);
+  // The web crate is used from its metadata (ADR 0024).
+  run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
+  const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
+  run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -183,26 +187,29 @@ test("structs and tuples are plain objects and arrays", async () => {
   expect(js).toContain("if (param[0] === 0 && param[1] === 0)");
 });
 
-// The counter (examples/counter.rs) against a small fake DOM: just the calls
-// it declares in its `extern` block (ADR 0021).
+// The counter (examples/counter.rs) against a small fake DOM: just the parts
+// of it the counter uses, through the web crate (ADR 0024).
 class FakeElement {
   children: (FakeElement | string)[] = [];
-  listeners: Record<string, (() => void)[]> = {};
+  listeners: Record<string, ((event: object) => void)[]> = {};
   constructor(readonly tag: string, readonly id = "") {}
   append(child: FakeElement) {
     this.children.push(child);
   }
-  replaceChildren(text: string) {
+  set textContent(text: string) {
     this.children = [text];
   }
-  addEventListener(event: string, listener: () => void) {
+  get textContent(): string {
+    return this.children.map((c) => (typeof c === "string" ? c : c.textContent)).join("");
+  }
+  addEventListener(event: string, listener: (event: object) => void) {
     (this.listeners[event] ??= []).push(listener);
   }
   click() {
-    for (const listener of this.listeners.click ?? []) listener();
+    for (const listener of this.listeners.click ?? []) listener({ type: "click" });
   }
   get text(): string {
-    return this.children.map((c) => (typeof c === "string" ? c : c.text)).join("");
+    return this.textContent;
   }
 }
 
@@ -231,11 +238,31 @@ test("the counter runs against the DOM", async () => {
     delete (globalThis as any).document;
   }
 
-  // The JS reads like the Rust: methods, globals, and one shared `{ value }`.
+  // The JS reads like the Rust: methods, properties, globals, and one
+  // shared `{ value }`. No wrappers from the web crate.
   const js = await Bun.file(join(target, "counter.js")).text();
   expect(js).toContain('const b = document.createElement("button");');
+  expect(js).toContain("b.textContent = label;");
   expect(js).toContain("const count = { value: 0 };");
-  expect(js).toContain('b.addEventListener("click", () => {');
+  expect(js).toContain('b.addEventListener("click", (_) => {');
   expect(js).toContain("count$1.value = count$1.value + by | 0;");
-  expect(js).toContain("output.replaceChildren(String(count$1.value));");
+  expect(js).toContain("output.textContent = String(count$1.value);");
+  expect(js).toContain("app.append(output);");
+});
+
+// Each `#[link_name]` form the web crate uses (ADR 0024), in test/web_forms.rs.
+test("the web crate's bindings become plain JS", async () => {
+  const js = await Bun.file(join(target, "web_forms.js")).text();
+  // A cast is the value itself; a setter, an assignment; a getter, a read.
+  expect(js).toContain('const input = document.createElement("input");');
+  expect(js).toContain('input.value = "typed";');
+  expect(js).toContain("return app.textContent + input.value;");
+  // A union member other than the first gets its own Rust function, same JS.
+  expect(js).toContain("app.append(input);");
+  expect(js).toContain('app.append("!");');
+  // Constructors, and a global used as an `EventTarget` through `Deref`.
+  expect(js).toContain('const ping = new Event("ping");');
+  // A closure returning \`()\` is a block body: JS gets no return value Rust didn't have.
+  expect(js).toContain('app.addEventListener("ping", (e) => {\n    e.preventDefault();\n  });');
+  expect(js).toContain("window.dispatchEvent(ping);");
 });

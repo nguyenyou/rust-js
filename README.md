@@ -36,8 +36,14 @@ struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes
 struct update syntax; closures, `&T`, `&str`/`String`, `Box`, `Rc`, `Cell`, `to_string()`;
 JS functions, methods and globals; calls between functions, across modules and files.
 
-[examples/counter.rs](examples/counter.rs) is a counter written against the DOM. It runs in the
-playground's Result pane.
+The DOM comes as the [`web`](web/README.md) crate: bindings generated from W3C's WebIDL
+([ADR 0024](docs/decisions/0024-web-crate.md)). [examples/counter.rs](examples/counter.rs) is a
+counter written with it, and runs in the playground's Result pane:
+
+```bash
+web/build.sh -o target/libweb.rmeta
+./target/debug/rust-js examples/counter.rs -- --extern web=target/libweb.rmeta
+```
 
 A crate split across files becomes one JS file per module, with the imports
 and exports written for you (see [ADR 0019](docs/decisions/0019-one-js-file-per-module.md)):

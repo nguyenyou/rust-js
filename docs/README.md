@@ -81,6 +81,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0021 JS interop: `extern` blocks name what JS has](decisions/0021-js-interop.md)
 - [0022 Closures are arrow functions](decisions/0022-closures.md)
 - [0023 Strings, references and shared state](decisions/0023-strings-references-shared-state.md)
+- [0024 The `web` crate: DOM bindings generated from WebIDL](decisions/0024-web-crate.md)
 
 **Scope and process**
 

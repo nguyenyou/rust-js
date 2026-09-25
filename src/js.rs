@@ -99,6 +99,8 @@ pub enum ExprKind {
     Binary(Op, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
+    /// `new Event(t)`: a JS constructor (ADR 0024).
+    New(Box<Expr>, Vec<Expr>),
     /// `(a, b) => { .. }`: a closure (ADR 0022).
     Arrow(Vec<String>, Vec<Stmt>),
 }
@@ -199,6 +201,10 @@ impl Expr {
         Expr::new(ExprKind::Cond(Box::new(test), Box::new(then), Box::new(els)))
     }
 
+    pub fn new_(callee: Expr, args: Vec<Expr>) -> Expr {
+        Expr::new(ExprKind::New(Box::new(callee), args))
+    }
+
     pub fn arrow(params: Vec<String>, body: Vec<Stmt>) -> Expr {
         Expr::new(ExprKind::Arrow(params, body))
     }
@@ -251,7 +257,7 @@ impl Expr {
             ExprKind::Unary(_, a) => a.has_effects(),
             ExprKind::Binary(_, a, b) => a.has_effects() || b.has_effects(),
             ExprKind::Cond(a, b, c) => a.has_effects() || b.has_effects() || c.has_effects(),
-            ExprKind::Call(..) => true,
+            ExprKind::Call(..) | ExprKind::New(..) => true,
         }
     }
 }

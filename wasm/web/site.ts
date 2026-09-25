@@ -1,8 +1,8 @@
 // What the playground page needs besides itself, shared by the dev server
 // (serve.ts) and the static build for GitHub Pages (build.ts).
 
-import { readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { mkdirSync, readdirSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 
 export const wasmPath = join(import.meta.dir, "../target/wasm32-wasip1/release/rust-js.wasm");
 export const sysrootDir = join(import.meta.dir, "../sysroot/lib/rustlib/wasm32-unknown-unknown/lib");
@@ -26,6 +26,17 @@ export function sysrootFiles(): string[] {
     throw new Error(`expected ${NEEDED.length} sysroot files, found ${files.length}; run ../build.sh`);
   }
   return files;
+}
+
+/**
+ * Build the web crate's metadata for the playground's target (ADR 0024), with
+ * the pinned rustc: every program is compiled with `--extern web=` this file.
+ */
+export function buildWebCrate(out: string) {
+  mkdirSync(dirname(out), { recursive: true });
+  const script = join(import.meta.dir, "../../web/build.sh");
+  const p = Bun.spawnSync([script, "--target", "wasm32-unknown-unknown", "-o", out], { stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`web/build.sh failed:\n${p.stderr.toString()}`);
 }
 
 /** A crate the page can load: its files, relative to `dir`, and its root. */

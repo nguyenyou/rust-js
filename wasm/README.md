@@ -53,6 +53,9 @@ needs, and then compiles the crate in the editor on each click (or
 you can add to and delete from, and the JS files it compiles to, one per module
 ([ADR 0019](../docs/decisions/0019-one-js-file-per-module.md)). The examples
 come straight from `examples/`, starting with a counter written against the DOM.
+Every program can use the `web` crate (the DOM, [ADR 0024](../docs/decisions/0024-web-crate.md)):
+the page downloads its metadata, built for `wasm32-unknown-unknown` by
+`web/build.sh`, and passes `--extern web=`.
 If the root module exports `main`, the page runs it after each compile in a
 frame with a `<div id="app">`, and the status line says whether it ran. The
 modules are linked into one plain script. The frame isn't sandboxed: in some
