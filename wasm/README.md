@@ -54,8 +54,10 @@ you can add to and delete from, and the JS files it compiles to, one per module
 ([ADR 0019](../docs/decisions/0019-one-js-file-per-module.md)). The examples
 come straight from `examples/`, starting with a counter written against the DOM.
 If the root module exports `main`, the page runs it after each compile in a
-sandboxed frame with a `<div id="app">`. The modules are linked by an import
-map, since their relative imports can't resolve from `data:` URLs.
+frame with a `<div id="app">`, and the status line says whether it ran. The
+modules are linked into one plain script. The frame isn't sandboxed: in some
+Chrome setups a sandboxed (out-of-process) frame stays blank until the layout
+changes.
 
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),

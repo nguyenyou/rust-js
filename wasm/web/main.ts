@@ -347,10 +347,15 @@ async function compile(
 }
 
 // ── Running the program ─────────────────────────────────────────────────
-// If the root module exports `main`, run it in a sandboxed page with a
-// `<div id="app">` to render into. The modules import each other by
-// relative path, which a `data:` URL can't resolve, so each import becomes a
-// `rust-js:/path` name that an import map points at the module's code.
+// If the root module exports `main`, run it in a frame with a
+// `<div id="app">` to render into. The modules are linked into one plain
+// `<script>` (see `link`), which every browser runs the same way, and the
+// page reports back whether `main` ran, so the status line always says.
+//
+// The frame isn't sandboxed. Chrome runs a sandboxed frame in a process of
+// its own, and some setups then don't draw it until something else changes
+// the layout: the program ran, but the frame stayed blank. The program is
+// the one in the editor, so it may share this page's origin.
 
 const resultSection = $<HTMLElement>("result-section");
 let resultFrame = $<HTMLIFrameElement>("result");
@@ -365,21 +370,53 @@ function resolve(from: string, specifier: string): string {
   return parts.join("/");
 }
 
+/**
+ * rust-js's modules (ADR 0019) as one classic script. Each module becomes a
+ * function that fills in its exports object, and `import * as util from
+ * "./util.js"` becomes that module's exports object. The objects all exist
+ * before any module runs, so cycles work: functions are only called later.
+ */
+function link(files: Map<string, string>, rootFile: string): string {
+  const key = (path: string) => JSON.stringify(path);
+  const parts = ["const modules = {};", ...[...files.keys()].map((path) => `modules[${key(path)}] = {};`)];
+  for (const [path, code] of files) {
+    const exported: string[] = [];
+    const body = code
+      .replace(/^import \* as (\S+) from "([^"]+)";$/gm, (_, alias, specifier) => {
+        return `const ${alias} = modules[${key(resolve(path, specifier))}];`;
+      })
+      .replace(/^export function (\w+)/gm, (_, name) => {
+        exported.push(name);
+        return `function ${name}`;
+      })
+      .replace(/^\/\/# sourceMappingURL=.*$/m, "");
+    parts.push(`(function (exports) {\n${body}\nObject.assign(exports, { ${exported.join(", ")} });\n})(modules[${key(path)}]);`);
+  }
+  parts.push(`modules[${key(rootFile)}].main();`);
+  // A `</script>` in a string would end the script early; `<\/script>` is the same string.
+  return parts.join("\n").replaceAll("</script", "<\\/script");
+}
+
+let programRuns = 0;
+let reported = false;
+
 function runProgram(files: Map<string, string>, rootFile: string) {
   const main = files.get(rootFile);
+  programRuns++;
   if (!main || !/^export function main\(\)/m.test(main)) {
     resultSection.hidden = true;
     resultFrame.srcdoc = "";
     return;
   }
-  const imports: Record<string, string> = {};
-  for (const [path, code] of files) {
-    const linked = code
-      .replace(/ from "(\.\.?\/[^"]+)";/g, (_, spec) => ` from "rust-js:/${resolve(path, spec)}";`)
-      .replace(/^\/\/# sourceMappingURL=.*$/m, "");
-    imports[`rust-js:/${path}`] = `data:text/javascript;charset=utf-8,${encodeURIComponent(linked)}`;
-  }
-  const report = (what: string) => `parent.postMessage({ runError: String(${what}) }, "*")`;
+  const run = programRuns;
+  const report = (message: string) => `parent.postMessage({ run: ${run}, ${message} }, "*")`;
+  reported = false;
+  // If the page never reports, say so: something stopped its script.
+  setTimeout(() => {
+    if (run === programRuns && !reported) {
+      setStatus("The Result frame didn't run. Is something blocking its script? See the console.", "bad");
+    }
+  }, 3000);
   resultSection.hidden = false;
   // A new frame each run: the program starts from a clean page, and a frame
   // made while its section is showing gets drawn right away.
@@ -394,18 +431,26 @@ function runProgram(files: Map<string, string>, rootFile: string) {
   button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
   output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
 </style>
-<script type="importmap">${JSON.stringify({ imports })}</script>
 <div id="app"></div>
-<script type="module">
-  addEventListener("error", (e) => ${report("e.message")});
-  import("rust-js:/${rootFile}").then((m) => m.main()).catch((e) => ${report("e")});
+<script>
+  // Errors later on, in an event handler say.
+  addEventListener("error", (e) => ${report("error: String(e.message)")});
+</script>
+<script>
+  try {
+${link(files, rootFile)}
+    ${report("ran: true")};
+  } catch (e) {
+    ${report("error: String(e)")};
+  }
 </script>`;
 }
 
 addEventListener("message", (e) => {
-  if (e.source === resultFrame.contentWindow && e.data?.runError) {
-    setStatus(`Runtime error: ${e.data.runError}`, "bad");
-  }
+  if (e.source !== resultFrame.contentWindow || e.data?.run !== programRuns) return;
+  reported = true;
+  if (e.data.error) setStatus(`Runtime error: ${e.data.error}`, "bad");
+  else if (e.data.ran) setStatus(`${status.textContent} Ran main().`, "good");
 });
 
 // ── Loading ─────────────────────────────────────────────────────────────
