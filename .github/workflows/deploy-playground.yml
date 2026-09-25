@@ -1,5 +1,9 @@
 # Build the in-browser playground (rust-js + rustc's front end, as Wasm) and
 # deploy it to GitHub Pages. Run it by hand from the Actions tab.
+#
+# Compiling rustc's front end takes many minutes here, so if a prebuilt
+# rust-js.wasm was published for exactly these sources (wasm/prebuilt.sh
+# publish), it's downloaded instead. Otherwise it's built from source.
 name: Deploy playground
 
 on:
@@ -26,6 +30,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Use a prebuilt rust-js.wasm, if one matches these sources
+        id: prebuilt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if wasm/prebuilt.sh fetch; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install "$TOOLCHAIN" --profile minimal \
@@ -34,6 +49,7 @@ jobs:
 
       # Only compiler/ and library/proc_macro, and only this one commit.
       - name: Fetch rustc's source at the pinned commit
+        if: steps.prebuilt.outputs.found != 'true'
         run: |
           git init -q wasm/rustc
           cd wasm/rustc
@@ -43,6 +59,7 @@ jobs:
           git checkout -q FETCH_HEAD
 
       - uses: actions/cache@v6
+        if: steps.prebuilt.outputs.found != 'true'
         with:
           path: |
             ~/.cargo/registry
@@ -52,7 +69,13 @@ jobs:
           restore-keys: wasm-${{ runner.os }}-
 
       - name: Build rust-js.wasm
+        if: steps.prebuilt.outputs.found != 'true'
         run: wasm/build.sh
+
+      # build.sh stages the sysroot itself; a prebuilt binary still needs it.
+      - name: Stage the sysroot
+        if: steps.prebuilt.outputs.found == 'true'
+        run: wasm/stage-sysroot.sh
 
       - uses: oven-sh/setup-bun@v2
 

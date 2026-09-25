@@ -52,7 +52,22 @@ needs, and then compiles whatever is in the editor on each click.
 
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),
-which you run by hand from the Actions tab. `bun build.ts` writes the same
+which you run by hand from the Actions tab.
+
+Compiling rustc's front end takes many minutes on CI, so build locally and
+publish the result first:
+
+```bash
+./build.sh               # after committing and pushing your changes
+./prebuilt.sh publish    # uploads rust-js.wasm as release `wasm-<hash>`
+```
+
+The hash covers the committed inputs (`src/`, `wasm/Cargo.*`, `.cargo/`,
+`patches/`, `build.sh`). The workflow computes the same hash and downloads
+the matching binary in seconds. If there isn't one, for example after
+changing `src/` without publishing, it builds from source, so a stale binary
+is never deployed. `publish` refuses a binary that wasn't built from exactly
+the committed, pushed inputs. `bun build.ts` writes the same
 static site to `web/dist`, and `bun preview.ts` serves it under `/rust-js/`,
 as Pages does. Each click
 gets a fresh instance of the already-compiled module, because rustc keeps

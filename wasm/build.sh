@@ -2,6 +2,7 @@
 # Build rust-js, with rustc's front end, as a WASI program:
 #   wasm/target/wasm32-wasip1/release/rust-js.wasm
 # and stage the sysroot it type-checks against (wasm/sysroot).
+# To let the deploy workflow skip this build, run `prebuilt.sh publish` after.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -36,11 +37,11 @@ export AR_wasm32_wasip1="$SYSROOT/lib/rustlib/$HOST/bin/llvm-ar"
 
 cargo "+$TOOLCHAIN" build --release
 
-# 4. The sysroot rust-js type-checks against: the official wasm32 metadata.
-#    The front end only reads `.rmeta` files; `.rlib`s (object code) aren't needed.
-rustup target add wasm32-unknown-unknown --toolchain "$TOOLCHAIN" >/dev/null
-LIB=sysroot/lib/rustlib/wasm32-unknown-unknown/lib
-rm -rf sysroot && mkdir -p "$LIB"
-cp "$SYSROOT/lib/rustlib/wasm32-unknown-unknown/lib/"*.rmeta "$LIB/"
+# 4. Record which committed inputs this build came from (`dirty` if there were
+#    uncommitted changes), so `prebuilt.sh publish` can refuse a stale binary.
+./prebuilt.sh stamp
+
+# 5. The sysroot rust-js type-checks against.
+./stage-sysroot.sh
 
 echo "built: $PWD/target/wasm32-wasip1/release/rust-js.wasm"
