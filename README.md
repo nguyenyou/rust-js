@@ -33,12 +33,14 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums, structs, tuples; `let`, `if`,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
-struct update syntax; closures, `&T`, `&str`/`String`, `Box`, `Rc`, `Cell`, `to_string()`;
+struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+`RefCell`, `Vec`, `for` loops over sequences and ranges, `usize`, `to_string()`;
 JS functions, methods and globals; calls between functions, across modules and files.
 
 The DOM comes as the [`web`](web/README.md) crate: bindings generated from W3C's WebIDL
 ([ADR 0024](docs/decisions/0024-web-crate.md)). [examples/counter.rs](examples/counter.rs) is a
-counter written with it, and runs in the playground's Result pane:
+counter written with it, and [examples/todo.rs](examples/todo.rs) a todo list. Both run in the
+playground's Result pane:
 
 ```bash
 web/build.sh -o target/libweb.rmeta

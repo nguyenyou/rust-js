@@ -82,6 +82,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0022 Closures are arrow functions](decisions/0022-closures.md)
 - [0023 Strings, references and shared state](decisions/0023-strings-references-shared-state.md)
 - [0024 The `web` crate: DOM bindings generated from WebIDL](decisions/0024-web-crate.md)
+- [0025 `Vec`, `for` loops, `RefCell` and `&mut` to objects](decisions/0025-vec-loops-refcell-mut.md)
 
 **Scope and process**
 

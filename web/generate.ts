@@ -27,7 +27,7 @@ const INTERFACES = [
   // uievents
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
   // cssom
-  "CSSStyleDeclaration",
+  "CSSStyleDeclaration", "CSSStyleProperties",
 ];
 const known = new Set(INTERFACES);
 
@@ -109,9 +109,12 @@ const KEYWORDS = new Set(
     "try type typeof unsafe unsized use virtual where while yield abstract become").split(" "),
 );
 
-/** Functions, modules and parameters: `getElementById` → `get_element_by_id`. */
+/** `getElementById` → `get_element_by_id`. */
+const snakeWords = (name: string) => words(name).map((w) => w.toLowerCase()).join("_");
+
+/** Functions, modules and parameters, with a `_` after a Rust keyword: `type` → `type_`. */
 const snake = (name: string) => {
-  const s = words(name).map((w) => w.toLowerCase()).join("_");
+  const s = snakeWords(name);
   return KEYWORDS.has(s) ? `${s}_` : s;
 };
 
@@ -229,7 +232,7 @@ function functionsOf(i: Interface): Fn[] {
       const forwards = (m.extAttrs ?? []).some((a) => a.name === "PutForwards" || a.name === "Replaceable");
       const value = alternatives(m.idlType!)[0];
       if (!m.readonly && !forwards && value) {
-        fns.push({ name: `set_${snake(m.name!)}`, jsName: `set ${m.name}`, params: [self, `value: ${value}`], result: "()", doc });
+        fns.push({ name: `set_${snakeWords(m.name!)}`, jsName: `set ${m.name}`, params: [self, `value: ${value}`], result: "()", doc });
       }
     } else if (m.type === "operation") {
       if (!m.name || m.special === "static") {

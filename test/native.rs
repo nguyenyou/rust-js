@@ -8,6 +8,10 @@
 #[allow(dead_code)]
 mod fib;
 
+#[path = "../examples/collections.rs"]
+#[allow(dead_code)]
+mod collections;
+
 #[path = "../examples/closures.rs"]
 #[allow(dead_code)]
 mod closures;
@@ -93,6 +97,22 @@ fn main() {
     for times in 0..5 {
         case("closures.fresh_copy_each_time", &[times as i64], || closures::fresh_copy_each_time(times));
     }
+    for n in [0, 1, 2, 5, 9, 12] {
+        case("collections.sum_to", &[n], || collections::sum_to(n as u32));
+        case("collections.end_once", &[n], || collections::end_once(n as i32));
+        case("collections.mut_counter", &[n], || collections::mut_counter(n as i32));
+        case("collections.evens", &[n], || collections::evens(n as u32));
+        case("collections.keep_over", &[n], || collections::keep_over(n as i32));
+        case("collections.lengths", &[n], || collections::lengths(n as u32));
+        case("collections.iterate", &[n], || collections::iterate(n as u32));
+        case("collections.labeled", &[n], || collections::labeled(n as u32));
+        case("collections.toggled", &[n], || collections::toggled(n as u32));
+        case("collections.cell", &[n], || collections::cell(n as i32));
+        case("collections.shared", &[n], || collections::shared(n as i32));
+    }
+    for s in ["", "  ", "hi", "  hi  ", "hello"] {
+        case_with("collections.words", &[&s], || collections::words(s));
+    }
     for (a, b) in [(7, 2), (0, 5), (u32::MAX, 10), (5, 0)] {
         case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));
         case("structs.divmod_sum", &[a as i64, b as i64], || structs::divmod_sum(a, b) as i64);
@@ -138,6 +158,49 @@ impl Json for i32 {
 impl Json for u32 {
     fn json(&self) -> String {
         self.to_string()
+    }
+}
+
+impl Json for u64 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for usize {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for bool {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for &str {
+    fn json(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl Json for String {
+    fn json(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl<T: Json> Json for Vec<T> {
+    fn json(&self) -> String {
+        let items: Vec<String> = self.iter().map(|x| x.json()).collect();
+        format!("[{}]", items.join(","))
+    }
+}
+
+impl<A: Json, B: Json, C: Json> Json for (A, B, C) {
+    fn json(&self) -> String {
+        format!("[{},{},{}]", self.0.json(), self.1.json(), self.2.json())
     }
 }
 

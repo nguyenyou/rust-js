@@ -63,6 +63,10 @@ pub enum StmtKind {
     Expr(Expr),
     If(Expr, Vec<Stmt>, Option<Vec<Stmt>>),
     While { label: Option<String>, cond: Expr, body: Vec<Stmt> },
+    /// `for (const name of iterable) { .. }`: a `for` over a sequence (ADR 0025).
+    ForOf { label: Option<String>, name: String, iterable: Expr, body: Vec<Stmt> },
+    /// `for (let name = start; test; name++) { .. }`: a `for` over a range.
+    For { label: Option<String>, name: String, start: Expr, test: Expr, body: Vec<Stmt> },
     Break(Option<String>),
     Continue(Option<String>),
     Return(Option<Expr>),

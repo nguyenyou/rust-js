@@ -1,0 +1,156 @@
+// A todo list, written against the DOM through the `web` crate (ADR 0024).
+// The todos live in one `Rc<RefCell<State>>`; after every change, the list
+// is drawn again from it (ADR 0025).
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use web::{
+    Element, document, element, event_target, html_element, html_input_element, keyboard_event, node,
+    css_style_declaration,
+};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Filter {
+    All,
+    Active,
+    Completed,
+}
+
+struct Todo {
+    id: u32,
+    title: String,
+    done: bool,
+}
+
+struct State {
+    todos: Vec<Todo>,
+    next_id: u32,
+    filter: Filter,
+}
+
+type Shared = Rc<RefCell<State>>;
+
+/// The parts of the page that change.
+#[derive(Clone, Copy)]
+struct View {
+    list: &'static Element,
+    left: &'static Element,
+}
+
+fn create(tag: &str) -> &'static Element {
+    document::create_element(document, tag)
+}
+
+fn text(tag: &str, s: &str) -> &'static Element {
+    let e = create(tag);
+    node::set_text_content(e, s);
+    e
+}
+
+/// When `event` fires on `target`, apply `change` to the state and draw it again.
+fn on(target: &'static Element, event: &str, state: &Shared, view: View, change: Box<dyn Fn(&mut State)>) {
+    let state = state.clone();
+    event_target::add_event_listener(target, event, Box::new(move |_| {
+        change(&mut state.borrow_mut());
+        render(&state, view);
+    }));
+}
+
+fn add(s: &mut State, title: &str) {
+    s.todos.push(Todo { id: s.next_id, title: title.to_string(), done: false });
+    s.next_id += 1;
+}
+
+fn toggle(s: &mut State, id: u32) {
+    for todo in &mut s.todos {
+        if todo.id == id {
+            todo.done = !todo.done;
+        }
+    }
+}
+
+fn shown(filter: Filter, todo: &Todo) -> bool {
+    match filter {
+        Filter::All => true,
+        Filter::Active => !todo.done,
+        Filter::Completed => todo.done,
+    }
+}
+
+/// One `<li>`: a checkbox, the title, and a button to delete it.
+fn item(state: &Shared, view: View, todo: &Todo) -> &'static Element {
+    let li = create("li");
+    let id = todo.id;
+
+    let check = html_input_element::unchecked_from(create("input"));
+    html_input_element::set_type(check, "checkbox");
+    html_input_element::set_checked(check, todo.done);
+    on(check, "change", state, view, Box::new(move |s| toggle(s, id)));
+
+    let title = html_element::unchecked_from(text("span", &todo.title));
+    if todo.done {
+        css_style_declaration::set_property(html_element::style(title), "text-decoration", "line-through");
+    }
+
+    let delete = text("button", "×");
+    on(delete, "click", state, view, Box::new(move |s| s.todos.retain(|t| t.id != id)));
+
+    element::append(li, check);
+    element::append(li, title);
+    element::append(li, delete);
+    li
+}
+
+fn render(state: &Shared, view: View) {
+    let s = state.borrow();
+    node::set_text_content(view.list, "");
+    let mut left = 0;
+    for todo in &s.todos {
+        if !todo.done {
+            left += 1;
+        }
+        if shown(s.filter, todo) {
+            element::append(view.list, item(state, view, todo));
+        }
+    }
+    let noun = if left == 1 { " item left" } else { " items left" };
+    node::set_text_content(view.left, &(left.to_string() + noun));
+}
+
+pub fn main() {
+    let app = document::get_element_by_id(document, "app");
+    let state: Shared = Rc::new(RefCell::new(State { todos: Vec::new(), next_id: 1, filter: Filter::All }));
+    let view = View { list: create("ul"), left: create("span") };
+
+    // Typing a title and pressing Enter adds it.
+    let input = html_input_element::unchecked_from(create("input"));
+    html_input_element::set_placeholder(input, "What needs to be done?");
+    let adding = state.clone();
+    event_target::add_event_listener(input, "keydown", Box::new(move |e| {
+        let title = html_input_element::value(input);
+        let title = title.trim();
+        if keyboard_event::key(keyboard_event::unchecked_from(e)) == "Enter" && !title.is_empty() {
+            add(&mut adding.borrow_mut(), title);
+            html_input_element::set_value(input, "");
+            render(&adding, view);
+        }
+    }));
+
+    // Which todos to show, and clearing the completed ones.
+    let footer = create("p");
+    element::append(footer, view.left);
+    for (label, filter) in [("All", Filter::All), ("Active", Filter::Active), ("Completed", Filter::Completed)] {
+        let b = text("button", label);
+        on(b, "click", &state, view, Box::new(move |s| s.filter = filter));
+        element::append(footer, b);
+    }
+    let clear = text("button", "Clear completed");
+    on(clear, "click", &state, view, Box::new(|s| s.todos.retain(|t| !t.done)));
+    element::append(footer, clear);
+
+    element::append(app, input);
+    element::append(app, view.list);
+    element::append(app, footer);
+    render(&state, view);
+}

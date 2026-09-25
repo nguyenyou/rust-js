@@ -88,3 +88,5 @@ A future `--overflow-checks` flag could emit checked helpers.
   is `0` in rust-js, and a panic in a debug build.
 - `usize` isn't supported yet. It's 64-bit on the host, and deciding how it
   maps is a separate decision.
+- `usize` and `isize` were added later as 32-bit integers, as on `wasm32`
+  (ADR 0025).

@@ -22,8 +22,8 @@ use std::path::PathBuf;
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
     Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
-    Declaration, Expression, FormalParameter, FormalParameterKind, FormalParameters, FunctionBody,
-    FunctionType, IdentifierName, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
+    Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter, FormalParameterKind,
+    FormalParameters, FunctionBody, FunctionType, IdentifierName, SimpleAssignmentTarget, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
     PropertyKind, Statement, VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
@@ -31,7 +31,7 @@ use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
 use oxc_sourcemap::{SourceMap, SourceMapBuilder};
 use oxc_span::{SPAN, SourceType, Span};
 use oxc_syntax::number::NumberBase;
-use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator};
+use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator};
 
 use crate::js::{self, ExprKind, Module, Op, Prop, StmtKind, UnaryOp};
 
@@ -199,10 +199,35 @@ impl<'a> Cx<'a> {
             }
             StmtKind::While { label, cond, body } => {
                 let w = Statement::new_while_statement(sp, self.expr(cond), self.block(body), b);
-                match label {
-                    Some(l) => Statement::new_labeled_statement(sp, self.label(l), w, b),
-                    None => w,
-                }
+                self.labeled(sp, label.as_deref(), w)
+            }
+            StmtKind::ForOf { label, name, iterable, body } => {
+                let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
+                let declarator = VariableDeclarator::new(SPAN, id, None, None, false, b);
+                let left = ForStatementLeft::new_variable_declaration(
+                    SPAN,
+                    VariableDeclarationKind::Const,
+                    ArenaVec::from_iter_in([declarator], b),
+                    false,
+                    b,
+                );
+                let l = Statement::new_for_of_statement(sp, false, left, self.expr(iterable), self.block(body), b);
+                self.labeled(sp, label.as_deref(), l)
+            }
+            StmtKind::For { label, name, start, test, body } => {
+                let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
+                let declarator = VariableDeclarator::new(SPAN, id, None, Some(self.expr(start)), false, b);
+                let init = ForStatementInit::new_variable_declaration(
+                    SPAN,
+                    VariableDeclarationKind::Let,
+                    ArenaVec::from_iter_in([declarator], b),
+                    false,
+                    b,
+                );
+                let counter = SimpleAssignmentTarget::new_assignment_target_identifier(SPAN, self.name(name), b);
+                let update = Expression::new_update_expression(SPAN, UpdateOperator::Increment, false, counter, b);
+                let l = Statement::new_for_statement(sp, Some(init), Some(self.expr(test)), Some(update), self.block(body), b);
+                self.labeled(sp, label.as_deref(), l)
             }
             StmtKind::Break(label) => {
                 Statement::new_break_statement(sp, label.as_deref().map(|l| self.label(l)), b)
@@ -232,6 +257,13 @@ impl<'a> Cx<'a> {
                 AssignmentTarget::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)
             }
             _ => unreachable!("lowering only assigns to variables and fields"),
+        }
+    }
+
+    fn labeled(&self, sp: Span, label: Option<&str>, s: Statement<'a>) -> Statement<'a> {
+        match label {
+            Some(l) => Statement::new_labeled_statement(sp, self.label(l), s, &self.b),
+            None => s,
         }
     }
 

@@ -1468,6 +1468,10 @@ pub mod html_element {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/blur)
         pub safe fn blur(this: &HtmlElement);
 
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/style)
+        #[link_name = "get style"]
+        pub safe fn style(this: &HtmlElement) -> &'static CssStyleProperties;
+
         /// Treats `this` as `HtmlElement` without checking that it is one.
         #[link_name = "this"]
         pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlElement;
@@ -1668,7 +1672,7 @@ pub mod html_anchor_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLAnchorElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmlAnchorElement, value: &str);
+        pub safe fn set_type(this: &HtmlAnchorElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLAnchorElement/href)
         #[link_name = "get href"]
@@ -1796,7 +1800,7 @@ pub mod html_button_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmlButtonElement, value: &str);
+        pub safe fn set_type(this: &HtmlButtonElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/value)
         #[link_name = "get value"]
@@ -2527,7 +2531,7 @@ pub mod html_input_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmlInputElement, value: &str);
+        pub safe fn set_type(this: &HtmlInputElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/defaultValue)
         #[link_name = "get defaultValue"]
@@ -2753,7 +2757,7 @@ pub mod htmlli_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmlliElement, value: &str);
+        pub safe fn set_type(this: &HtmlliElement, value: &str);
 
         /// Treats `this` as `HtmlliElement` without checking that it is one.
         #[link_name = "this"]
@@ -2803,7 +2807,7 @@ pub mod htmlo_list_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmloListElement, value: &str);
+        pub safe fn set_type(this: &HtmloListElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/compact)
         #[link_name = "get compact"]
@@ -3447,7 +3451,7 @@ pub mod htmlu_list_element {
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type_(this: &HtmluListElement, value: &str);
+        pub safe fn set_type(this: &HtmluListElement, value: &str);
 
         /// Treats `this` as `HtmluListElement` without checking that it is one.
         #[link_name = "this"]
@@ -3548,6 +3552,10 @@ pub mod window {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/releaseEvents)
         #[link_name = "releaseEvents"]
         pub safe fn release_events(this: &Window);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/getComputedStyle)
+        #[link_name = "getComputedStyle"]
+        pub safe fn get_computed_style(this: &Window, elt: &Element) -> &'static CssStyleProperties;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/origin)
         #[link_name = "get origin"]
@@ -4057,5 +4065,35 @@ pub mod css_style_declaration {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/CSSStyleDeclaration/removeProperty)
         #[link_name = "removeProperty"]
         pub safe fn remove_property(this: &CssStyleDeclaration, property: &str) -> String;
+    }
+}
+
+/// [`CSSStyleProperties`](https://developer.mozilla.org/docs/Web/API/CSSStyleProperties)
+pub struct CssStyleProperties(PhantomData<JsObject>);
+
+impl Deref for CssStyleProperties {
+    type Target = CssStyleDeclaration;
+
+    fn deref(&self) -> &CssStyleDeclaration {
+        // Never runs: rust-js compiles this `Deref` to the object itself.
+        unsafe { &*(self as *const Self as *const CssStyleDeclaration) }
+    }
+}
+
+pub mod css_style_properties {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/CSSStyleProperties/cssFloat)
+        #[link_name = "get cssFloat"]
+        pub safe fn css_float(this: &CssStyleProperties) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/CSSStyleProperties/cssFloat)
+        #[link_name = "set cssFloat"]
+        pub safe fn set_css_float(this: &CssStyleProperties, value: &str);
+
+        /// Treats `this` as `CssStyleProperties` without checking that it is one.
+        #[link_name = "this"]
+        pub safe fn unchecked_from(this: &CssStyleDeclaration) -> &'static CssStyleProperties;
     }
 }

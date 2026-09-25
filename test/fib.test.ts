@@ -23,6 +23,7 @@ let cases: Case[] = [];
 let fib: Record<string, (...args: any[]) => number>;
 let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;
+let collections: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 
@@ -40,11 +41,14 @@ beforeAll(async () => {
   structs = await import(join(target, "structs.js"));
   run([join(target, "debug", "rust-js"), "examples/closures.rs", "-o", join(target, "closures.js")]);
   closures = await import(join(target, "closures.js"));
+  run([join(target, "debug", "rust-js"), "examples/collections.rs", "-o", join(target, "collections.js")]);
+  collections = await import(join(target, "collections.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
   run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -68,6 +72,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "closures") {
         return closures[path[1]](...c.args);
+      }
+      if (path[0] === "collections") {
+        return collections[path[1]](...c.args);
       }
       if (path[0] === "modules") {
         const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
@@ -197,7 +204,8 @@ class FakeElement {
     this.children.push(child);
   }
   set textContent(text: string) {
-    this.children = [text];
+    // As in the DOM: every child goes, and an empty string adds no text.
+    this.children = text === "" ? [] : [text];
   }
   get textContent(): string {
     return this.children.map((c) => (typeof c === "string" ? c : c.textContent)).join("");
@@ -211,7 +219,68 @@ class FakeElement {
   get text(): string {
     return this.textContent;
   }
+  // For the todo app: form fields, inline style, and firing any event.
+  type = "";
+  value = "";
+  placeholder = "";
+  checked = false;
+  style = { props: {} as Record<string, string>, setProperty(name: string, value: string) { this.props[name] = value; } };
+  fire(event: string, detail: object = {}) {
+    for (const listener of this.listeners[event] ?? []) listener({ type: event, ...detail });
+  }
 }
+
+test("the todo app works like a todo app", async () => {
+  const app = new FakeElement("div", "app");
+  (globalThis as any).document = {
+    getElementById: (id: string) => (id === "app" ? app : null),
+    createElement: (tag: string) => new FakeElement(tag),
+  };
+  try {
+    const todo = await import(join(target, "todo.js"));
+    todo.main();
+    const [input, list, footer] = app.children as FakeElement[];
+    const [left, all, active, completed, clear] = footer.children as FakeElement[];
+    const titles = () => (list.children as FakeElement[]).map((li) => (li.children[1] as FakeElement).text);
+    const type = (text: string) => {
+      input.value = text;
+      input.fire("keydown", { key: "Enter" });
+    };
+    expect([input.placeholder, left.text, all.text, clear.text]).toEqual(["What needs to be done?", "0 items left", "All", "Clear completed"]);
+
+    // Enter adds a trimmed title, and clears the input; blank titles are ignored.
+    type("  Buy milk  ");
+    expect([titles(), input.value, left.text]).toEqual([["Buy milk"], "", "1 item left"]);
+    type("Walk the dog");
+    type("   ");
+    input.value = "Not yet";
+    input.fire("keydown", { key: "a" });
+    expect([titles(), left.text]).toEqual([["Buy milk", "Walk the dog"], "2 items left"]);
+
+    // Ticking one off crosses it out.
+    const first = () => (list.children as FakeElement[])[0];
+    (first().children[0] as FakeElement).fire("change");
+    expect(left.text).toBe("1 item left");
+    expect([(first().children[0] as FakeElement).type, (first().children[0] as FakeElement).checked]).toEqual(["checkbox", true]);
+    expect((first().children[1] as FakeElement).style.props["text-decoration"]).toBe("line-through");
+
+    // Filters.
+    active.click();
+    expect(titles()).toEqual(["Walk the dog"]);
+    completed.click();
+    expect(titles()).toEqual(["Buy milk"]);
+    all.click();
+    expect(titles()).toEqual(["Buy milk", "Walk the dog"]);
+
+    // Clear completed, then delete the last one.
+    clear.click();
+    expect([titles(), left.text]).toEqual([["Walk the dog"], "1 item left"]);
+    (first().children[2] as FakeElement).click();
+    expect([titles(), left.text]).toEqual([[], "0 items left"]);
+  } finally {
+    delete (globalThis as any).document;
+  }
+});
 
 test("the counter runs against the DOM", async () => {
   const app = new FakeElement("div", "app");

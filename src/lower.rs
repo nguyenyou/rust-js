@@ -349,6 +349,7 @@ pub struct LoweredFn {
 pub enum Helper {
     Div,
     Rem,
+    Retain,
 }
 
 impl Helper {
@@ -364,6 +365,20 @@ function $div(a, b, min) {
     throw new Error("attempt to divide with overflow");
   }
   return a / b;
+}
+"#
+            }
+            // `v.retain(keep)`: in place, so every reference to `v` sees it.
+            Helper::Retain => {
+                r#"
+function $retain(v, keep) {
+  let n = 0;
+  for (const x of v) {
+    if (keep(x)) {
+      v[n++] = x;
+    }
+  }
+  v.length = n;
 }
 "#
             }
@@ -411,20 +426,45 @@ struct Binding<'tcx> {
     ty: Ty<'tcx>,
 }
 
-/// The std functions whose JS meaning rust-js knows (ADR 0023).
-#[derive(Clone, Copy)]
+/// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
+#[derive(Clone, Copy, PartialEq)]
 enum Std {
-    BoxNew,
-    RcNew,
-    RcClone,
+    /// The argument itself: `Box::new(x)`, `Rc::new(x)`, `rc.clone()`,
+    /// `s.to_owned()`, `String::from(s)`, `v.iter()`, and `Deref` of
+    /// `String`, `Rc`, `Vec`, `Ref`, `RefMut` and JS objects.
+    Same,
+    /// `Cell::new(x)` and `RefCell::new(x)`: `{ value: x }`.
     CellNew,
     CellGet,
     CellSet,
+    /// `RefCell::borrow`, `borrow_mut`: the cell's `value`.
+    Borrow,
     ToString,
     /// `String + &str`.
     Concat,
-    /// `Deref::deref` on a `String` or an `Rc`.
-    Deref,
+    /// `==` (true) or `!=` (false) on strings and fieldless enums.
+    Eq(bool),
+    StringNew,
+    Trim,
+    /// `is_empty` on a string or a `Vec`: `x.length === 0`.
+    IsEmpty,
+    VecNew,
+    /// `vec![a, b]`.
+    VecMacro,
+    Push,
+    Len,
+    Clear,
+    Retain,
+}
+
+/// The parts of a `for pat in head { body }` (ADR 0025).
+struct ForLoop<'a, 'tcx> {
+    head: ExprId,
+    pat: &'a Pat<'tcx>,
+    body: ExprId,
+    /// The `loop` inside, which `break` and `continue` refer to.
+    scope: region::Scope,
+    hir_id: HirId,
 }
 
 /// How a Rust struct or tuple type is represented in JS (ADR 0020).
@@ -465,10 +505,11 @@ impl Num {
         Some(match ty.kind() {
             ty::Int(ty::IntTy::I8) => Num::I8,
             ty::Int(ty::IntTy::I16) => Num::I16,
-            ty::Int(ty::IntTy::I32) => Num::I32,
+            // `isize` and `usize` are 32 bits, as on wasm32 (ADR 0025).
+            ty::Int(ty::IntTy::I32 | ty::IntTy::Isize) => Num::I32,
             ty::Uint(ty::UintTy::U8) => Num::U8,
             ty::Uint(ty::UintTy::U16) => Num::U16,
-            ty::Uint(ty::UintTy::U32) => Num::U32,
+            ty::Uint(ty::UintTy::U32 | ty::UintTy::Usize) => Num::U32,
             ty::Float(ty::FloatTy::F64) => Num::F64,
             _ => return None,
         })
@@ -631,6 +672,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.push(StmtKind::If(cond, then_out, else_out).at(span));
                 Ok(())
             }
+            ExprKind::Match { .. } if let Some(for_loop) = self.as_for(e) => self.lower_for(for_loop, span, out),
             ExprKind::Match { scrutinee, ref arms, .. } => self.lower_match(scrutinee, arms, dest, out),
             ExprKind::Return { value } => {
                 match value {
@@ -875,6 +917,115 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// Recognize the `for` desugaring (ADR 0025):
+    ///
+    /// ```text
+    /// match IntoIterator::into_iter(head) {
+    ///     mut iter => loop {
+    ///         match Iterator::next(&mut iter) { None => break, Some(pat) => body }
+    ///     }
+    /// }
+    /// ```
+    fn as_for(&self, e: ExprId) -> Option<ForLoop<'a, 'tcx>> {
+        let thir: &'a Thir<'tcx> = self.thir;
+        let is_call_to = |e: ExprId, item: LangItem| match thir[strip(thir, e)].kind {
+            ExprKind::Call { fun, ref args, .. } => {
+                matches!(thir[strip(thir, fun)].ty.kind(), &ty::FnDef(d, _) if self.tcx.is_lang_item(d, item))
+                    .then(|| args[0])
+            }
+            _ => None,
+        };
+        let ExprKind::Match { scrutinee, ref arms, .. } = thir[strip(thir, e)].kind else { return None };
+        let head = is_call_to(scrutinee, LangItem::IntoIterIntoIter)?;
+        let [arm] = &arms[..] else { return None };
+        let ExprKind::Scope { value, region_scope, hir_id } = thir[thir[*arm].body].kind else { return None };
+        let ExprKind::Loop { body } = thir[value].kind else { return None };
+        let ExprKind::Block { block } = thir[strip(thir, body)].kind else { return None };
+        let ([stmt], None) = (&*thir[block].stmts, thir[block].expr) else { return None };
+        let thir::StmtKind::Expr { expr, .. } = thir[*stmt].kind else { return None };
+        let ExprKind::Match { scrutinee: next, ref arms, .. } = thir[strip(thir, expr)].kind else { return None };
+        is_call_to(next, LangItem::IteratorNext)?;
+        let some = arms.iter().find_map(|&a| match &thir[a].pattern.kind {
+            PatKind::Variant { subpatterns, .. } if subpatterns.len() == 1 => Some((&subpatterns[0].pattern, thir[a].body)),
+            _ => None,
+        })?;
+        Some(ForLoop { head, pat: some.0, body: some.1, scope: region_scope, hir_id })
+    }
+
+    /// `for x in &v` is `for (const x of v)`; `for i in a..b` is
+    /// `for (let i = a; i < b; i++)`.
+    fn lower_for(&mut self, f: ForLoop<'a, 'tcx>, span: js::Span, out: &mut Vec<Stmt>) -> R<()> {
+        let label_base = match self.tcx.hir_expect_expr(f.hir_id).kind {
+            hir::ExprKind::Loop(_, Some(label), ..) => label.ident.name.as_str().trim_start_matches('\'').to_string(),
+            _ => "loop".to_string(),
+        };
+        let head_ty = self.thir[f.head].ty;
+        let head_span = self.thir[f.head].span;
+        let range = self.is_lang_adt(head_ty, LangItem::Range);
+
+        // What to loop over: a range's bounds, or a sequence.
+        let (iterable, start_end) = if range {
+            let ExprKind::Adt(ref adt) = self.thir[self.strip(f.head)].kind else {
+                return Err(self.unsupported(head_span, "this range"));
+            };
+            let bound = |i: usize| adt.fields.iter().find(|field| field.name.as_usize() == i).map(|field| field.expr);
+            let (Some(start), Some(end)) = (bound(0), bound(1)) else { unreachable!("a range has a start and an end") };
+            self.num(self.thir[start].ty, head_span)?;
+            let [start_js, end_js] = self.operands(&[start, end], out)?.try_into().ok().unwrap();
+            // Rust works out the end once; JS would test it again each time round.
+            let end_js = if end_js.is_constant() || self.stable_place(end).is_some() {
+                end_js
+            } else {
+                let name = self.fresh("end");
+                out.push(StmtKind::Const(name.clone(), end_js).at(span));
+                Expr::var(&name)
+            };
+            (None, Some((start_js, end_js)))
+        } else {
+            let peeled = head_ty.peel_refs();
+            let sequence = peeled.is_array()
+                || peeled.is_slice()
+                || self.is_std_adt(peeled, sym::Vec)
+                || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
+                || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
+            if !sequence {
+                return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
+            }
+            (Some(self.expr(f.head, out)?), None)
+        };
+
+        // The loop variable: the pattern's own name if it's a plain
+        // immutable binding, else a fresh one that the body takes apart.
+        let mut body = Vec::new();
+        let name = match &f.pat.kind {
+            PatKind::Binding { name, var, mode, subpattern: None, ty, .. }
+                if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) =>
+            {
+                self.check_value_ty(*ty, f.pat.span)?;
+                self.bind(*var, name.as_str(), false)
+            }
+            _ => {
+                let name = self.fresh(if range { "i" } else { "item" });
+                self.destructure(f.pat, Expr::var(&name), true, &mut body)?;
+                name
+            }
+        };
+
+        self.loops.push(Loop { scope: f.scope, label_base, label: None, dest: Dest::Discard });
+        self.stmt(f.body, &Dest::Discard, &mut body)?;
+        let label = self.loops.pop().unwrap().label;
+        out.push(match (iterable, start_end) {
+            (Some(iterable), _) => StmtKind::ForOf { label, name, iterable, body },
+            (None, Some((start, end))) => {
+                let test = Expr::bin(Op::Lt, Expr::var(&name), end);
+                StmtKind::For { label, name, start, test, body }
+            }
+            (None, None) => unreachable!("a range or a sequence"),
+        }
+        .at(span));
+        Ok(())
+    }
+
     /// Recognize the `while` desugaring; returns `(cond, body)`.
     fn as_while(&self, body: ExprId, scope: region::Scope) -> Option<(ExprId, ExprId)> {
         let ExprKind::Block { block } = self.thir[self.strip(body)].kind else { return None };
@@ -1062,7 +1213,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some((place, _)) => Ok(place),
                 None => self.expr(arg, out),
             },
-            ExprKind::Borrow { .. } => Err(self.unsupported(span, "`&mut` references")),
+            // `&mut` to a JS object is the object (ADR 0025).
+            ExprKind::Borrow { borrow_kind: BorrowKind::Mut { .. }, arg } if self.is_object(self.thir[arg].ty) => {
+                match self.place(arg) {
+                    Some((place, _)) => Ok(place),
+                    None => self.expr(arg, out),
+                }
+            }
+            ExprKind::Borrow { arg, .. } => {
+                Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
+            }
+            ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
             ExprKind::PointerCoercion { cast: PointerCoercion::Unsize, source, .. } => self.expr(source, out),
             ExprKind::Closure(ref closure) => self.closure(closure, out),
@@ -1160,7 +1321,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Does calling `fun` become an assignment statement?
     fn is_assignment_call(&self, fun: ExprId) -> bool {
-        if matches!(self.std_fn(fun), Some(Std::CellSet)) {
+        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear)) {
             return true;
         }
         let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else { return false };
@@ -1198,7 +1359,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Field { lhs, .. } => self.is_simple(lhs),
             // Its body's statements go inside the arrow; only snapshots come first.
             ExprKind::Closure(ref closure) => closure.upvars.iter().all(|&u| !self.needs_snapshot(u)),
-            ExprKind::Tuple { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
+            ExprKind::Tuple { ref fields } | ExprKind::Array { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
             ExprKind::Adt(ref adt) => {
                 let base_simple = match &adt.base {
                     AdtExprBase::Base(fru) => self.is_simple(fru.base),
@@ -1454,27 +1615,57 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
         };
+        // `vec![a, b]` is `box_assume_init_into_vec_unsafe(write_box_via_move(<box>, [a, b]))`.
+        if known == Std::VecMacro {
+            let ExprKind::Call { args: ref inner, .. } = self.thir[self.strip(args[0])].kind else {
+                return Err(self.unsupported(span, "this `vec!`"));
+            };
+            return self.expr(inner[1], out);
+        }
         let mut values = self.operands(args, out)?.into_iter();
-        let first = values.next().expect("every known std function takes an argument");
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        let js_span = self.js_span(span);
         Ok(match known {
             // An `Rc` is the JS reference itself: the garbage collector does
             // its counting, so a clone is the same object.
-            Std::BoxNew | Std::RcNew | Std::RcClone | Std::Deref => first,
-            // A `Cell` is `{ value }`, so everyone sharing it sees a `set`.
-            Std::CellNew => Expr::object(vec![Prop::Field("value".into(), first)]),
-            Std::Concat => Expr::bin(Op::Add, first, values.next().expect("`+` takes two operands")),
-            Std::CellGet => self.copy_if_needed(Expr::member(first, "value"), generic_args.type_at(0)),
+            Std::Same => arg(),
+            // A `Cell` or `RefCell` is `{ value }`, so everyone sharing it sees a change.
+            Std::CellNew => Expr::object(vec![Prop::Field("value".into(), arg())]),
+            Std::CellGet => self.copy_if_needed(Expr::member(arg(), "value"), generic_args.type_at(0)),
             Std::CellSet => {
-                let value = values.next().expect("`Cell::set` takes a value");
-                out.push(StmtKind::Assign(Expr::member(first, "value"), value).at(self.js_span(span)));
+                let (cell, value) = (arg(), arg());
+                out.push(StmtKind::Assign(Expr::member(cell, "value"), value).at(js_span));
                 Expr::undefined()
+            }
+            // A `Ref` or `RefMut` guard is what it guards: the object itself.
+            Std::Borrow => Expr::member(arg(), "value"),
+            Std::Concat => Expr::bin(Op::Add, arg(), arg()),
+            Std::Eq(eq) => Expr::bin(if eq { Op::Eq } else { Op::Ne }, arg(), arg()),
+            Std::StringNew => Expr::str(""),
+            Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
+            Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
+            Std::VecNew => Expr::array(vec![]),
+            Std::VecMacro => unreachable!("handled above"),
+            Std::Push => {
+                let (v, x) = (arg(), arg());
+                Expr::call(Expr::member(v, "push"), vec![x])
+            }
+            Std::Len => Expr::member(arg(), "length"),
+            Std::Clear => {
+                out.push(StmtKind::Assign(Expr::member(arg(), "length"), Expr::num(0)).at(js_span));
+                Expr::undefined()
+            }
+            Std::Retain => {
+                self.runtime.insert(Helper::Retain);
+                let (v, keep) = (arg(), arg());
+                Expr::call(Expr::var("$retain"), vec![v, keep])
             }
             Std::ToString => {
                 let ty = generic_args.type_at(0);
-                if ty.is_str() || self.is_lang_adt(ty, LangItem::String) {
-                    first
+                if self.is_string_like(ty) {
+                    arg()
                 } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
-                    Expr::call(Expr::var("String"), vec![first])
+                    Expr::call(Expr::var("String"), vec![arg()])
                 } else {
                     return Err(self.unsupported(span, &format!("`to_string` on `{ty}`")));
                 }
@@ -1487,34 +1678,71 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let tcx = self.tcx;
         let &ty::FnDef(def_id, args) = self.thir[self.strip(fun)].ty.kind() else { return None };
         let diagnostic = |name: &str| tcx.is_diagnostic_item(Symbol::intern(name), def_id);
+        let self_ty = args.types().next();
         if diagnostic("box_new") {
-            return Some(Std::BoxNew);
+            return Some(Std::Same);
+        }
+        if diagnostic("box_assume_init_into_vec_unsafe") {
+            return Some(Std::VecMacro);
         }
         if diagnostic("to_string_method") {
             return Some(Std::ToString);
         }
-        let self_ty = args.types().next();
-        if diagnostic("deref_method") {
+        if diagnostic("deref_method") || diagnostic("deref_mut_method") {
+            // A reference to what's inside is the same JS value (ADR 0024 for JS objects).
             let ty = self_ty?;
-            // A JS object's `Deref` goes to the interface it inherits from:
-            // the same object (ADR 0024).
-            let identity = self.is_lang_adt(ty, LangItem::String) || self.is_std_adt(ty, sym::Rc) || self.is_js_object(ty);
-            return identity.then_some(Std::Deref);
+            let same = self.is_string_like(ty)
+                || self.is_js_object(ty)
+                || [sym::Rc, sym::Vec].into_iter().any(|name| self.is_std_adt(ty, name))
+                || ["RefCellRef", "RefCellRefMut"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)));
+            return same.then_some(Std::Same);
         }
-        if tcx.trait_of_assoc(def_id).is_some_and(|t| tcx.is_lang_item(t, LangItem::Add)) {
-            return self.is_lang_adt(self_ty?, LangItem::String).then_some(Std::Concat);
-        }
-        if tcx.is_lang_item(def_id, LangItem::CloneFn) {
-            return self.is_std_adt(self_ty?, sym::Rc).then_some(Std::RcClone);
+        if let Some(trait_) = tcx.trait_of_assoc(def_id) {
+            let ty = self_ty?;
+            if tcx.is_lang_item(trait_, LangItem::Add) {
+                return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
+            }
+            if tcx.is_lang_item(trait_, LangItem::PartialEq) {
+                let simple = self.is_string_like(ty) || matches!(ty.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
+                let eq = match tcx.item_name(def_id).as_str() {
+                    "eq" => true,
+                    "ne" => false,
+                    _ => return None,
+                };
+                return simple.then_some(Std::Eq(eq));
+            }
+            let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
+            let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
+            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn) && self.is_std_adt(ty, sym::Rc);
+            return (from_str || to_owned || rc_clone).then_some(Std::Same);
         }
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
-        match tcx.item_name(def_id).as_str() {
-            "new" if self.is_std_adt(owner, sym::Rc) => Some(Std::RcNew),
-            "new" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellNew),
-            "get" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellGet),
-            "set" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellSet),
-            _ => None,
-        }
+        let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
+        let string = self.is_lang_adt(owner, LangItem::String);
+        Some(match tcx.item_name(def_id).as_str() {
+            "new" if adt("Rc") => Std::Same,
+            "new" if adt("Cell") || adt("RefCell") => Std::CellNew,
+            "get" if adt("Cell") => Std::CellGet,
+            "set" if adt("Cell") => Std::CellSet,
+            "borrow" | "borrow_mut" if adt("RefCell") => Std::Borrow,
+            "new" if adt("Vec") => Std::VecNew,
+            "push" if adt("Vec") => Std::Push,
+            "len" if adt("Vec") || owner.is_slice() => Std::Len,
+            "clear" if adt("Vec") => Std::Clear,
+            "retain" if adt("Vec") => Std::Retain,
+            "iter" | "iter_mut" if owner.is_slice() => Std::Same,
+            "new" if string => Std::StringNew,
+            "as_str" if string => Std::Same,
+            "trim" if owner.is_str() => Std::Trim,
+            "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
+            _ => return None,
+        })
+    }
+
+    /// `str`, `String`, or a reference to one: all JS strings.
+    fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        ty.is_str() || self.is_lang_adt(ty, LangItem::String)
     }
 
     fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
@@ -1526,12 +1754,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// std types that aren't plain structs in JS: `String` is a JS string,
-    /// `Box<T>` and `Rc<T>` are just `T`, `Cell<T>` is `{ value }`.
+    /// `Box<T>` and `Rc<T>` are just `T`, `Cell<T>` and `RefCell<T>` are
+    /// `{ value }`, a `RefCell`'s guards are what they guard, and `Vec<T>`
+    /// is an array.
     fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
         ty.is_box()
             || self.is_lang_adt(ty, LangItem::String)
-            || self.is_std_adt(ty, sym::Rc)
-            || self.is_std_adt(ty, sym::Cell)
+            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut", "Vec"]
+                .into_iter()
+                .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+    }
+
+    /// Is a `ty` value a JS object? Then a reference to it, even `&mut`, can
+    /// be the object itself: changes through it change the one object (ADR 0025).
+    fn is_object(&self, ty: Ty<'tcx>) -> bool {
+        matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
+            || self.is_js_object(ty)
+            || ["Vec", "Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
     }
 
     /// A struct that stands for a JS object, like `web::Element` (ADR 0024):
@@ -1766,7 +2005,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A reference is the value it points to, so `*r` is where `r` is.
             // (A static is reached through a pointer to it.)
             ExprKind::Deref { arg } if matches!(self.thir[arg].ty.kind(), ty::Ref(..) | ty::RawPtr(..)) || self.thir[arg].ty.is_box() => {
-                self.place(arg)
+                self.place(arg).or_else(|| self.ref_place(arg))
             }
             // A JS global (ADR 0021).
             ExprKind::StaticRef { def_id, .. } if self.tcx.is_foreign_item(def_id) => {
@@ -1798,8 +2037,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.tcx.type_is_copy_modulo_regions(self.typing_env, ty)
     }
 
+    /// Where a reference made by a call points: `c.borrow_mut()` points at
+    /// the cell's `value`, and so does the guard's `deref_mut()` (ADR 0025).
+    fn ref_place(&self, e: ExprId) -> Option<(Expr, bool)> {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } => self.place(arg).or_else(|| self.ref_place(arg)),
+            ExprKind::Call { fun, ref args, .. } => match self.std_fn(fun)? {
+                Std::Same => self.ref_place(args[0]),
+                Std::Borrow => {
+                    let (cell, _) = self.ref_place(args[0])?;
+                    Some((Expr::member(cell, "value"), true))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// The place an assignment writes to.
     fn assignee(&self, e: ExprId) -> R<Expr> {
+        // `*r = v` with a `&mut` variable `r` would only rebind the JS variable.
+        if let ExprKind::Deref { arg } = self.thir[self.strip(e)].kind
+            && matches!(self.thir[arg].ty.kind(), ty::Ref(..))
+            && matches!(self.thir[self.strip(arg)].kind, ExprKind::VarRef { .. } | ExprKind::Field { .. })
+        {
+            return Err(self.unsupported(self.thir[e].span, "assigning a whole value through a `&mut`"));
+        }
         self.place(e).map(|(place, _)| place).ok_or_else(|| self.unsupported(self.thir[e].span, "assigning to this place"))
     }
 
@@ -1946,8 +2209,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return None;
             }
             ty::Ref(_, inner, Mutability::Not) => return self.unsupported_part(*inner),
+            // `&mut` to a JS object is the object; to anything else, it would
+            // need a place to point at.
+            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_part(*inner),
+            ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_part(*elem),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
-            ty::Adt(_, args) if self.is_std_wrapper(ty) => return self.unsupported_part(args.type_at(0)),
+            // A guard held in a variable is the object it guards; a guarded
+            // number would be a copy, not a place.
+            ty::Adt(_, args)
+                if ["RefCellRef", "RefCellRefMut"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+                    && !args.types().next().is_some_and(|inner| self.is_object(inner)) =>
+            {
+                return Some(ty);
+            }
+            ty::Adt(_, args) if self.is_std_wrapper(ty) => return args.types().next().and_then(|t| self.unsupported_part(t)),
             _ => {}
         }
         match (ty.kind(), self.shape(ty)) {
