@@ -15,6 +15,8 @@ const NEEDED = [
   "adler2", "alloc", "cfg_if", "compiler_builtins", "core", "dlmalloc", "hashbrown", "libc",
   "miniz_oxide", "rustc_demangle", "rustc_std_workspace_alloc", "rustc_std_workspace_core",
   "std", "std_detect", "unwind",
+  // `--test` (the Test button) also needs libtest and what it pulls in.
+  "getopts", "panic_abort", "rustc_std_workspace_std", "test",
 ];
 
 /** File names, in `sysrootDir`, of the metadata the page downloads. */

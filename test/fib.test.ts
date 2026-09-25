@@ -49,6 +49,12 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
+  // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
+  const tests = (rs: string, name: string, flags: string[] = []) =>
+    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "rust-tests", name, `${name}.js`), ...flags]);
+  tests("examples/counter.rs", "counter", withWeb);
+  tests("examples/todo.rs", "todo", withWeb);
+  tests("test/asserts.rs", "asserts");
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -194,121 +200,39 @@ test("structs and tuples are plain objects and arrays", async () => {
   expect(js).toContain("if (param[0] === 0 && param[1] === 0)");
 });
 
-// The counter (examples/counter.rs) against a small fake DOM: just the parts
-// of it the counter uses, through the web crate (ADR 0024).
-class FakeElement {
-  children: (FakeElement | string)[] = [];
-  listeners: Record<string, ((event: object) => void)[]> = {};
-  constructor(readonly tag: string, readonly id = "") {}
-  append(child: FakeElement) {
-    this.children.push(child);
-  }
-  set textContent(text: string) {
-    // As in the DOM: every child goes, and an empty string adds no text.
-    this.children = text === "" ? [] : [text];
-  }
-  get textContent(): string {
-    return this.children.map((c) => (typeof c === "string" ? c : c.textContent)).join("");
-  }
-  addEventListener(event: string, listener: (event: object) => void) {
-    (this.listeners[event] ??= []).push(listener);
-  }
-  click() {
-    for (const listener of this.listeners.click ?? []) listener({ type: "click" });
-  }
-  get text(): string {
-    return this.textContent;
-  }
-  // For the todo app: form fields, inline style, and firing any event.
-  type = "";
-  value = "";
-  placeholder = "";
-  checked = false;
-  style = { props: {} as Record<string, string>, setProperty(name: string, value: string) { this.props[name] = value; } };
-  fire(event: string, detail: object = {}) {
-    for (const listener of this.listeners[event] ?? []) listener({ type: event, ...detail });
-  }
+// ADR 0026: `#[test]` functions, in Rust, compiled by `rust-js --test` and
+// run by `bun test` in happy-dom's DOM.
+function rustTests(files: string[]): { exit: number; output: string } {
+  const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", ...files.map((f) => `./${f}`)], {
+    cwd: root,
+    stderr: "pipe",
+  });
+  return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
 }
 
-test("the todo app works like a todo app", async () => {
-  const app = new FakeElement("div", "app");
-  (globalThis as any).document = {
-    getElementById: (id: string) => (id === "app" ? app : null),
-    createElement: (tag: string) => new FakeElement(tag),
-  };
-  try {
-    const todo = await import(join(target, "todo.js"));
-    todo.main();
-    const [input, list, footer] = app.children as FakeElement[];
-    const [left, all, active, completed, clear] = footer.children as FakeElement[];
-    const titles = () => (list.children as FakeElement[]).map((li) => (li.children[1] as FakeElement).text);
-    const type = (text: string) => {
-      input.value = text;
-      input.fire("keydown", { key: "Enter" });
-    };
-    expect([input.placeholder, left.text, all.text, clear.text]).toEqual(["What needs to be done?", "0 items left", "All", "Clear completed"]);
+test("the counter's and the todo app's own tests pass, in a DOM", () => {
+  const { exit, output } = rustTests(["target/rust-tests/counter/counter.test.js", "target/rust-tests/todo/todo.test.js"]);
+  expect([exit, output.match(/(\d+) pass/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual([0, "7", "0"]);
+});
 
-    // Enter adds a trimmed title, and clears the input; blank titles are ignored.
-    type("  Buy milk  ");
-    expect([titles(), input.value, left.text]).toEqual([["Buy milk"], "", "1 item left"]);
-    type("Walk the dog");
-    type("   ");
-    input.value = "Not yet";
-    input.fire("keydown", { key: "a" });
-    expect([titles(), left.text]).toEqual([["Buy milk", "Walk the dog"], "2 items left"]);
-
-    // Ticking one off crosses it out.
-    const first = () => (list.children as FakeElement[])[0];
-    (first().children[0] as FakeElement).fire("change");
-    expect(left.text).toBe("1 item left");
-    expect([(first().children[0] as FakeElement).type, (first().children[0] as FakeElement).checked]).toEqual(["checkbox", true]);
-    expect((first().children[1] as FakeElement).style.props["text-decoration"]).toBe("line-through");
-
-    // Filters.
-    active.click();
-    expect(titles()).toEqual(["Walk the dog"]);
-    completed.click();
-    expect(titles()).toEqual(["Buy milk"]);
-    all.click();
-    expect(titles()).toEqual(["Buy milk", "Walk the dog"]);
-
-    // Clear completed, then delete the last one.
-    clear.click();
-    expect([titles(), left.text]).toEqual([["Walk the dog"], "1 item left"]);
-    (first().children[2] as FakeElement).click();
-    expect([titles(), left.text]).toEqual([[], "0 items left"]);
-  } finally {
-    delete (globalThis as any).document;
+test("a failing test fails the way Rust's would", () => {
+  const { exit, output } = rustTests(["target/rust-tests/asserts/asserts.test.js"]);
+  expect(exit).toBe(1);
+  expect([output.match(/(\d+) pass/)?.[1], output.match(/(\d+) skip/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual(["3", "1", "4"]);
+  // `assert!` with a message; `assert_eq!` showing both sides, as Rust does.
+  expect(output).toContain("error: n was 3");
+  expect(output).toContain("error: assertion `left == right` failed\n  left: { x: 1, y: 2 }\n right: { x: 1, y: 3 }");
+  // `#[should_panic]`: the wrong message, and no panic at all.
+  expect(output).toContain('panic message: "\\"something\\" happened"\n expected substring: "nope"');
+  expect(output).toContain("error: test did not panic as expected");
+  for (const name of ["fails_an_assert", "fails_an_assert_eq", "panics_with_the_wrong_message", "does_not_panic"]) {
+    expect(output).toContain(`(fail) tests::${name}`);
   }
 });
 
-test("the counter runs against the DOM", async () => {
-  const app = new FakeElement("div", "app");
-  (globalThis as any).document = {
-    getElementById: (id: string) => (id === "app" ? app : null),
-    createElement: (tag: string) => new FakeElement(tag),
-  };
-  try {
-    const counter = await import(join(target, "counter.js"));
-    counter.main();
-    const [minus, output, plus] = app.children as FakeElement[];
-    expect([minus.tag, minus.text, output.tag, output.text, plus.text]).toEqual(["button", "-", "output", "0", "+"]);
-    plus.click();
-    plus.click();
-    plus.click();
-    minus.click();
-    // Both buttons share one count, through the `Rc<Cell<i32>>`.
-    expect(output.text).toBe("2");
-    minus.click();
-    minus.click();
-    minus.click();
-    expect(output.text).toBe("-1");
-  } finally {
-    delete (globalThis as any).document;
-  }
-
-  // The JS reads like the Rust: methods, properties, globals, and one
-  // shared `{ value }`. No wrappers from the web crate.
+// The counter's JS reads like the Rust: methods, properties, globals, and one
+// shared `{ value }`. No wrappers from the web crate.
+test("the counter's JS is plain DOM code", async () => {
   const js = await Bun.file(join(target, "counter.js")).text();
   expect(js).toContain('const b = document.createElement("button");');
   expect(js).toContain("b.textContent = label;");

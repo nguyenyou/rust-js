@@ -1,0 +1,11 @@
+{
+  "name": "rust-js",
+  "private": true,
+  "description": "Compile Rust to readable JavaScript. This file only holds what the tests need.",
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5"
+  }
+}

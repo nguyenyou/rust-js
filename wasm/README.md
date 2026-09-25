@@ -56,6 +56,9 @@ come straight from `examples/`, starting with a counter written against the DOM.
 Every program can use the `web` crate (the DOM, [ADR 0024](../docs/decisions/0024-web-crate.md)):
 the page downloads its metadata, built for `wasm32-unknown-unknown` by
 `web/build.sh`, and passes `--extern web=`.
+The Test button compiles with `--test` and runs the crate's `#[test]` functions
+in the same frame, in the browser's own DOM ([ADR 0026](../docs/decisions/0026-testing.md)),
+with a small stand-in for `bun test`'s `test()`. It needs libtest's metadata too.
 If the root module exports `main`, the page runs it after each compile in a
 frame with a `<div id="app">`, and the status line says whether it ran. The
 modules are linked into one plain script. The frame isn't sandboxed: in some

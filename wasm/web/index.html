@@ -199,6 +199,7 @@
     <div class="toolbar">
       <select id="example" aria-label="Example"></select>
       <button id="compile" disabled>Compile</button>
+      <button id="test" disabled title="Compile with --test and run the #[test] functions">Test</button>
       <kbd>⌘/Ctrl-Enter</kbd>
       <span id="status" role="status">Loading…</span>
     </div>
@@ -224,7 +225,7 @@
       </section>
     </div>
     <section id="result-section" hidden>
-      <h2>Result <span class="hint">the root module's <code>main()</code>, run in its own frame</span></h2>
+      <h2>Result <span class="hint">the root module's <code>main()</code>, or with Test its <code>#[test]</code>s, in a frame of their own</span></h2>
       <iframe id="result" title="Result"></iframe>
     </section>
     <table id="stats"></table>

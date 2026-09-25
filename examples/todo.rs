@@ -154,3 +154,119 @@ pub fn main() {
     element::append(app, footer);
     render(&state, view);
 }
+
+// Tests, in Rust (ADR 0026): `rust-js --test` compiles them, and `bun test`
+// runs them in happy-dom's DOM.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use web::{Event, HtmlInputElement, node_list};
+
+    /// `new KeyboardEvent(type, { key })`. The web crate can't take
+    /// dictionaries yet, but a struct is a JS object with the same fields
+    /// (ADR 0020), so it can be declared here (ADR 0021).
+    #[allow(dead_code)] // `key` is read by JS, not by Rust.
+    struct KeyboardEventInit {
+        key: String,
+    }
+
+    unsafe extern "Rust" {
+        #[link_name = "new KeyboardEvent"]
+        safe fn keyboard_event(type_: &str, init: &KeyboardEventInit) -> &'static Event;
+    }
+
+    /// An empty page with the `<div id="app">` that `main` looks for.
+    fn page() -> &'static Element {
+        let body = document::body(document);
+        node::set_text_content(body, "");
+        let app = create("div");
+        element::set_id(app, "app");
+        element::append(body, app);
+        main();
+        app
+    }
+
+    fn input(app: &Element) -> &'static HtmlInputElement {
+        html_input_element::unchecked_from(element::query_selector(app, "input"))
+    }
+
+    /// Type `title` and press `key`.
+    fn type_in(app: &Element, title: &str, key: &str) {
+        let field = input(app);
+        html_input_element::set_value(field, title);
+        event_target::dispatch_event(field, keyboard_event("keydown", &KeyboardEventInit { key: key.to_string() }));
+    }
+
+    fn titles(app: &Element) -> Vec<String> {
+        let spans = element::query_selector_all(app, "li span");
+        let mut titles = Vec::new();
+        for i in 0..node_list::length(spans) {
+            titles.push(node::text_content(node_list::item(spans, i)));
+        }
+        titles
+    }
+
+    fn left(app: &Element) -> String {
+        node::text_content(element::query_selector(app, "p span"))
+    }
+
+    /// The `n`th element matching `selector`, to click.
+    fn nth(app: &Element, selector: &str, n: u32) -> &'static web::HtmlElement {
+        html_element::unchecked_from(node_list::item(element::query_selector_all(app, selector), n))
+    }
+
+    #[test]
+    fn starts_empty() {
+        let app = page();
+        assert_eq!(titles(app), Vec::<String>::new());
+        assert_eq!(left(app), "0 items left");
+    }
+
+    #[test]
+    fn enter_adds_a_trimmed_title() {
+        let app = page();
+        type_in(app, "  Buy milk  ", "Enter");
+        assert_eq!(titles(app), ["Buy milk"]);
+        assert_eq!(html_input_element::value(input(app)), "");
+        assert_eq!(left(app), "1 item left");
+    }
+
+    #[test]
+    fn blank_titles_and_other_keys_add_nothing() {
+        let app = page();
+        type_in(app, "   ", "Enter");
+        type_in(app, "Not yet", "a");
+        assert_eq!(titles(app), Vec::<String>::new());
+    }
+
+    #[test]
+    fn ticking_one_off_crosses_it_out() {
+        let app = page();
+        type_in(app, "Buy milk", "Enter");
+        type_in(app, "Walk the dog", "Enter");
+        html_element::click(nth(app, "li input", 0));
+        assert_eq!(left(app), "1 item left");
+        let title = nth(app, "li span", 0);
+        assert_eq!(css_style_declaration::get_property_value(html_element::style(title), "text-decoration"), "line-through");
+    }
+
+    #[test]
+    fn filters_clear_and_delete() {
+        let app = page();
+        type_in(app, "Buy milk", "Enter");
+        type_in(app, "Walk the dog", "Enter");
+        html_element::click(nth(app, "li input", 0));
+        let (all, active, completed, clear) = (nth(app, "p button", 0), nth(app, "p button", 1), nth(app, "p button", 2), nth(app, "p button", 3));
+        html_element::click(active);
+        assert_eq!(titles(app), ["Walk the dog"]);
+        html_element::click(completed);
+        assert_eq!(titles(app), ["Buy milk"]);
+        html_element::click(all);
+        assert_eq!(titles(app), ["Buy milk", "Walk the dog"]);
+        html_element::click(clear);
+        assert_eq!(titles(app), ["Walk the dog"]);
+        html_element::click(nth(app, "li button", 0));
+        assert_eq!(titles(app), Vec::<String>::new());
+        assert_eq!(left(app), "0 items left");
+    }
+}

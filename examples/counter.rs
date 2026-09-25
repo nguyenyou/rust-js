@@ -38,3 +38,52 @@ pub fn main() {
     element::append(app, output);
     element::append(app, stepper("+", 1, &count, output));
 }
+
+// Tests, in Rust (ADR 0026): `rust-js --test` compiles them, and `bun test`
+// runs them in happy-dom's DOM.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use web::{HtmlElement, html_element, node_list};
+
+    /// An empty page with the `<div id="app">` that `main` looks for.
+    fn page() -> &'static Element {
+        let body = document::body(document);
+        node::set_text_content(body, "");
+        let app = document::create_element(document, "div");
+        element::set_id(app, "app");
+        element::append(body, app);
+        app
+    }
+
+    fn nth_button(app: &Element, n: u32) -> &'static HtmlElement {
+        html_element::unchecked_from(node_list::item(element::query_selector_all(app, "button"), n))
+    }
+
+    fn shown(app: &Element) -> String {
+        node::text_content(element::query_selector(app, "output"))
+    }
+
+    #[test]
+    fn starts_at_zero() {
+        let app = page();
+        main();
+        assert_eq!(node::text_content(app), "-0+");
+    }
+
+    #[test]
+    fn both_buttons_change_one_count() {
+        let app = page();
+        main();
+        let (minus, plus) = (nth_button(app, 0), nth_button(app, 1));
+        html_element::click(plus);
+        html_element::click(plus);
+        html_element::click(plus);
+        html_element::click(minus);
+        assert_eq!(shown(app), "2");
+        html_element::click(minus);
+        html_element::click(minus);
+        html_element::click(minus);
+        assert_eq!(shown(app), "-1");
+    }
+}

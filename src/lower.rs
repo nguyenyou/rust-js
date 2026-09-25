@@ -19,7 +19,7 @@ use std::sync::Arc;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, DefKind};
-use rustc_hir::{BindingMode, ByRef, HirId, LangItem};
+use rustc_hir::{BindingMode, ByRef, HirId, LangItem, find_attr};
 use rustc_middle::middle::region;
 use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
@@ -79,6 +79,24 @@ pub struct LoweredModule {
     pub runtime: Vec<Helper>,
 }
 
+/// A `#[test]` function (ADR 0026).
+pub struct TestFn {
+    /// The module it's in, and its JS name there.
+    pub module: Vec<String>,
+    pub name: String,
+    /// What the runner calls it: `tests::adds`.
+    pub label: String,
+    /// `#[should_panic]`, with its `expected` substring if any.
+    pub should_panic: Option<Option<String>>,
+    pub ignore: bool,
+}
+
+/// The crate as JS: one module per Rust module, and the tests in test mode.
+pub struct Lowered {
+    pub modules: Vec<LoweredModule>,
+    pub tests: Vec<TestFn>,
+}
+
 /// Where a function ends up in the JS: its module's file, under this name.
 struct FnInfo {
     module: LocalModDefId,
@@ -87,10 +105,26 @@ struct FnInfo {
 
 /// Lower every function, grouped by module. Reports all unsupported
 /// features as rustc errors.
-pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Vec<LoweredModule>> {
+pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Lowered> {
+    // With `--test`, rustc adds a harness: a `const` per test, marked
+    // `#[rustc_test_marker]`, and a `main` that runs them with libtest. The
+    // JS runner takes their place (ADR 0026), so they're left out.
+    let markers: Vec<(LocalDefId, Symbol)> = tcx
+        .hir_crate_items(())
+        .definitions()
+        .filter_map(|def_id| find_attr!(tcx, def_id, RustcTestMarker(label) => (def_id, *label)))
+        .collect();
+    let harness_main = tcx.sess.opts.test.then(|| tcx.entry_fn(()).map(|(main, _)| main)).flatten();
+    let is_harness = |def_id: LocalDefId| {
+        let root = tcx.typeck_root_def_id(def_id.to_def_id());
+        Some(root) == harness_main || markers.iter().any(|&(marker, _)| marker.to_def_id() == root)
+    };
+    let all_bodies: Vec<&Body<'tcx>> = all_bodies.iter().filter(|body| !is_harness(body.def_id)).collect();
+
     let mut failed = false;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
+            _ if markers.iter().any(|&(marker, _)| marker == def_id) => continue,
             // `#[derive(Clone, Copy)]` and friends write impls we never call.
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn => "methods",
@@ -109,6 +143,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // Closures are lowered inside the function that creates them.
     let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) =
         all_bodies.iter().partition(|body| tcx.def_kind(body.def_id) == DefKind::Fn);
+    let all_bodies = &all_bodies;
     let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
 
     // JS globals the crate uses, whether declared here or in another crate
@@ -170,6 +205,30 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 }
             }
         }
+    }
+
+    // The tests: each marker names a function beside it, of the same name.
+    // The test file imports them, so they're exported.
+    let mut tests = Vec::new();
+    for &(marker, label) in &markers {
+        let module = tcx.parent_module_from_def_id(marker);
+        let name = tcx.item_name(marker.to_def_id());
+        let Some(test) = bodies
+            .iter()
+            .map(|body| body.def_id)
+            .find(|&f| tcx.parent_module_from_def_id(f) == module && tcx.item_name(f.to_def_id()) == name)
+        else {
+            continue;
+        };
+        called_from_elsewhere.insert(test.to_def_id());
+        let should_panic = find_attr!(tcx, test, ShouldPanic { reason, .. } => reason.map(|r| r.to_string()));
+        tests.push(TestFn {
+            module: module_path(tcx, module),
+            name: fns[&test.to_def_id()].name.clone(),
+            label: label.to_string(),
+            should_panic,
+            ignore: find_attr!(tcx, test, Ignore { .. }),
+        });
     }
 
     // Import aliases: the module's last path segment (the crate name for the
@@ -260,7 +319,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             }
         })
         .collect();
-    Some(lowered)
+    Some(Lowered { modules: lowered, tests })
 }
 
 /// What a JS function or global declared in an `extern` block is called:
@@ -350,6 +409,9 @@ pub enum Helper {
     Div,
     Rem,
     Retain,
+    Debug,
+    Eq,
+    AssertFailed,
 }
 
 impl Helper {
@@ -379,6 +441,56 @@ function $retain(v, keep) {
     }
   }
   v.length = n;
+}
+"#
+            }
+            // `{:?}`: Rust's `Debug`, as far as the JS value shows it. Structs
+            // print as `{ x: 1 }`: their type names aren't in the JS (ADR 0026).
+            Helper::Debug => {
+                r#"
+function $debug(v) {
+  if (typeof v === "string") {
+    return JSON.stringify(v);
+  }
+  if (Array.isArray(v)) {
+    return "[" + v.map($debug).join(", ") + "]";
+  }
+  if (v === undefined) {
+    return "()";
+  }
+  if (typeof v === "object" && v !== null) {
+    return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
+  }
+  return String(v);
+}
+"#
+            }
+            // `==` on structs, tuples, arrays and `Vec`s: a derived `PartialEq`
+            // compares field by field, element by element.
+            Helper::Eq => {
+                r#"
+function $eq(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a)) {
+    return Array.isArray(b) && a.length === b.length && a.every((x, i) => $eq(x, b[i]));
+  }
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => $eq(a[k], b[k]));
+}
+"#
+            }
+            // `assert_eq!` and `assert_ne!` failing, with Rust's message.
+            Helper::AssertFailed => {
+                r#"
+function $assertFailed(kind, left, right, message) {
+  const op = kind === "Eq" ? "==" : kind === "Ne" ? "!=" : "matches";
+  const why = message === undefined ? "" : ": " + message;
+  throw new Error("assertion `left " + op + " right` failed" + why + "\n  left: " + $debug(left) + "\n right: " + $debug(right));
 }
 "#
             }
@@ -455,6 +567,22 @@ enum Std {
     Len,
     Clear,
     Retain,
+    /// `==` (true) or `!=` (false) on structs, tuples, arrays and `Vec`s.
+    StructEq(bool),
+    /// `panic!("..")`, `assert!(..)`: `throw new Error(..)`.
+    Panic,
+    /// `panic!("{}", x)`: the same, with a formatted message.
+    PanicFmt,
+    /// What `assert_eq!` and `assert_ne!` call when they fail.
+    AssertFailed,
+    /// `format_args!("..")` with no placeholders: the string.
+    FmtStr,
+    /// `format_args!("{} {:?}", ..)`: a template and its arguments.
+    FmtNew,
+    /// An argument for `{}`.
+    FmtDisplay,
+    /// An argument for `{:?}`.
+    FmtDebug,
 }
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -1321,7 +1449,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Does calling `fun` become an assignment statement?
     fn is_assignment_call(&self, fun: ExprId) -> bool {
-        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear)) {
+        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt)) {
             return true;
         }
         let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else { return false };
@@ -1622,6 +1750,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             return self.expr(inner[1], out);
         }
+        if known == Std::FmtNew {
+            // `format_arguments::new(template, &args)`, the template a byte string.
+            let ExprKind::Literal { lit, .. } = self.thir[self.strip_refs(args[0])].kind else {
+                return Err(self.unsupported(span, "this format string"));
+            };
+            let LitKind::ByteStr(ref bytes, _) = lit.node else {
+                return Err(self.unsupported(span, "this format string"));
+            };
+            let items = self.expr(args[1], out)?;
+            return self.format(bytes.as_byte_str(), items, span);
+        }
+        if known == Std::AssertFailed {
+            // `assert_failed(kind, &left, &right, None or Some(message))`.
+            let message = match self.thir[self.strip(args[3])].kind {
+                ExprKind::Adt(ref option) => option.fields.first().map(|f| f.expr),
+                _ => return Err(self.unsupported(span, "this assertion")),
+            };
+            let mut list = args[..3].to_vec();
+            list.extend(message);
+            let values = self.operands(&list, out)?;
+            self.runtime.extend([Helper::AssertFailed, Helper::Debug]);
+            return Ok(Expr::call(Expr::var("$assertFailed"), values));
+        }
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
         let js_span = self.js_span(span);
@@ -1645,7 +1796,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
             Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
             Std::VecNew => Expr::array(vec![]),
-            Std::VecMacro => unreachable!("handled above"),
+            Std::VecMacro | Std::FmtNew | Std::AssertFailed => unreachable!("handled above"),
+            Std::Panic | Std::PanicFmt => {
+                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
+                Expr::undefined()
+            }
+            Std::FmtStr => arg(),
+            Std::FmtDisplay => {
+                let ty = generic_args.types().next().expect("`new_display` has a type argument");
+                if self.is_string_like(ty) {
+                    arg()
+                } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
+                    Expr::call(Expr::var("String"), vec![arg()])
+                } else {
+                    return Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")));
+                }
+            }
+            Std::FmtDebug => {
+                self.runtime.insert(Helper::Debug);
+                Expr::call(Expr::var("$debug"), vec![arg()])
+            }
+            Std::StructEq(eq) => {
+                self.runtime.insert(Helper::Eq);
+                let same = Expr::call(Expr::var("$eq"), vec![arg(), arg()]);
+                if eq { same } else { Expr::unary(UnaryOp::Not, same) }
+            }
             Std::Push => {
                 let (v, x) = (arg(), arg());
                 Expr::call(Expr::member(v, "push"), vec![x])
@@ -1688,6 +1863,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if diagnostic("to_string_method") {
             return Some(Std::ToString);
         }
+        if tcx.is_lang_item(def_id, LangItem::Panic) {
+            return Some(Std::Panic);
+        }
+        if tcx.is_lang_item(def_id, LangItem::PanicFmt) {
+            return Some(Std::PanicFmt);
+        }
+        if tcx.crate_name(def_id.krate) == sym::core && tcx.item_name(def_id).as_str() == "assert_failed" {
+            return Some(Std::AssertFailed);
+        }
         if diagnostic("deref_method") || diagnostic("deref_mut_method") {
             // A reference to what's inside is the same JS value (ADR 0024 for JS objects).
             let ty = self_ty?;
@@ -1709,7 +1893,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "ne" => false,
                     _ => return None,
                 };
-                return simple.then_some(Std::Eq(eq));
+                if simple {
+                    return Some(Std::Eq(eq));
+                }
+                return self.is_structural_eq(trait_, ty).then_some(Std::StructEq(eq));
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
@@ -1719,7 +1906,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
         let string = self.is_lang_adt(owner, LangItem::String);
+        let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
+        let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
+            "from_str" if arguments => Std::FmtStr,
+            "new" if arguments => Std::FmtNew,
+            "new_display" if argument => Std::FmtDisplay,
+            "new_debug" if argument => Std::FmtDebug,
             "new" if adt("Rc") => Std::Same,
             "new" if adt("Cell") || adt("RefCell") => Std::CellNew,
             "get" if adt("Cell") => Std::CellGet,
@@ -1737,6 +1930,66 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
             _ => return None,
         })
+    }
+
+    /// Does `==` on `ty` compare field by field or element by element? True
+    /// for tuples, arrays, slices and `Vec`s, and structs with a derived `PartialEq`.
+    fn is_structural_eq(&self, partial_eq: DefId, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        if ty.is_array() || ty.is_slice() || matches!(ty.kind(), ty::Tuple(_)) || self.is_std_adt(ty, sym::Vec) {
+            return true;
+        }
+        let mut derived = false;
+        self.tcx.for_each_relevant_impl(partial_eq, ty, |imp| derived |= self.tcx.is_automatically_derived(imp));
+        derived && matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
+    }
+
+    /// A `format_args!` template, decoded (its encoding is documented in
+    /// core's `fmt::Arguments`): literal pieces prefixed by their length, and
+    /// a byte with the top two bits set for each placeholder. `items` holds
+    /// the arguments, already made into strings.
+    fn format(&self, template: &[u8], items: Expr, span: Span) -> R<Expr> {
+        let bad = |what: &str| self.unsupported(span, what);
+        let byte = |i: usize| template.get(i).copied().ok_or_else(|| bad("this format string"));
+        let u16_at = |i: usize| Ok::<usize, ErrorGuaranteed>(u16::from_le_bytes([byte(i)?, byte(i + 1)?]) as usize);
+        let piece = |from: usize, len: usize| {
+            let bytes = template.get(from..from + len).ok_or_else(|| bad("this format string"))?;
+            Ok::<Expr, ErrorGuaranteed>(Expr::str(String::from_utf8_lossy(bytes)))
+        };
+        let (mut parts, mut i, mut next) = (Vec::new(), 0, 0);
+        loop {
+            let b = byte(i)?;
+            i += 1;
+            match b {
+                0 => break,
+                1..=0x7f => {
+                    parts.push(piece(i, b as usize)?);
+                    i += b as usize;
+                }
+                0x80 => {
+                    let len = u16_at(i)?;
+                    parts.push(piece(i + 2, len)?);
+                    i += 2 + len;
+                }
+                _ if b & 0xc0 == 0xc0 => {
+                    // Flags, width or precision (`{:>8}`, `{:.2}`, `{:#?}`).
+                    if b & 0b111 != 0 {
+                        return Err(bad("formatting options like width and precision"));
+                    }
+                    let index = if b & 0b1000 != 0 {
+                        let k = u16_at(i)?;
+                        i += 2;
+                        k
+                    } else {
+                        next
+                    };
+                    next = index + 1;
+                    parts.push(Expr::index(items.clone(), Expr::int(index as i128)));
+                }
+                _ => return Err(bad("this format string")),
+            }
+        }
+        Ok(parts.into_iter().reduce(|a, b| Expr::bin(Op::Add, a, b)).unwrap_or_else(|| Expr::str("")))
     }
 
     /// `str`, `String`, or a reference to one: all JS strings.
@@ -2153,6 +2406,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         strip(self.thir, e)
     }
 
+    /// Also skip borrows and derefs: `&*x` to `x`.
+    fn strip_refs(&self, e: ExprId) -> ExprId {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } => self.strip_refs(arg),
+            _ => self.strip(e),
+        }
+    }
+
     fn loop_index(&self, label: region::Scope, span: Span) -> R<usize> {
         self.loops
             .iter()
@@ -2214,6 +2475,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_part(*inner),
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_part(*elem),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
+            // `format_args!`'s pieces are strings by the time JS sees them.
+            ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::FormatArguments) || self.is_lang_adt(ty, LangItem::FormatArgument) => {
+                return None;
+            }
             // A guard held in a variable is the object it guards; a guarded
             // number would be a copy, not a place.
             ty::Adt(_, args)

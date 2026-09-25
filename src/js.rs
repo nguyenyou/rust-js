@@ -70,6 +70,8 @@ pub enum StmtKind {
     Break(Option<String>),
     Continue(Option<String>),
     Return(Option<Expr>),
+    /// `throw new Error(..)`: a panic (ADR 0012).
+    Throw(Expr),
 }
 
 impl StmtKind {

@@ -30,6 +30,7 @@ type Example = { name: string; title: string; root: string; files: string[] };
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const exampleSelect = $<HTMLSelectElement>("example");
 const button = $<HTMLButtonElement>("compile");
+const testButton = $<HTMLButtonElement>("test");
 const status = $<HTMLSpanElement>("status");
 const stats = $<HTMLTableElement>("stats");
 
@@ -305,6 +306,7 @@ async function compile(
   webCrate: File,
   sources: Map<string, string>,
   rootFile: string,
+  test: boolean,
 ): Promise<Result> {
   const stderr: string[] = [];
   const outDir = new PreopenDirectory("/out", new Map());
@@ -321,7 +323,9 @@ async function compile(
     new PreopenDirectory("/web", new Map([["libweb.rmeta", webCrate]])),
   ];
   const outFile = `/out/${rootFile.replace(/\.rs$/, ".js")}`;
-  const args = ["rust-js", `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
+  // `--test`: the `#[test]` functions too, and `<root>.test.js` to run them (ADR 0026).
+  const mode = test ? ["--test"] : [];
+  const args = ["rust-js", ...mode, `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
   // Every program may use the web crate; rustc only reads it if one does.
   args.push("--extern", "web=/web/libweb.rmeta");
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
@@ -381,10 +385,13 @@ function resolve(from: string, specifier: string): string {
  * "./util.js"` becomes that module's exports object. The objects all exist
  * before any module runs, so cycles work: functions are only called later.
  */
-function link(files: Map<string, string>, rootFile: string): string {
+function link(files: Map<string, string>, start: string): string {
   const key = (path: string) => JSON.stringify(path);
   const parts = ["const modules = {};", ...[...files.keys()].map((path) => `modules[${key(path)}] = {};`)];
-  for (const [path, code] of files) {
+  // A test file reads the tests' functions as it registers them, so it goes
+  // after the modules that define them.
+  const ordered = [...files].sort(([a], [b]) => Number(a.endsWith(".test.js")) - Number(b.endsWith(".test.js")));
+  for (const [path, code] of ordered) {
     const exported: string[] = [];
     const body = code
       .replace(/^import \* as (\S+) from "([^"]+)";$/gm, (_, alias, specifier) => {
@@ -397,7 +404,7 @@ function link(files: Map<string, string>, rootFile: string): string {
       .replace(/^\/\/# sourceMappingURL=.*$/m, "");
     parts.push(`(function (exports) {\n${body}\nObject.assign(exports, { ${exported.join(", ")} });\n})(modules[${key(path)}]);`);
   }
-  parts.push(`modules[${key(rootFile)}].main();`);
+  parts.push(start);
   // A `</script>` in a string would end the script early; `<\/script>` is the same string.
   return parts.join("\n").replaceAll("</script", "<\\/script");
 }
@@ -405,10 +412,39 @@ function link(files: Map<string, string>, rootFile: string): string {
 let programRuns = 0;
 let reported = false;
 
-function runProgram(files: Map<string, string>, rootFile: string) {
+// A small `bun test` look-alike for the Result frame: `test` and `test.skip`
+// collect the tests, which then run one after another. What they leave in
+// the page is replaced by the report.
+const TEST_RUNNER = `
+    const results = registered.map(({ name, f }) => {
+      if (!f) return { name, outcome: "skip" };
+      try {
+        f();
+        return { name, outcome: "pass" };
+      } catch (e) {
+        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {
+      const line = document.createElement("div");
+      line.className = outcome;
+      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");
+      if (message) {
+        const why = document.createElement("pre");
+        why.textContent = message;
+        line.append(why);
+      }
+      return line;
+    }));
+    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;`;
+
+/** Run the root module's `main()`, or with `test`, the crate's tests. */
+function runProgram(files: Map<string, string>, rootFile: string, test = false) {
   const main = files.get(rootFile);
+  const tests = rootFile.replace(/\.js$/, ".test.js");
   programRuns++;
-  if (!main || !/^export function main\(\)/m.test(main)) {
+  const runnable = test ? files.has(tests) : main !== undefined && /^export function main\(\)/m.test(main);
+  if (!runnable) {
     resultSection.hidden = true;
     resultFrame.srcdoc = "";
     return;
@@ -435,16 +471,23 @@ function runProgram(files: Map<string, string>, rootFile: string) {
   body { margin: 12px; }
   button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
   output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
+  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }
+  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }
+  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }
 </style>
 <div id="app"></div>
 <script>
   // Errors later on, in an event handler say.
   addEventListener("error", (e) => ${report("error: String(e.message)")});
+  // What a test file calls, as bun test provides it (ADR 0026).
+  const registered = [];
+  globalThis.test = (name, f) => registered.push({ name, f });
+  test.skip = (name) => registered.push({ name });
 </script>
 <script>
   try {
-${link(files, rootFile)}
-    ${report("ran: true")};
+${test ? link(files, TEST_RUNNER) : link(files, `modules[${JSON.stringify(rootFile)}].main();`)}
+    ${test ? report(`tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }`) : report("ran: true")};
   } catch (e) {
     ${report("error: String(e)")};
   }
@@ -456,6 +499,12 @@ addEventListener("message", (e) => {
   reported = true;
   if (e.data.error) setStatus(`Runtime error: ${e.data.error}`, "bad");
   else if (e.data.ran) setStatus(`${status.textContent} Ran main().`, "good");
+  else if (e.data.tested) {
+    const { passed, failed, ignored } = e.data.tested;
+    const total = passed + failed;
+    const summary = total === 0 ? "No tests." : `Tests: ${passed} passed, ${failed} failed${ignored ? `, ${ignored} ignored` : ""}.`;
+    setStatus(summary, failed ? "bad" : "good");
+  }
 });
 
 // ── Loading ─────────────────────────────────────────────────────────────
@@ -518,16 +567,17 @@ exampleSelect.addEventListener("change", async () => {
 });
 await loadExample(examples[0]);
 button.disabled = false;
+testButton.disabled = false;
 setStatus("Ready.");
 
 let runs = 0;
 let compiling = false;
-async function onCompile() {
+async function onCompile(test = false) {
   if (compiling || button.disabled) return;
   compiling = true;
-  button.disabled = true;
-  setStatus("Compiling…");
-  const r = await compile(module, sysroot, webCrate, crateSources(), root);
+  button.disabled = testButton.disabled = true;
+  setStatus(test ? "Compiling the tests…" : "Compiling…");
+  const r = await compile(module, sysroot, webCrate, crateSources(), root, test);
   runs++;
   const ok = r.exit === 0;
   if (ok) {
@@ -535,7 +585,7 @@ async function onCompile() {
     // Keep showing the same file if it's still there; otherwise the root's.
     openOutput(outputs.has(shownOutput) ? shownOutput : rootJs());
     setStatus(`Compiled: ${outputs.size} JS file${outputs.size === 1 ? "" : "s"}.`, "good");
-    runProgram(outputs, rootJs());
+    runProgram(outputs, rootJs(), test);
   } else {
     showDiagnostics(r.stderr);
     runProgram(new Map(), rootJs());
@@ -543,9 +593,10 @@ async function onCompile() {
   }
   stat(`compile #${runs}`, `instantiate ${ms(r.instantiate)}, run ${ms(r.run)}, memory ${mb(r.memory)}, ${ok ? "ok" : "error"}`);
   compiling = false;
-  button.disabled = false;
+  button.disabled = testButton.disabled = false;
   // For automated checks.
   (window as unknown as { lastResult: Result }).lastResult = r;
 }
 
-button.addEventListener("click", onCompile);
+button.addEventListener("click", () => onCompile());
+testButton.addEventListener("click", () => onCompile(true));

@@ -7,7 +7,7 @@ replace the back end with one that prints JS from THIR.
 ```bash
 cargo build
 ./target/debug/rust-js examples/fib.rs          # writes examples/fib.js + fib.js.map
-bun test                                     # native Rust vs. generated JS, and the source map
+bun install && bun test                      # native Rust vs. generated JS, source maps, Rust #[test]s
 ```
 
 **Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
@@ -53,5 +53,19 @@ and exports written for you (see [ADR 0019](docs/decisions/0019-one-js-file-per-
 ```bash
 ./target/debug/rust-js examples/modules/lib.rs -o out/lib.js   # writes out/lib.js, out/stats.js, ...
 ```
+
+## Testing
+
+Tests are Rust's own `#[test]` functions ([ADR 0026](docs/decisions/0026-testing.md)).
+`rust-js --test` compiles them, and writes a `.test.js` file for `bun test`, which runs them
+in happy-dom's DOM:
+
+```bash
+bun install                                         # happy-dom, for DOM tests
+./target/debug/rust-js --test examples/todo.rs -o out/todo.js -- --extern web=target/libweb.rmeta
+bun test --preload ./test/happydom.ts ./out/todo.test.js
+```
+
+`assert!`, `assert_eq!`, `panic!` and `#[should_panic]` fail with Rust's messages.
 
 Design decisions are recorded in [docs/](docs/README.md).
