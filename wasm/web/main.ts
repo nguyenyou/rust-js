@@ -16,10 +16,51 @@ import {
   PreopenDirectory,
   WASI,
 } from "@bjorn3/browser_wasi_shim";
+import { javascript } from "@codemirror/lang-javascript";
+import { rust } from "@codemirror/lang-rust";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { basicSetup, EditorView } from "codemirror";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const source = $<HTMLTextAreaElement>("source");
-const output = $<HTMLPreElement>("output");
+
+// Two CodeMirror editors: Rust in, JavaScript out. Both follow the system's
+// light or dark setting, like the rest of the page.
+const darkMode = window.matchMedia("(prefers-color-scheme: dark)");
+const themeFor = (dark: boolean): Extension => (dark ? oneDark : []);
+const sourceTheme = new Compartment();
+const outputTheme = new Compartment();
+const outputLanguage = new Compartment();
+
+const source = new EditorView({
+  parent: $("source"),
+  extensions: [
+    basicSetup,
+    rust(),
+    sourceTheme.of(themeFor(darkMode.matches)),
+    EditorView.contentAttributes.of({ "aria-label": "Rust source" }),
+  ],
+});
+// Read-only, but still selectable and copyable. Highlighted as JS after a
+// successful compile, plain text when it shows rustc's diagnostics.
+const output = new EditorView({
+  parent: $("output"),
+  extensions: [
+    basicSetup,
+    outputLanguage.of(javascript()),
+    outputTheme.of(themeFor(darkMode.matches)),
+    EditorState.readOnly.of(true),
+    EditorView.contentAttributes.of({ "aria-label": "Generated JavaScript" }),
+  ],
+});
+darkMode.addEventListener("change", (e) => {
+  source.dispatch({ effects: sourceTheme.reconfigure(themeFor(e.matches)) });
+  output.dispatch({ effects: outputTheme.reconfigure(themeFor(e.matches)) });
+});
+
+function setText(view: EditorView, text: string, ...effects: ReturnType<Compartment["reconfigure"]>[]) {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, effects });
+}
 const status = $<HTMLSpanElement>("status");
 const button = $<HTMLButtonElement>("compile");
 const stats = $<HTMLTableElement>("stats");
@@ -112,7 +153,7 @@ async function compile(module: WebAssembly.Module, sysroot: Map<string, Inode>, 
 }
 
 const { module, sysroot, example } = await load();
-source.value = example;
+setText(source, example);
 button.disabled = false;
 status.textContent = "Ready.";
 
@@ -121,10 +162,10 @@ async function onCompile() {
   button.disabled = true;
   status.textContent = "Compiling…";
   status.className = "";
-  const r = await compile(module, sysroot, source.value);
+  const r = await compile(module, sysroot, source.state.doc.toString());
   runs++;
   const ok = r.js !== undefined;
-  output.textContent = ok ? r.js! : r.stderr;
+  setText(output, ok ? r.js! : r.stderr, outputLanguage.reconfigure(ok ? javascript() : []));
   status.textContent = ok ? `Compiled (exit ${r.exit}).` : `Failed: exit ${r.exit}.`;
   status.className = ok ? "good" : "bad";
   stat(`compile #${runs}`, `instantiate ${ms(r.instantiate)}, run ${ms(r.run)}, memory ${mb(r.memory)}, ${ok ? "ok" : "error"}`);
