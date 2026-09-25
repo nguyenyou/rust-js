@@ -48,7 +48,11 @@ cd web && bun install && bun serve.ts     # http://localhost:4400
 ```
 
 The page compiles `rust-js.wasm` once, downloads the 15 metadata files rustc
-needs, and then compiles whatever is in the editor on each click.
+needs, and then compiles the crate in the editor on each click (or
+⌘/Ctrl-Enter). Each side has a file explorer: the crate's `.rs` files, which
+you can add to and delete from, and the JS files it compiles to, one per module
+([ADR 0019](../docs/decisions/0019-one-js-file-per-module.md)). The examples
+come straight from `examples/`: the multi-file `modules` crate, and `fib`.
 
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),

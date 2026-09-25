@@ -1,8 +1,9 @@
-// Run rust-js.wasm in the browser, on an in-memory WASI filesystem:
+// The playground: a Rust crate in (a few files), one JS file per module out
+// (ADR 0019). rust-js.wasm runs on an in-memory WASI filesystem:
 //
-//   /in/main.rs      the source from the textarea
-//   /out/main.js     what rust-js writes (plus main.js.map)
-//   /sysroot/...     the std metadata rustc type-checks against
+//   /in/lib.rs, /in/stats.rs, ...   the crate, from the Rust editor
+//   /out/lib.js, /out/stats.js, ... what rust-js writes (plus .js.map files)
+//   /sysroot/...                    the std metadata rustc type-checks against
 //
 // Each compile gets a fresh instance of the (compiled once) module: rustc
 // keeps global state, and a failed compile ends in a trap.
@@ -18,31 +19,53 @@ import {
 } from "@bjorn3/browser_wasi_shim";
 import { javascript } from "@codemirror/lang-javascript";
 import { rust } from "@codemirror/lang-rust";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension, Prec } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { keymap } from "@codemirror/view";
 import { basicSetup, EditorView } from "codemirror";
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+type Example = { name: string; title: string; root: string; files: string[] };
 
-// Two CodeMirror editors: Rust in, JavaScript out. Both follow the system's
-// light or dark setting, like the rest of the page.
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const exampleSelect = $<HTMLSelectElement>("example");
+const button = $<HTMLButtonElement>("compile");
+const status = $<HTMLSpanElement>("status");
+const stats = $<HTMLTableElement>("stats");
+
+const ms = (t: number) => `${t.toFixed(0)} ms`;
+const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+
+function stat(label: string, value: string) {
+  const row = stats.insertRow();
+  row.insertCell().textContent = label;
+  row.insertCell().textContent = value;
+}
+
+function setStatus(text: string, kind: "" | "good" | "bad" = "") {
+  status.textContent = text;
+  status.className = kind;
+}
+
+// ── Editors ─────────────────────────────────────────────────────────────
+// Rust in, JavaScript out. Both follow the system's light or dark setting.
+
 const darkMode = window.matchMedia("(prefers-color-scheme: dark)");
 const themeFor = (dark: boolean): Extension => (dark ? oneDark : []);
 const sourceTheme = new Compartment();
 const outputTheme = new Compartment();
 const outputLanguage = new Compartment();
 
-const source = new EditorView({
-  parent: $("source"),
-  extensions: [
-    basicSetup,
-    rust(),
-    sourceTheme.of(themeFor(darkMode.matches)),
-    EditorView.contentAttributes.of({ "aria-label": "Rust source" }),
-  ],
-});
-// Read-only, but still selectable and copyable. Highlighted as JS after a
-// successful compile, plain text when it shows rustc's diagnostics.
+const sourceExtensions: Extension[] = [
+  basicSetup,
+  rust(),
+  sourceTheme.of(themeFor(darkMode.matches)),
+  // basicSetup binds Mod-Enter to "insert blank line": outrank it.
+  Prec.highest(keymap.of([{ key: "Mod-Enter", run: () => (void onCompile(), true) }])),
+  EditorView.contentAttributes.of({ "aria-label": "Rust source" }),
+];
+const source = new EditorView({ parent: $("source"), extensions: sourceExtensions });
+// Read-only, but still selectable and copyable. Highlighted as JS for a
+// generated file, plain text when it shows rustc's diagnostics.
 const output = new EditorView({
   parent: $("output"),
   extensions: [
@@ -58,71 +81,244 @@ darkMode.addEventListener("change", (e) => {
   output.dispatch({ effects: outputTheme.reconfigure(themeFor(e.matches)) });
 });
 
-function setText(view: EditorView, text: string, ...effects: ReturnType<Compartment["reconfigure"]>[]) {
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, effects });
-}
-const status = $<HTMLSpanElement>("status");
-const button = $<HTMLButtonElement>("compile");
-const stats = $<HTMLTableElement>("stats");
+// ── File explorer ───────────────────────────────────────────────────────
 
-const ms = (t: number) => `${t.toFixed(0)} ms`;
-const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+type Tree = Map<string, Tree | string>; // a folder's entries: subfolders, or a file's full path
 
-function stat(label: string, value: string) {
-  const row = stats.insertRow();
-  row.insertCell().textContent = label;
-  row.insertCell().textContent = value;
+function buildTree(paths: string[]): Tree {
+  const tree: Tree = new Map();
+  for (const path of paths) {
+    const parts = path.split("/");
+    let folder = tree;
+    for (const part of parts.slice(0, -1)) {
+      if (!(folder.get(part) instanceof Map)) folder.set(part, new Map());
+      folder = folder.get(part) as Tree;
+    }
+    folder.set(parts.at(-1)!, path);
+  }
+  return tree;
 }
+
+/** Render a file tree into `list`: a button per file, folders as labels. */
+function renderTree(
+  list: HTMLUListElement,
+  paths: string[],
+  options: {
+    selected: string;
+    first?: string;
+    onOpen: (path: string) => void;
+    decorate?: (li: HTMLLIElement, path: string) => void;
+  },
+) {
+  const render = (tree: Tree, into: HTMLUListElement, depth: number) => {
+    // The crate root first; then by name, a module's file just before its
+    // folder: `geometry.rs`, then `geometry/` ("." sorts before "/").
+    const key = ([name, entry]: [string, Tree | string]) => (entry instanceof Map ? `${name}/` : name);
+    const entries = [...tree].sort((a, b) =>
+      a[1] === options.first ? -1 : b[1] === options.first ? 1 : key(a) < key(b) ? -1 : 1,
+    );
+    for (const [name, entry] of entries) {
+      const li = document.createElement("li");
+      const indent = `${8 + depth * 12}px`;
+      if (entry instanceof Map) {
+        const label = document.createElement("span");
+        label.className = "folder";
+        label.style.paddingLeft = indent;
+        label.textContent = `${name}/`;
+        const nested = document.createElement("ul");
+        render(entry, nested, depth + 1);
+        const wrapper = document.createElement("div");
+        wrapper.style.width = "100%";
+        wrapper.append(label, nested);
+        li.append(wrapper);
+      } else {
+        const file = document.createElement("button");
+        file.className = "file";
+        file.style.paddingLeft = indent;
+        file.textContent = name;
+        file.setAttribute("aria-current", String(entry === options.selected));
+        file.addEventListener("click", () => options.onOpen(entry));
+        li.append(file);
+        options.decorate?.(li, entry);
+      }
+      into.append(li);
+    }
+  };
+  list.replaceChildren();
+  render(buildTree(paths), list, 0);
+}
+
+// ── The crate being edited ──────────────────────────────────────────────
+// Each file keeps its own editor state, so undo history survives switching.
+
+let root = "lib.rs";
+const files = new Map<string, EditorState>();
+let current = "";
+
+const newState = (text: string) => EditorState.create({ doc: text, extensions: sourceExtensions });
+
+function openFile(path: string) {
+  if (current && files.has(current)) files.set(current, source.state);
+  current = path;
+  source.setState(files.get(path)!);
+  // A stored state has the theme from when it was created: bring it up to date.
+  source.dispatch({ effects: sourceTheme.reconfigure(themeFor(darkMode.matches)) });
+  renderSourceFiles();
+}
+
+function renderSourceFiles() {
+  renderTree($("source-files"), [...files.keys()], {
+    selected: current,
+    first: root,
+    onOpen: openFile,
+    decorate: (li, path) => {
+      if (path === root) {
+        const note = document.createElement("span");
+        note.className = "note";
+        note.textContent = "root ";
+        li.append(note);
+        return;
+      }
+      const remove = document.createElement("button");
+      remove.className = "delete";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", `Delete ${path}`);
+      remove.addEventListener("click", () => {
+        if (!confirm(`Delete ${path}?`)) return;
+        files.delete(path);
+        if (current === path) {
+          current = "";
+          openFile(root);
+        } else {
+          renderSourceFiles();
+        }
+      });
+      li.append(remove);
+    },
+  });
+}
+
+$("new-file").addEventListener("click", () => {
+  const path = prompt("New file, e.g. math.rs or geometry/shape.rs:")?.trim();
+  if (!path) return;
+  if (!/^([a-z_][a-z0-9_]*\/)*[a-z_][a-z0-9_]*\.rs$/.test(path)) {
+    setStatus(`"${path}" isn't a Rust module file name, like math.rs or geometry/shape.rs.`, "bad");
+    return;
+  }
+  if (files.has(path)) {
+    setStatus(`${path} already exists.`, "bad");
+    return;
+  }
+  files.set(path, newState(""));
+  openFile(path);
+  const module = path.slice(path.lastIndexOf("/") + 1, -".rs".length);
+  setStatus(`Created ${path}. Declare it with \`mod ${module};\` in its parent, or rustc won't include it.`);
+});
+
+/** The crate's files as text, including unsaved edits in the open file. */
+function crateSources(): Map<string, string> {
+  files.set(current, source.state);
+  return new Map([...files].map(([path, state]) => [path, state.doc.toString()]));
+}
+
+// ── Generated JS ────────────────────────────────────────────────────────
+
+let outputs = new Map<string, string>();
+let shownOutput = "";
+
+const rootJs = () => root.replace(/\.rs$/, ".js");
+
+function openOutput(path: string) {
+  shownOutput = path;
+  output.dispatch({
+    changes: { from: 0, to: output.state.doc.length, insert: outputs.get(path)! },
+    effects: outputLanguage.reconfigure(javascript()),
+  });
+  renderOutputFiles();
+}
+
+function renderOutputFiles() {
+  const list = $<HTMLUListElement>("output-files");
+  if (outputs.size === 0) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "(none)";
+    list.replaceChildren(empty);
+    return;
+  }
+  renderTree(list, [...outputs.keys()], { selected: shownOutput, first: rootJs(), onOpen: openOutput });
+}
+
+function showDiagnostics(text: string) {
+  outputs = new Map();
+  shownOutput = "";
+  output.dispatch({
+    changes: { from: 0, to: output.state.doc.length, insert: text },
+    effects: outputLanguage.reconfigure([]),
+  });
+  renderOutputFiles();
+}
+
+// ── Running rust-js ─────────────────────────────────────────────────────
 
 function dir(entries: Record<string, Inode>): Directory {
   return new Directory(new Map(Object.entries(entries)));
 }
 
-async function load() {
-  const start = performance.now();
-  const [module, sysroot, example] = await Promise.all([
-    WebAssembly.compileStreaming(fetch("./rust-js.wasm")).then((m) => {
-      stat("download + compile rust-js.wasm", ms(performance.now() - start));
-      return m;
-    }),
-    fetch("./sysroot.json")
-      .then((r) => r.json() as Promise<string[]>)
-      .then((names) =>
-        Promise.all(
-          names.map(async (name) => {
-            const bytes = new Uint8Array(await (await fetch(`./sysroot/${name}`)).arrayBuffer());
-            return [name, new File(bytes, { readonly: true })] as [string, Inode];
-          }),
-        ),
-      )
-      .then((files) => {
-        const size = files.reduce((n, [, f]) => n + (f as File).data.byteLength, 0);
-        stat("download sysroot", `${ms(performance.now() - start)} (${files.length} files, ${mb(size)})`);
-        return new Map(files);
-      }),
-    fetch("./fib.rs").then((r) => r.text()),
-  ]);
-  stat("ready after", ms(performance.now() - start));
-  return { module, sysroot, example };
+/** A WASI directory tree from `path → text`, e.g. `geometry/area.rs`. */
+function directoryOf(sources: Map<string, string>): Map<string, Inode> {
+  const top = new Map<string, Inode>();
+  for (const [path, text] of sources) {
+    const parts = path.split("/");
+    let folder = top;
+    for (const part of parts.slice(0, -1)) {
+      if (!folder.has(part)) folder.set(part, new Directory(new Map()));
+      folder = (folder.get(part) as Directory).contents;
+    }
+    folder.set(parts.at(-1)!, new File(new TextEncoder().encode(text)));
+  }
+  return top;
 }
 
-type Result = { exit: number | string; js?: string; stderr: string; instantiate: number; run: number; memory: number };
+/** Every `.js` file under a WASI directory, as `path → text`. */
+function jsFilesIn(folder: Directory, prefix = "", found = new Map<string, string>()): Map<string, string> {
+  for (const [name, entry] of folder.contents) {
+    if (entry instanceof Directory) jsFilesIn(entry, `${prefix}${name}/`, found);
+    else if (entry instanceof File && name.endsWith(".js")) found.set(prefix + name, new TextDecoder().decode(entry.data));
+  }
+  return found;
+}
 
-async function compile(module: WebAssembly.Module, sysroot: Map<string, Inode>, code: string): Promise<Result> {
+type Result = {
+  exit: number | string;
+  files: Map<string, string>;
+  stderr: string;
+  instantiate: number;
+  run: number;
+  memory: number;
+};
+
+async function compile(
+  module: WebAssembly.Module,
+  sysroot: Map<string, Inode>,
+  sources: Map<string, string>,
+  rootFile: string,
+): Promise<Result> {
   const stderr: string[] = [];
   const outDir = new PreopenDirectory("/out", new Map());
   const fds = [
     new OpenFile(new File([])), // stdin
     ConsoleStdout.lineBuffered((line) => stderr.push(line)), // stdout
     ConsoleStdout.lineBuffered((line) => stderr.push(line)), // stderr
-    new PreopenDirectory("/in", new Map([["main.rs", new File(new TextEncoder().encode(code))]])),
+    new PreopenDirectory("/in", directoryOf(sources)),
     outDir,
     new PreopenDirectory(
       "/sysroot",
       new Map([["lib", dir({ rustlib: dir({ "wasm32-unknown-unknown": dir({ lib: new Directory(sysroot) }) }) })]]),
     ),
   ];
-  const args = ["rust-js", "/in/main.rs", "-o", "/out/main.js", "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
+  const outFile = `/out/${rootFile.replace(/\.rs$/, ".js")}`;
+  const args = ["rust-js", `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
   const wasi = new WASI(args, ["RUSTC_ICE=0"], fds);
 
@@ -140,35 +336,92 @@ async function compile(module: WebAssembly.Module, sysroot: Map<string, Inode>, 
   }
   const t2 = performance.now();
 
-  const file = outDir.dir.contents.get("main.js") as File | undefined;
-  const memory = (instance.exports.memory as WebAssembly.Memory).buffer.byteLength;
   return {
     exit,
-    js: file && new TextDecoder().decode(file.data),
+    files: exit === 0 ? jsFilesIn(outDir.dir) : new Map(),
     stderr: stderr.join("\n"),
     instantiate: t1 - t0,
     run: t2 - t1,
-    memory,
+    memory: (instance.exports.memory as WebAssembly.Memory).buffer.byteLength,
   };
 }
 
-const { module, sysroot, example } = await load();
-setText(source, example);
+// ── Loading ─────────────────────────────────────────────────────────────
+
+async function load() {
+  const start = performance.now();
+  const [module, sysroot, examples] = await Promise.all([
+    WebAssembly.compileStreaming(fetch("./rust-js.wasm")).then((m) => {
+      stat("download + compile rust-js.wasm", ms(performance.now() - start));
+      return m;
+    }),
+    fetch("./sysroot.json")
+      .then((r) => r.json() as Promise<string[]>)
+      .then((names) =>
+        Promise.all(
+          names.map(async (name) => {
+            const bytes = new Uint8Array(await (await fetch(`./sysroot/${name}`)).arrayBuffer());
+            return [name, new File(bytes, { readonly: true })] as [string, Inode];
+          }),
+        ),
+      )
+      .then((entries) => {
+        const size = entries.reduce((n, [, f]) => n + (f as File).data.byteLength, 0);
+        stat("download sysroot", `${ms(performance.now() - start)} (${entries.length} files, ${mb(size)})`);
+        return new Map(entries);
+      }),
+    fetch("./examples.json").then((r) => r.json() as Promise<Example[]>),
+  ]);
+  stat("ready after", ms(performance.now() - start));
+  return { module, sysroot, examples };
+}
+
+async function loadExample(example: Example) {
+  const texts = await Promise.all(
+    example.files.map(async (f) => [f, await (await fetch(`./examples/${example.name}/${f}`)).text()] as const),
+  );
+  files.clear();
+  for (const [path, text] of texts) files.set(path, newState(text));
+  root = example.root;
+  current = "";
+  openFile(root);
+  outputs = new Map();
+  shownOutput = "";
+  output.dispatch({ changes: { from: 0, to: output.state.doc.length, insert: "" } });
+  renderOutputFiles();
+}
+
+const { module, sysroot, examples } = await load();
+for (const example of examples) exampleSelect.add(new Option(example.title, example.name));
+exampleSelect.addEventListener("change", async () => {
+  await loadExample(examples.find((e) => e.name === exampleSelect.value)!);
+  setStatus("Ready.");
+});
+await loadExample(examples[0]);
 button.disabled = false;
-status.textContent = "Ready.";
+setStatus("Ready.");
 
 let runs = 0;
+let compiling = false;
 async function onCompile() {
+  if (compiling || button.disabled) return;
+  compiling = true;
   button.disabled = true;
-  status.textContent = "Compiling…";
-  status.className = "";
-  const r = await compile(module, sysroot, source.state.doc.toString());
+  setStatus("Compiling…");
+  const r = await compile(module, sysroot, crateSources(), root);
   runs++;
-  const ok = r.js !== undefined;
-  setText(output, ok ? r.js! : r.stderr, outputLanguage.reconfigure(ok ? javascript() : []));
-  status.textContent = ok ? `Compiled (exit ${r.exit}).` : `Failed: exit ${r.exit}.`;
-  status.className = ok ? "good" : "bad";
+  const ok = r.exit === 0;
+  if (ok) {
+    outputs = r.files;
+    // Keep showing the same file if it's still there; otherwise the root's.
+    openOutput(outputs.has(shownOutput) ? shownOutput : rootJs());
+    setStatus(`Compiled: ${outputs.size} JS file${outputs.size === 1 ? "" : "s"}.`, "good");
+  } else {
+    showDiagnostics(r.stderr);
+    setStatus(`Failed: exit ${r.exit}.`, "bad");
+  }
   stat(`compile #${runs}`, `instantiate ${ms(r.instantiate)}, run ${ms(r.run)}, memory ${mb(r.memory)}, ${ok ? "ok" : "error"}`);
+  compiling = false;
   button.disabled = false;
   // For automated checks.
   (window as unknown as { lastResult: Result }).lastResult = r;

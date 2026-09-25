@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>rust-js in the browser</title>
+    <title>rust-js playground</title>
     <style>
       :root {
         --bg: #fbfbfa;
@@ -11,6 +11,7 @@
         --muted: #6b6b66;
         --panel: #f1f0ec;
         --border: #deddd6;
+        --selected: #e3e1d9;
         --bad: #a3321f;
         --good: #2f6b3a;
         color-scheme: light dark;
@@ -22,6 +23,7 @@
           --muted: #9a998f;
           --panel: #1f1f1c;
           --border: #34332e;
+          --selected: #2e2d29;
           --bad: #ef8a78;
           --good: #8fcf98;
         }
@@ -41,35 +43,128 @@
         margin: 0 0 12px;
         color: var(--muted);
       }
-      .panes {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 12px;
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        margin-bottom: 12px;
       }
-      /* CodeMirror editors; their colors come from the editor theme. */
-      .panes > div {
-        min-width: 0;
-      }
-      .cm-editor {
-        height: 420px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 13px;
-      }
-      .cm-scroller {
-        font-family: ui-monospace, monospace;
-        line-height: 1.45;
-      }
-      button {
-        margin: 12px 0;
-        padding: 6px 14px;
+      button,
+      select {
+        padding: 5px 12px;
         font: inherit;
+      }
+      kbd {
+        color: var(--muted);
+        font: 12px ui-monospace, monospace;
       }
       #status.bad {
         color: var(--bad);
       }
       #status.good {
         color: var(--good);
+      }
+      .panes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+        gap: 12px;
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--muted);
+      }
+      /* One side of the page: a file explorer beside an editor. */
+      .pane {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        height: 460px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .explorer {
+        overflow: auto;
+        padding: 6px 0;
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        font: 13px ui-monospace, monospace;
+      }
+      .explorer ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .explorer li {
+        display: flex;
+        align-items: center;
+      }
+      .explorer .folder {
+        display: block;
+        padding: 2px 8px;
+        color: var(--muted);
+      }
+      .explorer .file {
+        flex: 1;
+        min-width: 0;
+        padding: 2px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+        color: inherit;
+        background: none;
+        border: 0;
+        font: inherit;
+        cursor: pointer;
+      }
+      .explorer .file[aria-current="true"] {
+        background: var(--selected);
+      }
+      .explorer .note {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .explorer .delete {
+        padding: 0 6px;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        font: inherit;
+        cursor: pointer;
+        visibility: hidden;
+      }
+      .explorer li:hover .delete,
+      .explorer .delete:focus {
+        visibility: visible;
+      }
+      .explorer .new-file {
+        display: block;
+        margin: 6px 8px 0;
+        padding: 0;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        font: inherit;
+        cursor: pointer;
+      }
+      .explorer .empty {
+        padding: 2px 8px;
+        color: var(--muted);
+      }
+      .editor {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .cm-editor {
+        height: 100%;
+        font-size: 13px;
+      }
+      .cm-scroller {
+        font-family: ui-monospace, monospace;
+        line-height: 1.45;
       }
       table {
         border-collapse: collapse;
@@ -85,13 +180,34 @@
     </style>
   </head>
   <body>
-    <h1>rust-js in the browser</h1>
+    <h1>rust-js playground</h1>
     <p>rustc's front end and rust-js, as WebAssembly. No server compiles anything.</p>
-    <button id="compile" disabled>Compile</button>
-    <span id="status">Loading…</span>
+    <div class="toolbar">
+      <select id="example" aria-label="Example"></select>
+      <button id="compile" disabled>Compile</button>
+      <kbd>⌘/Ctrl-Enter</kbd>
+      <span id="status" role="status">Loading…</span>
+    </div>
     <div class="panes">
-      <div id="source"></div>
-      <div id="output"></div>
+      <section>
+        <h2>Rust</h2>
+        <div class="pane">
+          <nav class="explorer" aria-label="Rust files">
+            <ul id="source-files"></ul>
+            <button class="new-file" id="new-file">+ New file</button>
+          </nav>
+          <div class="editor" id="source"></div>
+        </div>
+      </section>
+      <section>
+        <h2>JavaScript</h2>
+        <div class="pane">
+          <nav class="explorer" aria-label="JavaScript files">
+            <ul id="output-files"></ul>
+          </nav>
+          <div class="editor" id="output"></div>
+        </div>
+      </section>
     </div>
     <table id="stats"></table>
     <script type="module" src="./main.ts"></script>

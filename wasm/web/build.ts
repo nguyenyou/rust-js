@@ -3,15 +3,15 @@
 //   dist/index.html + bundled JS
 //   dist/rust-js.wasm
 //   dist/sysroot.json, dist/sysroot/*.rmeta
-//   dist/fib.rs
+//   dist/examples.json, dist/examples/<name>/<path>
 //
 // Every URL the page uses is relative, so it works under any base path
 // (on Pages: https://<user>.github.io/rust-js/).
 
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-import { examplePath, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
+import { examples, examplesManifest, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
 
 const dist = join(import.meta.dir, "dist");
 rmSync(dist, { recursive: true, force: true });
@@ -32,6 +32,13 @@ mkdirSync(join(dist, "sysroot"));
 for (const name of sysroot) copyFileSync(join(sysrootDir, name), join(dist, "sysroot", name));
 writeFileSync(join(dist, "sysroot.json"), JSON.stringify(sysroot));
 copyFileSync(wasmPath, join(dist, "rust-js.wasm"));
-copyFileSync(examplePath, join(dist, "fib.rs"));
+for (const example of examples()) {
+  for (const file of example.files) {
+    const to = join(dist, "examples", example.name, file);
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(join(example.dir, file), to);
+  }
+}
+writeFileSync(join(dist, "examples.json"), JSON.stringify(examplesManifest()));
 
 console.log(`built ${dist}`);

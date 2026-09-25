@@ -2,11 +2,11 @@
 // (serve.ts) and the static build for GitHub Pages (build.ts).
 
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 export const wasmPath = join(import.meta.dir, "../target/wasm32-wasip1/release/rust-js.wasm");
-export const examplePath = join(import.meta.dir, "../../examples/fib.rs");
 export const sysrootDir = join(import.meta.dir, "../sysroot/lib/rustlib/wasm32-unknown-unknown/lib");
+const examplesDir = join(import.meta.dir, "../../examples");
 
 // The crates rustc loads to type-check a program against `std`. Found by
 // removing files one at a time until compiling failed; the rest of the
@@ -26,4 +26,25 @@ export function sysrootFiles(): string[] {
     throw new Error(`expected ${NEEDED.length} sysroot files, found ${files.length}; run ../build.sh`);
   }
   return files;
+}
+
+/** A crate the page can load: its files, relative to `dir`, and its root. */
+export type Example = { name: string; title: string; root: string; files: string[]; dir: string };
+
+/** The examples, read from ../../examples. The first one loads by default. */
+export function examples(): Example[] {
+  const modulesDir = join(examplesDir, "modules");
+  const modulesFiles = readdirSync(modulesDir, { recursive: true, encoding: "utf8" })
+    .filter((f) => f.endsWith(".rs"))
+    .map((f) => relative(modulesDir, join(modulesDir, f)).replaceAll("\\", "/"))
+    .sort();
+  return [
+    { name: "modules", title: "Modules (a crate across files)", root: "lib.rs", files: modulesFiles, dir: modulesDir },
+    { name: "fib", title: "fib (one file)", root: "fib.rs", files: ["fib.rs"], dir: examplesDir },
+  ];
+}
+
+/** What the page's `examples.json` holds: everything but local paths. */
+export function examplesManifest() {
+  return examples().map(({ name, title, root, files }) => ({ name, title, root, files }));
 }
