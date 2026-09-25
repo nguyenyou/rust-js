@@ -79,6 +79,12 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0016 Only top-level functions, for now](decisions/0016-crate-shape.md)
 - [0017 Test against native Rust, not against expectations](decisions/0017-differential-testing.md)
 
+## Research
+
+Explorations that aren't decisions yet:
+
+- [An in-browser rust-js playground](research/in-browser-playground.md): run rustc's front end + rust-js as WebAssembly
+
 ## Adding a decision
 
 Copy the shape of an existing record: **Context → Decision → Why →
