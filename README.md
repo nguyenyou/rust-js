@@ -10,6 +10,9 @@ cargo build
 bun test                                     # native Rust vs. generated JS, and the source map
 ```
 
+**Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
+and rust-js as WebAssembly, so nothing is compiled on a server (see [wasm/](wasm/README.md)).
+
 JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `.rs` file, so a debugger can show the Rust source.
 

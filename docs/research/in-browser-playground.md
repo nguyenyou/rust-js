@@ -1,7 +1,7 @@
 # Research: an in-browser rust-js playground
 
 Status: **Research note**, not a decision. September 2026. **Spike S1
-done; see the update below.** Measurements
+done, and so is S2 (it runs in a browser); see the updates below.** Measurements
 use rustc `nightly-2026-03-25` (commit `362211dc2`), the version rust-js
 is pinned to.
 
@@ -53,8 +53,32 @@ info for the 60 MB module at exit (seen with `sample`:
 because panics can't unwind on `wasm32-wasip1`. This run also didn't isolate
 the program's own memory from wasmtime's; S2 will measure it in the browser.
 
-**Next: S2**, the same `.wasm` in a browser via browser_wasi_shim, with no
-threads fork or special headers needed now.
+## Update: spike S2 worked too
+
+**rust-js now compiles Rust in a browser tab**: the same `rust-js.wasm`, on
+bjorn3's browser_wasi_shim (plain, no threads fork, no COOP/COEP headers),
+with an in-memory filesystem. The page is in [`wasm/web/`](../../wasm/README.md).
+Measured in the Claude desktop app's built-in Chromium, served from localhost:
+
+| | Measured |
+|---|---|
+| Output | **identical to native**: same SHA-256 once the header path and map name are set aside |
+| `compileStreaming` of the 60 MB module | 102 ms (Chromium compiles functions lazily, on first call) |
+| First compile of `fib.rs` | 166 ms (includes compiling the rustc code it touches) |
+| Later compiles, fresh instance each | **21–34 ms** (instantiate 3–6 ms + run); native is 20 ms |
+| Memory (the module's linear memory) | **100 MB**, steady across compiles |
+| Errors | full rustc diagnostics on the page, no JS written; the next compile works |
+
+What this doesn't show yet:
+
+- **Download time on a real network.** Localhost is instant. The payload is
+  ~21 MB brotli (see S1), so about 3–4 s at 50 Mbit/s, then cached.
+- **Other browsers.** Only Chromium was tested, not Firefox or Safari.
+- **A responsive UI.** Compiles run on the main thread. A playground should
+  move them to a worker.
+
+**Next: S3**, a real playground: editor, generated JS with its source map,
+and a Run button that executes the JS, with compiles in a worker.
 
 ## The question
 

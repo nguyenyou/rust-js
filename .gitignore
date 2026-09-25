@@ -9,3 +9,5 @@
 /wasm/target
 /wasm/sysroot
 /wasm/out
+/wasm/web/node_modules
+/wasm/web/dist

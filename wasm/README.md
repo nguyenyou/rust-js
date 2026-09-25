@@ -37,6 +37,27 @@ wasmtime run --env RUSTC_ICE=0 \
 `RUSTC_ICE=0` stops rustc from naming a crash-report file after the process
 id, which WASI doesn't have.
 
+## In a browser (spike S2)
+
+`web/` runs the same `rust-js.wasm` in a page, with bjorn3's
+[browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim) providing
+WASI on an in-memory filesystem:
+
+```bash
+cd web && bun install && bun serve.ts     # http://localhost:4400
+```
+
+The page compiles `rust-js.wasm` once, downloads the 15 metadata files rustc
+needs, and then compiles whatever is in the editor on each click.
+
+It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
+*Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),
+which you run by hand from the Actions tab. `bun build.ts` writes the same
+static site to `web/dist`, and `bun preview.ts` serves it under `/rust-js/`,
+as Pages does. Each click
+gets a fresh instance of the already-compiled module, because rustc keeps
+global state and a failed compile ends in a trap.
+
 ## How it's put together
 
 - rustc's crates are built from source (`./rustc`, a worktree at the pinned
