@@ -19,16 +19,17 @@ use std::sync::Arc;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, DefKind};
-use rustc_hir::{BindingMode, ByRef, HirId};
+use rustc_hir::{BindingMode, ByRef, HirId, LangItem};
 use rustc_middle::middle::region;
-use rustc_middle::mir::{AssignOp, BinOp, UnOp};
+use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
     self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind,
     Thir,
 };
+use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
-use rustc_span::{BytePos, ErrorGuaranteed, SourceFile, Span};
+use rustc_span::{BytePos, ErrorGuaranteed, SourceFile, Span, Symbol, sym};
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 
@@ -41,14 +42,21 @@ pub struct Body<'tcx> {
     expr: ExprId,
 }
 
-/// Copy the THIR of every function in the crate.
+/// Copy the THIR of every function and closure in the crate.
 ///
 /// Must run *before* `analysis`: building MIR for borrowck consumes ("steals")
 /// the THIR, so this is our only chance to read it.
 pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
-    tcx.hir_crate_items(())
+    let items = tcx.hir_crate_items(());
+    items
         .definitions()
-        .filter(|&def_id| tcx.def_kind(def_id) == DefKind::Fn)
+        .chain(items.nested_bodies())
+        .filter(|&def_id| match tcx.def_kind(def_id) {
+            // A function declared in an `extern` block is JS's (ADR 0021).
+            DefKind::Fn => !tcx.is_foreign_item(def_id),
+            DefKind::Closure => true,
+            _ => false,
+        })
         .filter_map(|def_id| {
             let (thir, expr) = tcx.thir_body(def_id).ok()?;
             let thir = (*thir.borrow()).clone();
@@ -79,7 +87,7 @@ struct FnInfo {
 
 /// Lower every function, grouped by module. Reports all unsupported
 /// features as rustc errors.
-pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec<LoweredModule>> {
+pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Vec<LoweredModule>> {
     let mut failed = false;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
@@ -87,6 +95,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn => "methods",
             DefKind::Const { .. } | DefKind::AssocConst { .. } => "constants",
+            DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
             DefKind::Static { .. } => "statics",
             _ => continue,
         };
@@ -97,10 +106,25 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
         return None;
     }
 
+    // Closures are lowered inside the function that creates them.
+    let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) =
+        all_bodies.iter().partition(|body| tcx.def_kind(body.def_id) == DefKind::Fn);
+    let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
+
+    // JS globals the crate uses: every module reserves them, so a local
+    // named `document` can't hide the real one.
+    let globals: HashSet<String> = tcx
+        .hir_crate_items(())
+        .foreign_items()
+        .map(|item| item.owner_id.to_def_id())
+        .filter(|&def_id| !is_method(tcx, def_id))
+        .map(|def_id| js_name(tcx, def_id).split('.').next().unwrap_or_default().to_string())
+        .collect();
+
     // The modules that get a JS file: the root, then every module with a
     // function, in the order their first function appears.
     let mut modules = vec![LocalModDefId::CRATE_DEF_ID];
-    for body in bodies {
+    for body in &bodies {
         let module = tcx.parent_module_from_def_id(body.def_id);
         if !modules.contains(&module) {
             modules.push(module);
@@ -109,7 +133,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
 
     // Each function's JS name, unique within its module's file. `taken` also
     // collects the import aliases below, so local variables avoid both.
-    let mut taken: HashMap<LocalModDefId, HashSet<String>> = HashMap::new();
+    let mut taken: HashMap<LocalModDefId, HashSet<String>> =
+        modules.iter().map(|&m| (m, globals.clone())).collect();
     let fns: HashMap<DefId, FnInfo> = bodies
         .iter()
         .map(|body| {
@@ -125,8 +150,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
     // (a child module may call its parent's private functions).
     let mut uses: HashMap<LocalModDefId, Vec<LocalModDefId>> = HashMap::new();
     let mut called_from_elsewhere: HashSet<DefId> = HashSet::new();
-    for body in bodies {
-        let from = fns[&body.def_id.to_def_id()].module;
+    for body in all_bodies {
+        let from = tcx.parent_module_from_def_id(body.def_id);
         for expr in body.thir.exprs.iter() {
             if let (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) = (&expr.kind, expr.ty.kind())
                 && let Some(target) = fns.get(def_id)
@@ -162,7 +187,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
     // crate: `a.b.c = ..` changes the object `a.b`, so it's `a.b`'s type.
     // Only these ever need copying (ADR 0020).
     let mut mutated: HashSet<Ty<'tcx>> = HashSet::new();
-    for body in bodies {
+    for body in all_bodies {
         for expr in body.thir.exprs.iter() {
             if let ExprKind::Assign { lhs, .. } | ExprKind::AssignOp { lhs, .. } = expr.kind
                 && let ExprKind::Field { lhs: object, .. } = body.thir[strip(&body.thir, lhs)].kind
@@ -174,7 +199,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
 
     let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
     let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
-    for body in bodies {
+    for body in &bodies {
         let def_id = body.def_id.to_def_id();
         let module = fns[&def_id].module;
         let file = module_file(tcx, module);
@@ -182,6 +207,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
             tcx,
             typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
             mutated: &mutated,
+            closures: &closures,
+            captures: HashMap::new(),
             file_start: file.start_pos,
             file_end: file.end_position(),
             thir: &body.thir,
@@ -228,6 +255,23 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
         })
         .collect();
     Some(lowered)
+}
+
+/// What a JS function or global declared in an `extern` block is called:
+/// its `#[link_name]`, or its Rust name. A dotted name (`console.log`) is
+/// a path from a global.
+fn js_name(tcx: TyCtxt<'_>, def_id: DefId) -> String {
+    match tcx.codegen_fn_attrs(def_id).symbol_name {
+        Some(name) => name.to_string(),
+        None => tcx.item_name(def_id).to_string(),
+    }
+}
+
+/// A JS function whose first parameter is named `this` is a method:
+/// `f(x, a)` calls `x.f(a)`.
+fn is_method(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
+    tcx.def_kind(def_id) == DefKind::Fn
+        && matches!(tcx.fn_arg_idents(def_id).first(), Some(Some(ident)) if ident.name.as_str() == "this")
 }
 
 /// A module's path below the crate root, e.g. `["math", "stats"]`.
@@ -306,6 +350,8 @@ struct Var {
     /// `q` mean `t[0]`, with no JS variable at all.
     place: Expr,
     mutable: bool,
+    /// How many loops enclose its declaration (ADR 0022).
+    depth: usize,
 }
 
 /// A variable bound by a pattern, and the place in the subject it matched.
@@ -315,6 +361,20 @@ struct Binding<'tcx> {
     mutable: bool,
     place: Expr,
     ty: Ty<'tcx>,
+}
+
+/// The std functions whose JS meaning rust-js knows (ADR 0023).
+#[derive(Clone, Copy)]
+enum Std {
+    BoxNew,
+    RcNew,
+    RcClone,
+    CellNew,
+    CellGet,
+    CellSet,
+    ToString,
+    /// `Deref::deref` on a `String` or an `Rc`.
+    Deref,
 }
 
 /// How a Rust struct or tuple type is represented in JS (ADR 0020).
@@ -408,6 +468,10 @@ struct FnCx<'a, 'tcx> {
     typing_env: ty::TypingEnv<'tcx>,
     /// Types whose objects are changed in place somewhere in the crate.
     mutated: &'a HashSet<Ty<'tcx>>,
+    /// Every closure's THIR, lowered where the closure is created.
+    closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
+    /// While lowering a closure: the places it captured into snapshots.
+    captures: HashMap<(LocalVarId, Vec<usize>), Var>,
     /// The range, in rustc's global source map, of the `.rs` file this
     /// function's module lives in, for `js_span`.
     file_start: BytePos,
@@ -428,29 +492,9 @@ struct FnCx<'a, 'tcx> {
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn lower_fn(&mut self, body: &Body<'tcx>) -> R<LoweredFn> {
         let def_id = body.def_id.to_def_id();
-        let mut params = Vec::new();
         let mut out = Vec::new();
-        for param in &self.thir.params {
-            let span = param.ty_span.unwrap_or(self.tcx.def_span(def_id));
-            self.check_value_ty(param.ty, span)?;
-            let name = match param.pat.as_deref() {
-                Some(pat) => match &pat.kind {
-                    PatKind::Binding { name, var, mode, subpattern: None, .. } => {
-                        self.check_by_value(*mode, pat.span)?;
-                        self.bind(*var, name.as_str(), mode.1 == Mutability::Mut)
-                    }
-                    PatKind::Wild => self.fresh("_"),
-                    // `(x, y): (i32, i32)`: take the whole value, then take it apart.
-                    _ => {
-                        let name = self.fresh("param");
-                        self.destructure(pat, Expr::var(&name), true, &mut out)?;
-                        name
-                    }
-                },
-                None => self.fresh("_"),
-            };
-            params.push(name);
-        }
+        let thir = self.thir;
+        let params = self.lower_params(&thir.params.raw, self.tcx.def_span(def_id), &mut out)?;
 
         let BodyTy::Fn(sig) = self.thir.body_type else {
             return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
@@ -469,6 +513,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             },
             runtime: std::mem::take(&mut self.runtime),
         })
+    }
+
+    /// Name the parameters. One with a pattern (`(x, y): (i32, i32)`) is
+    /// taken whole, then taken apart at the start of the body in `out`.
+    fn lower_params(&mut self, params: &[thir::Param<'tcx>], span: Span, out: &mut Vec<Stmt>) -> R<Vec<String>> {
+        let mut names = Vec::new();
+        for param in params {
+            let span = param.ty_span.unwrap_or(span);
+            self.check_value_ty(param.ty, span)?;
+            let name = match param.pat.as_deref() {
+                Some(pat) => match &pat.kind {
+                    PatKind::Binding { name, var, mode, subpattern: None, .. } => {
+                        self.check_by_value(*mode, pat.span)?;
+                        self.bind(*var, name.as_str(), mode.1 == Mutability::Mut)
+                    }
+                    PatKind::Wild => self.fresh("_"),
+                    // `(x, y): (i32, i32)`: take the whole value, then take it apart.
+                    _ => {
+                        let name = self.fresh("param");
+                        self.destructure(pat, Expr::var(&name), true, out)?;
+                        name
+                    }
+                },
+                None => self.fresh("_"),
+            };
+            names.push(name);
+        }
+        Ok(names)
     }
 
     // ── Statement mode ──────────────────────────────────────────────────
@@ -627,7 +699,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.check_value_ty(*ty, pat.span)?;
                 let mutable = mode.1 == Mutability::Mut;
                 match init {
-                    Some(init) if self.is_simple(init) => {
+                    // Only control flow needs `let x;` and then assignments in
+                    // its branches. Anything else (a closure, say) computes its
+                    // statements first and then has a value.
+                    Some(init) if self.is_simple(init) || !self.is_control_flow(init) => {
                         let value = self.expr(init, out)?;
                         let name = self.bind(*var, name.as_str(), mutable);
                         let kind = if mutable { StmtKind::Let(name, Some(value)) } else { StmtKind::Const(name, value) };
@@ -705,7 +780,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
         for b in bindings {
             if stable && !b.mutable {
-                self.vars.insert(b.var, Var { place: b.place, mutable: false });
+                self.vars.insert(b.var, Var { place: b.place, mutable: false, depth: self.loops.len() });
                 continue;
             }
             let value = self.copy_if_needed(b.place, b.ty).or_at(span);
@@ -926,7 +1001,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let num = self.num(ty, span)?;
                 Ok(num_literal(lit.to_bits_unchecked(), num))
             }
-            ExprKind::VarRef { .. } | ExprKind::Field { .. } => self.read(e, out),
+            ExprKind::VarRef { .. }
+            | ExprKind::UpvarRef { .. }
+            | ExprKind::Field { .. }
+            | ExprKind::Deref { .. }
+            | ExprKind::StaticRef { .. } => self.read(e, out),
+            // A shared reference is the value it points to (ADR 0023): JS
+            // shares objects anyway, and nothing can change through it.
+            ExprKind::Borrow { borrow_kind: BorrowKind::Shared, arg } => match self.place(arg) {
+                Some((place, _)) => Ok(place),
+                None => self.expr(arg, out),
+            },
+            ExprKind::Borrow { .. } => Err(self.unsupported(span, "`&mut` references")),
+            // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
+            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize, source, .. } => self.expr(source, out),
+            ExprKind::Closure(ref closure) => self.closure(closure, out),
             ExprKind::Tuple { ref fields } if fields.is_empty() => Ok(Expr::undefined()),
             ExprKind::Tuple { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
             ExprKind::Adt(ref adt) => self.adt(adt, ty, span, out),
@@ -964,12 +1053,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let v = self.expr(source, out)?;
                 self.cast(v, self.thir[source].ty, ty, span)
             }
-            ExprKind::Call { fun, ref args, .. } => {
-                let callee = self.callee(fun)?;
-                let args = self.operands(args, out)?;
-                let callee = callee.or_at(self.js_span(self.thir[fun].span));
-                Ok(Expr::call(callee, args))
-            }
+            ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
                 if self.is_simple(then) && self.is_simple(els) =>
             {
@@ -1010,7 +1094,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut values = Vec::new();
         for (i, &e) in list.iter().enumerate() {
             let v = self.expr(e, out)?;
-            if last_complex.is_some_and(|k| i < k) && !v.is_constant() {
+            // Constants, and places that can't change, read the same later.
+            let settled = v.is_constant() || self.stable_place(e).is_some();
+            if last_complex.is_some_and(|k| i < k) && !settled {
                 let tmp = self.fresh("tmp");
                 let span = v.span;
                 out.push(StmtKind::Const(tmp.clone(), v).at(span));
@@ -1020,6 +1106,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         Ok(values)
+    }
+
+    /// Is `e` a Rust expression that JS can only write as statements?
+    fn is_control_flow(&self, e: ExprId) -> bool {
+        matches!(
+            self.thir[self.strip(e)].kind,
+            ExprKind::If { .. } | ExprKind::Match { .. } | ExprKind::Block { .. } | ExprKind::Loop { .. }
+        )
     }
 
     /// Can `e` become a JS expression with no statements before it?
@@ -1032,12 +1126,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. }
             | ExprKind::Cast { source }
+            | ExprKind::PointerCoercion { source, .. }
+            | ExprKind::Borrow { arg: source, .. }
+            | ExprKind::Deref { arg: source }
             | ExprKind::Unary { arg: source, .. } => self.is_simple(source),
             ExprKind::Literal { .. }
             | ExprKind::NonHirLiteral { .. }
             | ExprKind::VarRef { .. }
+            | ExprKind::UpvarRef { .. }
+            | ExprKind::StaticRef { .. }
             | ExprKind::ZstLiteral { .. } => true,
             ExprKind::Field { lhs, .. } => self.is_simple(lhs),
+            // Its body's statements go inside the arrow; only snapshots come first.
+            ExprKind::Closure(ref closure) => closure.upvars.iter().all(|&u| !self.needs_snapshot(u)),
             ExprKind::Tuple { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
             ExprKind::Adt(ref adt) => {
                 let base_simple = match &adt.base {
@@ -1052,8 +1153,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Binary { lhs, rhs, .. } | ExprKind::LogicalOp { lhs, rhs, .. } => {
                 self.is_simple(lhs) && self.is_simple(rhs)
             }
+            // `cell.set(v)` is an assignment statement.
             ExprKind::Call { fun, ref args, .. } => {
-                self.is_simple(fun) && args.iter().all(|&a| self.is_simple(a))
+                !matches!(self.std_fn(fun), Some(Std::CellSet))
+                    && self.is_simple(fun)
+                    && args.iter().all(|&a| self.is_simple(a))
             }
             ExprKind::If { cond, then, else_opt: Some(els), .. } => {
                 self.is_simple(cond) && self.is_simple(then) && self.is_simple(els)
@@ -1207,6 +1311,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn literal(&self, lit: &LitKind, neg: bool, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         match *lit {
             LitKind::Bool(b) => Ok(Expr::bool(b)),
+            LitKind::Str(s, _) => Ok(Expr::str(s.as_str())),
             LitKind::Int(n, _) => {
                 self.num(ty, span)?;
                 let n = n.get() as i128;
@@ -1230,21 +1335,226 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(num_literal(leaf.to_bits_unchecked(), num))
     }
 
-    /// The function being called: `f` in the same module, `alias.f` in another.
-    fn callee(&self, fun: ExprId) -> R<Expr> {
-        let fun = &self.thir[self.strip(fun)];
-        if let (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) = (&fun.kind, fun.ty.kind()) {
-            if let Some(target) = self.fns.get(def_id) {
-                return Ok(if target.module == self.module {
-                    Expr::var(&target.name)
-                } else {
-                    Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
-                });
-            }
-            let path = self.tcx.def_path_str(*def_id);
-            return Err(self.unsupported(fun.span, &format!("calling `{path}`")));
+    /// A call to one of our functions (`f`, or `alias.f` in another module),
+    /// to JS (ADR 0021), or to one of the std functions rust-js knows (ADR 0023).
+    fn call(&mut self, fun: ExprId, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let fun_span = self.js_span(self.thir[fun].span);
+        let f = &self.thir[self.strip(fun)];
+        let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, generic_args)) = (&f.kind, f.ty.kind()) else {
+            return Err(self.unsupported(f.span, "calling this"));
+        };
+        if let Some(target) = self.fns.get(&def_id) {
+            let callee = if target.module == self.module {
+                Expr::var(&target.name)
+            } else {
+                Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
+            };
+            let args = self.operands(args, out)?;
+            return Ok(Expr::call(callee.or_at(fun_span), args));
         }
-        Err(self.unsupported(fun.span, "calling this"))
+        if self.tcx.is_foreign_item(def_id) {
+            let mut args = self.operands(args, out)?;
+            let name = js_name(self.tcx, def_id);
+            let callee = if is_method(self.tcx, def_id) {
+                let this = args.remove(0);
+                Expr::member(this, name)
+            } else {
+                global(&name)
+            };
+            return Ok(Expr::call(callee.or_at(fun_span), args));
+        }
+        // Calling a closure, `f(a, b)`, is `Fn::call(&f, (a, b))`: in JS, `f(a, b)`.
+        if let Some(fn_trait) = self.tcx.trait_of_assoc(def_id)
+            && self.tcx.fn_trait_kind_from_def_id(fn_trait).is_some()
+        {
+            let [callee, ExprKind::Tuple { fields }] = [args[0], args[1]].map(|a| &self.thir[self.strip(a)].kind)
+            else {
+                return Err(self.unsupported(span, "this closure call"));
+            };
+            let callee = match *callee {
+                // `&f` or `&mut f`: the closure itself.
+                ExprKind::Borrow { arg, .. } => arg,
+                _ => args[0],
+            };
+            let mut list = vec![callee];
+            list.extend(fields.iter().copied());
+            let mut values = self.operands(&list, out)?;
+            let callee = values.remove(0);
+            return Ok(Expr::call(callee, values));
+        }
+        let Some(known) = self.std_fn(fun) else {
+            let path = self.tcx.def_path_str(def_id);
+            return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
+        };
+        let mut values = self.operands(args, out)?.into_iter();
+        let first = values.next().expect("every known std function takes an argument");
+        Ok(match known {
+            // An `Rc` is the JS reference itself: the garbage collector does
+            // its counting, so a clone is the same object.
+            Std::BoxNew | Std::RcNew | Std::RcClone | Std::Deref => first,
+            // A `Cell` is `{ value }`, so everyone sharing it sees a `set`.
+            Std::CellNew => Expr::object(vec![Prop::Field("value".into(), first)]),
+            Std::CellGet => self.copy_if_needed(Expr::member(first, "value"), generic_args.type_at(0)),
+            Std::CellSet => {
+                let value = values.next().expect("`Cell::set` takes a value");
+                out.push(StmtKind::Assign(Expr::member(first, "value"), value).at(self.js_span(span)));
+                Expr::undefined()
+            }
+            Std::ToString => {
+                let ty = generic_args.type_at(0);
+                if ty.is_str() || self.is_lang_adt(ty, LangItem::String) {
+                    first
+                } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
+                    Expr::call(Expr::var("String"), vec![first])
+                } else {
+                    return Err(self.unsupported(span, &format!("`to_string` on `{ty}`")));
+                }
+            }
+        })
+    }
+
+    /// Which std function `fun` is, if rust-js knows what it means in JS.
+    fn std_fn(&self, fun: ExprId) -> Option<Std> {
+        let tcx = self.tcx;
+        let &ty::FnDef(def_id, args) = self.thir[self.strip(fun)].ty.kind() else { return None };
+        let diagnostic = |name: &str| tcx.is_diagnostic_item(Symbol::intern(name), def_id);
+        if diagnostic("box_new") {
+            return Some(Std::BoxNew);
+        }
+        if diagnostic("to_string_method") {
+            return Some(Std::ToString);
+        }
+        let self_ty = args.types().next();
+        if diagnostic("deref_method") {
+            let ty = self_ty?;
+            return (self.is_lang_adt(ty, LangItem::String) || self.is_std_adt(ty, sym::Rc)).then_some(Std::Deref);
+        }
+        if tcx.is_lang_item(def_id, LangItem::CloneFn) {
+            return self.is_std_adt(self_ty?, sym::Rc).then_some(Std::RcClone);
+        }
+        let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
+        match tcx.item_name(def_id).as_str() {
+            "new" if self.is_std_adt(owner, sym::Rc) => Some(Std::RcNew),
+            "new" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellNew),
+            "get" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellGet),
+            "set" if self.is_std_adt(owner, sym::Cell) => Some(Std::CellSet),
+            _ => None,
+        }
+    }
+
+    fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.is_diagnostic_item(name, adt.did()))
+    }
+
+    fn is_lang_adt(&self, ty: Ty<'tcx>, item: LangItem) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.is_lang_item(adt.did(), item))
+    }
+
+    /// std types that aren't plain structs in JS: `String` is a JS string,
+    /// `Box<T>` and `Rc<T>` are just `T`, `Cell<T>` is `{ value }`.
+    fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
+        ty.is_box()
+            || self.is_lang_adt(ty, LangItem::String)
+            || self.is_std_adt(ty, sym::Rc)
+            || self.is_std_adt(ty, sym::Cell)
+    }
+
+    // ── Closures (ADR 0022) ─────────────────────────────────────────────
+
+    /// A closure is an arrow function, lowered right where it's created.
+    ///
+    /// JS closures capture *variables*, which is what a Rust capture by
+    /// reference means, and the borrow checker has made sure nothing else
+    /// uses them meanwhile. A capture by value is a copy: for an immutable
+    /// variable that's the same thing, so only mutable ones get a snapshot.
+    fn closure(&mut self, closure: &thir::ClosureExpr<'tcx>, out: &mut Vec<Stmt>) -> R<Expr> {
+        let body: &'a Body<'tcx> = self.closures[&closure.closure_id];
+        let mut shadowed = Vec::new();
+        for &upvar in closure.upvars.iter() {
+            if !self.needs_snapshot(upvar) {
+                continue;
+            }
+            // Since Rust 2021 a closure may capture part of a variable
+            // (`p.x`), so the snapshot stands for that place.
+            let span = self.thir[upvar].span;
+            let Some(path) = self.place_path(upvar) else {
+                return Err(self.unsupported(span, "capturing this place by value"));
+            };
+            let value = self.read(upvar, out)?;
+            // Named after what it copies, from the Rust name: `n` gives `n$1`.
+            let base = match self.place(upvar) {
+                Some((Expr { kind: js::ExprKind::Member(_, field), .. }, _)) => field,
+                Some((Expr { kind: js::ExprKind::Var(name), .. }, _)) => name,
+                _ => "capture".to_string(),
+            };
+            let name = self.fresh(base.split('$').next().unwrap_or_default());
+            out.push(StmtKind::Let(name.clone(), Some(value)).at(self.js_span(span)));
+            let snapshot = Var { place: Expr::var(&name), mutable: true, depth: self.loops.len() };
+            shadowed.push((path.clone(), self.captures.insert(path, snapshot)));
+        }
+
+        // Lower the body as if it were a function of its own, then come back.
+        let thir = std::mem::replace(&mut self.thir, &body.thir);
+        let loops = std::mem::take(&mut self.loops);
+        let mut stmts = Vec::new();
+        // The first parameter is the closure itself, which JS doesn't need.
+        let params = self.lower_params(&body.thir.params.raw[1..], self.tcx.def_span(body.def_id), &mut stmts)?;
+        let BodyTy::Fn(sig) = body.thir.body_type else { unreachable!("a closure body is a function") };
+        let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
+        self.stmt(body.expr, &dest, &mut stmts)?;
+        self.thir = thir;
+        self.loops = loops;
+        for (path, previous) in shadowed {
+            match previous {
+                Some(var) => self.captures.insert(path, var),
+                None => self.captures.remove(&path),
+            };
+        }
+        Ok(Expr::arrow(params, stmts))
+    }
+
+    /// A place as a variable and a path of fields, like `p.x` as `(p, [0])`.
+    fn place_path(&self, e: ExprId) -> Option<(LocalVarId, Vec<usize>)> {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => Some((id, Vec::new())),
+            ExprKind::Field { lhs, name, .. } => {
+                let (id, mut path) = self.place_path(lhs)?;
+                path.push(name.as_usize());
+                Some((id, path))
+            }
+            _ => None,
+        }
+    }
+
+    /// Does capturing `upvar` need a snapshot? Only a by-value capture of a
+    /// mutable variable does, and not when the capture is the variable's
+    /// only use, outside any loop the variable isn't also in.
+    fn needs_snapshot(&self, upvar: ExprId) -> bool {
+        let u = self.strip(upvar);
+        if matches!(self.thir[u].kind, ExprKind::Borrow { .. }) {
+            return false;
+        }
+        let Some(var) = self.root_var(u).and_then(|id| self.vars.get(&id)) else { return false };
+        if !var.mutable {
+            return false;
+        }
+        let only_use = match self.thir[u].kind {
+            ExprKind::VarRef { id } => {
+                let uses = self.thir.exprs.iter().filter(|e| matches!(e.kind, ExprKind::VarRef { id: i } if i == id));
+                uses.count() == 1 && var.depth == self.loops.len()
+            }
+            _ => false,
+        };
+        !only_use
+    }
+
+    /// The variable a place starts from.
+    fn root_var(&self, e: ExprId) -> Option<LocalVarId> {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => Some(id),
+            ExprKind::Field { lhs, .. } | ExprKind::Deref { arg: lhs } => self.root_var(lhs),
+            _ => None,
+        }
     }
 
     // ── Structs and tuples (ADR 0020) ───────────────────────────────────
@@ -1318,6 +1628,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// How a struct or tuple type looks in JS.
     fn shape(&self, ty: Ty<'tcx>) -> Shape<'tcx> {
+        if self.is_std_wrapper(ty) {
+            return Shape::Other;
+        }
         match ty.kind() {
             ty::Tuple(tys) if !tys.is_empty() => Shape::Array(tys.to_vec()),
             ty::Adt(adt, args) if adt.is_struct() => {
@@ -1347,14 +1660,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `e` as a place, a variable and some of its fields, without reading it.
     /// Also says whether that variable is mutable.
     fn place(&self, e: ExprId) -> Option<(Expr, bool)> {
+        // Inside a closure, a place it captured by value is its snapshot.
+        if !self.captures.is_empty()
+            && let Some(var) = self.place_path(e).and_then(|path| self.captures.get(&path))
+        {
+            return Some((var.place.clone(), var.mutable));
+        }
         match self.thir[self.strip(e)].kind {
-            ExprKind::VarRef { id } => {
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => {
                 let var = &self.vars[&id];
                 Some((var.place.clone(), var.mutable))
             }
             ExprKind::Field { lhs, name, .. } => {
                 let (base, mutable) = self.place(lhs)?;
                 Some((self.project(base, self.thir[lhs].ty, name.as_usize()), mutable))
+            }
+            // A reference is the value it points to, so `*r` is where `r` is.
+            // (A static is reached through a pointer to it.)
+            ExprKind::Deref { arg } if matches!(self.thir[arg].ty.kind(), ty::Ref(..) | ty::RawPtr(..)) || self.thir[arg].ty.is_box() => {
+                self.place(arg)
+            }
+            // A JS global (ADR 0021).
+            ExprKind::StaticRef { def_id, .. } if self.tcx.is_foreign_item(def_id) => {
+                Some((global(&js_name(self.tcx, def_id)), false))
             }
             _ => None,
         }
@@ -1370,7 +1698,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn stable_place(&self, e: ExprId) -> Option<Expr> {
         let (place, mutable) = self.place(e)?;
         let mut root = self.strip(e);
-        while let ExprKind::Field { lhs, .. } = self.thir[root].kind {
+        while let ExprKind::Field { lhs, .. } | ExprKind::Deref { arg: lhs } = self.thir[root].kind {
             root = self.strip(lhs);
         }
         let ty = self.thir[root].ty;
@@ -1393,12 +1721,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some((place, _)) = self.place(e) {
             return Ok(self.copy_if_needed(place, ty));
         }
-        // A field of a temporary, like `f().x`: nothing else can see the rest.
-        let ExprKind::Field { lhs, name, .. } = self.thir[self.strip(e)].kind else {
-            unreachable!("a variable is always a place")
-        };
-        let base = self.expr(lhs, out)?;
-        Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
+        match self.thir[self.strip(e)].kind {
+            // A field of a temporary, like `f().x`: nothing else can see the rest.
+            ExprKind::Field { lhs, name, .. } => {
+                let base = self.expr(lhs, out)?;
+                Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
+            }
+            // `*f()`, including `Deref::deref` on a `String` or `Rc`: a
+            // reference is its value.
+            ExprKind::Deref { arg } => self.expr(arg, out),
+            _ => Err(self.unsupported(self.thir[e].span, "reading this")),
+        }
     }
 
     /// Rust copies a `Copy` value when it's read, and JS objects are shared
@@ -1495,7 +1828,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn bind(&mut self, var: LocalVarId, name: &str, mutable: bool) -> String {
         let name = self.fresh(name);
-        self.vars.insert(var, Var { place: Expr::var(&name), mutable });
+        self.vars.insert(var, Var { place: Expr::var(&name), mutable, depth: self.loops.len() });
         name
     }
 
@@ -1512,8 +1845,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// The first type inside `ty` (or `ty` itself) that rust-js can't represent.
     fn unsupported_part(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
-        if ty.is_bool() || ty.is_unit() || Num::of(ty).is_some() {
+        if ty.is_bool() || ty.is_unit() || ty.is_str() || Num::of(ty).is_some() {
             return None;
+        }
+        match ty.kind() {
+            // A JS value from an `extern` block, and closures: JS functions.
+            ty::Foreign(_) | ty::Closure(..) => return None,
+            ty::Dynamic(traits, ..)
+                if traits.principal_def_id().is_some_and(|t| self.tcx.fn_trait_kind_from_def_id(t).is_some()) =>
+            {
+                return None;
+            }
+            ty::Ref(_, inner, Mutability::Not) => return self.unsupported_part(*inner),
+            ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
+            ty::Adt(_, args) if self.is_std_wrapper(ty) => return self.unsupported_part(args.type_at(0)),
+            _ => {}
         }
         match (ty.kind(), self.shape(ty)) {
             (ty::Adt(adt, _), _) if is_fieldless_enum(*adt) => None,
@@ -1531,6 +1877,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {
         self.tcx.dcx().span_err(span, format!("rust-js does not support {what} yet"))
     }
+}
+
+/// A JS global, like `document`, or a path from one, like `console.log`.
+fn global(name: &str) -> Expr {
+    let mut parts = name.split('.');
+    let first = Expr::var(parts.next().unwrap_or_default());
+    parts.fold(first, Expr::member)
 }
 
 /// Skip THIR's wrapper nodes that don't change meaning.
@@ -1598,7 +1951,7 @@ fn js_ident(name: &str) -> String {
         "for", "function", "if", "implements", "import", "in", "instanceof", "interface", "let",
         "new", "null", "package", "private", "protected", "public", "return", "static", "super",
         "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with",
-        "yield", "undefined", "NaN", "Infinity", "Math", "Error",
+        "yield", "undefined", "NaN", "Infinity", "Math", "Error", "String",
     ];
     if RESERVED.contains(&name) { format!("{name}$") } else { name.to_string() }
 }

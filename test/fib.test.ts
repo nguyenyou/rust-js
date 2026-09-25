@@ -22,6 +22,7 @@ type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
 let cases: Case[] = [];
 let fib: Record<string, (...args: any[]) => number>;
 let structs: Record<string, (...args: any[]) => unknown>;
+let closures: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 
@@ -37,6 +38,9 @@ beforeAll(async () => {
   fib = await import(join(target, "fib.js"));
   run([join(target, "debug", "rust-js"), "examples/structs.rs", "-o", join(target, "structs.js")]);
   structs = await import(join(target, "structs.js"));
+  run([join(target, "debug", "rust-js"), "examples/closures.rs", "-o", join(target, "closures.js")]);
+  closures = await import(join(target, "closures.js"));
+  run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js")]);
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -57,6 +61,9 @@ function call(c: Case): unknown {
       const path = c.fn.split(".");
       if (path[0] === "structs") {
         return structs[path[1]](...c.args);
+      }
+      if (path[0] === "closures") {
+        return closures[path[1]](...c.args);
       }
       if (path[0] === "modules") {
         const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
@@ -174,4 +181,61 @@ test("structs and tuples are plain objects and arrays", async () => {
   expect(js).toMatch(/const y = \$div\(100, a, -2147483648\) \| 0;\s+const x = \$rem/);
   // `match (a, b)` tests the variables directly, without building an array.
   expect(js).toContain("if (param[0] === 0 && param[1] === 0)");
+});
+
+// The counter (examples/counter.rs) against a small fake DOM: just the calls
+// it declares in its `extern` block (ADR 0021).
+class FakeElement {
+  children: (FakeElement | string)[] = [];
+  listeners: Record<string, (() => void)[]> = {};
+  constructor(readonly tag: string, readonly id = "") {}
+  append(child: FakeElement) {
+    this.children.push(child);
+  }
+  replaceChildren(text: string) {
+    this.children = [text];
+  }
+  addEventListener(event: string, listener: () => void) {
+    (this.listeners[event] ??= []).push(listener);
+  }
+  click() {
+    for (const listener of this.listeners.click ?? []) listener();
+  }
+  get text(): string {
+    return this.children.map((c) => (typeof c === "string" ? c : c.text)).join("");
+  }
+}
+
+test("the counter runs against the DOM", async () => {
+  const app = new FakeElement("div", "app");
+  (globalThis as any).document = {
+    getElementById: (id: string) => (id === "app" ? app : null),
+    createElement: (tag: string) => new FakeElement(tag),
+  };
+  try {
+    const counter = await import(join(target, "counter.js"));
+    counter.main();
+    const [minus, output, plus] = app.children as FakeElement[];
+    expect([minus.tag, minus.text, output.tag, output.text, plus.text]).toEqual(["button", "-", "output", "0", "+"]);
+    plus.click();
+    plus.click();
+    plus.click();
+    minus.click();
+    // Both buttons share one count, through the `Rc<Cell<i32>>`.
+    expect(output.text).toBe("2");
+    minus.click();
+    minus.click();
+    minus.click();
+    expect(output.text).toBe("-1");
+  } finally {
+    delete (globalThis as any).document;
+  }
+
+  // The JS reads like the Rust: methods, globals, and one shared `{ value }`.
+  const js = await Bun.file(join(target, "counter.js")).text();
+  expect(js).toContain('const b = document.createElement("button");');
+  expect(js).toContain("const count = { value: 0 };");
+  expect(js).toContain('b.addEventListener("click", () => {');
+  expect(js).toContain("count$1.value = count$1.value + by | 0;");
+  expect(js).toContain("output.replaceChildren(String(count$1.value));");
 });

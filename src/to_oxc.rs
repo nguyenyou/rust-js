@@ -21,7 +21,7 @@ use std::path::PathBuf;
 
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
-    Argument, ArrayExpressionElement, AssignmentTarget, BindingIdentifier, BindingPattern,
+    Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
     Declaration, Expression, FormalParameter, FormalParameterKind, FormalParameters, FunctionBody,
     FunctionType, IdentifierName, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
     PropertyKind, Statement, VariableDeclarationKind, VariableDeclarator,
@@ -134,19 +134,18 @@ struct Cx<'a> {
 }
 
 impl<'a> Cx<'a> {
-    fn function(&self, f: &js::Function) -> Statement<'a> {
+    fn params(&self, kind: FormalParameterKind, names: &[String]) -> FormalParameters<'a> {
         let b = &self.b;
-        let params = f.params.iter().map(|name| {
+        let params = names.iter().map(|name| {
             let pattern = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
             FormalParameter::new(SPAN, ArenaVec::new_in(b), pattern, None, None, false, None, false, false, b)
         });
-        let params = FormalParameters::new(
-            SPAN,
-            FormalParameterKind::FormalParameter,
-            ArenaVec::from_iter_in(params, b),
-            None,
-            b,
-        );
+        FormalParameters::new(SPAN, kind, ArenaVec::from_iter_in(params, b), None, b)
+    }
+
+    fn function(&self, f: &js::Function) -> Statement<'a> {
+        let b = &self.b;
+        let params = self.params(FormalParameterKind::FormalParameter, &f.params);
         let body = FunctionBody::new(SPAN, ArenaVec::new_in(b), self.stmts(&f.body), b);
         let decl = Declaration::new_function_declaration(
             span(f.span),
@@ -293,6 +292,15 @@ impl<'a> Cx<'a> {
             }
             ExprKind::Cond(test, then, els) => {
                 Expression::new_conditional_expression(sp, self.expr(test), self.expr(then), self.expr(els), b)
+            }
+            ExprKind::Arrow(params, body) => {
+                let params = ArenaBox::new_in(self.params(FormalParameterKind::ArrowFormalParameters, params), b);
+                // `() => x` when the body only returns a value.
+                let body = match body.as_slice() {
+                    [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => ArrowFunctionBody::from(self.expr(value)),
+                    _ => ArrowFunctionBody::new_function_body(SPAN, ArenaVec::new_in(b), self.stmts(body), b),
+                };
+                Expression::new_arrow_function_expression(sp, false, None, params, None, body, b)
             }
             ExprKind::Call(callee, args) => {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));

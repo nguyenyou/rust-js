@@ -48,11 +48,13 @@ pub struct Function {
     pub name_span: Span,
 }
 
+#[derive(Clone)]
 pub struct Stmt {
     pub kind: StmtKind,
     pub span: Span,
 }
 
+#[derive(Clone)]
 pub enum StmtKind {
     Const(String, Expr),
     Let(String, Option<Expr>),
@@ -97,6 +99,8 @@ pub enum ExprKind {
     Binary(Op, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
+    /// `(a, b) => { .. }`: a closure (ADR 0022).
+    Arrow(Vec<String>, Vec<Stmt>),
 }
 
 #[derive(Clone)]
@@ -195,6 +199,10 @@ impl Expr {
         Expr::new(ExprKind::Cond(Box::new(test), Box::new(then), Box::new(els)))
     }
 
+    pub fn arrow(params: Vec<String>, body: Vec<Stmt>) -> Expr {
+        Expr::new(ExprKind::Arrow(params, body))
+    }
+
     pub fn call(callee: Expr, args: Vec<Expr>) -> Expr {
         Expr::new(ExprKind::Call(Box::new(callee), args))
     }
@@ -232,7 +240,8 @@ impl Expr {
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
             | ExprKind::Undefined
-            | ExprKind::Var(_) => false,
+            | ExprKind::Var(_)
+            | ExprKind::Arrow(..) => false,
             ExprKind::Member(object, _) => object.has_effects(),
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
             ExprKind::Array(items) => items.iter().any(Expr::has_effects),

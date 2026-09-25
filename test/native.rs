@@ -8,6 +8,10 @@
 #[allow(dead_code)]
 mod fib;
 
+#[path = "../examples/closures.rs"]
+#[allow(dead_code)]
+mod closures;
+
 #[path = "../examples/structs.rs"]
 #[allow(dead_code)]
 mod structs;
@@ -75,6 +79,19 @@ fn main() {
         case("structs.grow", &[w as i64, h as i64, 5], || structs::grow(w, h, 5));
         let r = structs::rect(0, 0, w, h);
         case_with("structs.area", &[&r], || structs::area(structs::rect(0, 0, w, h)) as i64);
+    }
+    for &a in &ints {
+        case("closures.move_copies", &[a as i64], || closures::move_copies(a));
+        case("closures.own_state", &[a as i64], || closures::own_state(a));
+        case("closures.struct_copy", &[a as i64], || closures::struct_copy(a));
+        for &b in &[0, 3, -5, i32::MAX] {
+            case("closures.by_reference", &[a as i64, b as i64], || closures::by_reference(a, b));
+            case("closures.add_both", &[a as i64, b as i64], || closures::add_both(a, b));
+            case("closures.pattern_param", &[a as i64, b as i64], || closures::pattern_param(a, b));
+        }
+    }
+    for times in 0..5 {
+        case("closures.fresh_copy_each_time", &[times as i64], || closures::fresh_copy_each_time(times));
     }
     for (a, b) in [(7, 2), (0, 5), (u32::MAX, 10), (5, 0)] {
         case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));

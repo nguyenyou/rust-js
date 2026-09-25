@@ -346,6 +346,68 @@ async function compile(
   };
 }
 
+// ── Running the program ─────────────────────────────────────────────────
+// If the root module exports `main`, run it in a sandboxed page with a
+// `<div id="app">` to render into. The modules import each other by
+// relative path, which a `data:` URL can't resolve, so each import becomes a
+// `rust-js:/path` name that an import map points at the module's code.
+
+const resultSection = $<HTMLElement>("result-section");
+let resultFrame = $<HTMLIFrameElement>("result");
+
+/** `from`'s directory joined with a relative specifier like `../lib.js`. */
+function resolve(from: string, specifier: string): string {
+  const parts = from.split("/").slice(0, -1);
+  for (const part of specifier.split("/")) {
+    if (part === "..") parts.pop();
+    else if (part !== ".") parts.push(part);
+  }
+  return parts.join("/");
+}
+
+function runProgram(files: Map<string, string>, rootFile: string) {
+  const main = files.get(rootFile);
+  if (!main || !/^export function main\(\)/m.test(main)) {
+    resultSection.hidden = true;
+    resultFrame.srcdoc = "";
+    return;
+  }
+  const imports: Record<string, string> = {};
+  for (const [path, code] of files) {
+    const linked = code
+      .replace(/ from "(\.\.?\/[^"]+)";/g, (_, spec) => ` from "rust-js:/${resolve(path, spec)}";`)
+      .replace(/^\/\/# sourceMappingURL=.*$/m, "");
+    imports[`rust-js:/${path}`] = `data:text/javascript;charset=utf-8,${encodeURIComponent(linked)}`;
+  }
+  const report = (what: string) => `parent.postMessage({ runError: String(${what}) }, "*")`;
+  resultSection.hidden = false;
+  // A new frame each run: the program starts from a clean page, and a frame
+  // made while its section is showing gets drawn right away.
+  const frame = resultFrame.cloneNode() as HTMLIFrameElement;
+  resultFrame.replaceWith(frame);
+  resultFrame = frame;
+  resultFrame.srcdoc = `<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
+  body { margin: 12px; }
+  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
+  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
+</style>
+<script type="importmap">${JSON.stringify({ imports })}</script>
+<div id="app"></div>
+<script type="module">
+  addEventListener("error", (e) => ${report("e.message")});
+  import("rust-js:/${rootFile}").then((m) => m.main()).catch((e) => ${report("e")});
+</script>`;
+}
+
+addEventListener("message", (e) => {
+  if (e.source === resultFrame.contentWindow && e.data?.runError) {
+    setStatus(`Runtime error: ${e.data.runError}`, "bad");
+  }
+});
+
 // ── Loading ─────────────────────────────────────────────────────────────
 
 async function load() {
@@ -389,6 +451,7 @@ async function loadExample(example: Example) {
   shownOutput = "";
   output.dispatch({ changes: { from: 0, to: output.state.doc.length, insert: "" } });
   renderOutputFiles();
+  runProgram(new Map(), rootJs());
 }
 
 const { module, sysroot, examples } = await load();
@@ -416,8 +479,10 @@ async function onCompile() {
     // Keep showing the same file if it's still there; otherwise the root's.
     openOutput(outputs.has(shownOutput) ? shownOutput : rootJs());
     setStatus(`Compiled: ${outputs.size} JS file${outputs.size === 1 ? "" : "s"}.`, "good");
+    runProgram(outputs, rootJs());
   } else {
     showDiagnostics(r.stderr);
+    runProgram(new Map(), rootJs());
     setStatus(`Failed: exit ${r.exit}.`, "bad");
   }
   stat(`compile #${runs}`, `instantiate ${ms(r.instantiate)}, run ${ms(r.run)}, memory ${mb(r.memory)}, ${ok ? "ok" : "error"}`);
