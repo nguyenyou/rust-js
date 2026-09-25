@@ -18,18 +18,19 @@ use std::sync::Arc;
 
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir as hir;
-use rustc_hir::def::DefKind;
+use rustc_hir::def::{CtorKind, DefKind};
 use rustc_hir::{BindingMode, ByRef, HirId};
 use rustc_middle::middle::region;
 use rustc_middle::mir::{AssignOp, BinOp, UnOp};
 use rustc_middle::thir::{
-    self as thir, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind, Thir,
+    self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind,
+    Thir,
 };
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
 use rustc_span::{BytePos, ErrorGuaranteed, SourceFile, Span};
 
-use crate::js::{self, Expr, Op, Stmt, StmtKind, UnaryOp};
+use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 
 type R<T> = Result<T, ErrorGuaranteed>;
 
@@ -82,6 +83,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
     let mut failed = false;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
+            // `#[derive(Clone, Copy)]` and friends write impls we never call.
+            DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn => "methods",
             DefKind::Const { .. } | DefKind::AssocConst { .. } => "constants",
             DefKind::Static { .. } => "statics",
@@ -155,6 +158,20 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
         aliases.insert(module, module_aliases);
     }
 
+    // The types whose JS objects get changed in place somewhere in the
+    // crate: `a.b.c = ..` changes the object `a.b`, so it's `a.b`'s type.
+    // Only these ever need copying (ADR 0020).
+    let mut mutated: HashSet<Ty<'tcx>> = HashSet::new();
+    for body in bodies {
+        for expr in body.thir.exprs.iter() {
+            if let ExprKind::Assign { lhs, .. } | ExprKind::AssignOp { lhs, .. } = expr.kind
+                && let ExprKind::Field { lhs: object, .. } = body.thir[strip(&body.thir, lhs)].kind
+            {
+                mutated.insert(body.thir[object].ty);
+            }
+        }
+    }
+
     let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
     let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
     for body in bodies {
@@ -163,6 +180,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec
         let file = module_file(tcx, module);
         let mut cx = FnCx {
             tcx,
+            typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
+            mutated: &mutated,
             file_start: file.start_pos,
             file_end: file.end_position(),
             thir: &body.thir,
@@ -282,8 +301,30 @@ enum Dest {
 }
 
 struct Var {
+    /// Usually the variable's JS name. An immutable binding into a pattern
+    /// can instead just name the place it matched: `let (q, r) = t` makes
+    /// `q` mean `t[0]`, with no JS variable at all.
+    place: Expr,
+    mutable: bool,
+}
+
+/// A variable bound by a pattern, and the place in the subject it matched.
+struct Binding<'tcx> {
+    var: LocalVarId,
     name: String,
     mutable: bool,
+    place: Expr,
+    ty: Ty<'tcx>,
+}
+
+/// How a Rust struct or tuple type is represented in JS (ADR 0020).
+enum Shape<'tcx> {
+    /// A struct with named fields: `{ x: 1, y: 2 }`.
+    Object(Vec<(String, Ty<'tcx>)>),
+    /// A tuple or tuple struct: `[1, 2]`.
+    Array(Vec<Ty<'tcx>>),
+    /// Anything else: numbers, `bool`, unit and unit structs (`undefined`), enums.
+    Other,
 }
 
 struct Loop {
@@ -364,6 +405,9 @@ impl Num {
 
 struct FnCx<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    /// Types whose objects are changed in place somewhere in the crate.
+    mutated: &'a HashSet<Ty<'tcx>>,
     /// The range, in rustc's global source map, of the `.rs` file this
     /// function's module lives in, for `js_span`.
     file_start: BytePos,
@@ -385,6 +429,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn lower_fn(&mut self, body: &Body<'tcx>) -> R<LoweredFn> {
         let def_id = body.def_id.to_def_id();
         let mut params = Vec::new();
+        let mut out = Vec::new();
         for param in &self.thir.params {
             let span = param.ty_span.unwrap_or(self.tcx.def_span(def_id));
             self.check_value_ty(param.ty, span)?;
@@ -395,7 +440,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         self.bind(*var, name.as_str(), mode.1 == Mutability::Mut)
                     }
                     PatKind::Wild => self.fresh("_"),
-                    _ => return Err(self.unsupported(pat.span, "this parameter pattern")),
+                    // `(x, y): (i32, i32)`: take the whole value, then take it apart.
+                    _ => {
+                        let name = self.fresh("param");
+                        self.destructure(pat, Expr::var(&name), true, &mut out)?;
+                        name
+                    }
                 },
                 None => self.fresh("_"),
             };
@@ -406,7 +456,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
         };
         let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
-        let mut out = Vec::new();
         self.stmt(body.expr, &dest, &mut out)?;
 
         Ok(LoweredFn {
@@ -491,31 +540,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.push(StmtKind::Continue(label).at(span));
                 Ok(())
             }
+            // Rust evaluates the right side of an assignment first. The target
+            // is a variable or its fields, which reading can't change.
             ExprKind::Assign { lhs, rhs } => {
-                let name = self.place(lhs)?;
-                if self.is_simple(rhs) {
-                    let value = self.expr(rhs, out)?;
-                    out.push(StmtKind::Assign(name, value).at(span));
-                    Ok(())
-                } else {
-                    self.stmt(rhs, &Dest::Assign(name), out)
+                let target = self.assignee(lhs)?;
+                match &target.kind {
+                    js::ExprKind::Var(name) if !self.is_simple(rhs) => {
+                        let name = name.clone();
+                        self.stmt(rhs, &Dest::Assign(name), out)
+                    }
+                    _ => {
+                        let value = self.expr(rhs, out)?;
+                        out.push(StmtKind::Assign(target, value).at(span));
+                        Ok(())
+                    }
                 }
             }
             ExprKind::AssignOp { op, lhs, rhs } => {
-                // For primitives, Rust evaluates the right side first.
                 let rhs_js = self.expr(rhs, out)?;
-                let name = self.place(lhs)?;
+                let target = self.assignee(lhs)?;
                 let ty = self.thir[lhs].ty;
-                let target = Expr::var(&name).or_at(self.js_span(self.thir[lhs].span));
-                let value = self.binary(assign_op(op), target, rhs_js, ty, expr.span)?.or_at(span);
-                out.push(StmtKind::Assign(name, value).at(span));
+                let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
+                let value = self.binary(assign_op(op), current, rhs_js, ty, expr.span)?.or_at(span);
+                out.push(StmtKind::Assign(target, value).at(span));
                 Ok(())
             }
             _ => {
-                let value = self.expr(e, out)?;
+                let value = match (dest, self.place(e)) {
+                    // Returning a place hands its value over without a copy:
+                    // every local dies here, so nothing is left to share it.
+                    (Dest::Return, Some((place, _))) => place.or_at(span),
+                    _ => self.expr(e, out)?,
+                };
                 match dest {
                     Dest::Return => out.push(StmtKind::Return(Some(value)).at(span)),
-                    Dest::Assign(name) => out.push(StmtKind::Assign(name.clone(), value).at(span)),
+                    Dest::Assign(name) => out.push(StmtKind::Assign(Expr::var(name), value).at(span)),
                     Dest::Discard if value.has_effects() => out.push(StmtKind::Expr(value).at(span)),
                     Dest::Discard => {}
                 }
@@ -590,7 +649,69 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some(init) => self.stmt(init, &Dest::Discard, out),
                 None => Ok(()),
             },
-            _ => Err(self.unsupported(pat.span, "this `let` pattern")),
+            // `let (q, r) = divmod(a, b);`
+            _ => {
+                let Some(init) = init else {
+                    return Err(self.unsupported(pat.span, "this `let` pattern without a value"));
+                };
+                let (subject, stable) = self.subject(init, "tmp", out)?;
+                self.destructure(pat, subject, stable, out)
+            }
+        }
+    }
+
+    /// Bind the variables of an irrefutable pattern to the parts of `subject`.
+    fn destructure(&mut self, pat: &Pat<'tcx>, subject: Expr, stable: bool, out: &mut Vec<Stmt>) -> R<()> {
+        let mut bindings = Vec::new();
+        if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {
+            return Err(self.unsupported(pat.span, "this refutable pattern"));
+        }
+        self.bind_all(bindings, stable, self.js_span(pat.span), out);
+        Ok(())
+    }
+
+    /// Where a `match` or `let` finds the value it takes apart, and whether
+    /// that stays unchanged while the pattern's variables live.
+    ///
+    /// A place is used where it is, and may be stable (see `stable_place`).
+    /// A tuple of stable places (`match (a, b)`) is used without building
+    /// the array. Anything else is computed once into a `const` named `base`,
+    /// which is stable: no Rust variable can move or change it.
+    fn subject(&mut self, e: ExprId, base: &str, out: &mut Vec<Stmt>) -> R<(Expr, bool)> {
+        if let Some(place) = self.stable_place(e) {
+            return Ok((place, true));
+        }
+        if let Some((place, _)) = self.place(e) {
+            return Ok((place, false));
+        }
+        if let ExprKind::Tuple { ref fields } = self.thir[self.strip(e)].kind
+            && !fields.is_empty()
+        {
+            let places: Option<Vec<Expr>> = fields.iter().map(|&f| self.stable_place(f)).collect();
+            if let Some(places) = places {
+                return Ok((Expr::array(places), true));
+            }
+        }
+        let value = self.expr(e, out)?;
+        let name = self.fresh(base);
+        out.push(StmtKind::Const(name.clone(), value).at(self.js_span(self.thir[e].span)));
+        Ok((Expr::var(&name), true))
+    }
+
+    /// Give a pattern's variables their JS meaning. Immutable ones bound into
+    /// a stable subject just name the place they matched, as ReScript does:
+    /// `P { x, y } => x + y` becomes `p.x + p.y`. The rest get a variable
+    /// holding their own value.
+    fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
+        for b in bindings {
+            if stable && !b.mutable {
+                self.vars.insert(b.var, Var { place: b.place, mutable: false });
+                continue;
+            }
+            let value = self.copy_if_needed(b.place, b.ty).or_at(span);
+            let name = self.bind(b.var, &b.name, b.mutable);
+            let kind = if b.mutable { StmtKind::Let(name, Some(value)) } else { StmtKind::Const(name, value) };
+            out.push(kind.at(span));
         }
     }
 
@@ -655,21 +776,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         dest: &Dest,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
-        // Evaluate the scrutinee once. An immutable variable can be tested
-        // directly; anything else goes into a `const`.
-        let (subject, stable) = match self.thir[self.strip(scrutinee)].kind {
-            ExprKind::VarRef { id } => {
-                let var = &self.vars[&id];
-                (var.name.clone(), !var.mutable)
-            }
-            _ => {
-                let value = self.expr(scrutinee, out)?;
-                let name = self.fresh("match");
-                let span = self.js_span(self.thir[scrutinee].span);
-                out.push(StmtKind::Const(name.clone(), value).at(span));
-                (name, true)
-            }
-        };
+        // Evaluate the scrutinee once, unless it's a place that can be
+        // tested where it is.
+        let (subject, stable) = self.subject(scrutinee, "match", out)?;
 
         let mut chain: Vec<(Option<Expr>, Vec<Stmt>, js::Span)> = Vec::new();
         for (i, &arm_id) in arms.iter().enumerate() {
@@ -681,21 +790,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .pattern_test(&arm.pattern, &subject, &mut bindings)?
                 .map(|t| t.or_at(pat_span));
 
-            let mut body = Vec::new();
-            for (var, name, mutable) in bindings {
-                if stable && !mutable {
-                    // `x => ..` just names the subject: reuse it.
-                    self.vars.insert(var, Var { name: subject.clone(), mutable: false });
-                } else {
-                    if arm.guard.is_some() {
-                        return Err(self.unsupported(arm.pattern.span, "this binding in a guarded arm"));
-                    }
-                    let name = self.bind(var, &name, mutable);
-                    let value = Expr::var(&subject).or_at(pat_span);
-                    let kind = if mutable { StmtKind::Let(name, Some(value)) } else { StmtKind::Const(name, value) };
-                    body.push(kind.at(pat_span));
-                }
+            // A guard is tested before the arm's body, where the variables
+            // with their own `const` are declared. Only named places work there.
+            if arm.guard.is_some() && bindings.iter().any(|b| !stable || b.mutable) {
+                return Err(self.unsupported(arm.pattern.span, "this binding in a guarded arm"));
             }
+            let mut body = Vec::new();
+            self.bind_all(bindings, stable, pat_span, &mut body);
             if let Some(guard) = arm.guard {
                 if !self.is_simple(guard) {
                     return Err(self.unsupported(self.thir[guard].span, "this guard"));
@@ -735,25 +836,39 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn pattern_test(
         &mut self,
         pat: &Pat<'tcx>,
-        subject: &str,
-        bindings: &mut Vec<(LocalVarId, String, bool)>,
+        subject: &Expr,
+        bindings: &mut Vec<Binding<'tcx>>,
     ) -> R<Option<Expr>> {
         match &pat.kind {
             PatKind::Wild => Ok(None),
-            PatKind::Binding { name, var, mode, subpattern: None, .. } => {
+            PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
                 self.check_by_value(*mode, pat.span)?;
-                bindings.push((*var, name.to_string(), mode.1 == Mutability::Mut));
+                bindings.push(Binding {
+                    var: *var,
+                    name: name.to_string(),
+                    mutable: mode.1 == Mutability::Mut,
+                    place: subject.clone(),
+                    ty: *ty,
+                });
                 Ok(None)
             }
             PatKind::Constant { value } => {
                 let value = self.const_value(*value, pat.span)?;
-                Ok(Some(Expr::bin(Op::Eq, Expr::var(subject), value)))
+                Ok(Some(Expr::bin(Op::Eq, subject.clone(), value)))
             }
             PatKind::Variant { adt_def, variant_index, subpatterns, .. } if subpatterns.is_empty() => {
                 let name = adt_def.variant(*variant_index).name.to_string();
-                Ok(Some(Expr::bin(Op::Eq, Expr::var(subject), Expr::str(name))))
+                Ok(Some(Expr::bin(Op::Eq, subject.clone(), Expr::str(name))))
             }
-            PatKind::Leaf { subpatterns } if subpatterns.is_empty() => Ok(None),
+            // A struct or tuple: every field must match.
+            PatKind::Leaf { subpatterns } => {
+                let mut tests = Vec::new();
+                for field in subpatterns {
+                    let part = self.project(subject.clone(), pat.ty, field.field.as_usize());
+                    tests.extend(self.pattern_test(&field.pattern, &part, bindings)?);
+                }
+                Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
+            }
             PatKind::Or { pats } => {
                 let before = bindings.len();
                 let mut tests = Vec::new();
@@ -811,15 +926,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let num = self.num(ty, span)?;
                 Ok(num_literal(lit.to_bits_unchecked(), num))
             }
-            ExprKind::VarRef { id } => Ok(Expr::var(&self.vars[&id].name)),
+            ExprKind::VarRef { .. } | ExprKind::Field { .. } => self.read(e, out),
             ExprKind::Tuple { ref fields } if fields.is_empty() => Ok(Expr::undefined()),
-            ExprKind::Adt(ref adt) => {
-                let variant = adt.adt_def.variant(adt.variant_index);
-                if !adt.adt_def.is_enum() || !is_fieldless_enum(adt.adt_def) {
-                    return Err(self.unsupported(span, "structs and enums with fields"));
-                }
-                Ok(Expr::str(variant.name.to_string()))
-            }
+            ExprKind::Tuple { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
+            ExprKind::Adt(ref adt) => self.adt(adt, ty, span, out),
             ExprKind::Binary { op, lhs, rhs } => {
                 let [l, r] = self.operands(&[lhs, rhs], out)?.try_into().ok().unwrap();
                 self.binary(op, l, r, self.thir[lhs].ty, span)
@@ -926,9 +1036,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Literal { .. }
             | ExprKind::NonHirLiteral { .. }
             | ExprKind::VarRef { .. }
-            | ExprKind::ZstLiteral { .. }
-            | ExprKind::Adt(_) => true,
-            ExprKind::Tuple { ref fields } => fields.is_empty(),
+            | ExprKind::ZstLiteral { .. } => true,
+            ExprKind::Field { lhs, .. } => self.is_simple(lhs),
+            ExprKind::Tuple { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
+            ExprKind::Adt(ref adt) => {
+                let base_simple = match &adt.base {
+                    AdtExprBase::Base(fru) => self.is_simple(fru.base),
+                    _ => true,
+                };
+                // Fields written out of declaration order may need temporaries.
+                base_simple
+                    && adt.fields.is_sorted_by_key(|f| f.name)
+                    && adt.fields.iter().all(|f| self.is_simple(f.expr))
+            }
             ExprKind::Binary { lhs, rhs, .. } | ExprKind::LogicalOp { lhs, rhs, .. } => {
                 self.is_simple(lhs) && self.is_simple(rhs)
             }
@@ -1127,11 +1247,205 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Err(self.unsupported(fun.span, "calling this"))
     }
 
-    /// The JS variable an assignment writes to.
-    fn place(&self, e: ExprId) -> R<String> {
+    // ── Structs and tuples (ADR 0020) ───────────────────────────────────
+
+    /// A struct literal: `{ x: 1, y: 2 }`, or `[1, 2]` for a tuple struct.
+    fn adt(&mut self, adt: &thir::AdtExpr<'tcx>, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let variant = adt.adt_def.variant(adt.variant_index);
+        if adt.adt_def.is_enum() {
+            if !is_fieldless_enum(adt.adt_def) {
+                return Err(self.unsupported(span, "enums with fields"));
+            }
+            return Ok(Expr::str(variant.name.to_string()));
+        }
+        if adt.adt_def.is_union() {
+            return Err(self.unsupported(span, "unions"));
+        }
+        // `struct Marker;` holds nothing, like `()`.
+        if variant.ctor_kind() == Some(CtorKind::Const) {
+            return Ok(Expr::undefined());
+        }
+        // `P { x, ..base }`: the fields not written come from `base`.
+        let base = match &adt.base {
+            AdtExprBase::None => None,
+            AdtExprBase::Base(fru) => match self.place(fru.base) {
+                Some((place, _)) => Some(place),
+                None => return Err(self.unsupported(self.thir[fru.base].span, "`..` with this base")),
+            },
+            AdtExprBase::DefaultFields(_) => return Err(self.unsupported(span, "default field values")),
+        };
+
+        // Rust evaluates the fields in the order they're written. JS lists
+        // them in declaration order, so every object of a type has the same
+        // shape. If that reorders two calls, they go into `const`s first.
+        let exprs: Vec<ExprId> = adt.fields.iter().map(|f| f.expr).collect();
+        let mut values = self.operands(&exprs, out)?;
+        let reordered = !adt.fields.is_sorted_by_key(|f| f.name);
+        if reordered && values.iter().filter(|v| v.has_effects()).count() > 1 {
+            for (field, value) in adt.fields.iter().zip(&mut values) {
+                if value.has_effects() {
+                    let name = self.fresh(variant.fields[field.name].name.as_str());
+                    let v = std::mem::replace(value, Expr::var(&name));
+                    let span = v.span;
+                    out.push(StmtKind::Const(name, v).at(span));
+                }
+            }
+        }
+        let mut given: HashMap<usize, Expr> =
+            adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
+
+        let shape = self.shape(ty);
+        let field_tys = match &shape {
+            Shape::Object(fields) => fields.iter().map(|&(_, t)| t).collect(),
+            Shape::Array(tys) => tys.clone(),
+            Shape::Other => unreachable!("a struct with fields"),
+        };
+        let mut items = Vec::new();
+        for (i, field_ty) in field_tys.into_iter().enumerate() {
+            items.push(match (given.remove(&i), &base) {
+                (Some(value), _) => value,
+                (None, Some(base)) => self.copy_if_needed(self.project(base.clone(), ty, i), field_ty),
+                (None, None) => unreachable!("rustc checked that every field is given"),
+            });
+        }
+        Ok(match shape {
+            Shape::Object(fields) => {
+                Expr::object(fields.into_iter().zip(items).map(|((name, _), v)| Prop::Field(name, v)).collect())
+            }
+            _ => Expr::array(items),
+        })
+    }
+
+    /// How a struct or tuple type looks in JS.
+    fn shape(&self, ty: Ty<'tcx>) -> Shape<'tcx> {
+        match ty.kind() {
+            ty::Tuple(tys) if !tys.is_empty() => Shape::Array(tys.to_vec()),
+            ty::Adt(adt, args) if adt.is_struct() => {
+                let variant = adt.non_enum_variant();
+                let fields = variant.fields.iter().map(|f| (f.name.to_string(), f.ty(self.tcx, args)));
+                match variant.ctor_kind() {
+                    None => Shape::Object(fields.collect()),
+                    Some(CtorKind::Fn) => Shape::Array(fields.map(|(_, ty)| ty).collect()),
+                    Some(CtorKind::Const) => Shape::Other,
+                }
+            }
+            _ => Shape::Other,
+        }
+    }
+
+    /// Field `i` of a `ty` value: `base.x`, or `base[0]` for tuples.
+    fn project(&self, base: Expr, ty: Ty<'tcx>, i: usize) -> Expr {
+        match (self.shape(ty), &base.kind) {
+            // A part of `[a, b]` (a `match (a, b)` subject) is just `a`.
+            (Shape::Array(_), js::ExprKind::Array(items)) if !base.has_effects() => items[i].clone(),
+            (Shape::Array(_), _) => Expr::index(base, Expr::int(i as i128)),
+            (Shape::Object(fields), _) => Expr::member(base, fields[i].0.clone()),
+            (Shape::Other, _) => unreachable!("fields of a type without fields"),
+        }
+    }
+
+    /// `e` as a place, a variable and some of its fields, without reading it.
+    /// Also says whether that variable is mutable.
+    fn place(&self, e: ExprId) -> Option<(Expr, bool)> {
         match self.thir[self.strip(e)].kind {
-            ExprKind::VarRef { id } => Ok(self.vars[&id].name.clone()),
-            _ => Err(self.unsupported(self.thir[e].span, "assigning to this place")),
+            ExprKind::VarRef { id } => {
+                let var = &self.vars[&id];
+                Some((var.place.clone(), var.mutable))
+            }
+            ExprKind::Field { lhs, name, .. } => {
+                let (base, mutable) = self.place(lhs)?;
+                Some((self.project(base, self.thir[lhs].ty, name.as_usize()), mutable))
+            }
+            _ => None,
+        }
+    }
+
+    /// `e` as a place whose value can't change while it's still in scope, so
+    /// a pattern's variables can just name parts of it.
+    ///
+    /// Its variable must be immutable. That's not enough on its own: `let mut
+    /// s = r;` moves `r`, and then `s.origin.x = 0` changes the object `r`
+    /// still names. So the variable must also be `Copy` (read, never moved:
+    /// the read copies it if needed) or hold nothing changed in place.
+    fn stable_place(&self, e: ExprId) -> Option<Expr> {
+        let (place, mutable) = self.place(e)?;
+        let mut root = self.strip(e);
+        while let ExprKind::Field { lhs, .. } = self.thir[root].kind {
+            root = self.strip(lhs);
+        }
+        let ty = self.thir[root].ty;
+        let unchanging = self.is_copy(ty) || !self.contains_mutated(ty);
+        (!mutable && unchanging).then_some(place)
+    }
+
+    fn is_copy(&self, ty: Ty<'tcx>) -> bool {
+        self.tcx.type_is_copy_modulo_regions(self.typing_env, ty)
+    }
+
+    /// The place an assignment writes to.
+    fn assignee(&self, e: ExprId) -> R<Expr> {
+        self.place(e).map(|(place, _)| place).ok_or_else(|| self.unsupported(self.thir[e].span, "assigning to this place"))
+    }
+
+    /// Read a variable or field's value.
+    fn read(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        let ty = self.thir[e].ty;
+        if let Some((place, _)) = self.place(e) {
+            return Ok(self.copy_if_needed(place, ty));
+        }
+        // A field of a temporary, like `f().x`: nothing else can see the rest.
+        let ExprKind::Field { lhs, name, .. } = self.thir[self.strip(e)].kind else {
+            unreachable!("a variable is always a place")
+        };
+        let base = self.expr(lhs, out)?;
+        Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
+    }
+
+    /// Rust copies a `Copy` value when it's read, and JS objects are shared
+    /// references. The two only disagree if one of the copies is later
+    /// changed in place, which needs a type in `mutated`. So only those
+    /// types are copied, and everything else stays shared.
+    fn copy_if_needed(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
+        if self.contains_mutated(ty) && self.is_copy(ty) {
+            self.copy(place, ty)
+        } else {
+            place
+        }
+    }
+
+    fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
+        self.mutated.contains(&ty)
+            || match self.shape(ty) {
+                Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
+                Shape::Array(tys) => tys.iter().any(|&t| self.contains_mutated(t)),
+                Shape::Other => false,
+            }
+    }
+
+    /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.
+    /// A field that also contains mutated types is copied in turn.
+    fn copy(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
+        match self.shape(ty) {
+            Shape::Object(fields) => {
+                let mut props = vec![Prop::Spread(place.clone())];
+                for (name, t) in fields {
+                    if self.contains_mutated(t) {
+                        let field = self.copy(Expr::member(place.clone(), name.clone()), t);
+                        props.push(Prop::Field(name, field));
+                    }
+                }
+                Expr::object(props)
+            }
+            Shape::Array(tys) => Expr::array(
+                tys.into_iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        let item = Expr::index(place.clone(), Expr::int(i as i128));
+                        if self.contains_mutated(t) { self.copy(item, t) } else { item }
+                    })
+                    .collect(),
+            ),
+            Shape::Other => place,
         }
     }
 
@@ -1151,18 +1465,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         js::Span { lo: (span.lo() - self.file_start).0, hi: (span.hi() - self.file_start).0 }
     }
 
-    /// Skip THIR's wrapper nodes that don't change meaning.
-    fn strip(&self, mut e: ExprId) -> ExprId {
-        loop {
-            match self.thir[e].kind {
-                ExprKind::Scope { value: inner, .. }
-                | ExprKind::Use { source: inner }
-                | ExprKind::NeverToAny { source: inner }
-                | ExprKind::ValueTypeAscription { source: inner, .. }
-                | ExprKind::PlaceTypeAscription { source: inner, .. } => e = inner,
-                _ => return e,
-            }
-        }
+    fn strip(&self, e: ExprId) -> ExprId {
+        strip(self.thir, e)
     }
 
     fn loop_index(&self, label: region::Scope, span: Span) -> R<usize> {
@@ -1191,7 +1495,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn bind(&mut self, var: LocalVarId, name: &str, mutable: bool) -> String {
         let name = self.fresh(name);
-        self.vars.insert(var, Var { name: name.clone(), mutable });
+        self.vars.insert(var, Var { place: Expr::var(&name), mutable });
         name
     }
 
@@ -1200,11 +1504,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn check_value_ty(&self, ty: Ty<'tcx>, span: Span) -> R<()> {
-        let ok = ty.is_bool()
-            || ty.is_unit()
-            || Num::of(ty).is_some()
-            || matches!(ty.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
-        if ok { Ok(()) } else { Err(self.unsupported(span, &format!("values of type `{ty}`"))) }
+        match self.unsupported_part(ty) {
+            None => Ok(()),
+            Some(part) => Err(self.unsupported(span, &format!("values of type `{part}`"))),
+        }
+    }
+
+    /// The first type inside `ty` (or `ty` itself) that rust-js can't represent.
+    fn unsupported_part(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+        if ty.is_bool() || ty.is_unit() || Num::of(ty).is_some() {
+            return None;
+        }
+        match (ty.kind(), self.shape(ty)) {
+            (ty::Adt(adt, _), _) if is_fieldless_enum(*adt) => None,
+            (_, Shape::Object(fields)) => fields.iter().find_map(|&(_, t)| self.unsupported_part(t)),
+            (_, Shape::Array(tys)) => tys.iter().find_map(|&t| self.unsupported_part(t)),
+            (ty::Adt(adt, _), Shape::Other) if adt.is_struct() => None, // a unit struct
+            _ => Some(ty),
+        }
     }
 
     fn check_by_value(&self, mode: BindingMode, span: Span) -> R<()> {
@@ -1213,6 +1530,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {
         self.tcx.dcx().span_err(span, format!("rust-js does not support {what} yet"))
+    }
+}
+
+/// Skip THIR's wrapper nodes that don't change meaning.
+fn strip(thir: &Thir<'_>, mut e: ExprId) -> ExprId {
+    loop {
+        match thir[e].kind {
+            ExprKind::Scope { value: inner, .. }
+            | ExprKind::Use { source: inner }
+            | ExprKind::NeverToAny { source: inner }
+            | ExprKind::ValueTypeAscription { source: inner, .. }
+            | ExprKind::PlaceTypeAscription { source: inner, .. } => e = inner,
+            _ => return e,
+        }
     }
 }
 

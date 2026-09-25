@@ -56,7 +56,8 @@ pub struct Stmt {
 pub enum StmtKind {
     Const(String, Expr),
     Let(String, Option<Expr>),
-    Assign(String, Expr),
+    /// `target = value`, where `target` is a variable, `a.b` or `a[0]`.
+    Assign(Expr, Expr),
     Expr(Expr),
     If(Expr, Vec<Stmt>, Option<Vec<Stmt>>),
     While { label: Option<String>, cond: Expr, body: Vec<Stmt> },
@@ -71,11 +72,13 @@ impl StmtKind {
     }
 }
 
+#[derive(Clone)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
 }
 
+#[derive(Clone)]
 pub enum ExprKind {
     Num(f64),
     Bool(bool),
@@ -84,10 +87,24 @@ pub enum ExprKind {
     Var(String),
     /// `object.property`, e.g. `Math.imul` or `math.add`.
     Member(Box<Expr>, String),
+    /// `object[index]`, e.g. `pair[0]`.
+    Index(Box<Expr>, Box<Expr>),
+    /// `[a, b]`: a tuple or tuple struct (ADR 0020).
+    Array(Vec<Expr>),
+    /// `{ x: a, y: b }`: a struct (ADR 0020).
+    Object(Vec<Prop>),
     Unary(UnaryOp, Box<Expr>),
     Binary(Op, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
+}
+
+#[derive(Clone)]
+pub enum Prop {
+    /// `name: value`, printed as `name` when `value` is a variable of that name.
+    Field(String, Expr),
+    /// `...value`: copy every field of `value`.
+    Spread(Expr),
 }
 
 #[derive(Clone, Copy)]
@@ -154,6 +171,18 @@ impl Expr {
         Expr::new(ExprKind::Member(Box::new(object), property.into()))
     }
 
+    pub fn index(object: Expr, index: Expr) -> Expr {
+        Expr::new(ExprKind::Index(Box::new(object), Box::new(index)))
+    }
+
+    pub fn array(items: Vec<Expr>) -> Expr {
+        Expr::new(ExprKind::Array(items))
+    }
+
+    pub fn object(props: Vec<Prop>) -> Expr {
+        Expr::new(ExprKind::Object(props))
+    }
+
     pub fn unary(op: UnaryOp, arg: Expr) -> Expr {
         Expr::new(ExprKind::Unary(op, Box::new(arg)))
     }
@@ -205,6 +234,11 @@ impl Expr {
             | ExprKind::Undefined
             | ExprKind::Var(_) => false,
             ExprKind::Member(object, _) => object.has_effects(),
+            ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
+            ExprKind::Array(items) => items.iter().any(Expr::has_effects),
+            ExprKind::Object(props) => props.iter().any(|p| match p {
+                Prop::Field(_, value) | Prop::Spread(value) => value.has_effects(),
+            }),
             ExprKind::Unary(_, a) => a.has_effects(),
             ExprKind::Binary(_, a, b) => a.has_effects() || b.has_effects(),
             ExprKind::Cond(a, b, c) => a.has_effects() || b.has_effects() || c.has_effects(),

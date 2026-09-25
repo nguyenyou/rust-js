@@ -40,6 +40,7 @@ export function examples(): Example[] {
     .sort();
   return [
     { name: "modules", title: "Modules (a crate across files)", root: "lib.rs", files: modulesFiles, dir: modulesDir },
+    { name: "structs", title: "Structs and tuples", root: "structs.rs", files: ["structs.rs"], dir: examplesDir },
     { name: "fib", title: "fib (one file)", root: "fib.rs", files: ["fib.rs"], dir: examplesDir },
   ];
 }

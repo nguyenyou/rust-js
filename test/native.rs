@@ -1,9 +1,16 @@
-//! Runs examples/fib.rs natively and prints every result as JSON lines.
-//! The JS test runs the same calls on the generated fib.js and compares.
+//! Runs the examples natively and prints every result as JSON lines. The
+//! JS test runs the same calls on the generated JS and compares.
+//!
+//! Values are printed the way ADR 0020 says JS holds them: a struct as an
+//! object, a tuple (or tuple struct) as an array.
 
 #[path = "../examples/fib.rs"]
 #[allow(dead_code)]
 mod fib;
+
+#[path = "../examples/structs.rs"]
+#[allow(dead_code)]
+mod structs;
 
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
@@ -12,6 +19,7 @@ mod fib;
 use std::panic::{self, UnwindSafe};
 
 use fib::*;
+use structs::{Point, Rect, Size};
 
 fn main() {
     panic::set_hook(Box::new(|_| {}));
@@ -46,11 +54,44 @@ fn main() {
         case("modules.shadowed", &[x as i64], || modules::shadowed(x) as i64);
         case("modules.util.double", &[x as i64], || modules::util::double(x) as i64);
     }
+
+    let ints = [0, 1, -1, 7, -7, 100, i32::MAX, i32::MIN];
+    for &x in &ints {
+        for &y in &ints {
+            case("structs.point", &[x as i64, y as i64], || structs::point(x, y));
+            case("structs.moved", &[x as i64, y as i64, 3], || structs::moved(x, y, 3));
+            case("structs.with_x", &[x as i64, y as i64], || structs::with_x(x, y));
+            case("structs.written_order", &[x as i64, y as i64], || structs::written_order(x, y));
+            case("structs.quadrant", &[x as i64, y as i64], || structs::quadrant(x, y) as i64);
+            case_with("structs.classify", &[&(x, y)], || structs::classify((x, y)) as i64);
+        }
+        case("structs.copies_are_separate", &[x as i64], || structs::copies_are_separate(x));
+        case("structs.caller_keeps_its_point", &[x as i64], || structs::caller_keeps_its_point(x));
+        case("structs.moves_share_nothing", &[x as i64], || structs::moves_share_nothing(x));
+        case("structs.bound_before_move", &[x as i64], || structs::bound_before_move(x));
+    }
+    for (w, h) in [(0, 0), (3, 4), (65_536, 65_536), (u32::MAX, 2)] {
+        case("structs.rect", &[-1, 2, w as i64, h as i64], || structs::rect(-1, 2, w, h));
+        case("structs.grow", &[w as i64, h as i64, 5], || structs::grow(w, h, 5));
+        let r = structs::rect(0, 0, w, h);
+        case_with("structs.area", &[&r], || structs::area(structs::rect(0, 0, w, h)) as i64);
+    }
+    for (a, b) in [(7, 2), (0, 5), (u32::MAX, 10), (5, 0)] {
+        case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));
+        case("structs.divmod_sum", &[a as i64, b as i64], || structs::divmod_sum(a, b) as i64);
+    }
 }
 
-fn case(name: &str, args: &[i64], f: impl FnOnce() -> i64 + UnwindSafe) {
+fn case<T: Json>(name: &str, args: &[i64], f: impl FnOnce() -> T + UnwindSafe) {
+    let args: Vec<&dyn Json> = args.iter().map(|a| a as &dyn Json).collect();
+    case_with(name, &args, f);
+}
+
+fn case_with<T: Json>(name: &str, args: &[&dyn Json], f: impl FnOnce() -> T + UnwindSafe) {
+    let args: Vec<String> = args.iter().map(|a| a.json()).collect();
+    let args = args.join(",");
     let outcome = match panic::catch_unwind(f) {
-        Ok(v) => format!("\"value\":{v}"),
+        Ok(v) => format!("\"value\":{}", v.json()),
         Err(e) => {
             let msg = e.downcast_ref::<&str>().map(|s| s.to_string())
                 .or_else(|| e.downcast_ref::<String>().cloned())
@@ -58,5 +99,51 @@ fn case(name: &str, args: &[i64], f: impl FnOnce() -> i64 + UnwindSafe) {
             format!("\"panic\":{msg:?}")
         }
     };
-    println!("{{\"fn\":{name:?},\"args\":{args:?},{outcome}}}");
+    println!("{{\"fn\":{name:?},\"args\":[{args}],{outcome}}}");
+}
+
+trait Json {
+    fn json(&self) -> String;
+}
+
+impl Json for i64 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for i32 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for u32 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl<A: Json, B: Json> Json for (A, B) {
+    fn json(&self) -> String {
+        format!("[{},{}]", self.0.json(), self.1.json())
+    }
+}
+
+impl Json for Point {
+    fn json(&self) -> String {
+        format!("{{\"x\":{},\"y\":{}}}", self.x, self.y)
+    }
+}
+
+impl Json for Size {
+    fn json(&self) -> String {
+        format!("[{},{}]", self.0, self.1)
+    }
+}
+
+impl Json for Rect {
+    fn json(&self) -> String {
+        format!("{{\"origin\":{},\"size\":{}}}", self.origin.json(), self.size.json())
+    }
 }

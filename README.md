@@ -21,13 +21,16 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - Integers wrap on overflow, like Rust's release profile (`overflow-checks = off`).
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`.
+- A struct is a plain object, `{ x: 1, y: 2 }`; a tuple or tuple struct is an array, `[1, 2]`.
+  Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
 - Anything not supported yet is reported as a compiler error at the right span.
 
 ## Supported so far
 
-`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums; `let`, `if`, `while`,
-`loop` (with `break value` and labels), `match` on constants, enum variants,
-`_`, bindings, `|` and guards; calls between functions, across modules and files.
+`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums, structs, tuples; `let`, `if`,
+`while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
+struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
+struct update syntax; calls between functions, across modules and files.
 
 A crate split across files becomes one JS file per module, with the imports
 and exports written for you (see [ADR 0019](docs/decisions/0019-one-js-file-per-module.md)):

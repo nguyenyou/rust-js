@@ -44,7 +44,8 @@ The enum declaration itself emits nothing.
 - `order as i32` (enum to integer cast) isn't supported yet. It will need the
   variant's discriminant, not its name.
 - Enums **with** fields are a separate, future decision. They'll likely be
-  tagged objects, so a mixed enum could use strings for its fieldless
+  tagged objects, as ReScript does (see [0020](0020-structs-and-tuples.md) for
+  structs), so a mixed enum could use strings for its fieldless
   variants and objects for the rest.
 - `==` on enums goes through the `PartialEq` trait (a method call), which
   isn't supported yet. `match` works.

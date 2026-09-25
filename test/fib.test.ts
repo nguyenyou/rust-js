@@ -17,9 +17,11 @@ function run(cmd: string[]): string {
   return p.stdout.toString();
 }
 
-type Case = { fn: string; args: number[]; value?: number; panic?: string };
+// Values are JSON: numbers, and objects and arrays for structs and tuples.
+type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
 let cases: Case[] = [];
 let fib: Record<string, (...args: any[]) => number>;
+let structs: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 
@@ -33,6 +35,8 @@ beforeAll(async () => {
     "test/native.rs", "-o", join(target, "native")]);
   cases = run([join(target, "native")]).trim().split("\n").map((line) => JSON.parse(line));
   fib = await import(join(target, "fib.js"));
+  run([join(target, "debug", "rust-js"), "examples/structs.rs", "-o", join(target, "structs.js")]);
+  structs = await import(join(target, "structs.js"));
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -42,20 +46,23 @@ beforeAll(async () => {
 }, 600_000);
 
 // `nth` takes an enum; in JS a fieldless variant is its name as a string.
-function call(c: Case): number {
+function call(c: Case): unknown {
   switch (c.fn) {
     case "nth_asc":
-      return fib.nth("Ascending", ...c.args);
+      return fib.nth("Ascending", ...(c.args as number[]));
     case "nth_desc":
-      return fib.nth("Descending", ...c.args);
+      return fib.nth("Descending", ...(c.args as number[]));
     default: {
       // "modules.summary" is the crate root's; "modules.stats.mean" is stats.js's.
       const path = c.fn.split(".");
+      if (path[0] === "structs") {
+        return structs[path[1]](...c.args);
+      }
       if (path[0] === "modules") {
         const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
-        return modules[file][name](...c.args);
+        return modules[file][name](...(c.args as number[]));
       }
-      return fib[c.fn](...c.args);
+      return fib[c.fn](...(c.args as number[]));
     }
   }
 }
@@ -63,11 +70,11 @@ function call(c: Case): number {
 test("generated JS matches native Rust on every case", () => {
   expect(cases.length).toBeGreaterThan(100);
   for (const c of cases) {
-    const label = `${c.fn}(${c.args.join(", ")})`;
+    const label = `${c.fn}(${c.args.map((a) => JSON.stringify(a)).join(", ")})`;
     if (c.panic !== undefined) {
       expect(() => call(c), label).toThrow(c.panic);
     } else {
-      expect([label, call(c)]).toEqual([label, c.value!]);
+      expect([label, call(c)]).toEqual([label, c.value]);
     }
   }
 });
@@ -145,4 +152,26 @@ test("a crate split across files becomes one JS file per module", async () => {
   expect(await sources("geometry/area.js")).toEqual(["../../../examples/modules/geometry/area.rs"]);
   // An inline module lives in its parent's file.
   expect(await sources("util.js")).toEqual(["../../examples/modules/lib.rs"]);
+});
+
+// ADR 0020: structs are objects, tuples are arrays, and only some reads copy.
+test("structs and tuples are plain objects and arrays", async () => {
+  const js = await Bun.file(join(target, "structs.js")).text();
+  // A JS caller builds the same shapes by hand.
+  expect(structs.area({ origin: { x: 0, y: 0 }, size: [3, 4] })).toBe(12);
+  expect(structs.classify([5, 5])).toBe(2);
+
+  // `Point` is Copy and changed in place in this crate, so reading one copies it...
+  expect(js).toContain("let b = { ...a };");
+  expect(js).toContain("origin: { ...a },");
+  // ...but `Rect` isn't Copy: assigning it moves it, with no copy.
+  expect(js).toContain("let s = r;");
+  // Returning a variable hands it over.
+  expect(js).toContain("return p;");
+  // The tuple `(u32, u32)` is never changed in place, so it's never copied.
+  expect(js).toContain("const tmp = divmod(a, b);");
+  // Fields are listed in declaration order, but the calls run in the order written.
+  expect(js).toMatch(/const y = \$div\(100, a, -2147483648\) \| 0;\s+const x = \$rem/);
+  // `match (a, b)` tests the variables directly, without building an array.
+  expect(js).toContain("if (param[0] === 0 && param[1] === 0)");
 });

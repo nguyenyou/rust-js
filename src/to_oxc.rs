@@ -21,10 +21,10 @@ use std::path::PathBuf;
 
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
-    Argument, AssignmentTarget, BindingIdentifier, BindingPattern, Declaration, Expression,
-    FormalParameter, FormalParameterKind, FormalParameters, FunctionBody, FunctionType,
-    IdentifierName, LabelIdentifier, Program, Statement, VariableDeclarationKind,
-    VariableDeclarator,
+    Argument, ArrayExpressionElement, AssignmentTarget, BindingIdentifier, BindingPattern,
+    Declaration, Expression, FormalParameter, FormalParameterKind, FormalParameters, FunctionBody,
+    FunctionType, IdentifierName, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
+    PropertyKind, Statement, VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -33,7 +33,7 @@ use oxc_span::{SPAN, SourceType, Span};
 use oxc_syntax::number::NumberBase;
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator};
 
-use crate::js::{self, ExprKind, Module, Op, StmtKind, UnaryOp};
+use crate::js::{self, ExprKind, Module, Op, Prop, StmtKind, UnaryOp};
 
 pub struct Output {
     pub code: String,
@@ -179,12 +179,11 @@ impl<'a> Cx<'a> {
         match &s.kind {
             StmtKind::Const(name, init) => self.declare(sp, VariableDeclarationKind::Const, name, Some(init)),
             StmtKind::Let(name, init) => self.declare(sp, VariableDeclarationKind::Let, name, init.as_ref()),
-            StmtKind::Assign(name, value) => {
-                let target = AssignmentTarget::new_assignment_target_identifier(SPAN, self.name(name), b);
+            StmtKind::Assign(target, value) => {
                 let assign = Expression::new_assignment_expression(
                     sp,
                     AssignmentOperator::Assign,
-                    target,
+                    self.assignment_target(target),
                     self.expr(value),
                     b,
                 );
@@ -218,6 +217,25 @@ impl<'a> Cx<'a> {
         }
     }
 
+    fn assignment_target(&self, e: &js::Expr) -> AssignmentTarget<'a> {
+        let b = &self.b;
+        let sp = span(e.span);
+        match &e.kind {
+            ExprKind::Var(name) => AssignmentTarget::new_assignment_target_identifier(sp, self.name(name), b),
+            ExprKind::Member(object, property) => AssignmentTarget::new_static_member_expression(
+                sp,
+                self.expr(object),
+                IdentifierName::new(SPAN, self.name(property), b),
+                false,
+                b,
+            ),
+            ExprKind::Index(object, index) => {
+                AssignmentTarget::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)
+            }
+            _ => unreachable!("lowering only assigns to variables and fields"),
+        }
+    }
+
     fn declare(
         &self,
         sp: Span,
@@ -247,6 +265,17 @@ impl<'a> Cx<'a> {
                 false,
                 b,
             ),
+            ExprKind::Index(object, index) => {
+                Expression::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)
+            }
+            ExprKind::Array(items) => {
+                let items = items.iter().map(|item| ArrayExpressionElement::from(self.expr(item)));
+                Expression::new_array_expression(sp, ArenaVec::from_iter_in(items, b), b)
+            }
+            ExprKind::Object(props) => {
+                let props = props.iter().map(|prop| self.property(prop));
+                Expression::new_object_expression(sp, ArenaVec::from_iter_in(props, b), b)
+            }
             ExprKind::Unary(op, arg) => {
                 let op = match op {
                     UnaryOp::Neg => UnaryOperator::UnaryNegation,
@@ -269,6 +298,27 @@ impl<'a> Cx<'a> {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));
                 Expression::new_call_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), false, b)
             }
+        }
+    }
+
+    fn property(&self, prop: &Prop) -> ObjectPropertyKind<'a> {
+        let b = &self.b;
+        match prop {
+            Prop::Field(name, value) => {
+                let value = self.expr(value);
+                // `{ x: x }` reads better as `{ x }`.
+                let shorthand = matches!(&value, Expression::Identifier(id) if id.name == name.as_str());
+                // In a literal, a plain `__proto__:` key sets the prototype. Quoted
+                // and computed, it's an ordinary field, like any other Rust field.
+                let computed = name == "__proto__";
+                let key = if computed {
+                    PropertyKey::new_string_literal(SPAN, self.name(name), None, b)
+                } else {
+                    PropertyKey::new_static_identifier(SPAN, self.name(name), b)
+                };
+                ObjectPropertyKind::new_object_property(SPAN, PropertyKind::Init, key, value, false, shorthand, computed, b)
+            }
+            Prop::Spread(value) => ObjectPropertyKind::new_spread_property(SPAN, self.expr(value), b),
         }
     }
 
