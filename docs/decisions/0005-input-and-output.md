@@ -1,6 +1,8 @@
 # 0005. One file in, one ES module out
 
-Status: Accepted
+Status: Accepted. **Extended by [0019](0019-one-js-file-per-module.md):**
+the output is one JS file per module. `-o` names the crate root's file, and
+the other modules go beside it.
 
 ## Context
 

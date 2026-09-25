@@ -65,6 +65,11 @@ THIR ──lower.rs──► js.rs AST ──to_oxc.rs──► oxc AST ──ox
   back. `to_oxc.rs` inserts a blank line before each function, then rebuilds
   the map with every mapping moved down by the number of lines inserted
   above it (`shift_lines`). The prelude shift uses the same mechanism.
+- **Whole numbers print as written.** oxc prints numbers in their shortest
+  form, like a minifier (`1000` becomes `1e3`), with no option to turn that
+  off. `to_oxc.rs` hands oxc whole numbers as ready-made decimal text instead,
+  wrapped in a real unary minus when negative, so oxc still handles spacing and
+  parentheses. Fractions keep oxc's formatting.
 - **Where a mapping points**: the outermost JS node made for a Rust
   expression gets that expression's span (`Expr::or_at`). Helper nodes like a
   `| 0` wrapper share it. Statements get their Rust statement's span.

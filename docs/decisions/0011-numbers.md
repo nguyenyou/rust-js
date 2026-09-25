@@ -59,10 +59,11 @@ becomes `a !== b`.
 - f64 → int: **a compile error for now.** Rust saturates (`300.0 as u8` is
   255, NaN is 0), while `| 0` is modular, and we won't ship the wrong one.
 
-**Literals** are stored as their exact `f64` value, and oxc prints them
-([0018](0018-print-with-oxc.md)). Every supported integer is exact in an f64,
-so nothing is lost. Negative literals are just negative values; the printer
-adds parentheses where precedence needs them.
+**Literals** are stored as their exact `f64` value. Every supported integer
+is exact in an f64, so nothing is lost. Whole numbers print in plain decimal,
+as written (`1000`, not oxc's shortest form `1e3`), and fractions print in
+their shortest round-trip form ([0018](0018-print-with-oxc.md)). Negative
+literals get parentheses where precedence needs them.
 
 ## Why release semantics?
 

@@ -1,6 +1,8 @@
 # 0016. Only top-level functions, for now
 
-Status: Accepted (temporary scope limit)
+Status: Accepted (temporary scope limit). **Partly superseded by
+[0019](0019-one-js-file-per-module.md):** functions inside modules are now
+supported, each module becoming its own JS file. The other limits stand.
 
 ## Context
 

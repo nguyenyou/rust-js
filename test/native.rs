@@ -5,6 +5,10 @@
 #[allow(dead_code)]
 mod fib;
 
+// `modules`: examples/modules/lib.rs, a crate split across files, linked
+// with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
+// `crate::` paths must mean its own root.)
+
 use std::panic::{self, UnwindSafe};
 
 use fib::*;
@@ -30,6 +34,17 @@ fn main() {
     }
     for (a, b) in [(7, 2), (-7, 2), (7, -2), (i32::MIN, 1), (i32::MAX, -1), (5, 0), (i32::MIN, -1)] {
         case("ratio", &[a as i64, b as i64], || ratio(a, b) as i64);
+    }
+
+    for (a, b) in [(0, 0), (3, 5), (10, 20), (999, 1001), (2000, 3000), (65_535, 7)] {
+        case("modules.summary", &[a as i64, b as i64], || modules::summary(a, b) as i64);
+        case("modules.doubled_mean", &[a as i64, b as i64], || modules::doubled_mean(a, b) as i64);
+        case("modules.stats.mean", &[a as i64, b as i64], || modules::stats::mean(a, b) as i64);
+    }
+    for x in [0, 1, 7, 999, 1000, 5000, u32::MAX] {
+        case("modules.mixed", &[x as i64], || modules::mixed(x) as i64);
+        case("modules.shadowed", &[x as i64], || modules::shadowed(x) as i64);
+        case("modules.util.double", &[x as i64], || modules::util::double(x) as i64);
     }
 }
 

@@ -20,14 +20,25 @@ function run(cmd: string[]): string {
 type Case = { fn: string; args: number[]; value?: number; panic?: string };
 let cases: Case[] = [];
 let fib: Record<string, (...args: any[]) => number>;
+// The multi-file crate: its root, and two of its other modules.
+let modules: Record<string, Record<string, (...args: any[]) => number>>;
 
 beforeAll(async () => {
   run(["cargo", "build", "--quiet"]);
   run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
   // Same semantics rust-js targets: the release profile, where arithmetic wraps.
-  run(["rustc", "--edition=2024", "-Coverflow-checks=off", "test/native.rs", "-o", join(target, "native")]);
+  run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--crate-name=modules",
+    "examples/modules/lib.rs", "-o", join(target, "libmodules.rlib")]);
+  run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--extern", `modules=${join(target, "libmodules.rlib")}`,
+    "test/native.rs", "-o", join(target, "native")]);
   cases = run([join(target, "native")]).trim().split("\n").map((line) => JSON.parse(line));
   fib = await import(join(target, "fib.js"));
+  run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
+  modules = {
+    lib: await import(join(target, "modules", "lib.js")),
+    stats: await import(join(target, "modules", "stats.js")),
+    util: await import(join(target, "modules", "util.js")),
+  };
 }, 600_000);
 
 // `nth` takes an enum; in JS a fieldless variant is its name as a string.
@@ -37,8 +48,15 @@ function call(c: Case): number {
       return fib.nth("Ascending", ...c.args);
     case "nth_desc":
       return fib.nth("Descending", ...c.args);
-    default:
+    default: {
+      // "modules.summary" is the crate root's; "modules.stats.mean" is stats.js's.
+      const path = c.fn.split(".");
+      if (path[0] === "modules") {
+        const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
+        return modules[file][name](...c.args);
+      }
       return fib[c.fn](...c.args);
+    }
   }
 }
 
@@ -96,4 +114,35 @@ test("source map points from fib.js back into fib.rs", async () => {
     const mapped = hit ? rs[hit.srcLine].slice(hit.srcCol) : "(no mapping)";
     expect([jsText, mapped.startsWith(rustText) ? rustText : mapped]).toEqual([jsText, rustText]);
   }
+});
+
+// ADR 0019: one JS file per module, with generated imports and exports.
+test("a crate split across files becomes one JS file per module", async () => {
+  const out = join(target, "modules");
+  const files = [...new Bun.Glob("**/*.js").scanSync(out)].sort();
+  // `geometry` only holds other modules, so it gets no file.
+  expect(files).toEqual(["geometry/area.js", "geometry/util.js", "lib.js", "stats.js", "util.js"]);
+
+  // Exported: \`pub\` functions, plus private ones another file calls
+  // (\`clamp\`, called from child modules). Private and local: not exported.
+  expect(Object.keys(modules.lib).sort()).toEqual(["clamp", "doubled_mean", "mixed", "shadowed", "summary"]);
+  expect(Object.keys(modules.stats)).toEqual(["mean"]);
+
+  const area = await Bun.file(join(out, "geometry/area.js")).text();
+  // Specifiers are relative, and aliases are unique within the file.
+  expect(area).toContain('import * as lib from "../lib.js";');
+  expect(area).toContain('import * as util from "./util.js";');
+  expect(area).toContain('import * as util$1 from "../util.js";');
+  // A local named like an alias is renamed rather than shadowing it.
+  expect(area).toContain("const util$2 = x + 1 >>> 0;");
+  expect(area).toContain("return util$1.double(util$2);");
+  // lib ↔ stats import each other: a cycle, which Rust and ES modules allow.
+  expect(await Bun.file(join(out, "stats.js")).text()).toContain('import * as lib from "./lib.js";');
+
+  // Each file's source map points into the .rs file its module lives in.
+  const sources = async (f: string) => (await Bun.file(join(out, `${f}.map`)).json()).sources;
+  expect(await sources("stats.js")).toEqual(["../../examples/modules/stats.rs"]);
+  expect(await sources("geometry/area.js")).toEqual(["../../../examples/modules/geometry/area.rs"]);
+  // An inline module lives in its parent's file.
+  expect(await sources("util.js")).toEqual(["../../examples/modules/lib.rs"]);
 });

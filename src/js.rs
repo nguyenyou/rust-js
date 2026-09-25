@@ -25,9 +25,17 @@ impl Span {
 
 pub struct Module {
     pub header: String,
+    /// `import * as <alias> from "<from>"`, one per module this one calls into.
+    pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
     pub runtime: Vec<&'static str>,
     pub functions: Vec<Function>,
+}
+
+pub struct Import {
+    pub alias: String,
+    /// A relative specifier, like `./math.js` or `../lib.js`.
+    pub from: String,
 }
 
 pub struct Function {
@@ -74,8 +82,8 @@ pub enum ExprKind {
     Str(String),
     Undefined,
     Var(String),
-    /// `object.property`, e.g. `Math.imul`.
-    Member(Box<Expr>, &'static str),
+    /// `object.property`, e.g. `Math.imul` or `math.add`.
+    Member(Box<Expr>, String),
     Unary(UnaryOp, Box<Expr>),
     Binary(Op, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
@@ -142,8 +150,8 @@ impl Expr {
         Expr::new(ExprKind::Var(name.to_string()))
     }
 
-    pub fn member(object: Expr, property: &'static str) -> Expr {
-        Expr::new(ExprKind::Member(Box::new(object), property))
+    pub fn member(object: Expr, property: impl Into<String>) -> Expr {
+        Expr::new(ExprKind::Member(Box::new(object), property.into()))
     }
 
     pub fn unary(op: UnaryOp, arg: Expr) -> Expr {

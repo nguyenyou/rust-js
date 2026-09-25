@@ -27,6 +27,13 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 
 `i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums; `let`, `if`, `while`,
 `loop` (with `break value` and labels), `match` on constants, enum variants,
-`_`, bindings, `|` and guards; calls between top-level functions.
+`_`, bindings, `|` and guards; calls between functions, across modules and files.
+
+A crate split across files becomes one JS file per module, with the imports
+and exports written for you (see [ADR 0019](docs/decisions/0019-one-js-file-per-module.md)):
+
+```bash
+./target/debug/rust-js examples/modules/lib.rs -o out/lib.js   # writes out/lib.js, out/stats.js, ...
+```
 
 Design decisions are recorded in [docs/](docs/README.md).

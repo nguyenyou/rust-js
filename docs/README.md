@@ -31,7 +31,7 @@ This folder is where we write those choices down.
                                  to_oxc.rs: JS AST ──► oxc AST           (0018)
                                        │
                                        ▼
-                                 oxc_codegen ──► fib.js + fib.js.map     (0016, 0018)
+                                 oxc_codegen ──► one .js + .js.map per module  (0018, 0019)
 ```
 
 ## Code map
@@ -65,6 +65,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0008 Two lowering modes: expressions and statements](decisions/0008-expression-and-statement-modes.md)
 - [0009 Temporaries keep Rust's evaluation order](decisions/0009-temporaries-and-evaluation-order.md)
 - [0010 Unique names per function, flat blocks](decisions/0010-naming-and-scopes.md)
+- [0019 One JS file per Rust module](decisions/0019-one-js-file-per-module.md)
 
 **Semantics**
 
@@ -76,7 +77,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 
 **Scope and process**
 
-- [0016 Only top-level functions, for now](decisions/0016-crate-shape.md)
+- [0016 Only top-level functions, for now](decisions/0016-crate-shape.md) *(modules: superseded by 0019)*
 - [0017 Test against native Rust, not against expectations](decisions/0017-differential-testing.md)
 
 ## Research

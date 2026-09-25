@@ -7,7 +7,7 @@
 //!   js::Module ──convert──► oxc Program ──oxc_codegen──► code + map
 //!                           (source_text = the .rs file)
 //!
-//!   final .js  =  header + runtime helpers   (plain text, no mappings)
+//!   final .js  =  header, imports, helpers  (plain text, no mappings)
 //!              +  code, blank line between functions
 //!                                             (map shifted to match)
 //!              +  //# sourceMappingURL=...
@@ -69,8 +69,15 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     };
     let generated = Codegen::new().with_options(options).build(&program);
 
-    // The header and runtime helpers are plain text above the generated code.
+    // The header, imports and runtime helpers are plain text above the
+    // generated code. None of them map to Rust.
     let mut code = format!("{}\n", module.header);
+    if !module.imports.is_empty() {
+        code.push('\n');
+        for import in &module.imports {
+            code.push_str(&format!("import * as {} from {:?};\n", import.alias, import.from));
+        }
+    }
     for helper in &module.runtime {
         code.push('\n');
         code.push_str(helper.trim_start());
@@ -228,7 +235,7 @@ impl<'a> Cx<'a> {
         let b = &self.b;
         let sp = span(e.span);
         match &e.kind {
-            ExprKind::Num(n) => Expression::new_numeric_literal(sp, *n, None, NumberBase::Decimal, b),
+            ExprKind::Num(n) => self.number(sp, *n),
             ExprKind::Bool(v) => Expression::new_boolean_literal(sp, *v, b),
             ExprKind::Str(s) => Expression::new_string_literal(sp, self.allocator.alloc_str(s), None, b),
             ExprKind::Undefined => Expression::new_identifier(sp, "undefined", b),
@@ -236,7 +243,7 @@ impl<'a> Cx<'a> {
             ExprKind::Member(object, property) => Expression::new_static_member_expression(
                 sp,
                 self.expr(object),
-                IdentifierName::new(SPAN, *property, b),
+                IdentifierName::new(SPAN, self.name(property), b),
                 false,
                 b,
             ),
@@ -262,6 +269,24 @@ impl<'a> Cx<'a> {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));
                 Expression::new_call_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), false, b)
             }
+        }
+    }
+
+    /// oxc prints numbers in their shortest form, like a minifier: `1000`
+    /// becomes `1e3`. Whole numbers should read as written, so print their
+    /// decimal digits verbatim (as an identifier, which oxc copies as-is); a
+    /// negative one gets a real unary minus, so oxc still handles spacing and
+    /// parentheses. Anything else (`0.1`) is already shortest.
+    fn number(&self, sp: Span, n: f64) -> Expression<'a> {
+        const EXACT: f64 = 9_007_199_254_740_992.0; // 2^53: every integer below is exact
+        if n.fract() != 0.0 || n.abs() >= EXACT || (n == 0.0 && n.is_sign_negative()) {
+            return Expression::new_numeric_literal(sp, n, None, NumberBase::Decimal, &self.b);
+        }
+        let digits = Expression::new_identifier(sp, self.name(&format!("{}", n.abs() as u64)), &self.b);
+        if n < 0.0 {
+            Expression::new_unary_expression(sp, UnaryOperator::UnaryNegation, digits, &self.b)
+        } else {
+            digits
         }
     }
 

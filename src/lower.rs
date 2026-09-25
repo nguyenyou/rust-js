@@ -26,7 +26,7 @@ use rustc_middle::thir::{
     self as thir, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind, Thir,
 };
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::def_id::{CRATE_DEF_ID, DefId, LocalDefId};
+use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
 use rustc_span::{BytePos, ErrorGuaranteed, SourceFile, Span};
 
 use crate::js::{self, Expr, Op, Stmt, StmtKind, UnaryOp};
@@ -56,26 +56,35 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .collect()
 }
 
-/// The crate's root source file: the `.rs` file rust-js was given.
-pub fn root_file(tcx: TyCtxt<'_>) -> Arc<SourceFile> {
-    tcx.sess.source_map().lookup_source_file(tcx.def_span(CRATE_DEF_ID).lo())
+/// One Rust module's functions: a future JS file (ADR 0019).
+pub struct LoweredModule {
+    /// The module's path below the crate root: `[]` for the root itself,
+    /// `["math", "stats"]` for `crate::math::stats`.
+    pub path: Vec<String>,
+    /// The `.rs` file the module's code lives in.
+    pub file: Arc<SourceFile>,
+    /// The modules this one calls into, as `(alias, path)`.
+    pub imports: Vec<(String, Vec<String>)>,
+    pub functions: Vec<js::Function>,
+    /// Runtime helpers its functions use.
+    pub runtime: Vec<Helper>,
 }
 
-/// Lower every function. Reports all unsupported features as rustc errors.
-pub fn lower_crate<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    bodies: &[Body<'tcx>],
-    file: &SourceFile,
-) -> Option<Vec<LoweredFn>> {
+/// Where a function ends up in the JS: its module's file, under this name.
+struct FnInfo {
+    module: LocalModDefId,
+    name: String,
+}
+
+/// Lower every function, grouped by module. Reports all unsupported
+/// features as rustc errors.
+pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, bodies: &[Body<'tcx>]) -> Option<Vec<LoweredModule>> {
     let mut failed = false;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
             DefKind::AssocFn => "methods",
             DefKind::Const { .. } | DefKind::AssocConst { .. } => "constants",
             DefKind::Static { .. } => "statics",
-            DefKind::Fn if tcx.parent_module_from_def_id(def_id).to_local_def_id() != CRATE_DEF_ID => {
-                "functions inside modules"
-            }
             _ => continue,
         };
         tcx.dcx().span_err(tcx.def_span(def_id), format!("rust-js does not support {what} yet"));
@@ -85,30 +94,138 @@ pub fn lower_crate<'tcx>(
         return None;
     }
 
-    let fns: HashMap<DefId, String> = bodies
-        .iter()
-        .map(|b| (b.def_id.to_def_id(), js_ident(tcx.item_name(b.def_id.to_def_id()).as_str())))
-        .collect();
-    let results: Vec<R<LoweredFn>> = bodies
+    // The modules that get a JS file: the root, then every module with a
+    // function, in the order their first function appears.
+    let mut modules = vec![LocalModDefId::CRATE_DEF_ID];
+    for body in bodies {
+        let module = tcx.parent_module_from_def_id(body.def_id);
+        if !modules.contains(&module) {
+            modules.push(module);
+        }
+    }
+
+    // Each function's JS name, unique within its module's file. `taken` also
+    // collects the import aliases below, so local variables avoid both.
+    let mut taken: HashMap<LocalModDefId, HashSet<String>> = HashMap::new();
+    let fns: HashMap<DefId, FnInfo> = bodies
         .iter()
         .map(|body| {
-            let mut cx = FnCx {
-                tcx,
-                file_start: file.start_pos,
-                file_end: file.end_position(),
-                thir: &body.thir,
-                fns: &fns,
-                vars: HashMap::new(),
-                // Locals must never shadow the functions they call.
-                names: fns.values().cloned().collect(),
-                labels: HashSet::new(),
-                loops: Vec::new(),
-                runtime: HashSet::new(),
-            };
-            cx.lower_fn(body)
+            let module = tcx.parent_module_from_def_id(body.def_id);
+            let names = taken.entry(module).or_default();
+            let name = fresh_in(names, tcx.item_name(body.def_id.to_def_id()).as_str());
+            (body.def_id.to_def_id(), FnInfo { module, name })
         })
         .collect();
-    results.into_iter().collect::<R<Vec<_>>>().ok()
+
+    // Which modules each module calls into, and which functions are called
+    // from another module: those must be exported, even if private in Rust
+    // (a child module may call its parent's private functions).
+    let mut uses: HashMap<LocalModDefId, Vec<LocalModDefId>> = HashMap::new();
+    let mut called_from_elsewhere: HashSet<DefId> = HashSet::new();
+    for body in bodies {
+        let from = fns[&body.def_id.to_def_id()].module;
+        for expr in body.thir.exprs.iter() {
+            if let (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) = (&expr.kind, expr.ty.kind())
+                && let Some(target) = fns.get(def_id)
+                && target.module != from
+            {
+                called_from_elsewhere.insert(*def_id);
+                let targets = uses.entry(from).or_default();
+                if !targets.contains(&target.module) {
+                    targets.push(target.module);
+                }
+            }
+        }
+    }
+
+    // Import aliases: the module's last path segment (the crate name for the
+    // root), unique within the importing file.
+    let paths: HashMap<LocalModDefId, Vec<String>> =
+        modules.iter().map(|&m| (m, module_path(tcx, m))).collect();
+    let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
+    let mut aliases: HashMap<LocalModDefId, HashMap<LocalModDefId, String>> = HashMap::new();
+    for &module in &modules {
+        let mut targets = uses.remove(&module).unwrap_or_default();
+        targets.sort_by(|a, b| paths[a].cmp(&paths[b]));
+        let names = taken.entry(module).or_default();
+        let module_aliases = targets
+            .into_iter()
+            .map(|target| (target, fresh_in(names, paths[&target].last().unwrap_or(&crate_name))))
+            .collect();
+        aliases.insert(module, module_aliases);
+    }
+
+    let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
+    let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
+    for body in bodies {
+        let def_id = body.def_id.to_def_id();
+        let module = fns[&def_id].module;
+        let file = module_file(tcx, module);
+        let mut cx = FnCx {
+            tcx,
+            file_start: file.start_pos,
+            file_end: file.end_position(),
+            thir: &body.thir,
+            fns: &fns,
+            module,
+            aliases: &aliases[&module],
+            vars: HashMap::new(),
+            // Locals must never shadow a function or an import of this file.
+            names: taken[&module].clone(),
+            labels: HashSet::new(),
+            loops: Vec::new(),
+            runtime: HashSet::new(),
+        };
+        match cx.lower_fn(body) {
+            Ok(mut lowered) => {
+                lowered.function.export |= called_from_elsewhere.contains(&def_id);
+                functions.entry(module).or_default().push(lowered.function);
+                runtime.entry(module).or_default().extend(lowered.runtime);
+            }
+            Err(_) => failed = true,
+        }
+    }
+    if failed {
+        return None;
+    }
+
+    let lowered = modules
+        .into_iter()
+        .map(|module| {
+            let mut imports: Vec<(String, Vec<String>)> = aliases[&module]
+                .iter()
+                .map(|(target, alias)| (alias.clone(), paths[target].clone()))
+                .collect();
+            imports.sort_by(|a, b| a.1.cmp(&b.1));
+            let mut helpers: Vec<Helper> = runtime.remove(&module).unwrap_or_default().into_iter().collect();
+            helpers.sort();
+            LoweredModule {
+                path: paths[&module].clone(),
+                file: module_file(tcx, module),
+                imports,
+                functions: functions.remove(&module).unwrap_or_default(),
+                runtime: helpers,
+            }
+        })
+        .collect();
+    Some(lowered)
+}
+
+/// A module's path below the crate root, e.g. `["math", "stats"]`.
+fn module_path(tcx: TyCtxt<'_>, module: LocalModDefId) -> Vec<String> {
+    if module == LocalModDefId::CRATE_DEF_ID {
+        return Vec::new();
+    }
+    let mut path = module_path(tcx, tcx.parent_module_from_def_id(module.to_local_def_id()));
+    path.push(tcx.item_name(module.to_def_id()).to_string());
+    path
+}
+
+/// The `.rs` file a module's code lives in: its own file for `mod foo;`,
+/// the parent's file for an inline `mod foo { .. }`.
+fn module_file(tcx: TyCtxt<'_>, module: LocalModDefId) -> Arc<SourceFile> {
+    let inner = tcx.hir_get_module(module).0.spans.inner_span;
+    tcx.sess.source_map().lookup_source_file(inner.lo())
 }
 
 pub struct LoweredFn {
@@ -247,11 +364,15 @@ impl Num {
 
 struct FnCx<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
-    /// The root file's range in rustc's global source map, for `js_span`.
+    /// The range, in rustc's global source map, of the `.rs` file this
+    /// function's module lives in, for `js_span`.
     file_start: BytePos,
     file_end: BytePos,
     thir: &'a Thir<'tcx>,
-    fns: &'a HashMap<DefId, String>,
+    fns: &'a HashMap<DefId, FnInfo>,
+    /// The module being lowered, and its import aliases for other modules.
+    module: LocalModDefId,
+    aliases: &'a HashMap<LocalModDefId, String>,
     vars: HashMap<LocalVarId, Var>,
     /// JS names already taken in this function.
     names: HashSet<String>,
@@ -290,7 +411,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
         Ok(LoweredFn {
             function: js::Function {
-                name: self.fns[&def_id].clone(),
+                name: self.fns[&def_id].name.clone(),
                 params,
                 body: out,
                 export: self.tcx.visibility(def_id).is_public(),
@@ -736,7 +857,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Call { fun, ref args, .. } => {
                 let callee = self.callee(fun)?;
                 let args = self.operands(args, out)?;
-                let callee = Expr::var(&callee).or_at(self.js_span(self.thir[fun].span));
+                let callee = callee.or_at(self.js_span(self.thir[fun].span));
                 Ok(Expr::call(callee, args))
             }
             ExprKind::If { cond, then, else_opt: Some(els), .. }
@@ -989,11 +1110,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(num_literal(leaf.to_bits_unchecked(), num))
     }
 
-    fn callee(&self, fun: ExprId) -> R<String> {
+    /// The function being called: `f` in the same module, `alias.f` in another.
+    fn callee(&self, fun: ExprId) -> R<Expr> {
         let fun = &self.thir[self.strip(fun)];
         if let (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) = (&fun.kind, fun.ty.kind()) {
-            if let Some(name) = self.fns.get(def_id) {
-                return Ok(name.clone());
+            if let Some(target) = self.fns.get(def_id) {
+                return Ok(if target.module == self.module {
+                    Expr::var(&target.name)
+                } else {
+                    Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
+                });
             }
             let path = self.tcx.def_path_str(*def_id);
             return Err(self.unsupported(fun.span, &format!("calling `{path}`")));
