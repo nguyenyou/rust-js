@@ -1,0 +1,18 @@
+[package]
+name = "rsjs"
+version = "0.1.0"
+edition = "2024"
+description = "Compile Rust to readable JavaScript, in the spirit of ReScript"
+
+[package.metadata.rust-analyzer]
+rustc_private = true
+
+# oxc prints the JS and builds source maps. It is pre-1.0 and changes often:
+# pin exact versions, and keep every use of its API in src/to_oxc.rs.
+[dependencies]
+oxc_allocator = "=0.151.0"
+oxc_ast = "=0.151.0"
+oxc_codegen = "=0.151.0"
+oxc_sourcemap = "=8.1.2"
+oxc_span = "=0.151.0"
+oxc_syntax = "=0.151.0"
