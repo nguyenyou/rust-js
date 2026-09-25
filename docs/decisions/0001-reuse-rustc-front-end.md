@@ -14,7 +14,7 @@ readable, and the target was removed in Rust 1.76.
 ## Decision
 
 Follow ReScript's recipe. ReScript keeps OCaml's type checker and swaps in a
-JS back end. rsjs keeps rustc's parser, name resolution, type inference,
+JS back end. rust-js keeps rustc's parser, name resolution, type inference,
 trait resolution and borrow checker, and adds a JS back end on top.
 
 ## Why

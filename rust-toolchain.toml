@@ -1,4 +1,4 @@
-# rsjs links against rustc's internal crates, whose API changes often.
+# rust-js links against rustc's internal crates, whose API changes often.
 # Pin the exact nightly the code was written against.
 [toolchain]
 channel = "nightly-2026-03-25"

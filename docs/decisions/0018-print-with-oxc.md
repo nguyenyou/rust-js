@@ -33,7 +33,7 @@ THIR ──lower.rs──► js.rs AST ──to_oxc.rs──► oxc AST ──ox
   We pass the Rust file as `source_text`, and spans that index into it. oxc
   doesn't care that the "source" isn't JavaScript.
 - **Pinned versions**: `oxc_* = "=0.151.0"`, `oxc_sourcemap = "=8.1.2"`.
-- rsjs writes `out.js` and `out.js.map`. The JS ends with
+- rust-js writes `out.js` and `out.js.map`. The JS ends with
   `//# sourceMappingURL=out.js.map`. The map names the Rust file relative to
   itself (`../examples/fib.rs`) and embeds its text (`sourcesContent`).
 

@@ -1,7 +1,7 @@
-// Differential test: native Rust vs. the JS that rsjs generates.
+// Differential test: native Rust vs. the JS that rust-js generates.
 //
-//   examples/fib.rs ──rustc──► native ──► expected results ─┐
-//                  └──rsjs───► fib.js ──► actual results ───┴─► must be equal
+//   examples/fib.rs ──rustc────► native ──► expected results ─┐
+//                  └─rust-js───► fib.js ──► actual results ───┴─► must be equal
 
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
@@ -23,8 +23,8 @@ let fib: Record<string, (...args: any[]) => number>;
 
 beforeAll(async () => {
   run(["cargo", "build", "--quiet"]);
-  run([join(target, "debug", "rsjs"), "examples/fib.rs", "-o", join(target, "fib.js")]);
-  // Same semantics rsjs targets: the release profile, where arithmetic wraps.
+  run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
+  // Same semantics rust-js targets: the release profile, where arithmetic wraps.
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "test/native.rs", "-o", join(target, "native")]);
   cases = run([join(target, "native")]).trim().split("\n").map((line) => JSON.parse(line));
   fib = await import(join(target, "fib.js"));

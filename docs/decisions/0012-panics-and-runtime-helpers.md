@@ -43,7 +43,7 @@ we read. We have to add them back ourselves.
 
 - **Inline the checks** at each use site: no helper, but each division
   becomes a multi-line block, or an IIFE in expression position.
-- **A shared runtime module** (`import { $div } from "rsjs/runtime"`): better
+- **A shared runtime module** (`import { $div } from "rust-js/runtime"`): better
   once there are many helpers and many modules. Today we have two tiny
   helpers and one module.
 - **A dedicated `RustPanic` error class**: nicer for catching panics

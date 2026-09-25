@@ -7,26 +7,26 @@ Status: Accepted
 Two kinds of "no" can happen:
 
 1. The program isn't valid Rust (a type error, a borrow error).
-2. The program is valid Rust, but uses something rsjs can't translate yet
+2. The program is valid Rust, but uses something rust-js can't translate yet
    (`u64`, strings, structs, ...).
 
 ## Decision
 
-- **Invalid Rust**: rustc reports its normal error, rsjs writes nothing and
+- **Invalid Rust**: rustc reports its normal error, rust-js writes nothing and
   exits with status 1.
-- **Unsupported feature**: rsjs reports a real compiler error at the exact
-  source location, reading `rsjs does not support <thing> yet`, then
+- **Unsupported feature**: rust-js reports a real compiler error at the exact
+  source location, reading `rust-js does not support <thing> yet`, then
   writes nothing and exits with status 1.
 - **All or nothing**: a single error means no output file.
 - **How much is reported in one run**, in two passes:
   1. Items first. Every unsupported item kind (a `const`, a method, a `fn`
-     inside a module) is reported. If there are any, rsjs stops here without
+     inside a module) is reported. If there are any, rust-js stops here without
      looking at function bodies.
   2. Otherwise, every function is lowered, and each reports its **first**
      unsupported feature.
 
 ```
-error: rsjs does not support values of type `u64` yet
+error: rust-js does not support values of type `u64` yet
  --> unsup.rs:1:15
 ```
 

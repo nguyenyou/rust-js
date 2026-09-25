@@ -84,6 +84,6 @@ A future `--overflow-checks` flag could emit checked helpers.
 ## Consequences
 
 - **This is a documented behavior difference from debug Rust:** `u32::MAX + 1`
-  is `0` in rsjs, and a panic in a debug build.
+  is `0` in rust-js, and a panic in a debug build.
 - `usize` isn't supported yet. It's 64-bit on the host, and deciding how it
   maps is a separate decision.

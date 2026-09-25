@@ -13,16 +13,16 @@ boundary or a panic that should happen, are exactly where beliefs are wrong.
 Use **differential testing**: let real Rust be the oracle.
 
 ```
-examples/fib.rs ──rustc──► native binary ──► expected results ─┐
-               └──rsjs───► fib.js       ──► actual results   ─┴─► must be identical
+examples/fib.rs ──rustc────► native binary ──► expected results ─┐
+               └─rust-js───► fib.js       ──► actual results   ─┴─► must be identical
 ```
 
 - `test/native.rs` includes `examples/fib.rs` as a module, calls each
   function on many inputs, and prints one JSON line per call, either
   `{"value": ..}` or `{"panic": "<message>"}` (via `catch_unwind`).
-- It is compiled with **`-Coverflow-checks=off`**: the semantics rsjs
+- It is compiled with **`-Coverflow-checks=off`**: the semantics rust-js
   targets ([0011](0011-numbers.md)).
-- `test/fib.test.ts` (run by `bun test`) builds rsjs, generates the JS,
+- `test/fib.test.ts` (run by `bun test`) builds rust-js, generates the JS,
   builds and runs the native binary, then calls the JS with the same inputs.
   It requires equal values and, for panics, a thrown error with Rust's exact
   message.

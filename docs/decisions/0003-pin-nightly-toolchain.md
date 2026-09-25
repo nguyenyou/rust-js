@@ -26,7 +26,7 @@ it changes between nightlies without notice, and a rename can break us any day.
   the API we compile against. No guessing from docs for a different version.
 - **The rpath**: our binary loads `librustc_driver.dylib` at startup. Without
   the rpath you'd have to set `DYLD_LIBRARY_PATH` (or `LD_LIBRARY_PATH`) by
-  hand. With it, `./target/debug/rsjs` just runs. rustc then finds its
+  hand. With it, `./target/debug/rust-js` just runs. rustc then finds its
   sysroot (where `core` lives) from that library's location, so the two
   always agree.
 
@@ -38,7 +38,7 @@ it changes between nightlies without notice, and a rename can break us any day.
 
 ## Consequences
 
-- rsjs needs nightly to *build*. The Rust code it compiles still only has to
+- rust-js needs nightly to *build*. The Rust code it compiles still only has to
   be valid Rust for that compiler version.
 - The rpath trick in `build.rs` uses `-Wl,-rpath`, which covers macOS and
   Linux, not Windows.

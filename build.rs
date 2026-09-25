@@ -1,5 +1,5 @@
 //! Bake the toolchain's `lib` directory into the binary's rpath, so
-//! `target/debug/rsjs` can find `librustc_driver` without extra env vars.
+//! `target/debug/rust-js` can find `librustc_driver` without extra env vars.
 
 use std::process::Command;
 

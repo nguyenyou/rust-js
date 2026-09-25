@@ -1,4 +1,4 @@
-# rsjs
+# rust-js
 
 Compile Rust to readable JavaScript, in the spirit of ReScript: reuse the
 compiler's front end (rustc's parser, type checker and borrow checker), and
@@ -6,7 +6,7 @@ replace the back end with one that prints JS from THIR.
 
 ```bash
 cargo build
-./target/debug/rsjs examples/fib.rs          # writes examples/fib.js + fib.js.map
+./target/debug/rust-js examples/fib.rs          # writes examples/fib.js + fib.js.map
 bun test                                     # native Rust vs. generated JS, and the source map
 ```
 

@@ -56,7 +56,7 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .collect()
 }
 
-/// The crate's root source file: the `.rs` file rsjs was given.
+/// The crate's root source file: the `.rs` file rust-js was given.
 pub fn root_file(tcx: TyCtxt<'_>) -> Arc<SourceFile> {
     tcx.sess.source_map().lookup_source_file(tcx.def_span(CRATE_DEF_ID).lo())
 }
@@ -78,7 +78,7 @@ pub fn lower_crate<'tcx>(
             }
             _ => continue,
         };
-        tcx.dcx().span_err(tcx.def_span(def_id), format!("rsjs does not support {what} yet"));
+        tcx.dcx().span_err(tcx.def_span(def_id), format!("rust-js does not support {what} yet"));
         failed = true;
     }
     if failed {
@@ -1086,7 +1086,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {
-        self.tcx.dcx().span_err(span, format!("rsjs does not support {what} yet"))
+        self.tcx.dcx().span_err(span, format!("rust-js does not support {what} yet"))
     }
 }
 

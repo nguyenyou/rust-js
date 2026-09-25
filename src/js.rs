@@ -1,4 +1,4 @@
-//! A tiny JavaScript AST: exactly the constructs rsjs emits.
+//! A tiny JavaScript AST: exactly the constructs rust-js emits.
 //!
 //! `lower.rs` builds it; `to_oxc.rs` converts it to oxc's AST, which prints
 //! it (with correct parentheses) and builds the source map. Keeping our own
@@ -122,7 +122,7 @@ impl Expr {
     }
 
     pub fn int(n: i128) -> Expr {
-        // Every integer rsjs supports fits in 32 bits, so this is exact.
+        // Every integer rust-js supports fits in 32 bits, so this is exact.
         Expr::num(n as f64)
     }
 

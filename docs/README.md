@@ -1,6 +1,6 @@
-# rsjs design docs
+# rust-js design docs
 
-rsjs compiles Rust to readable JavaScript. The whole design follows from one
+rust-js compiles Rust to readable JavaScript. The whole design follows from one
 sentence, borrowed from ReScript:
 
 > Keep the language's own front end. Replace only the back end. Where the

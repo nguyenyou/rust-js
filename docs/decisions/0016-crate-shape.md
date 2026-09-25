@@ -9,7 +9,7 @@ methods, traits, constants, statics, closures.
 
 ## Decision
 
-For the fib.js milestone, rsjs compiles **free functions at the crate root**.
+For the fib.js milestone, rust-js compiles **free functions at the crate root**.
 Everything else is either harmless or reported:
 
 | Item | Handling |
@@ -25,7 +25,7 @@ Calls work only between these compiled functions. Calling anything else
 (`std`, `core`, methods) is an error that names the callee.
 
 **Generic functions are rejected for now.** A value of type `T` fails the
-supported-type check (`rsjs does not support values of type `T` yet`). The
+supported-type check (`rust-js does not support values of type `T` yet`). The
 planned design is to *erase* generics: JS is dynamically typed, so one copy
 of `id<T>` can serve every `T`, unlike rustc, which makes a copy per type.
 
