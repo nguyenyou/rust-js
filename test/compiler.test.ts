@@ -863,3 +863,14 @@ test("format options pad, round and change base as Rust does", async () => {
   // `{:.1}` rounds a tie to even, exactly, and `{:?}` of an `f64` keeps its `.0`.
   expect(js).toContain('return $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x);');
 });
+
+// ADR 0059: a `HashMap` is a JS `Map`, and a `HashSet` a `Set`.
+test("HashMap and HashSet are a JS Map and Set", async () => {
+  const js = await Bun.file(join(target, "collections.js")).text();
+  // The count idiom: the value there, or the one it would start as.
+  expect(js).toContain("counts.set(word, (counts.get(word) ?? 0) + 1 >>> 0);");
+  // A value that's used is the old one; one that isn't is plain `set`.
+  expect(js).toContain('  m.set("a", n);\n  const old = $insert(m, "a", n + 1 >>> 0);');
+  expect(js).toContain("$orInsert(groups, key, []).push(i);");
+  expect(js).toContain("const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));");
+});

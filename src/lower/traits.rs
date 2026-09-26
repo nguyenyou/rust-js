@@ -49,6 +49,12 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
         ) {
             continue;
         }
+        // A derived impl's methods are never lowered: `#[derive(Hash)]`'s
+        // generic `hash<H>` is no reason to reject the crate.
+        let derived = |id: rustc_span::def_id::LocalDefId| tcx.is_automatically_derived(id.to_def_id());
+        if derived(id) || (kind == DefKind::AssocFn && tcx.opt_local_parent(id).is_some_and(derived)) {
+            continue;
+        }
         let params = &tcx.generics_of(id).own_params;
         let reason = if params
             .iter()

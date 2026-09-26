@@ -21,6 +21,11 @@ pub enum Helper {
     SomeAt,
     Pop,
     Iterator,
+    Insert,
+    Add,
+    Remove,
+    OrInsert,
+    OrInsertWith,
     StripPrefix,
     StripSuffix,
     SplitOnce,
@@ -117,6 +122,13 @@ function $debug(v) {
   }
   if (v === undefined) {
     return "()";
+  }
+  // A `HashMap` and a `HashSet` (ADR 0059), in braces as Rust shows them.
+  if (v instanceof Map) {
+    return "{" + [...v].map(([k, x]) => $debug(k) + ": " + $debug(x)).join(", ") + "}";
+  }
+  if (v instanceof Set) {
+    return "{" + [...v].map($debug).join(", ") + "}";
   }
   if (typeof v === "object" && v !== null) {
     return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
@@ -433,6 +445,58 @@ function $iterator(iterator, next, boxed = false) {
       return { done: false, value: boxed ? $someValue(item) : item };
     }
   });
+}
+"#
+            }
+            // A map's `insert` for its value: the one it replaced, or `None`.
+            Helper::Insert => {
+                r#"
+function $insert(map, key, value) {
+  const old = map.get(key);
+  map.set(key, value);
+  return old;
+}
+"#
+            }
+            // A set's `insert` for its value: whether it wasn't there yet.
+            Helper::Add => {
+                r#"
+function $add(set, item) {
+  const added = !set.has(item);
+  set.add(item);
+  return added;
+}
+"#
+            }
+            // A map's `remove` for its value: the one it took out, or `None`.
+            Helper::Remove => {
+                r#"
+function $remove(map, key) {
+  const old = map.get(key);
+  map.delete(key);
+  return old;
+}
+"#
+            }
+            // `m.entry(k).or_insert(v)`: the value there, put there first if need be.
+            Helper::OrInsert => {
+                r#"
+function $orInsert(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, value);
+  }
+  return map.get(key);
+}
+"#
+            }
+            // `or_insert_with(f)`: `f` runs only if there's none there.
+            Helper::OrInsertWith => {
+                r#"
+function $orInsertWith(map, key, make) {
+  if (!map.has(key)) {
+    map.set(key, make());
+  }
+  return map.get(key);
 }
 "#
             }

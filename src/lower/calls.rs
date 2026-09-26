@@ -18,6 +18,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A call to one of our functions (`f`, or `alias.f` in another module),
     /// to JS (ADR 0021), or to one of the std functions rust-js knows (ADR 0023).
     pub(super) fn call(&mut self, fun: ExprId, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        // Only this call's value is unused, not its arguments'.
+        let discarded = std::mem::take(&mut self.discarded);
         let fun_span = self.js_span(self.thir[fun].span);
         let f = &self.thir[self.strip(fun)];
         let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, generic_args)) = (&f.kind, f.ty.kind()) else {
@@ -191,6 +193,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));
         }
+        if let Std::Map(op) = known {
+            return self.map_call(op, args, generic_args, discarded, span, out);
+        }
         // `vec![a, b]` is `box_assume_init_into_vec_unsafe(write_box_via_move(<box>, [a, b]))`.
         if known == Std::VecMacro {
             let ExprKind::Call { args: ref inner, .. } = self.thir[self.strip(args[0])].kind else {
@@ -225,6 +230,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let value = self.expr(args[1], out)?;
             let js_span = self.js_span(span);
             out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, value)).at(js_span));
+            return Ok(Expr::undefined());
+        }
+        if let Std::AssignOperator(op) = known {
+            let ExprKind::Borrow { arg: place, .. } = self.thir[self.strip(args[0])].kind else {
+                return Err(self.unsupported(span, "this assignment"));
+            };
+            let value = self.expr(args[1], out)?;
+            let target = self.assignee(place)?;
+            let ty = self.thir[place].ty;
+            let current = self.binary(op, target.clone(), value, None, ty, span)?;
+            let js_span = self.js_span(span);
+            out.push(StmtKind::Assign(target, current).at(js_span));
             return Ok(Expr::undefined());
         }
         if known == Std::FmtNew {
@@ -416,7 +433,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let value = if boxed { self.some(value) } else { value };
                 Expr::cond(ok, value, otherwise)
             }
-            Std::PushStr => unreachable!("handled above"),
+            Std::PushStr | Std::AssignOperator(_) => unreachable!("handled above"),
             Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
             Std::IsNone => Expr::bin(Op::LooseEq, arg(), Expr::null()),
             Std::Unwrap => {
@@ -541,6 +558,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Only in a `format_args!` it recognizes whole (ADR 0058).
             Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
+            Std::Map(_) => unreachable!("handled above"),
+            // `Some(&x)` is `x`, and its clone is `x`'s.
+            Std::OptionCloned => {
+                let item = generic_args.types().next().expect("`Option<T>` has a `T`");
+                let value = arg();
+                let ty = ty::Ty::new_adt(
+                    self.tcx,
+                    self.tcx.adt_def(self.tcx.require_lang_item(LangItem::Option, span)),
+                    self.tcx.mk_args(&[item.into()]),
+                );
+                self.clone_value(value, ty, span, out)?
+            }
             Std::Push => {
                 let (v, x) = (arg(), arg());
                 Expr::call(Expr::member(v, "push"), vec![x])

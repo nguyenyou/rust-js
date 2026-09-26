@@ -38,6 +38,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ]
                 .contains(&path.as_str())
                 || self.is_str_split(ty))
+            // A map's `iter()`, `keys()` and `values()` are arrays too (ADR 0059).
+            || (krate == sym::std
+                && ["hash_map::Iter", "hash_map::IterMut", "hash_map::Keys", "hash_map::Values", "hash_map::ValuesMut", "hash_map::IntoIter", "hash_set::Iter", "hash_set::IntoIter"]
+                    .iter()
+                    .any(|name| path == format!("std::collections::{name}")))
     }
 
     /// `str::split`'s iterator, which is a JS array of strings (ADR 0034).
@@ -112,6 +117,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || ty.is_slice()
             || ty.is_array()
             || ["Vec", "Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || self.is_map(ty)
     }
 
     /// A struct that stands for a JS object, like `web::Element` (ADR 0024):
@@ -453,6 +459,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return None;
             }
             ty::Adt(..) if self.is_js_object(ty) => return None,
+            // A `HashMap` or `HashSet` (ADR 0059): keys JS compares by value.
+            ty::Adt(_, args) if self.is_map(ty) => {
+                let key = args.type_at(0);
+                if !self.is_key(key) {
+                    return Some(key);
+                }
+                // A map's value; after it, and after a set's key, the hasher.
+                let set = self.is_std_adt(ty, Symbol::intern("HashSet"));
+                return args
+                    .types()
+                    .skip(1)
+                    .take(usize::from(!set))
+                    .find_map(|t| self.unsupported_in(t, seen));
+            }
             ty::Dynamic(traits, ..)
                 if traits
                     .principal_def_id()

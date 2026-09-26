@@ -1,6 +1,7 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
 use super::format_spec::{Radix, Spec};
+use super::maps::{MapOp, Part};
 use super::representation::Num;
 use super::{FnCx, R};
 use crate::js;
@@ -63,6 +64,8 @@ pub(super) enum Std {
     FmtRadix(Radix),
     /// `Argument::from_usize`: a width or precision from an argument, `{:>w$}`.
     FmtUsize,
+    /// A `HashMap` or `HashSet` method (ADR 0059).
+    Map(MapOp),
     /// `Option` (ADR 0030): `o != null`, `o == null`.
     IsSome,
     IsNone,
@@ -70,6 +73,10 @@ pub(super) enum Std {
     Unwrap,
     /// `unwrap_or(d)`: `o ?? d`.
     UnwrapOr,
+    /// `a += b` of numbers where `b` is a reference: `a = a + b`.
+    AssignOperator(BinOp),
+    /// `copied()` and `cloned()` of an `Option<&T>`: a clone of what's in it.
+    OptionCloned,
     /// `map(f)`: `o != null ? f(o) : undefined`, with a closure's body in place.
     OptionMap,
     /// A string method that is a JS one (ADR 0034): `s.starts_with(p)` is
@@ -252,6 +259,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
                     return Some(Std::Operator(op));
                 }
+                // `total += x` with a `&u32` `x`: the same assignment as with a `u32`.
+                let assigning = [
+                    (LangItem::AddAssign, BinOp::Add),
+                    (LangItem::SubAssign, BinOp::Sub),
+                    (LangItem::MulAssign, BinOp::Mul),
+                    (LangItem::DivAssign, BinOp::Div),
+                    (LangItem::RemAssign, BinOp::Rem),
+                ];
+                if let Some(&(_, op)) = assigning.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                    return Some(Std::AssignOperator(op));
+                }
                 if tcx.is_lang_item(trait_, LangItem::PartialOrd) {
                     return Some(Std::Operator(match tcx.item_name(def_id).as_str() {
                         "lt" => BinOp::Lt,
@@ -262,6 +280,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     }));
                 }
             }
+            // `m[k]` of a map: its value, or a panic, as `get(k).expect(..)`.
+            if tcx.is_lang_item(trait_, LangItem::Index) && self.is_std_adt(ty.peel_refs(), Symbol::intern("HashMap")) {
+                return Some(Std::Map(MapOp::Index));
+            }
             // `v[i]` of a `Vec` is a slice's, checked the same way.
             if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
                 && self.is_std_adt(ty.peel_refs(), sym::Vec)
@@ -271,6 +293,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             if tcx.is_lang_item(trait_, LangItem::Add) {
                 return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
+            }
+            // A map's or a set's `into_iter()`: its entries, as an array (ADR 0059).
+            // A `for` over one takes the `Map` itself.
+            if tcx.is_diagnostic_item(sym::IntoIterator, trait_) && self.is_map(ty) {
+                return Some(Std::Map(MapOp::Iter(Part::Entries)));
             }
             // An iterator is a JS array (ADR 0036), and a `split` one of strings
             // (ADR 0034). Its adapters are the array's methods.
@@ -300,6 +327,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "count" => Std::Len,
                     "copied" | "cloned" => Std::Cloned,
                     "collect" if collects_string() => Std::CollectString,
+                    "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
+                        let set = args
+                            .types()
+                            .nth(1)
+                            .is_some_and(|b| self.is_std_adt(b, Symbol::intern("HashSet")));
+                        Std::Map(MapOp::From { set })
+                    }
                     "collect" => Std::Collect,
                     _ => return None,
                 });
@@ -321,6 +355,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => None,
                 };
             }
+            // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
+            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
+                let set = self.is_std_adt(ty, Symbol::intern("HashSet"));
+                return Some(Std::Map(MapOp::From { set }));
+            }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
             return (from_str || to_owned).then_some(Std::Same);
@@ -334,7 +373,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let local_key = adt("LocalKey");
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
+        let (map, set) = (adt("HashMap"), adt("HashSet"));
+        let entry = adt("HashMapEntry");
         Some(match tcx.item_name(def_id).as_str() {
+            "new" | "with_capacity" if map || set => Std::Map(MapOp::New { set }),
+            "insert" if map => Std::Map(MapOp::Insert),
+            "insert" if set => Std::Map(MapOp::Add),
+            "get" | "get_mut" if map => Std::Map(MapOp::Get),
+            "contains_key" if map => Std::Map(MapOp::Has),
+            "contains" if set => Std::Map(MapOp::Has),
+            "remove" if map => Std::Map(MapOp::Remove),
+            "remove" if set => Std::Map(MapOp::Delete),
+            "len" if map || set => Std::Map(MapOp::Len),
+            "is_empty" if map || set => Std::Map(MapOp::IsEmpty),
+            "iter" | "iter_mut" if map || set => Std::Map(MapOp::Iter(Part::Entries)),
+            "keys" if map => Std::Map(MapOp::Iter(Part::Keys)),
+            "values" | "values_mut" if map => Std::Map(MapOp::Iter(Part::Values)),
+            "entry" if map => Std::Map(MapOp::Entry),
+            "or_insert" if entry => Std::Map(MapOp::OrInsert),
+            "or_insert_with" if entry => Std::Map(MapOp::OrInsertWith),
+            "or_default" if entry => Std::Map(MapOp::OrDefault),
             "from_str" | "from_str_nonconst" if arguments => Std::FmtStr,
             "new" if arguments => Std::FmtNew,
             "new_display" if argument => Std::FmtDisplay,
@@ -385,6 +443,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "push_str" | "push" if string => Std::PushStr,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
             "is_some" if option => Std::IsSome,
+            "copied" | "cloned" if option => Std::OptionCloned,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
             "map" if option => Std::OptionMap,

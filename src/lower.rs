@@ -39,6 +39,7 @@ mod calls;
 mod display;
 mod format_spec;
 mod jsx;
+mod maps;
 mod ordering;
 mod representation;
 mod std_impls;
@@ -235,6 +236,9 @@ struct FnCx<'a, 'tcx> {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
     writer: Option<(Option<LocalVarId>, String)>,
+    /// The call being lowered is a statement of its own: its value isn't used,
+    /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
+    discarded: bool,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -532,6 +536,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Rust evaluates the right side of an assignment first. The target
             // is a variable or its fields, which reading can't change.
+            // A value in a map: `m.set(k, v)` (ADR 0059).
+            ExprKind::Assign { lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
+                let value = self.expr(rhs, out)?;
+                self.map_slot_write(slot, &|_, _| Ok(value.clone()), expr.span, out)
+            }
+            ExprKind::AssignOp { op, lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
+                let rhs_js = self.expr(rhs, out)?;
+                let ty = self.thir[lhs].ty;
+                let known = self.known_int(rhs);
+                let span = expr.span;
+                self.map_slot_write(
+                    slot,
+                    &|this, current| this.binary(assign_op(op), current, rhs_js.clone(), known, ty, span),
+                    span,
+                    out,
+                )
+            }
             // `v[i] = x` or `v[i].x = y`: Rust runs the right side first.
             ExprKind::Assign { lhs, rhs } if self.place(lhs).is_none() && self.in_element(lhs) => {
                 let value = self.expr(rhs, out)?;
@@ -569,6 +590,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             _ => {
+                // A call whose value goes nowhere says so, for `insert` (ADR 0059).
+                self.discarded =
+                    matches!(dest, Dest::Discard) && matches!(self.thir[self.strip(e)].kind, ExprKind::Call { .. });
                 let value = match (dest, self.place(e)) {
                     // Returning a place of this function's own hands its value
                     // over without a copy: every local dies here, so nothing is
@@ -1062,6 +1086,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || self.is_str_split(peeled)
                 || self.is_array_iter(peeled)
                 || self.is_lazy_iter(peeled)
+                || self.is_map(peeled)
                 || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
@@ -1747,7 +1772,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn is_assignment_call(&self, fun: ExprId) -> bool {
         if matches!(
             self.std_fn(fun),
-            Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr)
+            Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr | Std::AssignOperator(_))
         ) {
             return true;
         }

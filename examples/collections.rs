@@ -1,6 +1,7 @@
 // Vec, for loops, RefCell and `&mut` to objects (ADR 0025).
 
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 pub struct Todo {
@@ -192,4 +193,59 @@ pub fn arrays(i: usize) -> (u32, u32) {
     let b = a;
     a[i] = 9;
     (a[i], b[i])
+}
+
+/// `HashMap` and `HashSet` (ADR 0059): a JS `Map` and `Set`, keyed by what
+/// JS compares by value. Their order isn't Rust's, which is arbitrary too,
+/// so these sort what they take out.
+pub fn word_counts(text: &str) -> Vec<(String, u32)> {
+    let mut counts: HashMap<String, u32> = HashMap::new();
+    for word in text.split(' ') {
+        *counts.entry(word.to_string()).or_insert(0) += 1;
+    }
+    let mut all: Vec<(String, u32)> = counts.into_iter().collect();
+    all.sort();
+    all
+}
+
+pub fn map_basics(n: u32) -> (Option<u32>, Option<u32>, bool, usize, Option<u32>, u32) {
+    let mut m = HashMap::new();
+    m.insert("a", n);
+    let old = m.insert("a", n + 1);
+    m.insert("b", 3);
+    let removed = m.remove("b");
+    let first = m.get("a").copied();
+    let mut total = 0;
+    for (_, v) in &m {
+        total += v;
+    }
+    *m.get_mut("a").unwrap() += 10;
+    (old, first, m.contains_key("b"), m.len(), removed, total + m["a"])
+}
+
+pub fn set_basics(n: u32) -> (bool, bool, bool, usize, Vec<u32>, String) {
+    let mut s: HashSet<u32> = [3, 1, 2].into_iter().collect();
+    let new = s.insert(n);
+    let again = s.insert(n);
+    let gone = s.remove(&1);
+    let mut items: Vec<u32> = s.iter().copied().collect();
+    items.sort();
+    let one: HashMap<&str, u32> = HashMap::from([("k", n)]);
+    (new, again, gone, s.len(), items, format!("{one:?}"))
+}
+
+/// `or_default()` of a `Vec` value, pushed to, and a clone of the map that
+/// keeps its own `Vec`s.
+pub fn grouped(n: u32) -> Vec<(u32, Vec<u32>)> {
+    let mut groups: HashMap<u32, Vec<u32>> = HashMap::new();
+    for i in 1..n {
+        groups.entry(i % 3).or_default().push(i);
+    }
+    let copy = groups.clone();
+    if let Some(zero) = groups.get_mut(&0) {
+        zero.push(99);
+    }
+    let mut all: Vec<(u32, Vec<u32>)> = copy.into_iter().collect();
+    all.sort();
+    all
 }

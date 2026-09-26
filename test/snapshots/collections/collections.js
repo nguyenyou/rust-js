@@ -20,6 +20,75 @@ function $retain(v, keep) {
   v.length = n;
 }
 
+function $debug(v) {
+  if (typeof v === "string") {
+    return JSON.stringify(v);
+  }
+  if (Array.isArray(v)) {
+    return "[" + v.map($debug).join(", ") + "]";
+  }
+  if (v === undefined) {
+    return "()";
+  }
+  // A `HashMap` and a `HashSet` (ADR 0059), in braces as Rust shows them.
+  if (v instanceof Map) {
+    return "{" + [...v].map(([k, x]) => $debug(k) + ": " + $debug(x)).join(", ") + "}";
+  }
+  if (v instanceof Set) {
+    return "{" + [...v].map($debug).join(", ") + "}";
+  }
+  if (typeof v === "object" && v !== null) {
+    return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
+  }
+  return String(v);
+}
+
+function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+
+function $insert(map, key, value) {
+  const old = map.get(key);
+  map.set(key, value);
+  return old;
+}
+
+function $add(set, item) {
+  const added = !set.has(item);
+  set.add(item);
+  return added;
+}
+
+function $remove(map, key) {
+  const old = map.get(key);
+  map.delete(key);
+  return old;
+}
+
+function $orInsert(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, value);
+  }
+  return map.get(key);
+}
+
+function $cmp(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function $cmpItems(a, b, cmp) {
+  for (let i = 0; i < a.length && i < b.length; i++) {
+    const order = cmp(a[i], b[i]);
+    if (order !== 0) {
+      return order;
+    }
+  }
+  return $cmp(a.length, b.length);
+}
+
 export function sum_to(n) {
   let total = 0;
   for (let i = 0; i < n; i++) {
@@ -215,5 +284,79 @@ export function arrays(i) {
   const b = a.slice();
   a[$at(a, i)] = 9;
   return [$index(a, i), $index(b, i)];
+}
+
+export function word_counts(text) {
+  let counts = new Map();
+  for (const word of text.split(" ")) {
+    counts.set(word, (counts.get(word) ?? 0) + 1 >>> 0);
+  }
+  let all = Array.from(counts);
+  all.sort((a, b) => $cmp(a[0], b[0]) || $cmp(a[1], b[1]));
+  return all;
+}
+
+export function map_basics(n) {
+  let m = new Map();
+  m.set("a", n);
+  const old = $insert(m, "a", n + 1 >>> 0);
+  m.set("b", 3);
+  const removed = $remove(m, "b");
+  const first = m.get("a");
+  let total = 0;
+  for (const item of m) {
+    total = total + item[1] >>> 0;
+  }
+  m.set("a", $unwrap(m.get("a")) + 10 >>> 0);
+  return [
+    old,
+    first,
+    m.has("b"),
+    m.size,
+    removed,
+    total + $unwrap(m.get("a"), "key not found") >>> 0
+  ];
+}
+
+export function set_basics(n) {
+  let s = new Set([
+    3,
+    1,
+    2
+  ]);
+  const new$ = $add(s, n);
+  const again = $add(s, n);
+  const gone = s.delete(1);
+  let items = Array.from(s);
+  items.sort((a, b) => a - b);
+  const one = new Map([["k", n]]);
+  return [
+    new$,
+    again,
+    gone,
+    s.size,
+    items,
+    $debug(one)
+  ];
+}
+
+export function grouped(n) {
+  let groups = new Map();
+  for (let i = 1; i < n; i++) {
+    const key = i % 3;
+    $orInsert(groups, key, []).push(i);
+  }
+  const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));
+  const zero = groups.get(0);
+  if (zero != null) {
+    zero.push(99);
+  }
+  let all = Array.from(copy);
+  all.sort((a, b) => {
+    const left = a[1];
+    const right = b[1];
+    return $cmp(a[0], b[0]) || $cmpItems(left, right, $cmp);
+  });
+  return all;
 }
 //# sourceMappingURL=collections.js.map

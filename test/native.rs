@@ -155,6 +155,9 @@ fn main() {
         case("collections.indexed", &[n], || collections::indexed(n as usize));
         case("collections.element_fields", &[n], || collections::element_fields(n as usize));
         case("collections.arrays", &[n], || collections::arrays(n as usize));
+        case("collections.map_basics", &[n], || collections::map_basics(n as u32));
+        case("collections.set_basics", &[n], || collections::set_basics(n as u32));
+        case("collections.grouped", &[n], || collections::grouped(n as u32));
         case("collections.cell", &[n], || collections::cell(n as i32));
         case("collections.shared", &[n], || collections::shared(n as i32));
     }
@@ -243,6 +246,9 @@ fn main() {
         case("iterators.compare", &[a, b], || iterators::compare(a as i32, b as i32));
     }
     case("iterators.bigger", &[3, 9], || iterators::bigger(3, 9));
+    for text in ["a b a c b a", "one", "x x x"] {
+        case_with("collections.word_counts", &[&text], || collections::word_counts(text));
+    }
     for (a, b) in [('1', '2'), ('3', '0'), ('3', '2'), ('x', '1'), ('2', 'y')] {
         case_with("results.sum_digits", &[&a, &b], || results::sum_digits(a, b));
         case_with("results.converted", &[&a, &b], || results::converted(a, b));

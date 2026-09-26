@@ -90,6 +90,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Array(..) => true,
             ty::Adt(_, args) if std("Vec") => self.vec_changed(ty) || self.needs_clone_in(args.type_at(0), seen),
             ty::Adt(..) if std("Cell") || std("RefCell") => true,
+            // A map or a set changes in place (ADR 0059).
+            ty::Adt(..) if self.is_map(ty) => true,
             ty::Adt(..) if std("Rc") || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
             ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => true,
             ty::Adt(adt, args) if ty.is_box() || !self.is_std(adt.did()) || self.is_known_std(ty) => adt
@@ -155,6 +157,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if std("Cell") || std("RefCell") => {
                 let value = self.clone_value(Expr::member(place, "value"), args.type_at(0), span, out)?;
                 Ok(Expr::object(vec![Prop::Field("value".into(), value)]))
+            }
+            // `new Map(m)`, cloning each value that needs it; keys never do.
+            ty::Adt(_, args) if self.is_map(ty) => {
+                let set = std("HashSet");
+                let value = args.types().nth(1).filter(|&v| !set && self.needs_clone(v));
+                let entries = match value {
+                    Some(v) => {
+                        let clone = self.clone_value(Expr::var("value"), v, span, out)?;
+                        let pair = Expr::array(vec![Expr::var("key"), clone]);
+                        let f = Expr::arrow(
+                            vec![js::Pattern::Array(vec![Some("key".into()), Some("value".into())])],
+                            vec![StmtKind::Return(Some(pair)).at(js::Span::NONE)],
+                        );
+                        let all = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![place]);
+                        Expr::call(Expr::member(all, "map"), vec![f])
+                    }
+                    None => place,
+                };
+                Ok(Expr::new_(Expr::var(if set { "Set" } else { "Map" }), vec![entries]))
             }
             ty::Adt(_, args) if self.is_lang_adt(ty, LangItem::Option) => {
                 let inner = args.type_at(0);
@@ -288,6 +309,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),
             _ if self.is_lang_adt(ty, LangItem::String) => Expr::str(""),
             _ if std("Vec") => Expr::array(Vec::new()),
+            _ if self.is_map(ty) => Expr::new_(Expr::var(if std("HashSet") { "Set" } else { "Map" }), Vec::new()),
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
             ty::Adt(_, args) if std("Cell") || std("RefCell") => Expr::object(vec![Prop::Field(
                 "value".into(),
