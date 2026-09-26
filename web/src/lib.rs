@@ -47,6 +47,41 @@ unsafe extern "Rust" {
     pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
 }
 
+/// A JS [`ArrayBuffer`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer):
+/// raw bytes, as `response::array_buffer` gives them.
+pub struct ArrayBuffer(PhantomData<JsObject>);
+
+pub mod array_buffer {
+    use super::*;
+
+    unsafe extern "Rust" {
+        #[link_name = "get byteLength"]
+        pub safe fn byte_length(this: &ArrayBuffer) -> u32;
+    }
+}
+
+/// A JS [`Uint8Array`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array):
+/// a view of the bytes in an `ArrayBuffer`, as `response::bytes` gives them.
+pub struct Uint8Array(PhantomData<JsObject>);
+
+pub mod uint8_array {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// A view of all of `buffer`.
+        #[link_name = "new Uint8Array"]
+        pub safe fn new(buffer: &ArrayBuffer) -> &'static Uint8Array;
+
+        /// How many bytes it views.
+        #[link_name = "get length"]
+        pub safe fn length(this: &Uint8Array) -> u32;
+
+        /// The buffer it views.
+        #[link_name = "get buffer"]
+        pub safe fn buffer(this: &Uint8Array) -> &'static ArrayBuffer;
+    }
+}
+
 /// [`EventTarget`](https://developer.mozilla.org/docs/Web/API/EventTarget)
 pub struct EventTarget(PhantomData<JsObject>);
 
@@ -4565,6 +4600,13 @@ pub mod request {
         #[link_name = "get bodyUsed"]
         pub safe fn body_used(this: &Request) -> bool;
 
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Request/arrayBuffer)
+        #[link_name = "arrayBuffer"]
+        pub safe fn array_buffer(this: &Request) -> Promise<&'static ArrayBuffer>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Request/bytes)
+        pub safe fn bytes(this: &Request) -> Promise<&'static Uint8Array>;
+
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Request/text)
         pub safe fn text(this: &Request) -> Promise<String>;
     }
@@ -4615,6 +4657,13 @@ pub mod response {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Response/bodyUsed)
         #[link_name = "get bodyUsed"]
         pub safe fn body_used(this: &Response) -> bool;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Response/arrayBuffer)
+        #[link_name = "arrayBuffer"]
+        pub safe fn array_buffer(this: &Response) -> Promise<&'static ArrayBuffer>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Response/bytes)
+        pub safe fn bytes(this: &Response) -> Promise<&'static Uint8Array>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Response/text)
         pub safe fn text(this: &Response) -> Promise<String>;

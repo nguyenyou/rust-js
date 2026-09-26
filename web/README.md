@@ -26,6 +26,7 @@ element::append(app, b);                                  // app.append(b)
 - Results that may be `null` say so in their docs, but aren't checked yet.
 - A promise is a `Promise<T>`, to `.await`: `window::fetch_with_str(window, url).await`
   ([ADR 0029](../docs/decisions/0029-async-await.md)).
+- Binary data is JS's `ArrayBuffer` and `Uint8Array`: `response::bytes(r).await`.
 
 ## Use it
 

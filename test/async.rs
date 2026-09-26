@@ -1,9 +1,10 @@
-//! `async fn`, `.await`, `async` blocks and closures, and `spawn` (ADR 0029).
+//! `async fn`, `.await`, `async` blocks and closures, and `spawn` (ADR 0029),
+//! and the web crate's promises: `fetch` and binary data.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{Promise, response, spawn, window};
+use web::{Promise, array_buffer, response, spawn, uint8_array, window};
 
 unsafe extern "Rust" {
     /// Resolves with `value` after `ms` milliseconds.
@@ -67,4 +68,14 @@ pub async fn load(url: &str) -> (u16, bool, String) {
     let response = window::fetch_with_str(window, url).await;
     let body = response::text(response).await;
     (response::status(response), response::ok(response), body)
+}
+
+/// Binary data: `bytes()`, `arrayBuffer()`, and a view of a buffer.
+pub async fn load_bytes(url: &str) -> (u32, u32, u32) {
+    let response = window::fetch_with_str(window, url).await;
+    let copy = response::clone(response);
+    let bytes = response::bytes(response).await;
+    let buffer = response::array_buffer(copy).await;
+    let view = uint8_array::new(buffer);
+    (uint8_array::length(bytes), array_buffer::byte_length(buffer), uint8_array::length(view))
 }

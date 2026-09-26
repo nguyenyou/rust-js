@@ -245,6 +245,8 @@ test("async code becomes async functions and await", async () => {
   (globalThis as any).window = globalThis;
   try {
     expect(await asyncs.load(server.url.href)).toEqual([201, true, "hello"]);
+    // Binary data: `bytes()` and `arrayBuffer()`, five bytes of "hello".
+    expect(await asyncs.load_bytes(server.url.href)).toEqual([5, 5, 5]);
   } finally {
     delete (globalThis as any).window;
     server.stop();

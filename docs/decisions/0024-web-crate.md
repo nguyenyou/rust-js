@@ -82,6 +82,8 @@ includes them. `document` and `window` are globals at the crate root.
 | `byte` … `unsigned long` | `i8` … `u32` | same |
 | `double`, `unrestricted double` | `f64` | `f64` |
 | an interface in the crate | `&T` | `&'static T` |
+| `ArrayBuffer`, `Uint8Array` (JS's own) | `&T` | `&'static T` |
+| `Promise<T>` | – | `Promise<T>` |
 | `EventListener` | `Box<dyn FnMut(&Event)>` | – |
 | `undefined` | – | `()` |
 
@@ -89,7 +91,12 @@ A member is generated only if all its types are in this table. So far that
 leaves out `long long`, `float`, `any`, `object`, sequences, promises
 as parameters, dictionaries and most callbacks. As rust-js grows, rerunning
 the generator picks more up: promise results came with ADR 0029, as
-`Promise<T>`. Also:
+`Promise<T>`.
+
+JS's own types that WebIDL uses (`Promise`, `ArrayBuffer`, `Uint8Array`)
+aren't in any WebIDL file. They're declared by hand at the top of the crate,
+with the few members programs need so far: `uint8_array::new(buffer)`,
+`uint8_array::length`, `array_buffer::byte_length`. Also:
 
 - **Nullable:** a parameter takes the non-null type. A result is typed
   non-null, and its doc says it may be `null`, which isn't checked. When
