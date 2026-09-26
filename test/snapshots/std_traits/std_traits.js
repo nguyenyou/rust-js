@@ -92,6 +92,42 @@ function $eq(a, b) {
   return keys.length === Object.keys(b).length && keys.every((k) => $eq(a[k], b[k]));
 }
 
+// `Some(x)` of a generic `T` (ADR 0051): `x`, unless it looks like `None`,
+// as `undefined`, `null` or such a box does. Then it's a box one deeper.
+function $some(x) {
+  if (x == null) return { $someNone: 0 };
+  if (typeof x === "object" && "$someNone" in x) return { $someNone: x.$someNone + 1 };
+  return x;
+}
+
+// What's in a `$some`: the box one level shallower.
+function $someValue(x) {
+  if (x != null && typeof x === "object" && "$someNone" in x) {
+    return x.$someNone === 0 ? undefined : { $someNone: x.$someNone - 1 };
+  }
+  return x;
+}
+
+// A Rust iterator of the crate's own as a JS one: its `next` returns the
+// item, or `None` at the end. JS's iterator helpers are lazy, like Rust's
+// adapters, so an endless one is fine until something wants all of it. A
+// generic `next` may box its `Some` (ADR 0051): `boxed` unboxes it.
+function $iterator(iterator, next, boxed = false) {
+  return Iterator.from({
+    next() {
+      const item = next(iterator);
+      if (item == null) {
+        return { done: true, value: undefined };
+      }
+      return { done: false, value: boxed ? $someValue(item) : item };
+    }
+  });
+}
+
+function $max(items) {
+  return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
+}
+
 var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay;
 
 export function fresh(TDefault) {
@@ -360,6 +396,48 @@ export function displays() {
   ];
 }
 
+function fibonacci() {
+  return {
+    a: 0,
+    b: 1
+  };
+}
+
+export function iterations() {
+  let total = 0;
+  for (const x of $iterator({ n: 3 }, countdownIterator_next)) {
+    total = total + x >>> 0;
+  }
+  let c = { n: 2 };
+  const first = countdownIterator_next(c) ?? 0;
+  return [
+    total,
+    first,
+    $iterator(fibonacci(), fibonacciIterator_next).drop(1).take(6).toArray(),
+    $iterator(fibonacci(), fibonacciIterator_next).take(5).map((x) => Math.imul(x, 2) >>> 0).reduce((a, b) => a + b >>> 0, 0),
+    $iterator({ n: 4 }, countdownIterator_next).toArray().length,
+    $iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)
+  ];
+}
+
+export function generic_iterations() {
+  return [
+    $iterator({
+      item: undefined,
+      times: 3
+    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).toArray().length,
+    $iterator({
+      item: undefined,
+      times: 2
+    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).filter((o) => o == null).toArray().length,
+    $iterator({
+      item: 2,
+      times: 3
+    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).toArray(),
+    $max($iterator({ n: 5 }, countdownIterator_next).map((x, i) => [i, x]).map(([i, x]) => Math.imul(i, x) >>> 0).toArray())
+  ];
+}
+
 function configDefault_default() {
   return {
     retries: 3,
@@ -430,6 +508,30 @@ function figureDisplay_fmt(figure) {
 
 function labeledDisplay_fmt(labeled, TDisplay) {
   return labeled.label + ": " + TDisplay.fmt(labeled.value);
+}
+
+function countdownIterator_next(countdown) {
+  if (countdown.n === 0) {
+    return undefined;
+  } else {
+    countdown.n = countdown.n - 1 >>> 0;
+    return countdown.n + 1 >>> 0;
+  }
+}
+
+function fibonacciIterator_next(fibonacci$1) {
+  const a = fibonacci$1.a;
+  fibonacci$1.a = fibonacci$1.b;
+  fibonacci$1.b = fibonacci$1.b + a >>> 0;
+  return a;
+}
+
+function repeatIterator_next(repeat, TClone) {
+  if (repeat.times === 0) {
+    return undefined;
+  }
+  repeat.times = repeat.times - 1 >>> 0;
+  return $some(TClone.clone(repeat.item));
 }
 
 export function configDefault() {

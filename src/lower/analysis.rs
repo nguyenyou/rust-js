@@ -497,6 +497,14 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
             // `#[derive(Clone)]` write impls that are never called.
             DefKind::AssocFn => continue,
             DefKind::AssocConst { .. } => "associated constants",
+            // An `Iterator`'s `Item` (ADR 0055): rustc works out what it is.
+            DefKind::AssocTy
+                if tcx.trait_impl_of_assoc(def_id.to_def_id()).is_some_and(|imp| {
+                    tcx.is_diagnostic_item(sym::Iterator, tcx.impl_trait_ref(imp).instantiate_identity().def_id)
+                }) =>
+            {
+                continue;
+            }
             DefKind::AssocTy => "associated types",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())

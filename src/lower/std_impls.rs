@@ -18,7 +18,7 @@ use rustc_span::{Span, Symbol, sym};
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The trait's arguments for `Self = ty`, with `ty` for any others too:
     /// `PartialEq`'s `Rhs` is `Self` unless it says otherwise.
-    fn args_of(&self, trait_id: DefId, ty: Ty<'tcx>) -> ty::GenericArgsRef<'tcx> {
+    pub(super) fn args_of(&self, trait_id: DefId, ty: Ty<'tcx>) -> ty::GenericArgsRef<'tcx> {
         let ty = self.tcx.erase_and_anonymize_regions(ty);
         self.tcx.mk_args_from_iter(std::iter::repeat_n(
             ty::GenericArg::from(ty),

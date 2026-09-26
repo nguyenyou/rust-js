@@ -182,6 +182,8 @@ for (const [name, source, diagnostic] of [
   ["fmt::Error", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result { Err(fmt::Error) } }`, "a \`fmt::Error\`"],
   ["fmt::Result methods", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { let _ = f.write_str("a").is_ok(); Ok(()) } }`, "methods of a \`fmt::Result\`"],
   ["Formatter options", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { if f.alternate() { f.write_str("#") } else { Ok(()) } } }`, "alternate"],
+  // An `Iterator` is a JS iterator (ADR 0055), which can't go backwards: no `DoubleEndedIterator`.
+  ["rev of an Iterator", `pub struct C(pub u32); impl Iterator for C { type Item = u32; fn next(&mut self) -> Option<u32> { None } } impl DoubleEndedIterator for C { fn next_back(&mut self) -> Option<u32> { None } } pub fn f() -> Vec<u32> { C(1).rev().collect() }`, "user implementations"],
   ["generic From", `pub fn f<T: From<u32>>() -> T { T::from(1) }`, "calling \`std::convert::From::from\`"],
   ["colliding methods", `#![rust_js::camel_case] pub trait T { fn first_name(&self); fn firstName(&self); }`, "dictionary names collide"],
   ["reserved method", `pub trait T { fn __proto__(&self); }`, "reserved"],

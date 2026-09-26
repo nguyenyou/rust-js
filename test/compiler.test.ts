@@ -811,3 +811,16 @@ test("a Display impl's fmt returns the string it writes", async () => {
   expect(js).toContain("export function shown(x, TDisplay) {\n  return \"<\" + TDisplay.fmt(x) + \">\";");
   expect(js).toContain("{ fmt: $displayF64 }");
 });
+
+// ADR 0055: an iterator of the crate's own is a JS iterator, with lazy helpers.
+test("an Iterator impl is a JS iterator, lazy until something wants all of it", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  expect(js).toContain("for (const x of $iterator({ n: 3 }, countdownIterator_next)) {");
+  expect(js).toContain("const first = countdownIterator_next(c) ?? 0;");
+  // Endless, so only lazy helpers: `drop`, `take`, `find`.
+  expect(js).toContain("$iterator(fibonacci(), fibonacciIterator_next).drop(1).take(6).toArray()");
+  expect(js).toContain("$iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)");
+  expect(js).toContain("$iterator({ n: 4 }, countdownIterator_next).toArray().length");
+  // A generic `next` may box a `Some` that looks like `None`: unboxed as it comes out.
+  expect(js).toContain("(iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true)");
+});

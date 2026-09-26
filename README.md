@@ -43,7 +43,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`. One with
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.
 - An iterator is a JS array, and its adapters the array's methods (`v.iter().map(f)` is `v.map(f)`);
-  sorting takes comparators, and `Ordering` is -1, 0 or 1.
+  sorting takes comparators, and `Ordering` is -1, 0 or 1. An `impl Iterator` of the crate's own is a lazy JS
+  iterator, `$iterator(it, countdownIterator_next).take(5)` ([ADR 0055](docs/decisions/0055-iterator.md)).
 - `thread_local!` is a variable of its module: `const COUNT = { value: 0 };`.
 - A JS call whose binding returns a `Result` runs in a `try`: a throw is an `Err`. `?` returns
   an `Err` or a `None` early.
@@ -82,7 +83,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; inherent methods, local traits with defaults and supertraits,
 generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)),
-`Default`, `Clone`, `From`, `PartialEq` and `Display` impls ([ADRs 0052](docs/decisions/0052-std-trait-impls.md), [0053](docs/decisions/0053-partial-eq.md), [0054](docs/decisions/0054-display.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+`Default`, `Clone`, `From`, `PartialEq`, `Display` and `Iterator` impls ([ADRs 0052](docs/decisions/0052-std-trait-impls.md)–[0055](docs/decisions/0055-iterator.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.

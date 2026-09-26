@@ -3,7 +3,7 @@
 // copy only where it could be told apart from the value: something changes
 // one of them, or a hand-written `clone` makes something else. A
 // hand-written `eq` decides wherever it is, and a `fmt` returns what it
-// writes.
+// writes. An `Iterator` is a JS iterator.
 
 use std::fmt;
 
@@ -326,5 +326,85 @@ pub fn displays() -> (String, String, String, String, String, String) {
         labeled.to_string(),
         shown(&labeled),
         shown(&Labeled { label: "n".to_string(), value: 2.5 }),
+    )
+}
+
+/// `Iterator` (ADR 0055): a JS iterator, whose adapters are lazy too.
+pub struct Countdown {
+    pub n: u32,
+}
+
+impl Iterator for Countdown {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n + 1)
+        }
+    }
+}
+
+/// Endless: only lazy adapters can use it.
+pub struct Fibonacci {
+    pub a: u32,
+    pub b: u32,
+}
+
+impl Iterator for Fibonacci {
+    type Item = u32;
+    fn next(&mut self) -> Option<Self::Item> {
+        let a = self.a;
+        self.a = self.b;
+        self.b += a;
+        Some(a)
+    }
+}
+
+/// A generic one, whose `Some(())` and `Some(None)` must still be items.
+pub struct Repeat<T> {
+    pub item: T,
+    pub times: u32,
+}
+
+impl<T: Clone> Iterator for Repeat<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        if self.times == 0 {
+            return None;
+        }
+        self.times -= 1;
+        Some(self.item.clone())
+    }
+}
+
+fn fibonacci() -> Fibonacci {
+    Fibonacci { a: 0, b: 1 }
+}
+
+pub fn iterations() -> (u32, u32, Vec<u32>, u32, usize, Option<u32>) {
+    let mut total = 0;
+    for x in (Countdown { n: 3 }) {
+        total += x;
+    }
+    let mut c = Countdown { n: 2 };
+    let first = c.next().unwrap_or(0);
+    (
+        total,
+        first,
+        fibonacci().skip(1).take(6).collect(),
+        fibonacci().take(5).map(|x| x * 2).sum(),
+        Countdown { n: 4 }.count(),
+        fibonacci().find(|&x| x > 50),
+    )
+}
+
+pub fn generic_iterations() -> (usize, usize, Vec<u32>, Option<u32>) {
+    (
+        Repeat { item: (), times: 3 }.count(),
+        Repeat { item: None::<u32>, times: 2 }.filter(|o| o.is_none()).count(),
+        Repeat { item: 2, times: 3 }.collect(),
+        Countdown { n: 5 }.enumerate().map(|(i, x)| i as u32 * x).max(),
     )
 }

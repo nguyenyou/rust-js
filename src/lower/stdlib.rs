@@ -446,6 +446,65 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// An iterator's method (ADR 0036). The iterator is a JS array: a range
     /// becomes one, `$range(a, b)`, and the rest already are.
+    /// Is `ty` an iterator of the crate's own (ADR 0055)? `&mut` of one is too.
+    pub(super) fn is_user_iterator(&self, ty: ty::Ty<'tcx>) -> bool {
+        let iterator = self.tcx.get_diagnostic_item(sym::Iterator).expect("std has `Iterator`");
+        matches!(ty.peel_refs().kind(), ty::Adt(..)) && self.has_user_impl(iterator, ty.peel_refs())
+    }
+
+    /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
+    /// crate's own, or std's adapters on one.
+    pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        self.is_user_iterator(ty)
+            || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
+    }
+
+    /// An iterator of the crate's own as a JS one, `$iterator(it,
+    /// countdownIterator_next)`. Anything else is `value` itself.
+    pub(super) fn iter_source(&mut self, value: Expr, ty: ty::Ty<'tcx>, span: Span) -> R<Expr> {
+        if !self.is_user_iterator(ty) {
+            return Ok(value);
+        }
+        let iterator = self.tcx.get_diagnostic_item(sym::Iterator).expect("std has `Iterator`");
+        let next = self
+            .tcx
+            .associated_item_def_ids(iterator)
+            .iter()
+            .copied()
+            .find(|&id| self.tcx.item_name(id) == sym::next)
+            .expect("`Iterator` has `next`");
+        let args = self.args_of(iterator, ty.peel_refs());
+        // A generic `next` boxes a `Some` that looks like `None` (ADR 0051).
+        let boxed = ty::Instance::try_resolve(self.tcx, self.typing_env, next, args)?.is_some_and(|instance| {
+            let id = instance.def_id();
+            let output = self.tcx.fn_sig(id).instantiate_identity().skip_binder().output();
+            let output = self
+                .tcx
+                .try_normalize_erasing_regions(ty::TypingEnv::post_analysis(self.tcx, id), output)
+                .unwrap_or(output);
+            self.option_of(output).is_some_and(|item| self.boxed_payload(item))
+        });
+        let call = self.impl_call(next, args, vec![Expr::var("iterator")], span)?;
+        // `(iterator) => f(iterator)` is `f`.
+        let next = match &call.kind {
+            js::ExprKind::Call(callee, list) if matches!(list.as_slice(), [only] if matches!(&only.kind, js::ExprKind::Var(n) if n == "iterator")) => {
+                (**callee).clone()
+            }
+            _ => Expr::arrow(
+                vec!["iterator".into()],
+                vec![StmtKind::Return(Some(call)).at(js::Span::NONE)],
+            ),
+        };
+        self.runtime.insert(Helper::Iterator);
+        let mut list = vec![value, next];
+        if boxed {
+            self.runtime.insert(Helper::SomeValue);
+            list.push(Expr::bool(true));
+        }
+        Ok(Expr::call(Expr::var("$iterator"), list))
+    }
+
     pub(super) fn iterator_call(
         &mut self,
         known: Std,
@@ -468,7 +527,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if self.is_lang_adt(receiver_ty, LangItem::Range) => {
                 return Err(self.unsupported(span, "a range in a variable, as an iterator"));
             }
-            _ => self.expr(args[0], out)?,
+            _ => {
+                let value = self.expr(args[0], out)?;
+                self.iter_source(value, receiver_ty, span)?
+            }
+        };
+        // A JS iterator's helpers are lazy: `map`, `filter`, `take`, `drop`,
+        // and those that stop early, like `find`. Anything else takes all of
+        // it, as an array (ADR 0055).
+        let lazy = self.is_lazy_iter(receiver_ty);
+        if lazy && known == Std::Rev {
+            return Err(self.unsupported(span, "`rev` of an iterator of the crate's own"));
+        }
+        let items = match known {
+            _ if !lazy => items,
+            Std::ArrayMethod(_) | Std::Enumerate | Std::Fold | Std::Sum | Std::Skip | Std::Take | Std::Cloned => items,
+            _ => Expr::call(Expr::member(items, "toArray"), vec![]),
         };
         let mut rest = self.operands(&args[1..], out)?.into_iter();
         let mut next = || rest.next().expect("rustc checked the arguments");
@@ -489,6 +563,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 )
             }
             Std::Rev => method(items, "toReversed", vec![]),
+            Std::Skip if lazy => method(items, "drop", vec![next()]),
+            Std::Take if lazy => method(items, "take", vec![next()]),
             Std::Skip => method(items, "slice", vec![next()]),
             Std::Take => method(items, "slice", vec![Expr::int(0), next()]),
             Std::Fold => {
@@ -517,7 +593,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let fresh = match &items.kind {
                     js::ExprKind::Call(callee, _) => match &callee.kind {
                         js::ExprKind::Member(_, name) => {
-                            ["map", "filter", "slice", "toReversed", "split", "from"].contains(&name.as_str())
+                            ["map", "filter", "slice", "toReversed", "split", "from", "toArray"]
+                                .contains(&name.as_str())
                         }
                         js::ExprKind::Var(name) => name == "$range",
                         _ => false,

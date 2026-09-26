@@ -542,6 +542,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (v, x) = (arg(), arg());
                 Expr::call(Expr::member(v, "push"), vec![x])
             }
+            // `count()` of a JS iterator (ADR 0055) takes all of it.
+            Std::Len if self.is_lazy_iter(self.thir[args[0]].ty) => {
+                let items = self.iter_source(arg(), self.thir[args[0]].ty, span)?;
+                Expr::member(Expr::call(Expr::member(items, "toArray"), vec![]), "length")
+            }
             Std::Len => Expr::member(arg(), "length"),
             Std::Clear => {
                 out.push(StmtKind::Assign(Expr::member(arg(), "length"), Expr::num(0)).at(js_span));

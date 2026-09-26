@@ -1047,11 +1047,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
                 || self.is_str_split(peeled)
                 || self.is_array_iter(peeled)
+                || self.is_lazy_iter(peeled)
                 || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
             }
-            (Some(self.expr(f.head, out)?), None)
+            let head = self.expr(f.head, out)?;
+            (Some(self.iter_source(head, head_ty, head_span)?), None)
         };
 
         // The loop variable: the pattern's own name if it's a plain
