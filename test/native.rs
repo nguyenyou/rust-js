@@ -161,6 +161,7 @@ fn main() {
         case_with("iterators.extremes", &[&arg], || iterators::extremes(v));
         case_with("iterators.middle", &[&arg], || iterators::middle(v));
         case_with("iterators.sorted", &[&arg], || iterators::sorted(v));
+        case_with("iterators.sorted_copy", &[&arg], || iterators::sorted_copy(v.to_vec()));
         case_with("iterators.descending", &[&arg], || iterators::descending(v));
         case_with("iterators.by_last_digit", &[&arg], || iterators::by_last_digit(v));
     }

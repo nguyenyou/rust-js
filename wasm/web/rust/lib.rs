@@ -3,18 +3,20 @@
 // the page runs (see ../compile-rust.ts), and main.ts imports it. More of
 // main.ts moves here, a part at a time.
 //
-// So far: loading what the page needs, the stats table, and running
-// rust-js.wasm on a crate, under the WASI shim.
+// So far: loading what the page needs, the stats table, the file trees, and
+// running rust-js.wasm on a crate, under the WASI shim.
 
 #![feature(extern_types)]
 
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::rc::Rc;
 
 use web::{
-    JsError, JsObject, Promise, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule,
-    array_buffer, document, html_table_element, html_table_row_element, js_error, node, response, text_decoder,
-    text_encoder, uint8_array, web_assembly, web_assembly_instance, web_assembly_memory, window,
+    Element, JsError, JsObject, Promise, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
+    WebAssemblyModule, array_buffer, css_style_declaration, document, element, event_target, html_element,
+    html_table_element, html_table_row_element, js_error, node, response, text_decoder, text_encoder, uint8_array,
+    web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
 // Some JS functions are declared more than once, typed for each use (`json`
@@ -203,6 +205,108 @@ async fn load_web_crate(start: f64) -> &'static WasiFile {
 
 async fn load_examples() -> Vec<Example> {
     examples_json(window::fetch_with_str(window, "./examples.json").await).await
+}
+
+// ── File explorer ───────────────────────────────────────────────────────
+
+/// A folder's entries, in the order they came: subfolders, or a file's full path.
+type Tree = Vec<(String, Entry)>;
+
+enum Entry {
+    Folder(Tree),
+    File(String),
+}
+
+fn build_tree(paths: &[String]) -> Tree {
+    let mut tree: Tree = Vec::new();
+    for path in paths {
+        let mut folder = &mut tree;
+        let name = match path.rsplit_once('/') {
+            Some((folders, name)) => {
+                for part in folders.split('/') {
+                    if !folder.iter().any(|(n, _)| n == part) {
+                        folder.push((part.to_string(), Entry::Folder(Vec::new())));
+                    }
+                    folder = match folder.iter_mut().find(|(n, _)| n == part) {
+                        Some((_, Entry::Folder(children))) => children,
+                        _ => unreachable!("a folder, found or just made"),
+                    };
+                }
+                name
+            }
+            None => path.as_str(),
+        };
+        folder.push((name.to_string(), Entry::File(path.clone())));
+    }
+    tree
+}
+
+/// What `render_tree` shows, and what clicking a file does.
+pub struct TreeOptions {
+    pub selected: String,
+    pub first: Option<String>,
+    pub on_open: Rc<dyn Fn(String)>,
+    pub decorate: Option<Rc<dyn Fn(&Element, String)>>,
+}
+
+/// Render a file tree into `list`: a button per file, folders as labels.
+pub fn render_tree(list: &Element, paths: Vec<String>, options: TreeOptions) {
+    node::set_text_content(list, "");
+    render(&build_tree(&paths), list, 0, &options);
+}
+
+fn render(tree: &Tree, into: &Element, depth: u32, options: &TreeOptions) {
+    // The crate root first; then by name, a module's file just before its
+    // folder: `geometry.rs`, then `geometry/` ("." sorts before "/").
+    let key = |(name, entry): &(String, Entry)| match entry {
+        Entry::Folder(_) => format!("{name}/"),
+        Entry::File(_) => name.clone(),
+    };
+    let is_first = |entry: &Entry| matches!((entry, &options.first), (Entry::File(path), Some(first)) if path == first);
+    let mut entries: Vec<&(String, Entry)> = tree.iter().collect();
+    entries.sort_by(|a, b| {
+        if is_first(&a.1) {
+            Ordering::Less
+        } else if is_first(&b.1) {
+            Ordering::Greater
+        } else {
+            key(a).cmp(&key(b))
+        }
+    });
+    for (name, entry) in entries {
+        let li = document::create_element(document, "li");
+        let indent = format!("{}px", 8 + depth * 12);
+        match entry {
+            Entry::Folder(children) => {
+                let label = html_element::unchecked_from(document::create_element(document, "span"));
+                element::set_class_name(label, "folder");
+                css_style_declaration::set_property(html_element::style(label), "padding-left", &indent);
+                node::set_text_content(label, &format!("{name}/"));
+                let nested = document::create_element(document, "ul");
+                render(children, nested, depth + 1, options);
+                let wrapper = html_element::unchecked_from(document::create_element(document, "div"));
+                css_style_declaration::set_property(html_element::style(wrapper), "width", "100%");
+                element::append(wrapper, label);
+                element::append(wrapper, nested);
+                element::append(li, wrapper);
+            }
+            Entry::File(path) => {
+                let file = html_element::unchecked_from(document::create_element(document, "button"));
+                element::set_class_name(file, "file");
+                css_style_declaration::set_property(html_element::style(file), "padding-left", &indent);
+                node::set_text_content(file, name);
+                element::set_attribute(file, "aria-current", &(*path == options.selected).to_string());
+                let on_open = options.on_open.clone();
+                let opened = path.clone();
+                event_target::add_event_listener(file, "click", Box::new(move |_| on_open(opened.clone())));
+                element::append(li, file);
+                if let Some(decorate) = &options.decorate {
+                    decorate(li, path.clone());
+                }
+            }
+        }
+        element::append(into, li);
+    }
 }
 
 // ── Running rust-js ─────────────────────────────────────────────────────

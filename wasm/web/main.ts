@@ -19,7 +19,7 @@ import { basicSetup, EditorView } from "codemirror";
 
 // The part of the playground written in Rust: rust/lib.rs, which build.ts
 // and serve.ts compile to rust/lib.js with rust-js itself (compile-rust.ts).
-import { compile, load, mb, ms, stat } from "./rust/lib.js";
+import { compile, load, mb, ms, render_tree, stat } from "./rust/lib.js";
 
 type Example = { name: string; title: string; root: string; files: string[] };
 
@@ -70,71 +70,18 @@ darkMode.addEventListener("change", (e) => {
 });
 
 // ── File explorer ───────────────────────────────────────────────────────
+// `render_tree`, in rust/lib.rs: a button per file, folders as labels.
 
-type Tree = Map<string, Tree | string>; // a folder's entries: subfolders, or a file's full path
-
-function buildTree(paths: string[]): Tree {
-  const tree: Tree = new Map();
-  for (const path of paths) {
-    const parts = path.split("/");
-    let folder = tree;
-    for (const part of parts.slice(0, -1)) {
-      if (!(folder.get(part) instanceof Map)) folder.set(part, new Map());
-      folder = folder.get(part) as Tree;
-    }
-    folder.set(parts.at(-1)!, path);
-  }
-  return tree;
-}
-
-/** Render a file tree into `list`: a button per file, folders as labels. */
-function renderTree(
-  list: HTMLUListElement,
+const renderTree = render_tree as (
+  list: HTMLElement,
   paths: string[],
   options: {
     selected: string;
     first?: string;
-    onOpen: (path: string) => void;
-    decorate?: (li: HTMLLIElement, path: string) => void;
+    on_open: (path: string) => void;
+    decorate?: (li: HTMLElement, path: string) => void;
   },
-) {
-  const render = (tree: Tree, into: HTMLUListElement, depth: number) => {
-    // The crate root first; then by name, a module's file just before its
-    // folder: `geometry.rs`, then `geometry/` ("." sorts before "/").
-    const key = ([name, entry]: [string, Tree | string]) => (entry instanceof Map ? `${name}/` : name);
-    const entries = [...tree].sort((a, b) =>
-      a[1] === options.first ? -1 : b[1] === options.first ? 1 : key(a) < key(b) ? -1 : 1,
-    );
-    for (const [name, entry] of entries) {
-      const li = document.createElement("li");
-      const indent = `${8 + depth * 12}px`;
-      if (entry instanceof Map) {
-        const label = document.createElement("span");
-        label.className = "folder";
-        label.style.paddingLeft = indent;
-        label.textContent = `${name}/`;
-        const nested = document.createElement("ul");
-        render(entry, nested, depth + 1);
-        const wrapper = document.createElement("div");
-        wrapper.style.width = "100%";
-        wrapper.append(label, nested);
-        li.append(wrapper);
-      } else {
-        const file = document.createElement("button");
-        file.className = "file";
-        file.style.paddingLeft = indent;
-        file.textContent = name;
-        file.setAttribute("aria-current", String(entry === options.selected));
-        file.addEventListener("click", () => options.onOpen(entry));
-        li.append(file);
-        options.decorate?.(li, entry);
-      }
-      into.append(li);
-    }
-  };
-  list.replaceChildren();
-  render(buildTree(paths), list, 0);
-}
+) => void;
 
 // ── The crate being edited ──────────────────────────────────────────────
 // Each file keeps its own editor state, so undo history survives switching.
@@ -158,7 +105,7 @@ function renderSourceFiles() {
   renderTree($("source-files"), [...files.keys()], {
     selected: current,
     first: root,
-    onOpen: openFile,
+    on_open: openFile,
     decorate: (li, path) => {
       if (path === root) {
         const note = document.createElement("span");
@@ -234,7 +181,7 @@ function renderOutputFiles() {
     list.replaceChildren(empty);
     return;
   }
-  renderTree(list, [...outputs.keys()], { selected: shownOutput, first: rootJs(), onOpen: openOutput });
+  renderTree(list, [...outputs.keys()], { selected: shownOutput, first: rootJs(), on_open: openOutput });
 }
 
 function showDiagnostics(text: string) {

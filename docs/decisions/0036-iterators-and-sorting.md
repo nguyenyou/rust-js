@@ -32,7 +32,7 @@ methods, and Scala.js's collections are Scala's own.
 | `.fold(init, f)`, `.sum()` | `.reduce(f, init)`, `.reduce((a, b) => a + b, 0)`, wrapped (ADR 0011) |
 | `.count()`, `.last()` | `.length`, `.at(-1)` |
 | `.position(p)`, `.max()`, `.min()` | `$position`, `$max`, `$min`: options (ADR 0030) |
-| `.collect::<Vec<_>>()`, `.collect::<String>()` | the array, `.join("")` |
+| `.collect::<Vec<_>>()`, `.collect::<String>()` | a new array (an adapter's result already is one; otherwise `.slice()`), `.join("")` |
 
 **Sorting sorts in place, with a comparator**, and JS's sort is stable, as
 Rust's `sort` is:

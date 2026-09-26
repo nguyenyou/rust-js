@@ -866,6 +866,8 @@ enum Std {
     Fold,
     Sum,
     CollectString,
+    /// `collect::<Vec<_>>()`: a new array, unless it's one already.
+    Collect,
     Position,
     /// `max()` (true) or `min()` (false) of an iterator: an option.
     Extreme(bool),
@@ -900,6 +902,7 @@ impl Std {
                 | Std::Fold
                 | Std::Sum
                 | Std::CollectString
+                | Std::Collect
                 | Std::Position
                 | Std::Extreme(_)
                 | Std::Last
@@ -1958,7 +1961,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for (i, &e) in list.iter().enumerate() {
             let v = self.expr(e, out)?;
             // Constants, and places that can't change, read the same later.
-            let settled = v.is_constant() || self.stable_place(self.strip_refs(e)).is_some();
+            let settled = v.is_constant()
+                || self.stable_place(self.strip_refs(e)).is_some()
+                || self.ref_place(e).is_some_and(|(_, mutable)| !mutable);
             if last_complex.is_some_and(|k| i < k) && !settled {
                 let tmp = self.fresh("tmp");
                 let span = v.span;
@@ -2371,7 +2376,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var(name), vec![arg(), arg()])
             }
             Std::Last | Std::ArrayMethod(_) | Std::Enumerate | Std::Rev | Std::Skip | Std::Take | Std::Fold | Std::Sum
-            | Std::CollectString | Std::Position | Std::Extreme(_) | Std::Sort | Std::SortByKey => {
+            | Std::CollectString | Std::Collect | Std::Position | Std::Extreme(_) | Std::Sort | Std::SortByKey => {
                 unreachable!("handled above")
             }
             Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
@@ -2622,7 +2627,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "count" => Std::Len,
                     "copied" | "cloned" => Std::Same,
                     "collect" if collects_string() => Std::CollectString,
-                    "collect" => Std::Same,
+                    "collect" => Std::Collect,
                     _ => return None,
                 });
             }
@@ -2660,7 +2665,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
-            "from_str" if arguments => Std::FmtStr,
+            "from_str" | "from_str_nonconst" if arguments => Std::FmtStr,
             "new" if arguments => Std::FmtNew,
             "new_display" if argument => Std::FmtDisplay,
             "new_debug" if argument => Std::FmtDebug,
@@ -3544,6 +3549,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 method(items, "reduce", vec![f, Expr::int(0)])
             }
             Std::CollectString => method(items, "join", vec![Expr::str("")]),
+            // A new `Vec`: an adapter's result is a new array already, and the
+            // array an iterator started from is copied, so changing one of
+            // them doesn't change the other.
+            Std::Collect => {
+                let fresh = match &items.kind {
+                    js::ExprKind::Call(callee, _) => match &callee.kind {
+                        js::ExprKind::Member(_, name) => {
+                            ["map", "filter", "slice", "toReversed", "split", "from"].contains(&name.as_str())
+                        }
+                        js::ExprKind::Var(name) => name == "$range",
+                        _ => false,
+                    },
+                    _ => false,
+                };
+                if fresh { items } else { method(items, "slice", vec![]) }
+            }
             Std::Position => {
                 self.runtime.insert(Helper::Position);
                 Expr::call(Expr::var("$position"), vec![items, next()])

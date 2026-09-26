@@ -46,6 +46,13 @@ pub fn backwards(s: &str) -> String {
     s.chars().rev().collect()
 }
 
+/// `collect` makes a new `Vec`: sorting it leaves the original as it was.
+pub fn sorted_copy(v: Vec<i32>) -> (Vec<i32>, Vec<i32>) {
+    let mut copy: Vec<i32> = v.iter().copied().collect();
+    copy.sort();
+    (v, copy)
+}
+
 pub fn sorted(v: &[i32]) -> Vec<i32> {
     let mut w = v.to_vec();
     w.sort();
