@@ -3,7 +3,8 @@
 // copy only where it could be told apart from the value: something changes
 // one of them, or a hand-written `clone` makes something else. A
 // hand-written `eq` decides wherever it is, and a `fmt` returns what it
-// writes. An `Iterator` is a JS iterator, and an `Ordering` is -1, 0 or 1.
+// writes. An `Iterator` is a JS iterator, an `Ordering` is -1, 0 or 1, and
+// `{:?}` shows a value by its type.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -506,4 +507,72 @@ pub fn more_orderings() -> (bool, bool, bool, Vec<u32>, bool, u32) {
         in_order(&"abc", &"abd"),
         by_key[0].major,
     )
+}
+
+/// `Debug` (ADR 0060): `{:?}` by the type, as Rust shows it. A derived one is
+/// a function like any `fmt`, left out unless something shows the type.
+#[derive(Debug, Clone, Copy)]
+pub struct Pos {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug)]
+pub struct Dims(pub u32, pub u32);
+
+#[derive(Debug)]
+pub struct Nothing;
+
+#[derive(Debug)]
+pub enum Glyph {
+    Dot,
+    Ring(f64),
+    Box { w: u32, h: u32 },
+}
+
+#[derive(Debug)]
+pub struct Six {
+    pub a: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub f: char,
+}
+
+#[derive(Debug)]
+pub struct Boxed<T> {
+    pub item: T,
+}
+
+#[derive(Debug)]
+pub struct NeverShown {
+    pub n: u32,
+}
+
+pub struct Hidden;
+
+impl fmt::Debug for Hidden {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("<hidden>")
+    }
+}
+
+pub fn debugged<T: fmt::Debug>(x: &T) -> String {
+    format!("{x:?}")
+}
+
+pub fn debugs(n: u32) -> Vec<String> {
+    let p = Pos { x: n as f64, y: -2.5 };
+    let r: Result<u32, String> = if n > 1 { Ok(n) } else { Err("small".to_string()) };
+    vec![
+        format!("{:?}", p),
+        format!("{:?} {:?} {:?}", Dims(n, 2), Nothing, Glyph::Dot),
+        format!("{:?} {:?}", Glyph::Ring(1.5), Glyph::Box { w: n, h: 3 }),
+        format!("{:?}", Six { a: 1, b: 2, c: 3, d: 4, e: 5, f: 'x' }),
+        format!("{:?} {:?}", Boxed { item: p }, Boxed { item: Some("s") }),
+        format!("{:?} {:?} {:?} {:?}", Some(1.0), None::<u32>, (n, "a", '\''), (5,)),
+        format!("{:?} {:?} {:?}", vec![p, p], r, n.cmp(&1)),
+        format!("{:?} {}", Hidden, debugged(&vec![Some(Dims(3, 4))])),
+    ]
 }

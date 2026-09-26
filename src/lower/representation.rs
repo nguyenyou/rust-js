@@ -468,6 +468,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return None;
             }
             ty::Adt(..) if self.is_js_object(ty) => return None,
+            // `dyn Debug` is the string it shows (ADR 0060).
+            ty::Dynamic(..) if self.is_dyn_debug(ty) => return None,
             // A `HashMap` or `HashSet` (ADR 0059): keys JS compares by value.
             ty::Adt(_, args) if self.is_map(ty) => {
                 let key = args.type_at(0);

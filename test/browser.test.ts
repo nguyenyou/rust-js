@@ -44,7 +44,7 @@ test("a failing test fails the way Rust's would", () => {
   expect([output.match(/(\d+) pass/)?.[1], output.match(/(\d+) skip/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual(["3", "1", "4"]);
   // `assert!` with a message; `assert_eq!` showing both sides, as Rust does.
   expect(output).toContain("error: n was 3");
-  expect(output).toContain("error: assertion `left == right` failed\n  left: { x: 1, y: 2 }\n right: { x: 1, y: 3 }");
+  expect(output).toContain("error: assertion `left == right` failed\n  left: Point { x: 1, y: 2 }\n right: Point { x: 1, y: 3 }");
   // `#[should_panic]`: the wrong message, and no panic at all.
   expect(output).toContain('panic message: "\\"something\\" happened"\n expected substring: "nope"');
   expect(output).toContain("error: test did not panic as expected");
@@ -73,7 +73,7 @@ test("in real browsers, with Playwright Test on Bun", () => {
   expect([exit, output.match(/(\d+) passed/)?.[1]], output).toEqual([0, "8"]);
   const failing = inBrowsers("playwright", ["target/browser-tests/asserts/asserts.test.js"]);
   expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "4", "1"]);
-  expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: { x: 1, y: 2 }");
+  expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: Point { x: 1, y: 2 }");
 }, 120_000);
 
 test("in real browsers, with Vitest's browser mode", () => {

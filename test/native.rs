@@ -206,6 +206,9 @@ fn main() {
     case("std_traits.orderings", &[], std_traits::orderings);
     case("std_traits.partial_orderings", &[], std_traits::partial_orderings);
     case("std_traits.more_orderings", &[], std_traits::more_orderings);
+    for n in [0, 1, 7] {
+        case("std_traits.debugs", &[n], || std_traits::debugs(n as u32));
+    }
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

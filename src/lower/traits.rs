@@ -22,6 +22,7 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_lang_item(id, LangItem::PartialOrd)
         || tcx.is_diagnostic_item(sym::Ord, id)
         || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
+        || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
 
@@ -229,9 +230,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
         let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
         let display = tr.def_id == self.display_trait();
+        let debug = tr.def_id == self.debug_trait();
         let ord = tr.def_id == self.ord_trait();
         let partial_ord = tr.def_id == self.partial_ord_trait();
-        if (default || clone || eq || display || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
+        if (default || clone || eq || display || debug || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
+            if debug {
+                let mut body = Vec::new();
+                let shown = self.debug_string(Expr::var("value"), ty, span)?;
+                body.push(StmtKind::Return(Some(shown)).at(js::Span::NONE));
+                let fmt = Expr::arrow(vec!["value".into()], body);
+                return Ok(Expr::object(vec![Prop::Field("fmt".into(), fmt)]));
+            }
             if ord || partial_ord {
                 let (name, compare) = if ord {
                     ("cmp", self.cmp_fn(ty, false, span)?)
@@ -431,6 +440,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<js::Stmt>,
     ) -> R<Expr> {
+        // A `&dyn Debug` is the string it shows (ADR 0060).
+        if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
+            return self.debug_string(value, self.pointee(source), span);
+        }
         if self.dynamic_trait(target).is_none() {
             return Ok(value);
         }

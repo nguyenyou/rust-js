@@ -35,9 +35,12 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
             // and so is one with `#[rust_js::link_name]` (ADR 0039).
             DefKind::Fn => !is_binding(tcx, def_id.to_def_id()),
             // A method of an `impl Type` block (ADR 0047).
+            // A derived impl's is never called, but a derived `Debug`'s is
+            // how `{:?}` shows its type (ADR 0060).
             DefKind::AssocFn => {
+                let parent = tcx.parent(def_id.to_def_id());
                 tcx.hir_maybe_body_owned_by(def_id).is_some()
-                    && !tcx.is_automatically_derived(tcx.parent(def_id.to_def_id()))
+                    && (!tcx.is_automatically_derived(parent) || derived_debug(tcx, parent))
                     && !is_binding(tcx, def_id.to_def_id())
             }
             DefKind::Closure => true,
@@ -54,6 +57,9 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
 /// What one pass of lowering every body produces (see `lower_crate`).
 #[derive(Default)]
 struct Pass {
+    /// Which functions each item names: to leave out a derived `Debug` no
+    /// one uses (ADR 0060).
+    uses: Vec<(DefId, DefId)>,
     functions: HashMap<LocalModDefId, Vec<js::Function>>,
     namespaces: HashMap<LocalModDefId, Vec<js::Namespace>>,
     runtime: HashMap<LocalModDefId, HashSet<Helper>>,
@@ -102,7 +108,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .definitions()
         .filter(|&id| {
             matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
-                && !tcx.is_automatically_derived(id.to_def_id())
+                && (!tcx.is_automatically_derived(id.to_def_id()) || derived_debug(tcx, id.to_def_id()))
         })
         .map(|id| id.to_def_id())
         .collect();
@@ -224,7 +230,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     let no_body = rustc_middle::thir::Thir::new(rustc_middle::thir::BodyTy::Const(tcx.types.unit));
     // Every function body, lowered with these aliases and reserved names.
     let lower_all = |aliases: &HashMap<LocalModDefId, HashMap<LocalModDefId, String>>,
-                     taken: &HashMap<LocalModDefId, HashSet<String>>|
+                     taken: &HashMap<LocalModDefId, HashSet<String>>,
+                     unused: &HashSet<DefId>|
      -> Pass {
         let mut pass = Pass::default();
         let crate_facts = CrateFacts {
@@ -237,12 +244,14 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             trait_impls: &trait_impls,
             references: RefCell::new(HashSet::new()),
             package_uses: RefCell::new(HashSet::new()),
+            uses: RefCell::new(Vec::new()),
         };
         for (def_id, body) in bodies
             .iter()
             .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
             .map(|b| (b.def_id.to_def_id(), Some(*b)))
             .chain(dictionaries.iter().map(|id| (*id, None)))
+            .filter(|(def_id, _)| !unused.contains(def_id))
         {
             let module = fns[&def_id].module;
             let file = module_file(tcx, module);
@@ -268,6 +277,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 jsx: false,
                 writer: None,
                 discarded: false,
+                item: def_id,
             };
             let result = match body {
                 Some(body) => cx.lower_fn(body),
@@ -341,6 +351,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             }
         }
         pass.references = crate_facts.references.into_inner();
+        pass.uses = crate_facts.uses.into_inner();
         pass.package_uses = crate_facts.package_uses.into_inner();
         pass
     };
@@ -353,10 +364,30 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // output is a second pass's, reserving only those (unless all are used).
     let mut every_taken = taken.clone();
     let every = assign_aliases(&mut every_taken, &|_, _| true);
-    let first = lower_all(&every, &every_taken);
+    let first = lower_all(&every, &every_taken, &HashSet::new());
     if first.failed {
         return None;
     }
+    // A derived `Debug` is left out unless something that isn't one uses it,
+    // or uses one that's used (ADR 0060).
+    let derived: HashSet<DefId> = trait_impls
+        .iter()
+        .filter(|&&id| tcx.is_automatically_derived(id))
+        .flat_map(|&id| std::iter::once(id).chain(tcx.associated_item_def_ids(id).iter().copied()))
+        .collect();
+    let mut reached: HashSet<DefId> = HashSet::new();
+    let mut todo: Vec<DefId> = first
+        .uses
+        .iter()
+        .filter(|(from, _)| !derived.contains(from))
+        .map(|&(_, to)| to)
+        .collect();
+    while let Some(id) = todo.pop() {
+        if reached.insert(id) {
+            todo.extend(first.uses.iter().filter(|(from, _)| *from == id).map(|&(_, to)| to));
+        }
+    }
+    let unused: HashSet<DefId> = derived.difference(&reached).copied().collect();
     let used: HashSet<(LocalModDefId, LocalModDefId)> = first
         .references
         .iter()
@@ -364,7 +395,11 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .collect();
     let all_used = used.len() == modules.len() * (modules.len() - 1);
     let aliases = assign_aliases(&mut taken, &|from, to| used.contains(&(from, to)));
-    let mut pass = if all_used { first } else { lower_all(&aliases, &taken) };
+    let mut pass = if all_used && unused.is_empty() {
+        first
+    } else {
+        lower_all(&aliases, &taken, &unused)
+    };
     if pass.failed {
         return None;
     }
@@ -793,6 +828,16 @@ fn binds_ref_mut(pat: &rustc_middle::thir::Pat<'_>) -> bool {
         }
     });
     found
+}
+
+/// A `#[derive(Debug)]` impl: lowered, since it's how `{:?}` shows its type.
+pub(super) fn derived_debug(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    tcx.is_automatically_derived(id)
+        && matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
+        && tcx.is_diagnostic_item(
+            Symbol::intern("Debug"),
+            tcx.impl_trait_ref(id).instantiate_identity().def_id,
+        )
 }
 
 /// The `Vec` types something takes `&mut` of: `push`, `sort`, `v[i] = x`

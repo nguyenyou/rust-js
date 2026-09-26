@@ -38,6 +38,8 @@ pub enum Helper {
     PartialCmp,
     ToFixed,
     DebugF64,
+    DebugChar,
+    DebugFields,
     Plus,
     ZeroPad,
     Pad,
@@ -211,6 +213,23 @@ function $debugF64(value) {
   }
   const text = $displayF64(value);
   return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
+}
+"#
+            }
+            // `{:?}` of a `char`: in single quotes, escaped as Rust escapes it.
+            Helper::DebugChar => {
+                r#"
+function $debugChar(c) {
+  return "'" + (c === "'" ? "\\'" : c === '"' ? '"' : JSON.stringify(c).slice(1, -1)) + "'";
+}
+"#
+            }
+            // A derived `Debug` of a struct with more than five fields: its
+            // fields' names, and their strings (ADR 0060).
+            Helper::DebugFields => {
+                r#"
+function $debugFields(name, fields, values) {
+  return name + " { " + fields.map((field, i) => field + ": " + values[i]).join(", ") + " }";
 }
 "#
             }
@@ -512,10 +531,11 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
             }
             Helper::AssertFailed => {
                 r#"
+// `left` and `right` are their `{:?}` strings already (ADR 0060).
 function $assertFailed(kind, left, right, message) {
   const op = kind === "Eq" ? "==" : kind === "Ne" ? "!=" : "matches";
   const why = message === undefined ? "" : ": " + message;
-  throw new Error("assertion `left " + op + " right` failed" + why + "\n  left: " + $debug(left) + "\n right: " + $debug(right));
+  throw new Error("assertion `left " + op + " right` failed" + why + "\n  left: " + left + "\n right: " + right);
 }
 "#
             }

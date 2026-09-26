@@ -134,16 +134,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(span, &format!("a precision for a `{ty}`")));
             }
             Std::FmtDisplay => self.display_string(value, ty, span)?,
-            // `{:?}` of an `f64` keeps a `.0`, and uses an exponent when
-            // it's very small or large.
-            _ if num == Some(Num::F64) => {
-                self.runtime.extend([Helper::DebugF64, Helper::DisplayF64]);
-                Expr::call(Expr::var("$debugF64"), vec![value])
-            }
-            _ => {
-                self.runtime.insert(Helper::Debug);
-                Expr::call(Expr::var("$debug"), vec![value])
-            }
+            // `{:#?}` breaks lines and indents: not yet.
+            _ if spec.alternate => return Err(self.unsupported(span, "`{:#?}`")),
+            // By the type (ADR 0060): `1.0`, `Some(1)`, `Point { x: 1.0 }`.
+            _ => self.debug_string(value, ty, span)?,
         };
         let text = if spec.plus && num.is_some() {
             self.runtime.insert(Helper::Plus);

@@ -874,3 +874,14 @@ test("HashMap and HashSet are a JS Map and Set", async () => {
   expect(js).toContain("$orInsert(groups, key, []).push(i);");
   expect(js).toContain("const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));");
 });
+
+// ADR 0060: `{:?}` by the type, and a derived `Debug` is a function of its own.
+test("a derived Debug is a function, left out unless something shows the type", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  expect(js).toContain('function posDebug_fmt(pos) {\n  return "Pos { x: " + $debugF64(pos.x) + ", y: " + $debugF64(pos.y) + " }";\n}');
+  expect(js).toContain('  if (glyph === "Dot") {\n    return "Dot";\n  } else if (glyph.TAG === "Ring") {\n    return "Ring(" + $debugF64(glyph._0) + ")";');
+  // Generic: `T`'s `fmt`, from a dictionary.
+  expect(js).toContain("export function debugged(x, TDebug) {\n  return TDebug.fmt(x);");
+  // Derived, and never shown: not in the JS at all.
+  expect(js).not.toContain("neverShown");
+});

@@ -263,8 +263,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             let mut list = args[..3].to_vec();
             list.extend(message);
-            let values = self.operands(&list, out)?;
-            self.runtime.extend([Helper::AssertFailed, Helper::Debug]);
+            let mut values = self.operands(&list, out)?;
+            // The two values' `{:?}`, by their types (ADR 0060).
+            for i in [1, 2] {
+                let ty = self.thir[args[i]].ty;
+                let value = std::mem::replace(&mut values[i], Expr::undefined());
+                values[i] = self.debug_string(value, ty, span)?;
+            }
+            self.runtime.insert(Helper::AssertFailed);
             return Ok(Expr::call(Expr::var("$assertFailed"), values));
         }
         let mut values = self.operands(args, out)?.into_iter();
@@ -553,8 +559,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.display_string(arg(), ty, span)?
             }
             Std::FmtDebug => {
-                self.runtime.insert(Helper::Debug);
-                Expr::call(Expr::var("$debug"), vec![arg()])
+                let ty = generic_args.types().next().expect("`new_debug` has a type argument");
+                self.debug_string(arg(), ty, span)?
             }
             // Only in a `format_args!` it recognizes whole (ADR 0058).
             Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
@@ -626,6 +632,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `f`, or `util.f` in another module; a method, `Counter.tick` or
     /// `util.Counter.tick` (ADR 0047).
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
+        self.krate.uses.borrow_mut().push((self.item, def_id));
         let target = &self.krate.fns[&def_id];
         if target.module != self.module {
             self.krate.references.borrow_mut().insert((self.module, def_id));

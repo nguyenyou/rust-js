@@ -137,6 +137,23 @@ function $partialCmp(a, b) {
   return a < b ? -1 : a > b ? 1 : a === b ? 0 : undefined;
 }
 
+function $debugF64(value) {
+  const size = Math.abs(value);
+  if (Number.isFinite(value) && size !== 0 && (size < 1e-4 || size >= 1e16)) {
+    return value.toExponential().replace("e+", "e");
+  }
+  const text = $displayF64(value);
+  return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
+}
+
+function $debugChar(c) {
+  return "'" + (c === "'" ? "\\'" : c === '"' ? '"' : JSON.stringify(c).slice(1, -1)) + "'";
+}
+
+function $debugFields(name, fields, values) {
+  return name + " { " + fields.map((field, i) => field + ": " + values[i]).join(", ") + " }";
+}
+
 function $cmpIn(names, a, b) {
   return $cmp(names.indexOf(a), names.indexOf(b));
 }
@@ -180,7 +197,7 @@ function $max(items) {
   return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
 }
 
-var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay, $wordPartialOrd, $wordOrd;
+var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay, $wordPartialOrd, $wordOrd, $posDebug, $hiddenDebug;
 
 export function fresh(TDefault) {
   return TDefault.default();
@@ -606,6 +623,56 @@ export function more_orderings() {
   ];
 }
 
+export function debugged(x, TDebug) {
+  return TDebug.fmt(x);
+}
+
+export function debugs(n) {
+  const p = {
+    x: n,
+    y: -2.5
+  };
+  const r = n > 1 ? {
+    TAG: "Ok",
+    _0: n
+  } : {
+    TAG: "Err",
+    _0: "small"
+  };
+  return [
+    posDebug_fmt(p),
+    dimsDebug_fmt([n, 2]) + " " + nothingDebug_fmt(undefined) + " " + glyphDebug_fmt("Dot"),
+    glyphDebug_fmt({
+      TAG: "Ring",
+      _0: 1.5
+    }) + " " + glyphDebug_fmt({
+      TAG: "Box",
+      w: n,
+      h: 3
+    }),
+    sixDebug_fmt({
+      a: 1,
+      b: 2,
+      c: 3,
+      d: 4,
+      e: 5,
+      f: "x"
+    }),
+    boxedDebug_fmt({ item: p }, posDebug()) + " " + boxedDebug_fmt({ item: "s" }, { fmt: (value) => value == null ? "None" : "Some(" + JSON.stringify(value) + ")" }),
+    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " " + ((tuple) => "(" + String(tuple[0]) + ", " + JSON.stringify(tuple[1]) + ", " + $debugChar(tuple[2]) + ")")([
+      n,
+      "a",
+      "'"
+    ]) + " " + ((tuple) => "(" + String(tuple[0]) + ",)")([5]),
+    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "]" + " " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + JSON.stringify(r._0) + ")") + " " + [
+      "Less",
+      "Equal",
+      "Greater"
+    ][$cmp(n, 1) + 1],
+    hiddenDebug_fmt(undefined) + " " + debugged([[3, 4]], { fmt: (value) => "[" + value.map((item) => item == null ? "None" : "Some(" + dimsDebug_fmt(item) + ")").join(", ") + "]" })
+  ];
+}
+
 function configDefault_default() {
   return {
     retries: 3,
@@ -715,6 +782,56 @@ function wordOrd_cmp(word, other) {
   }
 }
 
+function posDebug_fmt(pos) {
+  return "Pos { x: " + $debugF64(pos.x) + ", y: " + $debugF64(pos.y) + " }";
+}
+
+function dimsDebug_fmt(dims) {
+  return "Dims(" + String(dims[0]) + ", " + String(dims[1]) + ")";
+}
+
+function nothingDebug_fmt(nothing) {
+  return "Nothing";
+}
+
+function glyphDebug_fmt(glyph) {
+  if (glyph === "Dot") {
+    return "Dot";
+  } else if (glyph.TAG === "Ring") {
+    return "Ring(" + $debugF64(glyph._0) + ")";
+  } else {
+    return "Box { w: " + String(glyph.w) + ", h: " + String(glyph.h) + " }";
+  }
+}
+
+function sixDebug_fmt(six) {
+  const names = [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f"
+  ];
+  const values = [
+    String(six.a),
+    String(six.b),
+    String(six.c),
+    String(six.d),
+    String(six.e),
+    $debugChar(six.f)
+  ];
+  return $debugFields("Six", names, values);
+}
+
+function boxedDebug_fmt(boxed, TDebug) {
+  return "Boxed { item: " + TDebug.fmt(boxed.item) + " }";
+}
+
+function hiddenDebug_fmt(hidden) {
+  return "<hidden>";
+}
+
 export function configDefault() {
   if ($configDefault === undefined) {
     $configDefault = { default: configDefault_default };
@@ -796,5 +913,19 @@ export function wordOrd() {
     };
   }
   return $wordOrd;
+}
+
+export function posDebug() {
+  if ($posDebug === undefined) {
+    $posDebug = { fmt: posDebug_fmt };
+  }
+  return $posDebug;
+}
+
+export function hiddenDebug() {
+  if ($hiddenDebug === undefined) {
+    $hiddenDebug = { fmt: hiddenDebug_fmt };
+  }
+  return $hiddenDebug;
 }
 //# sourceMappingURL=std_traits.js.map

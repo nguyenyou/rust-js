@@ -63,7 +63,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   or a call of a hand-written `clone` ([ADR 0052](docs/decisions/0052-std-trait-impls.md)). `==` is `===`,
   or `$eq(a, b)` field by field, and a hand-written `eq` is called wherever it's inside ([ADR 0053](docs/decisions/0053-partial-eq.md)).
 - A `Display` impl's `fmt` returns the string it writes: `write!(f, "({}, {})", self.x, self.y)` is
-  `return "(" + String(point.x) + ", " + String(point.y) + ")"` ([ADR 0054](docs/decisions/0054-display.md)).
+  `return "(" + String(point.x) + ", " + String(point.y) + ")"` ([ADR 0054](docs/decisions/0054-display.md)). `{:?}` is
+  written from the type, as Rust shows it: `Point { x: 1.0 }`, `Some(3)`, `(1, "a")` ([ADR 0060](docs/decisions/0060-debug.md)).
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.

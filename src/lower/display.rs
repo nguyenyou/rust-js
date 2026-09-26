@@ -6,6 +6,7 @@ use super::representation::Num;
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
+use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
@@ -69,6 +70,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         lowered?;
         // Each way through writes once: each is a `return` of what it writes.
         if let Some(returns) = as_returns(&body_out, &name) {
+            out.extend(returns);
+            return Ok(js_params);
+        }
+        // Declarations, then one write: they, then `return` of what it writes.
+        if let Some((last, before)) = body_out.split_last()
+            && before
+                .iter()
+                .all(|s| matches!(s.kind, StmtKind::Const(..) | StmtKind::Let(..)))
+            && let Some(returns) = as_returns(std::slice::from_ref(last), &name)
+        {
+            out.extend(before.iter().cloned());
             out.extend(returns);
             return Ok(js_params);
         }
@@ -136,8 +148,47 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.display_string(values.remove(0), ty, span)?
             }
             "fmt" if is_trait("Debug") => {
-                self.runtime.insert(Helper::Debug);
-                Expr::call(Expr::var("$debug"), vec![values.remove(0)])
+                let ty = generic_args.type_at(0);
+                self.debug_string(values.remove(0), ty, span)?
+            }
+            // More than five fields: arrays of their names and strings.
+            "debug_struct_fields_finish" if on_formatter => {
+                self.runtime.insert(Helper::DebugFields);
+                Expr::call(Expr::var("$debugFields"), values)
+            }
+            "debug_tuple_fields_finish" if on_formatter => {
+                let (type_name, items) = (values.remove(0), values.remove(0));
+                let joined = Expr::call(Expr::member(items, "join"), vec![Expr::str(", ")]);
+                join(vec![type_name, Expr::str("("), joined, Expr::str(")")])
+            }
+            // A derived `Debug`'s body (ADR 0060): its fields are strings
+            // already, each a `&dyn Debug` (`debug_dyn`).
+            name if on_formatter && name.starts_with("debug_struct_field") && name.ends_with("_finish") => {
+                let type_name = values.remove(0);
+                let mut parts = vec![type_name, Expr::str(" { ")];
+                let mut first = true;
+                while values.len() >= 2 {
+                    let (field, value) = (values.remove(0), values.remove(0));
+                    if !first {
+                        parts.push(Expr::str(", "));
+                    }
+                    first = false;
+                    parts.extend([field, Expr::str(": "), value]);
+                }
+                parts.push(Expr::str(" }"));
+                join(parts)
+            }
+            name if on_formatter && name.starts_with("debug_tuple_field") && name.ends_with("_finish") => {
+                let type_name = values.remove(0);
+                let mut parts = vec![type_name, Expr::str("(")];
+                for (i, value) in values.drain(..).enumerate() {
+                    if i > 0 {
+                        parts.push(Expr::str(", "));
+                    }
+                    parts.push(value);
+                }
+                parts.push(Expr::str(")"));
+                join(parts)
             }
             _ if self.krate.fns.contains_key(&def_id) && trait_id.is_none() => {
                 values.extend(self.evidence_args(def_id, generic_args, span)?);
@@ -204,6 +255,191 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")))
     }
 
+    pub(super) fn debug_trait(&self) -> DefId {
+        self.tcx
+            .get_diagnostic_item(Symbol::intern("Debug"))
+            .expect("std has `Debug`")
+    }
+
+    /// Is `ty` `dyn Debug`, which rust-js holds as the string it shows
+    /// (ADR 0060)? A derived `Debug` hands its fields to the formatter so.
+    pub(super) fn is_dyn_debug(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.peel_refs().kind(), ty::Dynamic(traits, ..)
+            if traits.principal_def_id() == Some(self.debug_trait()))
+    }
+
+    /// `{:?}` of a `ty` value (ADR 0060), as Rust shows it: `Some(1)`,
+    /// `(1, "a")`, `[1.0, 2.5]`, a call of a `Debug` impl of the crate's own,
+    /// derived or not, or `TDebug.fmt(x)` in generic code.
+    pub(super) fn debug_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        let ty = ty.peel_refs();
+        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let num = Num::of(ty);
+        if self.is_dyn_debug(ty) {
+            return Ok(value);
+        }
+        if num == Some(Num::F64) {
+            self.runtime.extend([Helper::DebugF64, Helper::DisplayF64]);
+            return Ok(Expr::call(Expr::var("$debugF64"), vec![value]));
+        }
+        if num.is_some() || ty.is_bool() {
+            return Ok(Expr::call(Expr::var("String"), vec![value]));
+        }
+        if ty.is_unit() {
+            return Ok(Expr::str("()"));
+        }
+        if ty.is_char() {
+            self.runtime.insert(Helper::DebugChar);
+            return Ok(Expr::call(Expr::var("$debugChar"), vec![value]));
+        }
+        if self.is_string_like(ty) {
+            return Ok(Expr::call(Expr::member(Expr::var("JSON"), "stringify"), vec![value]));
+        }
+        if self.is_lang_adt(ty, LangItem::OrderingEnum) {
+            let names = ["Less", "Equal", "Greater"];
+            if let Some(n) = value.as_int().filter(|n| (-1..=1).contains(n)) {
+                return Ok(Expr::str(names[(n + 1) as usize]));
+            }
+            let names = Expr::array(names.into_iter().map(Expr::str).collect());
+            return Ok(Expr::index(names, Expr::bin(Op::Add, value, Expr::int(1))));
+        }
+        let debug = self.debug_trait();
+        if let ty::Param(_) = ty.kind() {
+            let tr = ty::TraitRef::new(self.tcx, debug, [ty]);
+            let dictionary = self
+                .evidence_for(tr)
+                .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
+            return Ok(Expr::call(Expr::member(dictionary, "fmt"), vec![value]));
+        }
+        // The crate's own, hand-written or derived.
+        if self.has_user_impl(debug, ty) {
+            let fmt = self.tcx.associated_item_def_ids(debug)[0];
+            let args = self.args_of(debug, ty);
+            return self.impl_call(fmt, args, vec![value], span);
+        }
+        match ty.kind() {
+            _ if let Some(inner) = self.option_of(ty) => {
+                let inside = if self.boxed_payload(inner) {
+                    self.some_value(Expr::var("value"))
+                } else {
+                    Expr::var("value")
+                };
+                let shown = self.debug_string(inside, inner, span)?;
+                let some = join(vec![Expr::str("Some("), shown, Expr::str(")")]);
+                let none = Expr::bin(Op::LooseEq, Expr::var("value"), Expr::null());
+                let f = Expr::arrow(
+                    vec!["value".into()],
+                    vec![StmtKind::Return(Some(Expr::cond(none, Expr::str("None"), some))).at(js::Span::NONE)],
+                );
+                Ok(self.applied(f, value))
+            }
+            ty::Tuple(tys) => {
+                let tys: Vec<Ty<'tcx>> = tys.to_vec();
+                let mut parts = vec![Expr::str("(")];
+                for (i, &t) in tys.iter().enumerate() {
+                    if i > 0 {
+                        parts.push(Expr::str(", "));
+                    }
+                    parts.push(self.debug_string(Expr::index(Expr::var("tuple"), Expr::int(i as i128)), t, span)?);
+                }
+                if tys.len() == 1 {
+                    parts.push(Expr::str(","));
+                }
+                parts.push(Expr::str(")"));
+                let f = Expr::arrow(
+                    vec!["tuple".into()],
+                    vec![StmtKind::Return(Some(join(parts))).at(js::Span::NONE)],
+                );
+                Ok(self.applied(f, value))
+            }
+            ty::Array(item, _) | ty::Slice(item) => self.debug_items(value, *item, "[", "]", span),
+            ty::Adt(_, args) if std("Vec") => self.debug_items(value, args.type_at(0), "[", "]", span),
+            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.debug_string(value, args.type_at(0), span),
+            ty::Adt(_, args) if std("Cell") || std("RefCell") => {
+                let name = if std("Cell") {
+                    "Cell { value: "
+                } else {
+                    "RefCell { value: "
+                };
+                let shown = self.debug_string(Expr::member(value, "value"), args.type_at(0), span)?;
+                Ok(join(vec![Expr::str(name), shown, Expr::str(" }")]))
+            }
+            ty::Adt(_, args) if std("HashSet") => self.debug_items(value, args.type_at(0), "{", "}", span),
+            ty::Adt(_, args) if std("HashMap") => {
+                let (key, item) = (args.type_at(0), args.type_at(1));
+                let key = self.debug_string(Expr::var("key"), key, span)?;
+                let item = self.debug_string(Expr::var("value"), item, span)?;
+                let pair = join(vec![key, Expr::str(": "), item]);
+                let f = Expr::arrow(
+                    vec![js::Pattern::Array(vec![Some("key".into()), Some("value".into())])],
+                    vec![StmtKind::Return(Some(pair)).at(js::Span::NONE)],
+                );
+                let entries = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![value]);
+                let shown = Expr::call(
+                    Expr::member(Expr::call(Expr::member(entries, "map"), vec![f]), "join"),
+                    vec![Expr::str(", ")],
+                );
+                Ok(join(vec![Expr::str("{"), shown, Expr::str("}")]))
+            }
+            ty::Adt(_, args) if std("Result") => {
+                let inside = || Expr::member(Expr::var("result"), "_0");
+                let ok = self.debug_string(inside(), args.type_at(0), span)?;
+                let err = self.debug_string(inside(), args.type_at(1), span)?;
+                let f = Expr::arrow(
+                    vec!["result".into()],
+                    vec![
+                        StmtKind::Return(Some(Expr::cond(
+                            Expr::bin(Op::Eq, Expr::member(Expr::var("result"), "TAG"), Expr::str("Ok")),
+                            join(vec![Expr::str("Ok("), ok, Expr::str(")")]),
+                            join(vec![Expr::str("Err("), err, Expr::str(")")]),
+                        )))
+                        .at(js::Span::NONE),
+                    ],
+                );
+                Ok(self.applied(f, value))
+            }
+            _ => Err(self.unsupported(span, &format!("`{{:?}}` of a `{ty}`"))),
+        }
+    }
+
+    /// A sequence's `{:?}`: `"[" + items.map((item) => ..).join(", ") + "]"`.
+    fn debug_items(&mut self, items: Expr, item: Ty<'tcx>, open: &str, close: &str, span: Span) -> R<Expr> {
+        let shown = self.debug_string(Expr::var("item"), item, span)?;
+        let f = Expr::arrow(
+            vec!["item".into()],
+            vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
+        );
+        let items = if self.is_map(item) || open == "{" {
+            Expr::call(Expr::member(Expr::var("Array"), "from"), vec![items])
+        } else {
+            items
+        };
+        let joined = Expr::call(
+            Expr::member(Expr::call(Expr::member(items, "map"), vec![f]), "join"),
+            vec![Expr::str(", ")],
+        );
+        Ok(join(vec![Expr::str(open), joined, Expr::str(close)]))
+    }
+
+    /// `f(value)`, with a function that only returns written in place when
+    /// `value` is a variable: `value == null ? "None" : ..`.
+    fn applied(&mut self, f: Expr, value: Expr) -> Expr {
+        if let js::ExprKind::Arrow(params, body) = &f.kind
+            && let [js::Pattern::Name(name)] = params.as_slice()
+            && let [
+                Stmt {
+                    kind: StmtKind::Return(Some(result)),
+                    ..
+                },
+            ] = body.as_slice()
+            && value.reads_same()
+            && let Some(inlined) = result.substitute(&|n: &str| (n == name).then(|| value.clone()))
+        {
+            return inlined;
+        }
+        Expr::call(f, vec![value])
+    }
+
     /// `(value) => <its string>` for a dictionary's `fmt`, or the function
     /// itself: `String`, `$displayF64`.
     pub(super) fn display_fn(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
@@ -237,6 +473,27 @@ fn as_returns(body: &[Stmt], name: &str) -> Option<Vec<Stmt>> {
         _ => return None,
     };
     Some(vec![kind.at(stmt.span)])
+}
+
+/// `a + b + c`, with pieces that are constants joined first.
+fn join(parts: Vec<Expr>) -> Expr {
+    let mut folded: Vec<Expr> = Vec::new();
+    for part in parts {
+        match (folded.last_mut(), &part.kind) {
+            (
+                Some(Expr {
+                    kind: js::ExprKind::Str(before),
+                    ..
+                }),
+                js::ExprKind::Str(after),
+            ) => before.push_str(after),
+            _ => folded.push(part),
+        }
+    }
+    folded
+        .into_iter()
+        .reduce(|a, b| Expr::bin(Op::Add, a, b))
+        .unwrap_or_else(|| Expr::str(""))
 }
 
 fn is_var(e: &Expr, name: &str) -> bool {

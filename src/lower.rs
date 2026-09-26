@@ -206,6 +206,8 @@ struct CrateFacts<'a, 'tcx> {
     trait_impls: &'a [DefId],
     references: RefCell<HashSet<(LocalModDefId, DefId)>>,
     package_uses: RefCell<HashSet<(LocalModDefId, Export)>>,
+    /// Each item, and a function it names (ADR 0060).
+    uses: RefCell<Vec<(DefId, DefId)>>,
 }
 
 struct FnCx<'a, 'tcx> {
@@ -242,6 +244,8 @@ struct FnCx<'a, 'tcx> {
     /// The call being lowered is a statement of its own: its value isn't used,
     /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
     discarded: bool,
+    /// The item being lowered: what `fn_ref` records as using its target.
+    item: DefId,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {

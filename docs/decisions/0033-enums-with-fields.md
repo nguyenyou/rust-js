@@ -72,9 +72,8 @@ clones):
 
 ## Consequences
 
-- `{:?}` of an enum prints its JS shape: a variant without fields is a string
-  at run time, which `$debug` can't tell from a Rust string. Getting it right
-  needs the type at the `{:?}`.
+- `{:?}` of an enum is its derived `Debug`, written from its type (ADR 0060):
+  `Dot`, `Circle(1.5)`, `Rect { w: 2, h: 3 }`.
 - A `matches!` (a `match` of `pat => true, _ => false`) is its test alone:
   `s.TAG === "Circle"`.
 - `?` and `Result`'s methods came with ADR 0035. Casts of a fieldless enum
