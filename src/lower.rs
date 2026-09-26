@@ -888,7 +888,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let name = match param.pat.as_deref() {
                 Some(pat) => match &pat.kind {
                     PatKind::Binding { name, var, mode, subpattern: None, .. } => {
-                        self.check_by_value(*mode, pat.span)?;
+                        self.check_by_value(*mode, pat.ty, pat.span)?;
                         // `async fn f((a, b): ..)` takes `__arg0`, and takes it
                         // apart in its body (ADR 0029): named as in a plain `fn`.
                         let generated = name.as_str().strip_prefix("__arg").is_some_and(|n| n.parse::<u32>().is_ok());
@@ -1080,7 +1080,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let span = self.js_span(span);
         match &pat.kind {
             PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
-                self.check_by_value(*mode, pat.span)?;
+                self.check_by_value(*mode, *ty, pat.span)?;
                 self.check_value_ty(*ty, pat.span)?;
                 let mutable = mode.1 == Mutability::Mut;
                 match init {
@@ -1448,7 +1448,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match &pat.kind {
             PatKind::Wild => Ok(None),
             PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
-                self.check_by_value(*mode, pat.span)?;
+                self.check_by_value(*mode, *ty, pat.span)?;
                 bindings.push(Binding {
                     var: *var,
                     name: name.to_string(),
@@ -1477,10 +1477,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     None => present,
                 }))
             }
-            PatKind::Variant { adt_def, variant_index, subpatterns, .. } if subpatterns.is_empty() => {
-                let name = adt_def.variant(*variant_index).name.to_string();
-                Ok(Some(Expr::bin(Op::Eq, subject.clone(), Expr::str(name))))
+            // A variant (ADR 0013, 0033): its name, or its `TAG`, then its fields.
+            // An enum with one variant needs no test.
+            PatKind::Variant { adt_def, variant_index, subpatterns, .. } => {
+                let variant = adt_def.variant(*variant_index);
+                let name = Expr::str(variant.name.to_string());
+                let mut tests = Vec::new();
+                if adt_def.variants().len() > 1 {
+                    tests.push(match variant.fields.is_empty() {
+                        true => Expr::bin(Op::Eq, subject.clone(), name),
+                        false => Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), name),
+                    });
+                }
+                for field in subpatterns {
+                    let part = Expr::member(subject.clone(), variant_field(variant, field.field.as_usize()));
+                    tests.extend(self.pattern_test(&field.pattern, &part, bindings)?);
+                }
+                Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
             }
+            // Matching through a reference: the reference is the value (ADR 0023).
+            PatKind::Deref { subpattern, .. } => self.pattern_test(subpattern, subject, bindings),
             // A struct or tuple: every field must match.
             PatKind::Leaf { subpatterns } => {
                 let mut tests = Vec::new();
@@ -2202,7 +2218,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let mut derived = false;
         self.tcx.for_each_relevant_impl(partial_eq, ty, |imp| derived |= self.tcx.is_automatically_derived(imp));
-        derived && matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
+        derived && (matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_)) || matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()))
     }
 
     /// A `format_args!` template, decoded (its encoding is documented in
@@ -2475,10 +2491,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => Ok(Expr::undefined()),
             };
         }
-        if adt.adt_def.is_enum() {
-            if !is_fieldless_enum(adt.adt_def) {
-                return Err(self.unsupported(span, "enums with fields"));
-            }
+        // A variant without fields is its name (ADR 0013). One with fields is an
+        // object tagged with it, `{ TAG: "Circle", _0: r }` (ADR 0033), built
+        // below like a struct.
+        if adt.adt_def.is_enum() && variant.fields.is_empty() {
             return Ok(Expr::str(variant.name.to_string()));
         }
         if adt.adt_def.is_union() {
@@ -2517,7 +2533,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut given: HashMap<usize, Expr> =
             adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
 
-        let shape = self.shape(ty);
+        let tag = adt.adt_def.is_enum().then(|| variant.name.to_string());
+        let shape = match tag {
+            Some(_) => Shape::Object(self.variant_fields(variant, adt.args)),
+            None => self.shape(ty),
+        };
         let field_tys = match &shape {
             Shape::Object(fields) => fields.iter().map(|&(_, t)| t).collect(),
             Shape::Array(tys) => tys.clone(),
@@ -2533,10 +2553,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         Ok(match shape {
             Shape::Object(fields) => {
-                Expr::object(fields.into_iter().zip(items).map(|((name, _), v)| Prop::Field(name, v)).collect())
+                let tag = tag.map(|name| Prop::Field("TAG".into(), Expr::str(name)));
+                let fields = fields.into_iter().zip(items).map(|((name, _), v)| Prop::Field(name, v));
+                Expr::object(tag.into_iter().chain(fields).collect())
             }
             _ => Expr::array(items),
         })
+    }
+
+    /// An enum variant's fields as JS properties (ADR 0033): `_0`, `_1` for a
+    /// tuple variant, as in ReScript, and their names for a struct variant.
+    fn variant_fields(&self, variant: &ty::VariantDef, args: ty::GenericArgsRef<'tcx>) -> Vec<(String, Ty<'tcx>)> {
+        variant.fields.iter().enumerate().map(|(i, f)| (variant_field(variant, i), f.ty(self.tcx, args))).collect()
     }
 
     /// How a struct or tuple type looks in JS.
@@ -2790,6 +2818,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// The first type inside `ty` (or `ty` itself) that rust-js can't represent.
     fn unsupported_part(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+        self.unsupported_in(ty, &mut Vec::new())
+    }
+
+    /// `unsupported_part`, for a type inside the ones in `seen`. A type
+    /// inside itself (`Tree` in `Node(Box<Tree>, ..)`) is being checked
+    /// already, further out.
+    fn unsupported_in(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> Option<Ty<'tcx>> {
         if ty.is_bool() || ty.is_unit() || ty.is_str() || Num::of(ty).is_some() {
             return None;
         }
@@ -2820,16 +2855,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return None;
             }
-            ty::Ref(_, inner, Mutability::Not) => return self.unsupported_part(*inner),
+            ty::Ref(_, inner, Mutability::Not) => return self.unsupported_in(*inner, seen),
             // `&mut` to a JS object is the object; to anything else, it would
             // need a place to point at.
-            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_part(*inner),
-            ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_part(*elem),
+            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_in(*inner, seen),
+            ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_in(*elem, seen),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
             // An `Option` is its value or `undefined` (ADR 0030), so the value
             // itself mustn't be able to look like `None`.
             ty::Adt(..) if let Some(inner) = self.option_of(ty) => {
-                return if self.can_be_nullish(inner) { Some(ty) } else { self.unsupported_part(inner) };
+                return if self.can_be_nullish(inner) { Some(ty) } else { self.unsupported_in(inner, seen) };
             }
             // `format_args!`'s pieces are strings by the time JS sees them.
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::FormatArguments) || self.is_lang_adt(ty, LangItem::FormatArgument) => {
@@ -2843,20 +2878,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return Some(ty);
             }
-            ty::Adt(_, args) if self.is_std_wrapper(ty) => return args.types().next().and_then(|t| self.unsupported_part(t)),
+            ty::Adt(_, args) if self.is_std_wrapper(ty) => return args.types().next().and_then(|t| self.unsupported_in(t, seen)),
             _ => {}
         }
-        match (ty.kind(), self.shape(ty)) {
-            (ty::Adt(adt, _), _) if is_fieldless_enum(*adt) => None,
-            (_, Shape::Object(fields)) => fields.iter().find_map(|&(_, t)| self.unsupported_part(t)),
-            (_, Shape::Array(tys)) => tys.iter().find_map(|&t| self.unsupported_part(t)),
+        if seen.contains(&ty) {
+            return None;
+        }
+        seen.push(ty);
+        let found = match (ty.kind(), self.shape(ty)) {
+            // An enum with fields (ADR 0033): every variant's fields.
+            (ty::Adt(adt, args), _) if adt.is_enum() => {
+                let fields: Vec<Ty<'tcx>> = adt.all_fields().map(|f| f.ty(self.tcx, args)).collect();
+                fields.into_iter().find_map(|t| self.unsupported_in(t, seen))
+            }
+            (_, Shape::Object(fields)) => fields.iter().find_map(|&(_, t)| self.unsupported_in(t, seen)),
+            (_, Shape::Array(tys)) => tys.iter().find_map(|&t| self.unsupported_in(t, seen)),
             (ty::Adt(adt, _), Shape::Other) if adt.is_struct() => None, // a unit struct
             _ => Some(ty),
-        }
+        };
+        seen.pop();
+        found
     }
 
-    fn check_by_value(&self, mode: BindingMode, span: Span) -> R<()> {
-        if mode.0 == ByRef::No { Ok(()) } else { Err(self.unsupported(span, "`ref` bindings")) }
+    /// A binding by value, or by `ref`: a reference is the value itself
+    /// (ADR 0023), which rustc keeps from changing while it's borrowed. A `ref
+    /// mut` works where `&mut` does, to an object (ADR 0025).
+    fn check_by_value(&self, mode: BindingMode, ty: Ty<'tcx>, span: Span) -> R<()> {
+        match mode.0 {
+            ByRef::No | ByRef::Yes(_, Mutability::Not) => Ok(()),
+            ByRef::Yes(_, Mutability::Mut) if self.is_object(ty.peel_refs()) => Ok(()),
+            ByRef::Yes(_, Mutability::Mut) => Err(self.unsupported(span, "`ref mut` bindings to this type")),
+        }
     }
 
     /// A JS global or a path from one (`console.log`), or from an import
@@ -2979,7 +3031,12 @@ fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Option<Expr> {
                     None => Some(Expr::undefined()),
                 };
             }
-            is_fieldless_enum(*adt).then(|| Expr::str(variant.name.to_string()))
+            if fields.is_empty() {
+                return Some(Expr::str(variant.name.to_string()));
+            }
+            let values = all(fields)?;
+            let props = values.into_iter().enumerate().map(|(i, v)| Prop::Field(variant_field(variant, i), v));
+            Some(Expr::object(std::iter::once(Prop::Field("TAG".into(), Expr::str(variant.name.to_string()))).chain(props).collect()))
         }
         ty::Adt(adt, _) if adt.is_struct() => {
             let variant = adt.non_enum_variant();
@@ -2993,6 +3050,15 @@ fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Option<Expr> {
             }
         }
         _ => None,
+    }
+}
+
+/// The JS property for field `i` of an enum variant (ADR 0033): `_0` in a
+/// tuple variant, as in ReScript, and its name in a struct variant.
+fn variant_field(variant: &ty::VariantDef, i: usize) -> String {
+    match variant.ctor_kind() {
+        Some(CtorKind::Fn) => format!("_{i}"),
+        _ => variant.fields.iter().nth(i).expect("a field of this variant").name.to_string(),
     }
 }
 

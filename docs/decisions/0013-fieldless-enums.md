@@ -1,6 +1,7 @@
 # 0013. Fieldless enum variants are strings
 
-Status: Accepted
+Status: Accepted. Extended by [0033](0033-enums-with-fields.md): variants
+with fields are objects tagged with their names.
 
 ## Context
 

@@ -27,6 +27,7 @@ let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
+let enums: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -53,6 +54,8 @@ beforeAll(async () => {
   options = await import(join(target, "options.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
+  run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
+  enums = await import(join(target, "enums.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -111,6 +114,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "enums") {
+        return enums[path[1]](...c.args);
       }
       if (path[0] === "consts") {
         return JSON.parse(JSON.stringify(consts[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
@@ -324,6 +330,22 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   expect(js).toContain("  const module = load_compiler(start);\n  const sysroot = load_sysroot(start);");
   expect(js).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
   expect(js).toContain("  return t.toFixed(0) + \" ms\";");
+});
+
+// ADR 0033: enums with fields, in ReScript's shapes.
+test("enums with fields are tagged objects, as in ReScript", async () => {
+  const js = await Bun.file(join(target, "enums.js")).text();
+  // A variant without fields is its name; one with fields, `{ TAG, _0 }` or named fields.
+  expect(js).toContain('  return "Empty";');
+  expect(js).toContain('  return {\n    TAG: "Circle",\n    _0: r\n  };');
+  expect(js).toContain('  return {\n    TAG: "Rect",\n    w,\n    h\n  };');
+  // Matching tests the name, or the `TAG`, then the fields, in place.
+  expect(js).toContain('  if (s === "Empty") {\n    return 0;\n  } else if (s.TAG === "Circle") {');
+  expect(js).toContain('  } else if (s.TAG === "Rect" && s.w === 0 || s === "Empty") {');
+  // Through a reference, with no copy: the reference is the value.
+  expect(js).toContain("  if (t.TAG === \"Leaf\") {\n    return t._0;\n  } else {\n    return sum(t._0) + sum(t._1) | 0;");
+  // `Result` is ReScript's `result`.
+  expect(js).toContain('  if (match.TAG === "Ok") {\n    return match._0;');
 });
 
 // ADR 0031: a `const` is the value rustc computed, under its own name.

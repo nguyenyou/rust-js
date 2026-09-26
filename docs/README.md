@@ -72,6 +72,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0011 Integers are JS numbers, wrapped like release Rust](decisions/0011-numbers.md)
 - [0012 Panics throw, via runtime helpers emitted on demand](decisions/0012-panics-and-runtime-helpers.md)
 - [0013 Fieldless enum variants are strings](decisions/0013-fieldless-enums.md)
+- [0033 Enums with fields are ReScript's tagged objects](decisions/0033-enums-with-fields.md)
 - [0020 Structs are objects, tuples are arrays](decisions/0020-structs-and-tuples.md)
 - [0014 `match` becomes an `if`/`else if` chain](decisions/0014-match-lowering.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)

@@ -28,6 +28,10 @@ mod options;
 #[allow(dead_code)]
 mod consts;
 
+#[path = "../examples/enums.rs"]
+#[allow(dead_code)]
+mod enums;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -133,6 +137,26 @@ fn main() {
         case("options.label", &[n], || options::label(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+    }
+    let shapes = [enums::Shape::Empty, enums::Shape::Circle(2), enums::Shape::Circle(11), enums::Shape::Rect { w: 0, h: 5 }, enums::Shape::Rect { w: 2, h: 3 }];
+    for s in shapes {
+        case_with("enums.area", &[&s], || enums::area(s));
+        case_with("enums.classify", &[&s], || enums::classify(s));
+        case_with("enums.is_round", &[&s], || enums::is_round(s));
+        case_with("enums.width", &[&s], || enums::width(s));
+        for t in shapes {
+            case_with("enums.same", &[&s, &t], || enums::same(s, t));
+        }
+    }
+    case("enums.circle", &[4], || enums::circle(4));
+    case("enums.rect", &[2, 3], || enums::rect(2, 3));
+    case("enums.empty", &[], enums::empty);
+    for depth in 0..5 {
+        case("enums.tree_sum", &[depth], || enums::tree_sum(depth as u32));
+    }
+    for (a, b) in [(7, 2), (1, 0), (-9, 3)] {
+        case("enums.checked_div", &[a, b], || enums::checked_div(a as i32, b as i32));
+        case("enums.div_or", &[a, b, -1], || enums::div_or(a as i32, b as i32, -1));
     }
     case("consts.size_in_kb", &[], consts::size_in_kb);
     case("consts.greeting", &[], consts::greeting);
@@ -268,6 +292,26 @@ impl<T: Json> Json for Option<T> {
 impl Json for Slot {
     fn json(&self) -> String {
         format!("{{\"id\":{},\"value\":{}}}", self.id, self.value.json())
+    }
+}
+
+/// ReScript's shapes (ADR 0033): a name, or an object tagged with it.
+impl Json for enums::Shape {
+    fn json(&self) -> String {
+        match self {
+            enums::Shape::Empty => "\"Empty\"".to_string(),
+            enums::Shape::Circle(r) => format!("{{\"TAG\":\"Circle\",\"_0\":{r}}}"),
+            enums::Shape::Rect { w, h } => format!("{{\"TAG\":\"Rect\",\"w\":{w},\"h\":{h}}}"),
+        }
+    }
+}
+
+impl<T: Json, E: Json> Json for Result<T, E> {
+    fn json(&self) -> String {
+        match self {
+            Ok(v) => format!("{{\"TAG\":\"Ok\",\"_0\":{}}}", v.json()),
+            Err(e) => format!("{{\"TAG\":\"Err\",\"_0\":{}}}", e.json()),
+        }
     }
 }
 

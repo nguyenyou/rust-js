@@ -140,10 +140,10 @@ return { x, y };
 - Derived impls (`#[derive(Clone, Copy, PartialEq, ..)]`) are skipped, since
   `Copy` needs one. Calling them (`.clone()`, `==` on structs) isn't
   supported yet.
-- Not supported yet: enums with fields, unions, `..base` where `base` isn't
-  a variable or field, default field values. Enums with fields will follow
-  ReScript (`{ TAG: "Circle", _0: 1 }`, and `Option` erased), in their own
-  record.
+- Not supported yet: unions, `..base` where `base` isn't
+  a variable or field, default field values. Enums with fields follow
+  ReScript (`{ TAG: "Circle", _0: 1 }`, and `Option` erased): ADRs 0030
+  and 0033.
 - When references arrive, rule 2 must count `&mut place` as changing
   `place`'s type in place.
 - oxc prints an object with more than one field across several lines.

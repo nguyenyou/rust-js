@@ -95,5 +95,5 @@ const app = $unwrap(document.getElementById("app"), "the page has an #app");
   `$debug` can't tell `None` from `()` at run time. `assert_eq!` messages on
   options read that way too.
 - Not yet: `map`, `and_then`, `ok_or`, `?` on `Option`, `take`, `as_ref`,
-  `as_mut`, and nested options. Enums with fields in general (ADR 0013) are
-  still to come. `Option` is the special case that needs no tag.
+  `as_mut`, and nested options. Other enums with fields are tagged objects
+  (ADR 0033); `Option` is the special case that needs no tag.
