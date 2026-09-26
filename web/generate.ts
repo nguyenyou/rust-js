@@ -11,7 +11,7 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api"];
+const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api", "wasm-web-api"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
@@ -23,6 +23,7 @@ const INTERFACES = [
   "HTMLHeadingElement", "HTMLImageElement", "HTMLInputElement", "HTMLLabelElement", "HTMLLIElement",
   "HTMLOListElement", "HTMLOptionElement", "HTMLOutputElement", "HTMLParagraphElement",
   "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement", "HTMLUListElement",
+  "HTMLTableElement", "HTMLTableSectionElement", "HTMLTableRowElement", "HTMLTableCellElement",
   "Window", "Location", "History", "Storage",
   // uievents
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
@@ -168,8 +169,9 @@ type Position = "param" | "result";
 /** The Rust type for a (non-union) WebIDL type, or why there isn't one. */
 function rustType(t: IdlType, at: Position): string | { skip: string } {
   if (t.union) return { skip: "union" };
-  // A promise a function returns is `.await`ed in Rust (ADR 0029).
-  if (t.generic === "Promise" && at === "result") {
+  // A promise a function returns is `.await`ed in Rust (ADR 0029). One it
+  // takes is passed as it is: `compile_streaming(window::fetch_with_str(..))`.
+  if (t.generic === "Promise") {
     const inner = rustType((t.idlType as IdlType[])[0], "result");
     return typeof inner === "string" ? `Promise<${inner}>` : inner;
   }

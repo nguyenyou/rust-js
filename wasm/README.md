@@ -65,6 +65,13 @@ modules are linked into one plain script. The frame isn't sandboxed: in some
 Chrome setups a sandboxed (out-of-process) frame stays blank until the layout
 changes.
 
+**The page is written partly in Rust**, compiled by rust-js itself
+([ADR 0032](../docs/decisions/0032-dogfooding-the-playground.md)):
+`web/rust/lib.rs` holds what's been moved out of `main.ts` so far (loading,
+the stats table). `serve.ts` and `build.ts` compile it to `web/rust/lib.js`
+with `rust-js.wasm`, under the same WASI shim, in Bun (`web/compile-rust.ts`),
+before `main.ts` is bundled. On its own: `cd web && bun compile-rust.ts`.
+
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),
 which you run by hand from the Actions tab.

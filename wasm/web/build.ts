@@ -12,10 +12,16 @@
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { compileRust } from "./compile-rust.ts";
 import { buildWebCrate, examples, examplesManifest, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
 
 const dist = join(import.meta.dir, "dist");
 rmSync(dist, { recursive: true, force: true });
+
+// The page's own Rust, compiled by rust-js before main.ts is bundled.
+const webCrate = join(dist, "web", "libweb.rmeta");
+buildWebCrate(webCrate);
+await compileRust(webCrate);
 
 const result = await Bun.build({
   entrypoints: [join(import.meta.dir, "index.html")],
@@ -33,7 +39,6 @@ mkdirSync(join(dist, "sysroot"));
 for (const name of sysroot) copyFileSync(join(sysrootDir, name), join(dist, "sysroot", name));
 writeFileSync(join(dist, "sysroot.json"), JSON.stringify(sysroot));
 copyFileSync(wasmPath, join(dist, "rust-js.wasm"));
-buildWebCrate(join(dist, "web", "libweb.rmeta"));
 for (const example of examples()) {
   for (const file of example.files) {
     const to = join(dist, "examples", example.name, file);

@@ -13,11 +13,14 @@
 import { join } from "node:path";
 
 import page from "./index.html";
+import { compileRust } from "./compile-rust.ts";
 import { buildWebCrate, examples, examplesManifest, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
 
 const sysroot = sysrootFiles();
 const webCrate = join(import.meta.dir, "../target/web/libweb.rmeta");
 buildWebCrate(webCrate);
+// The page's own Rust, compiled by rust-js before the page is bundled.
+await compileRust(webCrate);
 const notFound = () => new Response("not found", { status: 404 });
 
 const server = Bun.serve({

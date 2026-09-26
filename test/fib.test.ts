@@ -61,6 +61,8 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
+  // The playground's own Rust (ADR 0032), as build.ts compiles it with rust-js.wasm.
+  run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
   asyncs = await import(join(target, "async.js"));
   // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
@@ -309,6 +311,19 @@ test("async code becomes async functions and await", async () => {
   expect(fetchJs).toContain("    load(URL, output);\n");
   // `spawn(Box::new(async move { .. }))` is the promise, unawaited.
   expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
+});
+
+// ADR 0032: the playground is written in Rust in part, compiled by rust-js.
+test("the playground's own Rust compiles to the JS main.ts imports", async () => {
+  const js = await Bun.file(join(target, "playground", "lib.js")).text();
+  expect(js).toContain('import { File } from "@bjorn3/browser_wasi_shim";');
+  for (const name of ["load", "stat", "ms", "mb"]) {
+    expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
+  }
+  // The downloads all start before any is awaited.
+  expect(js).toContain("  const module = load_compiler(start);\n  const sysroot = load_sysroot(start);");
+  expect(js).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
+  expect(js).toContain("  return t.toFixed(0) + \" ms\";");
 });
 
 // ADR 0031: a `const` is the value rustc computed, under its own name.

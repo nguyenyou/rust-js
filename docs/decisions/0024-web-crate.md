@@ -90,15 +90,15 @@ path from a global: `web_assembly::compile(bytes)` is
 | `double`, `unrestricted double` | `f64` | `f64` |
 | an interface in the crate | `&T` | `&'static T` |
 | `ArrayBuffer`, `Uint8Array` (JS's own) | `&T` | `&'static T` |
-| `Promise<T>` | – | `Promise<T>` |
+| `Promise<T>` | `Promise<T>` | `Promise<T>` |
 | `EventListener` | `Box<dyn FnMut(&Event)>` | – |
 | `object` | `&dyn Any`: any Rust value, a struct say | `&'static JsObject` |
 | a dictionary | – | a struct with its fields |
 | `undefined` | – | `()` |
 
 A member is generated only if all its types are in this table. So far that
-leaves out `long long`, `float`, `any`, sequences, promises and
-dictionaries as parameters, and most callbacks. As rust-js grows, rerunning
+leaves out `long long`, `float`, `any`, sequences, dictionaries as
+parameters, and most callbacks. As rust-js grows, rerunning
 the generator picks more up: promise results came with ADR 0029, as
 `Promise<T>`.
 
@@ -139,7 +139,9 @@ with the few members programs need so far: `uint8_array::new(buffer)`,
 programs need more. The Fetch Standard's `Request`, `Response` and
 `Headers` came with async code (ADR 0029), for `window::fetch`, and the
 Encoding Standard's `TextEncoder` and `TextDecoder` with binary data, and the
-WebAssembly JS API (`WebAssembly`, `Module`, `Instance`, `Memory`). It isn't
+WebAssembly JS API (`WebAssembly`, `Module`, `Instance`, `Memory`) and its
+Web API (`compile_streaming`), and tables (`HTMLTableElement` and its rows
+and cells) for the playground (ADR 0032). It isn't
 the whole platform (334 specs).
 
 **Building:** `rustc --emit=metadata` produces `libweb.rmeta`, once per

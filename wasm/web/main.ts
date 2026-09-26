@@ -25,6 +25,10 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { keymap } from "@codemirror/view";
 import { basicSetup, EditorView } from "codemirror";
 
+// The part of the playground written in Rust: rust/lib.rs, which build.ts
+// and serve.ts compile to rust/lib.js with rust-js itself (compile-rust.ts).
+import { load, mb, ms, stat } from "./rust/lib.js";
+
 type Example = { name: string; title: string; root: string; files: string[] };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -32,16 +36,6 @@ const exampleSelect = $<HTMLSelectElement>("example");
 const button = $<HTMLButtonElement>("compile");
 const testButton = $<HTMLButtonElement>("test");
 const status = $<HTMLSpanElement>("status");
-const stats = $<HTMLTableElement>("stats");
-
-const ms = (t: number) => `${t.toFixed(0)} ms`;
-const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
-
-function stat(label: string, value: string) {
-  const row = stats.insertRow();
-  row.insertCell().textContent = label;
-  row.insertCell().textContent = value;
-}
 
 function setStatus(text: string, kind: "" | "good" | "bad" = "") {
   status.textContent = text;
@@ -331,7 +325,8 @@ async function compile(
   // Every program may use the web crate; rustc only reads it if one does.
   args.push("--extern", "web=/web/libweb.rmeta");
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
-  const wasi = new WASI(args, ["RUSTC_ICE=0"], fds);
+  // Without options, the shim logs every call it handles.
+  const wasi = new WASI(args, ["RUSTC_ICE=0"], fds, { debug: false });
 
   const t0 = performance.now();
   const instance = (await WebAssembly.instantiate(module, {
@@ -524,40 +519,8 @@ addEventListener("message", (e) => {
 });
 
 // ── Loading ─────────────────────────────────────────────────────────────
-
-async function load() {
-  const start = performance.now();
-  const [module, sysroot, webCrate, examples] = await Promise.all([
-    WebAssembly.compileStreaming(fetch("./rust-js.wasm")).then((m) => {
-      stat("download + compile rust-js.wasm", ms(performance.now() - start));
-      return m;
-    }),
-    fetch("./sysroot.json")
-      .then((r) => r.json() as Promise<string[]>)
-      .then((names) =>
-        Promise.all(
-          names.map(async (name) => {
-            const bytes = new Uint8Array(await (await fetch(`./sysroot/${name}`)).arrayBuffer());
-            return [name, new File(bytes, { readonly: true })] as [string, Inode];
-          }),
-        ),
-      )
-      .then((entries) => {
-        const size = entries.reduce((n, [, f]) => n + (f as File).data.byteLength, 0);
-        stat("download sysroot", `${ms(performance.now() - start)} (${entries.length} files, ${mb(size)})`);
-        return new Map(entries);
-      }),
-    fetch("./web/libweb.rmeta")
-      .then((r) => r.arrayBuffer())
-      .then((bytes) => {
-        stat("download web crate", `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
-        return new File(new Uint8Array(bytes), { readonly: true });
-      }),
-    fetch("./examples.json").then((r) => r.json() as Promise<Example[]>),
-  ]);
-  stat("ready after", ms(performance.now() - start));
-  return { module, sysroot, webCrate, examples };
-}
+// Downloading the compiler, the sysroot, the web crate and the examples is
+// `load`, in rust/lib.rs.
 
 async function loadExample(example: Example) {
   const texts = await Promise.all(
@@ -575,7 +538,12 @@ async function loadExample(example: Example) {
   runProgram(new Map(), rootJs());
 }
 
-const { module, sysroot, webCrate, examples } = await load();
+const { module, sysroot, web_crate: webCrate, examples } = (await load()) as {
+  module: WebAssembly.Module;
+  sysroot: Map<string, Inode>;
+  web_crate: File;
+  examples: Example[];
+};
 for (const example of examples) exampleSelect.add(new Option(example.title, example.name));
 exampleSelect.addEventListener("change", async () => {
   await loadExample(examples.find((e) => e.name === exampleSelect.value)!);
