@@ -307,6 +307,7 @@ impl<'a> Cx<'a> {
             ExprKind::Bool(v) => Expression::new_boolean_literal(sp, *v, b),
             ExprKind::Str(s) => Expression::new_string_literal(sp, self.allocator.alloc_str(s), None, b),
             ExprKind::Undefined => Expression::new_identifier(sp, "undefined", b),
+            ExprKind::Null => Expression::new_null_literal(sp, b),
             ExprKind::Var(name) => Expression::new_identifier(sp, self.name(name), b),
             ExprKind::Member(object, property) => Expression::new_static_member_expression(
                 sp,
@@ -424,11 +425,14 @@ fn binary_op(op: Op) -> Result<BinaryOperator, LogicalOperator> {
     Ok(match op {
         Op::And => return Err(LogicalOperator::And),
         Op::Or => return Err(LogicalOperator::Or),
+        Op::Coalesce => return Err(LogicalOperator::Coalesce),
         Op::BitOr => BinaryOperator::BitwiseOR,
         Op::BitXor => BinaryOperator::BitwiseXOR,
         Op::BitAnd => BinaryOperator::BitwiseAnd,
         Op::Eq => BinaryOperator::StrictEquality,
         Op::Ne => BinaryOperator::StrictInequality,
+        Op::LooseEq => BinaryOperator::Equality,
+        Op::LooseNe => BinaryOperator::Inequality,
         Op::Lt => BinaryOperator::LessThan,
         Op::Le => BinaryOperator::LessEqualThan,
         Op::Gt => BinaryOperator::GreaterThan,

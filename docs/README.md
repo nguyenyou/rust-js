@@ -85,6 +85,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0025 `Vec`, `for` loops, `RefCell` and `&mut` to objects](decisions/0025-vec-loops-refcell-mut.md)
 - [0028 Imports from JS modules: `#[link_name = "module#path"]`](decisions/0028-js-module-imports.md)
 - [0029 `async`/`.await` are JS's `async`/`await`; a future is a promise](decisions/0029-async-await.md)
+- [0030 `Option`: `Some(x)` is `x`, `None` is `undefined`](decisions/0030-option.md)
 
 **Scope and process**
 

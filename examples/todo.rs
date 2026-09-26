@@ -119,7 +119,7 @@ fn render(state: &Shared, view: View) {
 }
 
 pub fn main() {
-    let app = document::get_element_by_id(document, "app");
+    let app = document::get_element_by_id(document, "app").expect("the page has an #app");
     let state: Shared = Rc::new(RefCell::new(State { todos: Vec::new(), next_id: 1, filter: Filter::All }));
     let view = View { list: create("ul"), left: create("span") };
 
@@ -177,7 +177,7 @@ mod tests {
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {
-        let body = document::body(document);
+        let body = document::body(document).unwrap();
         node::set_text_content(body, "");
         let app = create("div");
         element::set_id(app, "app");
@@ -187,7 +187,7 @@ mod tests {
     }
 
     fn input(app: &Element) -> &'static HtmlInputElement {
-        html_input_element::unchecked_from(element::query_selector(app, "input"))
+        html_input_element::unchecked_from(element::query_selector(app, "input").unwrap())
     }
 
     /// Type `title` and press `key`.
@@ -201,18 +201,18 @@ mod tests {
         let spans = element::query_selector_all(app, "li span");
         let mut titles = Vec::new();
         for i in 0..node_list::length(spans) {
-            titles.push(node::text_content(node_list::item(spans, i)));
+            titles.push(node::text_content(node_list::item(spans, i).unwrap()).unwrap());
         }
         titles
     }
 
     fn left(app: &Element) -> String {
-        node::text_content(element::query_selector(app, "p span"))
+        node::text_content(element::query_selector(app, "p span").unwrap()).unwrap()
     }
 
     /// The `n`th element matching `selector`, to click.
     fn nth(app: &Element, selector: &str, n: u32) -> &'static web::HtmlElement {
-        html_element::unchecked_from(node_list::item(element::query_selector_all(app, selector), n))
+        html_element::unchecked_from(node_list::item(element::query_selector_all(app, selector), n).unwrap())
     }
 
     #[test]

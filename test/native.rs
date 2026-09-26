@@ -20,6 +20,10 @@ mod closures;
 #[allow(dead_code)]
 mod structs;
 
+#[path = "../examples/options.rs"]
+#[allow(dead_code)]
+mod options;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -27,6 +31,7 @@ mod structs;
 use std::panic::{self, UnwindSafe};
 
 use fib::*;
+use options::Slot;
 use structs::{Point, Rect, Size};
 
 fn main() {
@@ -112,6 +117,27 @@ fn main() {
     }
     for s in ["", "  ", "hi", "  hi  ", "hello"] {
         case_with("collections.words", &[&s], || collections::words(s));
+    }
+    for n in [-6, -3, 0, 1, 2, 7, 8, 64, 96] {
+        case("options.half", &[n], || options::half(n as i32));
+        case("options.half_or_zero", &[n], || options::half_or_zero(n as i32));
+        case("options.halvings", &[n], || options::halvings(n as i32));
+        case("options.methods", &[n], || options::methods(n as i32));
+        case("options.unwrapped", &[n], || options::unwrapped(n as i32));
+        case("options.expected", &[n], || options::expected(n as i32));
+        case("options.eager", &[n], || options::eager(n as i32));
+        case("options.label", &[n], || options::label(n as i32));
+        let slot = Slot { id: 1, value: Some(5) };
+        case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+    }
+    let some_none = [None, Some(0), Some(-4), Some(3)];
+    for o in some_none {
+        case_with("options.describe", &[&o], || options::describe(o));
+        for p in some_none {
+            case_with("options.same", &[&o, &p], || options::same(o, p));
+            let (a, b) = (Slot { id: 1, value: o }, Slot { id: 1, value: p });
+            case_with("options.same_slots", &[&a, &b], || options::same_slots(a, b));
+        }
     }
     for (a, b) in [(7, 2), (0, 5), (u32::MAX, 10), (5, 0)] {
         case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));
@@ -207,6 +233,22 @@ impl<A: Json, B: Json, C: Json> Json for (A, B, C) {
 impl<A: Json, B: Json> Json for (A, B) {
     fn json(&self) -> String {
         format!("[{},{}]", self.0.json(), self.1.json())
+    }
+}
+
+/// `None` is `null` in JSON; the test counts JS's `undefined` as `null` too.
+impl<T: Json> Json for Option<T> {
+    fn json(&self) -> String {
+        match self {
+            Some(x) => x.json(),
+            None => "null".to_string(),
+        }
+    }
+}
+
+impl Json for Slot {
+    fn json(&self) -> String {
+        format!("{{\"id\":{},\"value\":{}}}", self.id, self.value.json())
     }
 }
 

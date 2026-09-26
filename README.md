@@ -22,6 +22,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - Integers wrap on overflow, like Rust's release profile (`overflow-checks = off`).
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`.
+- `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.
 - A struct is a plain object, `{ x: 1, y: 2 }`; a tuple or tuple struct is an array, `[1, 2]`.
   Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
@@ -34,7 +35,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 
 ## Supported so far
 
-`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums, structs, tuples; `let`, `if`,
+`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, fieldless enums, structs, tuples, `Option`; `let`, `if`, `if let`, `while let`,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,

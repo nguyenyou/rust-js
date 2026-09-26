@@ -25,6 +25,7 @@ let fib: Record<string, (...args: any[]) => number>;
 let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
+let options: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -47,6 +48,8 @@ beforeAll(async () => {
   closures = await import(join(target, "closures.js"));
   run([join(target, "debug", "rust-js"), "examples/collections.rs", "-o", join(target, "collections.js")]);
   collections = await import(join(target, "collections.js"));
+  run([join(target, "debug", "rust-js"), "examples/options.rs", "-o", join(target, "options.js")]);
+  options = await import(join(target, "options.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -103,6 +106,11 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "options") {
+        // `None` is `undefined` in JS, and `null` in the JSON: compare them as one.
+        const value = options[path[1]](...c.args);
+        return JSON.parse(JSON.stringify(value, (_, x) => (x === undefined ? null : x)));
       }
       if (path[0] === "modules") {
         const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
@@ -293,6 +301,24 @@ test("async code becomes async functions and await", async () => {
   expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
 });
 
+// ADR 0030: `Some(x)` is `x`, `None` is `undefined`, and `null` counts as `None`.
+test("options are the value or undefined", async () => {
+  const js = await Bun.file(join(target, "options.js")).text();
+  expect(js).toContain("    return n / 2 | 0;\n  } else {\n    return undefined;");
+  // `Some(0)` needs no `!= null`; `Some(n)` does.
+  expect(js).toContain("  if (o === 0) {\n    return 100;\n  } else if (o != null && o < 0) {");
+  // `if let Some(h) = ..` keeps the value in a `const h`.
+  expect(js).toContain("  const h = half(n);\n  if (h != null) {\n    return h;");
+  expect(js).toContain("    h != null,\n    h == null,\n    h ?? -1");
+  // `unwrap_or`'s argument runs even when it isn't needed, as in Rust.
+  expect(js).toContain("  const option = half(n);\n  const fallback = bump();\n  const v = option ?? fallback;");
+  expect(js).toContain('  return $unwrap(half(n), "an even number");');
+  // `==` on options is `==`: `null` from JS equals `undefined` from Rust.
+  expect(js).toContain("  return a == b;");
+  expect(options.same(null, undefined)).toBe(true);
+  expect(options.describe(null)).toBe(0);
+});
+
 // ADR 0020: structs are objects, tuples are arrays, and only some reads copy.
 test("structs and tuples are plain objects and arrays", async () => {
   const js = await Bun.file(join(target, "structs.js")).text();
@@ -396,7 +422,9 @@ test("the web crate's bindings become plain JS", async () => {
   // A cast is the value itself; a setter, an assignment; a getter, a read.
   expect(js).toContain('const input = document.createElement("input");');
   expect(js).toContain('input.value = "typed";');
-  expect(js).toContain("return app.textContent + input.value;");
+  // A result that may be `null` is an `Option` (ADR 0030), unwrapped here.
+  expect(js).toContain('const app = $unwrap(document.getElementById("app"), "the page has an #app");');
+  expect(js).toContain("return $unwrap(app.textContent) + input.value;");
   // A union member other than the first gets its own Rust function, same JS.
   expect(js).toContain("app.append(input);");
   expect(js).toContain('app.append("!");');

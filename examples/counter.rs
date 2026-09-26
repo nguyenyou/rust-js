@@ -27,7 +27,7 @@ fn stepper(label: &str, by: i32, count: &Rc<Cell<i32>>, output: &'static Element
 }
 
 pub fn main() {
-    let app = document::get_element_by_id(document, "app");
+    let app = document::get_element_by_id(document, "app").expect("the page has an #app");
     // Both buttons change one count, so they share it: `Rc` to share, `Cell`
     // to change it through a shared reference.
     let count = Rc::new(Cell::new(0));
@@ -48,7 +48,7 @@ mod tests {
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {
-        let body = document::body(document);
+        let body = document::body(document).unwrap();
         node::set_text_content(body, "");
         let app = document::create_element(document, "div");
         element::set_id(app, "app");
@@ -57,18 +57,18 @@ mod tests {
     }
 
     fn nth_button(app: &Element, n: u32) -> &'static HtmlElement {
-        html_element::unchecked_from(node_list::item(element::query_selector_all(app, "button"), n))
+        html_element::unchecked_from(node_list::item(element::query_selector_all(app, "button"), n).unwrap())
     }
 
     fn shown(app: &Element) -> String {
-        node::text_content(element::query_selector(app, "output"))
+        node::text_content(element::query_selector(app, "output").unwrap()).unwrap()
     }
 
     #[test]
     fn starts_at_zero() {
         let app = page();
         main();
-        assert_eq!(node::text_content(app), "-0+");
+        assert_eq!(node::text_content(app).unwrap(), "-0+");
     }
 
     #[test]
@@ -95,7 +95,7 @@ mod tests {
         let app = page();
         main();
         let minus = element::get_bounding_client_rect(nth_button(app, 0));
-        let output = element::get_bounding_client_rect(element::query_selector(app, "output"));
+        let output = element::get_bounding_client_rect(element::query_selector(app, "output").unwrap());
         let plus = element::get_bounding_client_rect(nth_button(app, 1));
         assert!(dom_rect_read_only::width(minus) > 0.0, "the buttons have a size");
         assert!(dom_rect_read_only::right(minus) <= dom_rect_read_only::left(output));

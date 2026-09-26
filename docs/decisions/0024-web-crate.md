@@ -107,9 +107,8 @@ aren't in any WebIDL file. They're declared by hand at the top of the crate,
 with the few members programs need so far: `uint8_array::new(buffer)`,
 `uint8_array::length`, `array_buffer::byte_length`. Also:
 
-- **Nullable:** a parameter takes the non-null type. A result is typed
-  non-null, and its doc says it may be `null`, which isn't checked. When
-  `Option` exists, those results become `Option<&T>`.
+- **Nullable:** a parameter takes the non-null type. A result is an
+  `Option` (ADR 0030): `get_element_by_id(..) -> Option<&'static Element>`.
 - **Optional** arguments: the shortest form keeps the name, and each
   optional argument, in order, adds a form, as web-sys names them:
   `encode(this)`, `encode_with_input(this, input)`; later ones add
@@ -176,7 +175,6 @@ which always passes `--extern web=..`.
 ## Consequences
 
 - Calls read `element::append(app, b)`, not `app.append(b)`.
-- Nullable results aren't checked until `Option` arrives.
 - `unchecked_from` is exactly that: `html_input_element::unchecked_from(e)`
   doesn't check that `e` is an input, just as a cast in TypeScript wouldn't.
 - ADR 0021's extern types still work for one-off bindings.

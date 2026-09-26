@@ -105,6 +105,8 @@ pub enum ExprKind {
     Bool(bool),
     Str(String),
     Undefined,
+    /// Only to test against: `o != null` (ADR 0030).
+    Null,
     Var(String),
     /// `object.property`, e.g. `Math.imul` or `math.add`.
     Member(Box<Expr>, String),
@@ -147,11 +149,17 @@ pub enum UnaryOp {
 pub enum Op {
     Or,
     And,
+    /// `a ?? b`: `unwrap_or` (ADR 0030).
+    Coalesce,
     BitOr,
     BitXor,
     BitAnd,
     Eq,
     Ne,
+    /// `==` and `!=`: only against `null`, for `None` (ADR 0030), and on
+    /// options, where `null` and `undefined` are both `None`.
+    LooseEq,
+    LooseNe,
     Lt,
     Le,
     Gt,
@@ -190,6 +198,10 @@ impl Expr {
 
     pub fn undefined() -> Expr {
         Expr::new(ExprKind::Undefined)
+    }
+
+    pub fn null() -> Expr {
+        Expr::new(ExprKind::Null)
     }
 
     pub fn var(name: &str) -> Expr {
@@ -266,7 +278,7 @@ impl Expr {
     pub fn is_constant(&self) -> bool {
         matches!(
             self.kind,
-            ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined
+            ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null
         )
     }
 
@@ -277,6 +289,7 @@ impl Expr {
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
             | ExprKind::Undefined
+            | ExprKind::Null
             | ExprKind::Var(_)
             | ExprKind::Arrow(..)
             | ExprKind::AsyncArrow(..) => false,

@@ -493,6 +493,7 @@ pub enum Helper {
     Debug,
     Eq,
     AssertFailed,
+    Unwrap,
 }
 
 impl Helper {
@@ -551,7 +552,7 @@ function $debug(v) {
             Helper::Eq => {
                 r#"
 function $eq(a, b) {
-  if (a === b) {
+  if (a === b || (a == null && b == null)) {
     return true;
   }
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
@@ -566,6 +567,16 @@ function $eq(a, b) {
 "#
             }
             // `assert_eq!` and `assert_ne!` failing, with Rust's message.
+            Helper::Unwrap => {
+                r#"
+function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+"#
+            }
             Helper::AssertFailed => {
                 r#"
 function $assertFailed(kind, left, right, message) {
@@ -664,6 +675,16 @@ enum Std {
     FmtDisplay,
     /// An argument for `{:?}`.
     FmtDebug,
+    /// `Option` (ADR 0030): `o != null`, `o == null`.
+    IsSome,
+    IsNone,
+    /// `unwrap()` and `expect(msg)`: `$unwrap(o)`, `$unwrap(o, msg)`.
+    Unwrap,
+    /// `unwrap_or(d)`: `o ?? d`.
+    UnwrapOr,
+    /// `==` (true) or `!=` (false) on options of strings, numbers and the
+    /// like: `==`, so that `null` and `undefined` are both `None`.
+    LooseEq(bool),
 }
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -873,8 +894,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::PlaceTypeAscription { source, .. } => self.stmt(source, dest, out),
             ExprKind::Block { block } => self.block(block, dest, out),
             ExprKind::If { cond, then, else_opt, .. } => {
-                let cond = self.expr(cond, out)?;
                 let mut then_out = Vec::new();
+                let cond = match self.thir[self.strip(cond)].kind {
+                    ExprKind::Let { expr: scrutinee, ref pat } => self.if_let(scrutinee, pat, &mut then_out, out)?,
+                    _ => self.expr(cond, out)?,
+                };
                 self.stmt(then, dest, &mut then_out)?;
                 let else_out = match else_opt {
                     Some(els) => {
@@ -1355,6 +1379,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// `if let pat = scrutinee`: the test, with the pattern's variables
+    /// bound at the start of the `then` branch. `if let Some(el) = find()`
+    /// keeps the value in a `const` named like the variable, which is then
+    /// just that `const`: `const el = find(); if (el != null) { .. }`.
+    fn if_let(&mut self, scrutinee: ExprId, pat: &Pat<'tcx>, then_out: &mut Vec<Stmt>, out: &mut Vec<Stmt>) -> R<Expr> {
+        let base = match &pat.kind {
+            PatKind::Variant { subpatterns, .. } if subpatterns.len() == 1 => match &subpatterns[0].pattern.kind {
+                PatKind::Binding { name, .. } => name.to_string(),
+                _ => "value".to_string(),
+            },
+            _ => "value".to_string(),
+        };
+        let (subject, stable) = self.subject(scrutinee, &base, out)?;
+        let mut bindings = Vec::new();
+        let test = self.pattern_test(pat, &subject, &mut bindings)?;
+        self.bind_all(bindings, stable, self.js_span(pat.span), then_out);
+        Ok(test.unwrap_or_else(|| Expr::bool(true)))
+    }
+
     /// A JS boolean test for "`subject` matches `pat`" (`None`: always matches).
     fn pattern_test(
         &mut self,
@@ -1378,6 +1421,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             PatKind::Constant { value } => {
                 let value = self.const_value(*value, pat.span)?;
                 Ok(Some(Expr::bin(Op::Eq, subject.clone(), value)))
+            }
+            // `Some(p)`: not `null` or `undefined`, and the value itself matches `p`.
+            // A constant needs no `!= null`: `o === 0` already says it.
+            PatKind::Variant { adt_def, variant_index, subpatterns, .. } if self.tcx.is_lang_item(adt_def.did(), LangItem::Option) => {
+                let Some(field) = subpatterns.first() else {
+                    return Ok(Some(Expr::bin(Op::LooseEq, subject.clone(), Expr::null())));
+                };
+                debug_assert!(self.tcx.is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome));
+                let inner = self.pattern_test(&field.pattern, subject, bindings)?;
+                let present = Expr::bin(Op::LooseNe, subject.clone(), Expr::null());
+                Ok(Some(match inner {
+                    Some(test) if matches!(field.pattern.kind, PatKind::Constant { .. }) => test,
+                    Some(test) => Expr::bin(Op::And, present, test),
+                    None => present,
+                }))
             }
             PatKind::Variant { adt_def, variant_index, subpatterns, .. } if subpatterns.is_empty() => {
                 let name = adt_def.variant(*variant_index).name.to_string();
@@ -1916,6 +1974,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Borrow => Expr::member(arg(), "value"),
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
             Std::Eq(eq) => Expr::bin(if eq { Op::Eq } else { Op::Ne }, arg(), arg()),
+            Std::LooseEq(eq) => Expr::bin(if eq { Op::LooseEq } else { Op::LooseNe }, arg(), arg()),
+            Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
+            Std::IsNone => Expr::bin(Op::LooseEq, arg(), Expr::null()),
+            Std::Unwrap => {
+                self.runtime.insert(Helper::Unwrap);
+                // `expect` has a message too.
+                let list = (0..args.len()).map(|_| arg()).collect();
+                Expr::call(Expr::var("$unwrap"), list)
+            }
+            // `??` skips its right side when it isn't needed, and Rust
+            // evaluates it either way: one with effects runs first, in order.
+            Std::UnwrapOr => {
+                let (mut option, mut default) = (arg(), arg());
+                if default.has_effects() {
+                    if option.has_effects() {
+                        option = self.spill("option", option, out);
+                    }
+                    default = self.spill("fallback", default, out);
+                }
+                Expr::bin(Op::Coalesce, option, default)
+            }
             Std::StringNew => Expr::str(""),
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
             Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
@@ -1987,6 +2066,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if diagnostic("to_string_method") {
             return Some(Std::ToString);
         }
+        if diagnostic("option_unwrap") || diagnostic("option_expect") {
+            return Some(Std::Unwrap);
+        }
         if tcx.is_lang_item(def_id, LangItem::Panic) {
             return Some(Std::Panic);
         }
@@ -2020,6 +2102,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if simple {
                     return Some(Std::Eq(eq));
                 }
+                if let Some(inner) = self.option_of(ty) {
+                    let simple = self.is_string_like(inner)
+                        || inner.is_bool()
+                        || Num::of(inner).is_some()
+                        || matches!(inner.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
+                    return if simple { Some(Std::LooseEq(eq)) } else { self.is_structural_eq(trait_, inner).then_some(Std::StructEq(eq)) };
+                }
                 return self.is_structural_eq(trait_, ty).then_some(Std::StructEq(eq));
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
@@ -2030,6 +2119,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
         let string = self.is_lang_adt(owner, LangItem::String);
+        let option = self.is_lang_adt(owner, LangItem::Option);
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
@@ -2052,6 +2142,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "as_str" if string => Std::Same,
             "trim" if owner.is_str() => Std::Trim,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
+            "is_some" if option => Std::IsSome,
+            "is_none" if option => Std::IsNone,
+            "unwrap_or" if option => Std::UnwrapOr,
             _ => return None,
         })
     }
@@ -2120,6 +2213,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
         ty.is_str() || self.is_lang_adt(ty, LangItem::String)
+    }
+
+    /// `T`, for an `Option<T>`.
+    fn option_of(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+        match ty.kind() {
+            ty::Adt(adt, args) if self.tcx.is_lang_item(adt.did(), LangItem::Option) => args.types().next(),
+            _ => None,
+        }
+    }
+
+    /// Can a `T` be `undefined` or `null` in JS? Then `Option<T>` can't be
+    /// `T` itself: `Some(())` and `None` would be the same value.
+    fn can_be_nullish(&self, ty: Ty<'tcx>) -> bool {
+        ty.is_unit()
+            || self.option_of(ty).is_some()
+            || matches!(ty.kind(), ty::Adt(adt, _) if adt.is_struct() && adt.non_enum_variant().fields.is_empty())
     }
 
     fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
@@ -2315,6 +2424,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A struct literal: `{ x: 1, y: 2 }`, or `[1, 2]` for a tuple struct.
     fn adt(&mut self, adt: &thir::AdtExpr<'tcx>, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let variant = adt.adt_def.variant(adt.variant_index);
+        // `Some(x)` is `x`, and `None` is `undefined` (ADR 0030).
+        if self.option_of(ty).is_some() {
+            return match adt.fields.first() {
+                Some(field) => self.expr(field.expr, out),
+                None => Ok(Expr::undefined()),
+            };
+        }
         if adt.adt_def.is_enum() {
             if !is_fieldless_enum(adt.adt_def) {
                 return Err(self.unsupported(span, "enums with fields"));
@@ -2666,6 +2782,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_part(*inner),
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_part(*elem),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
+            // An `Option` is its value or `undefined` (ADR 0030), so the value
+            // itself mustn't be able to look like `None`.
+            ty::Adt(..) if let Some(inner) = self.option_of(ty) => {
+                return if self.can_be_nullish(inner) { Some(ty) } else { self.unsupported_part(inner) };
+            }
             // `format_args!`'s pieces are strings by the time JS sees them.
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::FormatArguments) || self.is_lang_adt(ty, LangItem::FormatArgument) => {
                 return None;
@@ -2701,6 +2822,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some((export, rest)) => global(&format!("{}{rest}", self.imports[&export])),
             None => global(path),
         }
+    }
+
+    /// `const <base> = value;`, so it's evaluated here, then its name.
+    fn spill(&mut self, base: &str, value: Expr, out: &mut Vec<Stmt>) -> Expr {
+        let name = self.fresh(base);
+        let span = value.span;
+        out.push(StmtKind::Const(name.clone(), value).at(span));
+        Expr::var(&name)
     }
 
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {

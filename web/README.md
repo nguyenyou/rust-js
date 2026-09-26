@@ -23,7 +23,8 @@ element::append(app, b);                                  // app.append(b)
   `&Element` or `&Node` is expected.
 - `unchecked_from` is a cast:
   `html_input_element::unchecked_from(document::create_element(document, "input"))`.
-- Results that may be `null` say so in their docs, but aren't checked yet.
+- A result that may be `null` is an `Option`:
+  `document::get_element_by_id(document, "app").expect("the page has an #app")`.
 - A promise is a `Promise<T>`, to `.await`: `window::fetch_with_str(window, url).await`
   ([ADR 0029](../docs/decisions/0029-async-await.md)).
 - Binary data is JS's `ArrayBuffer` and `Uint8Array`: `response::bytes(r).await`.

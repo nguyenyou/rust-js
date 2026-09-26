@@ -13,7 +13,7 @@ async fn load(url: &str, output: &'static Element) {
 }
 
 pub fn main() {
-    let app = document::get_element_by_id(document, "app");
+    let app = document::get_element_by_id(document, "app").expect("the page has an #app");
     let button = document::create_element(document, "button");
     node::set_text_content(button, "Fetch");
     let output = document::create_element(document, "output");

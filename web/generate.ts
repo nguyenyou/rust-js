@@ -253,8 +253,9 @@ function functionsOf(i: Interface): Fn[] {
   // A namespace's functions are called on it: `WebAssembly.compile(bytes)`.
   const self = i.isNamespace ? [] : [`this: &${typeName(i.name)}`];
   const member = (name: string) => (i.isNamespace ? `${i.name}.${name}` : name);
+  // A result that may be `null` is an `Option`: `None` in Rust (ADR 0030).
   const nullable = (t: IdlType) => t.nullable || typedefs.get(t.idlType as string)?.nullable;
-  const nullNote = "May be `null` in JS, which this binding doesn't say yet (ADR 0024).";
+  const orNull = (rust: string, t: IdlType) => (nullable(t) ? `Option<${rust}>` : rust);
 
   // Arguments up to the first optional one, as lists of Rust types to try.
   const signatures = (args: Arg[]): { names: string[]; options: string[][] } | { skip: string } => {
@@ -330,7 +331,7 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
-      fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: self, result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
+      fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: self, result: orNull(result, m.idlType!), doc });
       const forwards = (m.extAttrs ?? []).some((a) => a.name === "PutForwards" || a.name === "Replaceable");
       const value = alternatives(m.idlType!)[0];
       if (!m.readonly && !forwards && value) {
@@ -363,7 +364,7 @@ function functionsOf(i: Interface): Fn[] {
           );
       const base = lead.length > 0 ? `${snake(m.name)}_with_${lead.join("_and_")}` : snake(m.name);
       for (const v of [...variants(base, sig), ...optionalForms(snake(m.name), lead, sig, m.arguments ?? [])]) {
-        fns.push({ name: v.name, jsName: member(m.name), params: [...self, ...v.params], result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
+        fns.push({ name: v.name, jsName: member(m.name), params: [...self, ...v.params], result: orNull(result, m.idlType!), doc });
       }
     }
   }

@@ -29,7 +29,7 @@ async fn count_down(output: &'static Element, from: u32) {
 }
 
 pub fn main() {
-    let app = document::get_element_by_id(document, "app");
+    let app = document::get_element_by_id(document, "app").expect("the page has an #app");
     let start = document::create_element(document, "button");
     node::set_text_content(start, "Start");
     let output = document::create_element(document, "output");
@@ -57,7 +57,7 @@ mod tests {
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {
-        let body = document::body(document);
+        let body = document::body(document).unwrap();
         node::set_text_content(body, "");
         let app = document::create_element(document, "div");
         element::set_id(app, "app");
@@ -71,7 +71,7 @@ mod tests {
     fn a_click_shows_the_first_number_at_once() {
         let app = page();
         main();
-        html_element::click(html_element::unchecked_from(element::query_selector(app, "button")));
-        assert_eq!(node::text_content(element::query_selector(app, "output")), "3");
+        html_element::click(html_element::unchecked_from(element::query_selector(app, "button").unwrap()));
+        assert_eq!(node::text_content(element::query_selector(app, "output").unwrap()).unwrap(), "3");
     }
 }

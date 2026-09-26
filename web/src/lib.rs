@@ -131,19 +131,16 @@ pub mod event {
         pub safe fn type_(this: &Event) -> String;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Event/target)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get target"]
-        pub safe fn target(this: &Event) -> &'static EventTarget;
+        pub safe fn target(this: &Event) -> Option<&'static EventTarget>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Event/srcElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get srcElement"]
-        pub safe fn src_element(this: &Event) -> &'static EventTarget;
+        pub safe fn src_element(this: &Event) -> Option<&'static EventTarget>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Event/currentTarget)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get currentTarget"]
-        pub safe fn current_target(this: &Event) -> &'static EventTarget;
+        pub safe fn current_target(this: &Event) -> Option<&'static EventTarget>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Event/eventPhase)
         #[link_name = "get eventPhase"]
@@ -248,23 +245,20 @@ pub mod node {
         pub safe fn is_connected(this: &Node) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/ownerDocument)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get ownerDocument"]
-        pub safe fn owner_document(this: &Node) -> &'static Document;
+        pub safe fn owner_document(this: &Node) -> Option<&'static Document>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/getRootNode)
         #[link_name = "getRootNode"]
         pub safe fn get_root_node(this: &Node) -> &'static Node;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/parentNode)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get parentNode"]
-        pub safe fn parent_node(this: &Node) -> &'static Node;
+        pub safe fn parent_node(this: &Node) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/parentElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get parentElement"]
-        pub safe fn parent_element(this: &Node) -> &'static Element;
+        pub safe fn parent_element(this: &Node) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/hasChildNodes)
         #[link_name = "hasChildNodes"]
@@ -275,38 +269,32 @@ pub mod node {
         pub safe fn child_nodes(this: &Node) -> &'static NodeList;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/firstChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get firstChild"]
-        pub safe fn first_child(this: &Node) -> &'static Node;
+        pub safe fn first_child(this: &Node) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/lastChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get lastChild"]
-        pub safe fn last_child(this: &Node) -> &'static Node;
+        pub safe fn last_child(this: &Node) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/previousSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get previousSibling"]
-        pub safe fn previous_sibling(this: &Node) -> &'static Node;
+        pub safe fn previous_sibling(this: &Node) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/nextSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get nextSibling"]
-        pub safe fn next_sibling(this: &Node) -> &'static Node;
+        pub safe fn next_sibling(this: &Node) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/nodeValue)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get nodeValue"]
-        pub safe fn node_value(this: &Node) -> String;
+        pub safe fn node_value(this: &Node) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/nodeValue)
         #[link_name = "set nodeValue"]
         pub safe fn set_node_value(this: &Node, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/textContent)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get textContent"]
-        pub safe fn text_content(this: &Node) -> String;
+        pub safe fn text_content(this: &Node) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/textContent)
         #[link_name = "set textContent"]
@@ -339,14 +327,12 @@ pub mod node {
         pub safe fn contains(this: &Node, other: &Node) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/lookupPrefix)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "lookupPrefix"]
-        pub safe fn lookup_prefix(this: &Node, namespace: &str) -> String;
+        pub safe fn lookup_prefix(this: &Node, namespace: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/lookupNamespaceURI)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "lookupNamespaceURI"]
-        pub safe fn lookup_namespace_uri(this: &Node, prefix: &str) -> String;
+        pub safe fn lookup_namespace_uri(this: &Node, prefix: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Node/isDefaultNamespace)
         #[link_name = "isDefaultNamespace"]
@@ -423,14 +409,12 @@ pub mod character_data {
         pub safe fn replace_data(this: &CharacterData, offset: u32, count: u32, data: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/CharacterData/previousElementSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get previousElementSibling"]
-        pub safe fn previous_element_sibling(this: &CharacterData) -> &'static Element;
+        pub safe fn previous_element_sibling(this: &CharacterData) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/CharacterData/nextElementSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get nextElementSibling"]
-        pub safe fn next_element_sibling(this: &CharacterData) -> &'static Element;
+        pub safe fn next_element_sibling(this: &CharacterData) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/CharacterData/before)
         pub safe fn before(this: &CharacterData, nodes: &Node);
@@ -548,14 +532,12 @@ pub mod element {
 
     unsafe extern "Rust" {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/namespaceURI)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get namespaceURI"]
-        pub safe fn namespace_uri(this: &Element) -> String;
+        pub safe fn namespace_uri(this: &Element) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/prefix)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get prefix"]
-        pub safe fn prefix(this: &Element) -> String;
+        pub safe fn prefix(this: &Element) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/localName)
         #[link_name = "get localName"]
@@ -598,14 +580,12 @@ pub mod element {
         pub safe fn has_attributes(this: &Element) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/getAttribute)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "getAttribute"]
-        pub safe fn get_attribute(this: &Element, qualified_name: &str) -> String;
+        pub safe fn get_attribute(this: &Element, qualified_name: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/getAttributeNS)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "getAttributeNS"]
-        pub safe fn get_attribute_ns(this: &Element, namespace: &str, local_name: &str) -> String;
+        pub safe fn get_attribute_ns(this: &Element, namespace: &str, local_name: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/setAttribute)
         #[link_name = "setAttribute"]
@@ -640,8 +620,7 @@ pub mod element {
         pub safe fn has_attribute_ns(this: &Element, namespace: &str, local_name: &str) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/closest)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn closest(this: &Element, selectors: &str) -> &'static Element;
+        pub safe fn closest(this: &Element, selectors: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/matches)
         pub safe fn matches(this: &Element, selectors: &str) -> bool;
@@ -663,9 +642,8 @@ pub mod element {
         pub safe fn get_elements_by_class_name(this: &Element, class_names: &str) -> &'static HtmlCollection;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/insertAdjacentElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "insertAdjacentElement"]
-        pub safe fn insert_adjacent_element(this: &Element, where_: &str, element: &Element) -> &'static Element;
+        pub safe fn insert_adjacent_element(this: &Element, where_: &str, element: &Element) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/insertAdjacentText)
         #[link_name = "insertAdjacentText"]
@@ -787,14 +765,12 @@ pub mod element {
         pub safe fn children(this: &Element) -> &'static HtmlCollection;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/firstElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get firstElementChild"]
-        pub safe fn first_element_child(this: &Element) -> &'static Element;
+        pub safe fn first_element_child(this: &Element) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/lastElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get lastElementChild"]
-        pub safe fn last_element_child(this: &Element) -> &'static Element;
+        pub safe fn last_element_child(this: &Element) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/childElementCount)
         #[link_name = "get childElementCount"]
@@ -827,23 +803,20 @@ pub mod element {
         pub safe fn move_before(this: &Element, node: &Node, child: &Node);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/querySelector)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "querySelector"]
-        pub safe fn query_selector(this: &Element, selectors: &str) -> &'static Element;
+        pub safe fn query_selector(this: &Element, selectors: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/querySelectorAll)
         #[link_name = "querySelectorAll"]
         pub safe fn query_selector_all(this: &Element, selectors: &str) -> &'static NodeList;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/previousElementSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get previousElementSibling"]
-        pub safe fn previous_element_sibling(this: &Element) -> &'static Element;
+        pub safe fn previous_element_sibling(this: &Element) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/nextElementSibling)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get nextElementSibling"]
-        pub safe fn next_element_sibling(this: &Element) -> &'static Element;
+        pub safe fn next_element_sibling(this: &Element) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/before)
         pub safe fn before(this: &Element, nodes: &Node);
@@ -925,9 +898,8 @@ pub mod document {
         pub safe fn content_type(this: &Document) -> String;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/documentElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get documentElement"]
-        pub safe fn document_element(this: &Document) -> &'static Element;
+        pub safe fn document_element(this: &Document) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/getElementsByTagName)
         #[link_name = "getElementsByTagName"]
@@ -986,9 +958,8 @@ pub mod document {
         pub safe fn create_event(this: &Document, interface: &str) -> &'static Event;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/location)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get location"]
-        pub safe fn location(this: &Document) -> &'static Location;
+        pub safe fn location(this: &Document) -> Option<&'static Location>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/domain)
         #[link_name = "get domain"]
@@ -1035,9 +1006,8 @@ pub mod document {
         pub safe fn set_dir(this: &Document, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/body)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get body"]
-        pub safe fn body(this: &Document) -> &'static HtmlElement;
+        pub safe fn body(this: &Document) -> Option<&'static HtmlElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/body)
         #[link_name = "set body"]
@@ -1203,38 +1173,32 @@ pub mod document {
         pub safe fn release_events(this: &Document);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/elementFromPoint)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "elementFromPoint"]
-        pub safe fn element_from_point(this: &Document, x: f64, y: f64) -> &'static Element;
+        pub safe fn element_from_point(this: &Document, x: f64, y: f64) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/scrollingElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get scrollingElement"]
-        pub safe fn scrolling_element(this: &Document) -> &'static Element;
+        pub safe fn scrolling_element(this: &Document) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/getElementById)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "getElementById"]
-        pub safe fn get_element_by_id(this: &Document, element_id: &str) -> &'static Element;
+        pub safe fn get_element_by_id(this: &Document, element_id: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/activeElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get activeElement"]
-        pub safe fn active_element(this: &Document) -> &'static Element;
+        pub safe fn active_element(this: &Document) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/children)
         #[link_name = "get children"]
         pub safe fn children(this: &Document) -> &'static HtmlCollection;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/firstElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get firstElementChild"]
-        pub safe fn first_element_child(this: &Document) -> &'static Element;
+        pub safe fn first_element_child(this: &Document) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/lastElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get lastElementChild"]
-        pub safe fn last_element_child(this: &Document) -> &'static Element;
+        pub safe fn last_element_child(this: &Document) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/childElementCount)
         #[link_name = "get childElementCount"]
@@ -1267,9 +1231,8 @@ pub mod document {
         pub safe fn move_before(this: &Document, node: &Node, child: &Node);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/querySelector)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "querySelector"]
-        pub safe fn query_selector(this: &Document, selectors: &str) -> &'static Element;
+        pub safe fn query_selector(this: &Document, selectors: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Document/querySelectorAll)
         #[link_name = "querySelectorAll"]
@@ -1306,23 +1269,20 @@ pub mod document_fragment {
         pub safe fn new() -> &'static DocumentFragment;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/getElementById)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "getElementById"]
-        pub safe fn get_element_by_id(this: &DocumentFragment, element_id: &str) -> &'static Element;
+        pub safe fn get_element_by_id(this: &DocumentFragment, element_id: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/children)
         #[link_name = "get children"]
         pub safe fn children(this: &DocumentFragment) -> &'static HtmlCollection;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/firstElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get firstElementChild"]
-        pub safe fn first_element_child(this: &DocumentFragment) -> &'static Element;
+        pub safe fn first_element_child(this: &DocumentFragment) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/lastElementChild)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get lastElementChild"]
-        pub safe fn last_element_child(this: &DocumentFragment) -> &'static Element;
+        pub safe fn last_element_child(this: &DocumentFragment) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/childElementCount)
         #[link_name = "get childElementCount"]
@@ -1355,9 +1315,8 @@ pub mod document_fragment {
         pub safe fn move_before(this: &DocumentFragment, node: &Node, child: &Node);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/querySelector)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "querySelector"]
-        pub safe fn query_selector(this: &DocumentFragment, selectors: &str) -> &'static Element;
+        pub safe fn query_selector(this: &DocumentFragment, selectors: &str) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DocumentFragment/querySelectorAll)
         #[link_name = "querySelectorAll"]
@@ -1381,8 +1340,7 @@ pub mod dom_token_list {
         pub safe fn length(this: &DomTokenList) -> u32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DOMTokenList/item)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn item(this: &DomTokenList, index: u32) -> String;
+        pub safe fn item(this: &DomTokenList, index: u32) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/DOMTokenList/contains)
         pub safe fn contains(this: &DomTokenList, token: &str) -> bool;
@@ -1424,8 +1382,7 @@ pub mod node_list {
 
     unsafe extern "Rust" {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/NodeList/item)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn item(this: &NodeList, index: u32) -> &'static Node;
+        pub safe fn item(this: &NodeList, index: u32) -> Option<&'static Node>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/NodeList/length)
         #[link_name = "get length"]
@@ -1445,13 +1402,11 @@ pub mod html_collection {
         pub safe fn length(this: &HtmlCollection) -> u32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCollection/item)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn item(this: &HtmlCollection, index: u32) -> &'static Element;
+        pub safe fn item(this: &HtmlCollection, index: u32) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCollection/namedItem)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "namedItem"]
-        pub safe fn named_item(this: &HtmlCollection, name: &str) -> &'static Element;
+        pub safe fn named_item(this: &HtmlCollection, name: &str) -> Option<&'static Element>;
     }
 }
 
@@ -1603,9 +1558,8 @@ pub mod html_element {
         pub safe fn toggle_popover_with_bool(this: &HtmlElement, options: bool) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/popover)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get popover"]
-        pub safe fn popover(this: &HtmlElement) -> String;
+        pub safe fn popover(this: &HtmlElement) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/popover)
         #[link_name = "set popover"]
@@ -1628,14 +1582,12 @@ pub mod html_element {
         pub safe fn set_heading_reset(this: &HtmlElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/scrollParent)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get scrollParent"]
-        pub safe fn scroll_parent(this: &HtmlElement) -> &'static Element;
+        pub safe fn scroll_parent(this: &HtmlElement) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/offsetParent)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get offsetParent"]
-        pub safe fn offset_parent(this: &HtmlElement) -> &'static Element;
+        pub safe fn offset_parent(this: &HtmlElement) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/offsetTop)
         #[link_name = "get offsetTop"]
@@ -1968,9 +1920,8 @@ pub mod html_button_element {
         pub safe fn set_command(this: &HtmlButtonElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/commandForElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get commandForElement"]
-        pub safe fn command_for_element(this: &HtmlButtonElement) -> &'static Element;
+        pub safe fn command_for_element(this: &HtmlButtonElement) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/commandForElement)
         #[link_name = "set commandForElement"]
@@ -1985,9 +1936,8 @@ pub mod html_button_element {
         pub safe fn set_disabled(this: &HtmlButtonElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlButtonElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlButtonElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/formAction)
         #[link_name = "get formAction"]
@@ -2078,9 +2028,8 @@ pub mod html_button_element {
         pub safe fn labels(this: &HtmlButtonElement) -> &'static NodeList;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/popoverTargetElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get popoverTargetElement"]
-        pub safe fn popover_target_element(this: &HtmlButtonElement) -> &'static Element;
+        pub safe fn popover_target_element(this: &HtmlButtonElement) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/popoverTargetElement)
         #[link_name = "set popoverTargetElement"]
@@ -2357,9 +2306,8 @@ pub mod html_image_element {
         pub safe fn set_sizes(this: &HtmlImageElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/crossOrigin)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get crossOrigin"]
-        pub safe fn cross_origin(this: &HtmlImageElement) -> String;
+        pub safe fn cross_origin(this: &HtmlImageElement) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/crossOrigin)
         #[link_name = "set crossOrigin"]
@@ -2619,9 +2567,8 @@ pub mod html_input_element {
         pub safe fn set_disabled(this: &HtmlInputElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlInputElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlInputElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/formAction)
         #[link_name = "get formAction"]
@@ -2808,9 +2755,8 @@ pub mod html_input_element {
         pub safe fn set_value(this: &HtmlInputElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/valueAsDate)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get valueAsDate"]
-        pub safe fn value_as_date(this: &HtmlInputElement) -> &'static JsObject;
+        pub safe fn value_as_date(this: &HtmlInputElement) -> Option<&'static JsObject>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/valueAsDate)
         #[link_name = "set valueAsDate"]
@@ -2869,35 +2815,31 @@ pub mod html_input_element {
         pub safe fn set_custom_validity(this: &HtmlInputElement, error: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/labels)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get labels"]
-        pub safe fn labels(this: &HtmlInputElement) -> &'static NodeList;
+        pub safe fn labels(this: &HtmlInputElement) -> Option<&'static NodeList>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/select)
         pub safe fn select(this: &HtmlInputElement);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionStart)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get selectionStart"]
-        pub safe fn selection_start(this: &HtmlInputElement) -> u32;
+        pub safe fn selection_start(this: &HtmlInputElement) -> Option<u32>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionStart)
         #[link_name = "set selectionStart"]
         pub safe fn set_selection_start(this: &HtmlInputElement, value: u32);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionEnd)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get selectionEnd"]
-        pub safe fn selection_end(this: &HtmlInputElement) -> u32;
+        pub safe fn selection_end(this: &HtmlInputElement) -> Option<u32>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionEnd)
         #[link_name = "set selectionEnd"]
         pub safe fn set_selection_end(this: &HtmlInputElement, value: u32);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionDirection)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get selectionDirection"]
-        pub safe fn selection_direction(this: &HtmlInputElement) -> String;
+        pub safe fn selection_direction(this: &HtmlInputElement) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/selectionDirection)
         #[link_name = "set selectionDirection"]
@@ -2944,9 +2886,8 @@ pub mod html_input_element {
         pub safe fn set_use_map(this: &HtmlInputElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/popoverTargetElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get popoverTargetElement"]
-        pub safe fn popover_target_element(this: &HtmlInputElement) -> &'static Element;
+        pub safe fn popover_target_element(this: &HtmlInputElement) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/popoverTargetElement)
         #[link_name = "set popoverTargetElement"]
@@ -2987,9 +2928,8 @@ pub mod html_label_element {
         pub safe fn new() -> &'static HtmlLabelElement;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLabelElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlLabelElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlLabelElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLabelElement/htmlFor)
         #[link_name = "get htmlFor"]
@@ -3000,9 +2940,8 @@ pub mod html_label_element {
         pub safe fn set_html_for(this: &HtmlLabelElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLabelElement/control)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get control"]
-        pub safe fn control(this: &HtmlLabelElement) -> &'static HtmlElement;
+        pub safe fn control(this: &HtmlLabelElement) -> Option<&'static HtmlElement>;
 
         /// Treats `this` as `HtmlLabelElement` without checking that it is one.
         #[link_name = "this"]
@@ -3139,9 +3078,8 @@ pub mod html_option_element {
         pub safe fn set_disabled(this: &HtmlOptionElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOptionElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlOptionElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlOptionElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOptionElement/label)
         #[link_name = "get label"]
@@ -3218,9 +3156,8 @@ pub mod html_output_element {
         pub safe fn html_for(this: &HtmlOutputElement) -> &'static DomTokenList;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOutputElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlOutputElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlOutputElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOutputElement/name)
         #[link_name = "get name"]
@@ -3351,9 +3288,8 @@ pub mod html_select_element {
         pub safe fn set_disabled(this: &HtmlSelectElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlSelectElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlSelectElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/multiple)
         #[link_name = "get multiple"]
@@ -3400,13 +3336,11 @@ pub mod html_select_element {
         pub safe fn set_length(this: &HtmlSelectElement, value: u32);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/item)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn item(this: &HtmlSelectElement, index: u32) -> &'static HtmlOptionElement;
+        pub safe fn item(this: &HtmlSelectElement, index: u32) -> Option<&'static HtmlOptionElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/namedItem)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "namedItem"]
-        pub safe fn named_item(this: &HtmlSelectElement, name: &str) -> &'static HtmlOptionElement;
+        pub safe fn named_item(this: &HtmlSelectElement, name: &str) -> Option<&'static HtmlOptionElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/add)
         pub safe fn add(this: &HtmlSelectElement, element: &HtmlOptionElement);
@@ -3559,9 +3493,8 @@ pub mod html_text_area_element {
         pub safe fn set_disabled(this: &HtmlTextAreaElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTextAreaElement/form)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get form"]
-        pub safe fn form(this: &HtmlTextAreaElement) -> &'static HtmlFormElement;
+        pub safe fn form(this: &HtmlTextAreaElement) -> Option<&'static HtmlFormElement>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTextAreaElement/maxLength)
         #[link_name = "get maxLength"]
@@ -3835,9 +3768,8 @@ pub mod window {
         pub safe fn length(this: &Window) -> u32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/frameElement)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get frameElement"]
-        pub safe fn frame_element(this: &Window) -> &'static Element;
+        pub safe fn frame_element(this: &Window) -> Option<&'static Element>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/originAgentCluster)
         #[link_name = "get originAgentCluster"]
@@ -3858,18 +3790,15 @@ pub mod window {
         pub safe fn confirm_with_message(this: &Window, message: &str) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/prompt)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn prompt(this: &Window) -> String;
+        pub safe fn prompt(this: &Window) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/prompt)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "prompt"]
-        pub safe fn prompt_with_message(this: &Window, message: &str) -> String;
+        pub safe fn prompt_with_message(this: &Window, message: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/prompt)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "prompt"]
-        pub safe fn prompt_with_message_and_default(this: &Window, message: &str, default: &str) -> String;
+        pub safe fn prompt_with_message_and_default(this: &Window, message: &str, default: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/print)
         pub safe fn print(this: &Window);
@@ -4188,13 +4117,11 @@ pub mod storage {
         pub safe fn length(this: &Storage) -> u32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Storage/key)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn key(this: &Storage, index: u32) -> String;
+        pub safe fn key(this: &Storage, index: u32) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Storage/getItem)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "getItem"]
-        pub safe fn get_item(this: &Storage, key: &str) -> String;
+        pub safe fn get_item(this: &Storage, key: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Storage/setItem)
         #[link_name = "setItem"]
@@ -4230,9 +4157,8 @@ pub mod ui_event {
         pub safe fn new(type_: &str) -> &'static UiEvent;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/UIEvent/view)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get view"]
-        pub safe fn view(this: &UiEvent) -> &'static Window;
+        pub safe fn view(this: &UiEvent) -> Option<&'static Window>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/UIEvent/detail)
         #[link_name = "get detail"]
@@ -4289,9 +4215,8 @@ pub mod focus_event {
         pub safe fn new(type_: &str) -> &'static FocusEvent;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/FocusEvent/relatedTarget)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get relatedTarget"]
-        pub safe fn related_target(this: &FocusEvent) -> &'static EventTarget;
+        pub safe fn related_target(this: &FocusEvent) -> Option<&'static EventTarget>;
 
         /// Treats `this` as `FocusEvent` without checking that it is one.
         #[link_name = "this"]
@@ -4368,9 +4293,8 @@ pub mod mouse_event {
         pub safe fn buttons(this: &MouseEvent) -> u16;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/MouseEvent/relatedTarget)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get relatedTarget"]
-        pub safe fn related_target(this: &MouseEvent) -> &'static EventTarget;
+        pub safe fn related_target(this: &MouseEvent) -> Option<&'static EventTarget>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/MouseEvent/getModifierState)
         #[link_name = "getModifierState"]
@@ -4601,9 +4525,8 @@ pub mod input_event {
         pub safe fn new(type_: &str) -> &'static InputEvent;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/InputEvent/data)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
         #[link_name = "get data"]
-        pub safe fn data(this: &InputEvent) -> String;
+        pub safe fn data(this: &InputEvent) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/InputEvent/isComposing)
         #[link_name = "get isComposing"]
@@ -4850,8 +4773,7 @@ pub mod headers {
         pub safe fn delete(this: &Headers, name: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Headers/get)
-        /// May be `null` in JS, which this binding doesn't say yet (ADR 0024).
-        pub safe fn get(this: &Headers, name: &str) -> String;
+        pub safe fn get(this: &Headers, name: &str) -> Option<String>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Headers/has)
         pub safe fn has(this: &Headers, name: &str) -> bool;
