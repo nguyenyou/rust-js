@@ -24,6 +24,10 @@ mod structs;
 #[allow(dead_code)]
 mod generic_options;
 
+#[path = "../examples/combinators.rs"]
+#[allow(dead_code)]
+mod combinators;
+
 #[path = "../examples/std_traits.rs"]
 #[allow(dead_code)]
 mod std_traits;
@@ -191,6 +195,11 @@ fn main() {
     case("generic_options.inner_values", &[], generic_options::inner_values);
     case("generic_options.mapped_values", &[], generic_options::mapped_values);
     case("generic_options.std_values", &[], generic_options::std_values);
+    // Every combinator's results, as `{:?}` shows them on both sides.
+    case("combinators.report", &[], combinators::report);
+    for i in [0, 1, 5] {
+        case("combinators.panics", &[i as i64], || combinators::panics(i));
+    }
     case("std_traits.defaults", &[], std_traits::defaults);
     case("std_traits.vec_clones", &[], std_traits::vec_clones);
     case("std_traits.struct_clones", &[], std_traits::struct_clones);

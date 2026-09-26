@@ -20,6 +20,7 @@ let options: Record<string, (...args: any[]) => unknown>;
 let methods: Record<string, (...args: any[]) => unknown>;
 let genericOptions: Record<string, (...args: any[]) => unknown>;
 let stdTraits: Record<string, (...args: any[]) => unknown>;
+let combinators: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -57,6 +58,8 @@ beforeAll(async () => {
   genericOptions = await import(join(target, "generic_options.js"));
   run([join(target, "debug", "rust-js"), "examples/std_traits.rs", "-o", join(target, "std_traits.js")]);
   stdTraits = await import(join(target, "std_traits.js"));
+  run([join(target, "debug", "rust-js"), "examples/combinators.rs", "-o", join(target, "combinators.js")]);
+  combinators = await import(join(target, "combinators.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -142,6 +145,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "generic_options") {
         return JSON.parse(JSON.stringify(genericOptions[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+      }
+      if (path[0] === "combinators") {
+        return combinators[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);

@@ -42,7 +42,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`. One with
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.
-- An iterator is a JS array, and its adapters the array's methods (`v.iter().map(f)` is `v.map(f)`);
+- An iterator is a JS array, and its adapters the array's methods (`v.iter().map(f)` is `v.map(f)`, and
+  `h.unwrap_or_else(|| 99)` is `h ?? 99`, [ADR 0062](docs/decisions/0062-combinators.md));
   sorting takes comparators, and `Ordering` is -1, 0 or 1. An `impl Iterator` of the crate's own is a lazy JS
   iterator, `$iterator(it, countdownIterator_next).take(5)` ([ADR 0055](docs/decisions/0055-iterator.md)).
 - `thread_local!` is a variable of its module: `const COUNT = { value: 0 };`.

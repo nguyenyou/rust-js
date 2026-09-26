@@ -77,5 +77,5 @@ const match = $try(() => JSON.parse(json));   // { TAG: "Ok", _0: .. } or { TAG:
   as a panic would.
 - `$try`'s `Err` is whatever was thrown. `&JsError` is the honest type, since
   JS can throw any value.
-- Not yet: `?` with std's `From` conversions, `map`, `map_err`, `and_then`, `ok_or`,
-  and `Result`'s other methods.
+- `map`, `map_err`, `and_then`, `ok_or` and the like came with ADR 0062.
+- Not yet: `?` with std's `From` conversions.

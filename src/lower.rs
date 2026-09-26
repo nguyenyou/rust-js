@@ -36,6 +36,7 @@ use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 mod analysis;
 mod bindings;
 mod calls;
+mod combinators;
 mod display;
 mod format_spec;
 mod jsx;

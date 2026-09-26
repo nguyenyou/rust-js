@@ -212,6 +212,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Std::Map(op) = known {
             return self.map_call(op, args, generic_args, discarded, span, out);
         }
+        if let Std::Comb(comb) = known {
+            return self.comb_call(comb, args, generic_args, span, out);
+        }
         // `vec![a, b]` is `box_assume_init_into_vec_unsafe(write_box_via_move(<box>, [a, b]))`.
         if known == Std::VecMacro {
             let ExprKind::Call { args: ref inner, .. } = self.thir[self.strip(args[0])].kind else {
@@ -580,7 +583,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Only in a `format_args!` it recognizes whole (ADR 0058).
             Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
-            Std::Map(_) => unreachable!("handled above"),
+            Std::Map(_) | Std::Comb(_) | Std::IterComb(_) => unreachable!("handled above"),
             // `Some(&x)` is `x`, and its clone is `x`'s.
             Std::OptionCloned => {
                 let item = generic_args.types().next().expect("`Option<T>` has a `T`");
@@ -703,7 +706,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 /// `f(args)`, with a closure that only returns put in place, its parameters
 /// the arguments: `((s) => s.value)(START)` is `START.value`. Only for
 /// arguments that read the same however often they're read.
-fn apply(f: Expr, args: Vec<Expr>) -> Expr {
+pub(super) fn apply(f: Expr, args: Vec<Expr>) -> Expr {
     if let js::ExprKind::Arrow(params, body) = &f.kind
         && let [
             js::Stmt {

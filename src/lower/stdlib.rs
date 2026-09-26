@@ -1,5 +1,6 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
+use super::combinators::{self, Comb, IterComb};
 use super::format_spec::{Radix, Spec};
 use super::maps::{MapOp, Part};
 use super::representation::Num;
@@ -66,6 +67,10 @@ pub(super) enum Std {
     FmtUsize,
     /// A `HashMap` or `HashSet` method (ADR 0059).
     Map(MapOp),
+    /// An `Option`, `Result` or `Vec` method (ADR 0062).
+    Comb(Comb),
+    /// An iterator adapter or consumer (ADR 0062).
+    IterComb(IterComb),
     /// `Option` (ADR 0030): `o != null`, `o == null`.
     IsSome,
     IsNone,
@@ -160,6 +165,7 @@ impl Std {
                 | Std::Extreme(_)
                 | Std::Last
                 | Std::Cloned
+                | Std::IterComb(_)
         )
     }
 }
@@ -325,6 +331,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "min" => Std::Extreme(false),
                     "last" => Std::Last,
                     "count" => Std::Len,
+                    name if let Some(comb) = combinators::classify_iter(name) => Std::IterComb(comb),
                     "copied" | "cloned" => Std::Cloned,
                     "collect" if collects_string() => Std::CollectString,
                     "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
@@ -352,6 +359,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => None,
                 };
             }
+            // `v.extend(items)` (ADR 0062).
+            if combinators::is_extend(tcx, trait_) && self.is_std_adt(ty.peel_refs(), sym::Vec) {
+                return Some(Std::Comb(Comb::Extend));
+            }
             // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
             if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
                 let set = self.is_set(ty);
@@ -372,6 +383,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         let (map, set) = (adt("HashMap") || adt("BTreeMap"), adt("HashSet") || adt("BTreeSet"));
         let entry = adt("HashMapEntry") || adt("BTreeEntry");
+        let name = tcx.item_name(def_id);
+        if let Some(comb) = combinators::classify(
+            name.as_str(),
+            option,
+            result,
+            adt("Vec"),
+            adt("Vec") || owner.is_slice(),
+        ) {
+            return Some(Std::Comb(comb));
+        }
         Some(match tcx.item_name(def_id).as_str() {
             "new" | "with_capacity" if map || set => Std::Map(MapOp::New { set }),
             "insert" if map => Std::Map(MapOp::Insert),
@@ -902,6 +923,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if lazy && known == Std::Rev {
             return Err(self.unsupported(span, "`rev` of an iterator of the crate's own"));
         }
+        if let Std::IterComb(comb) = known {
+            let rest = self.operands(&args[1..], out)?.into_iter();
+            return self.iter_comb(comb, items, rest, generic_args, receiver_ty, lazy, span, out);
+        }
         let items = match known {
             _ if !lazy => items,
             Std::ArrayMethod(_) | Std::Enumerate | Std::Fold | Std::Sum | Std::Skip | Std::Take | Std::Cloned => items,
@@ -955,11 +980,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Collect => {
                 let fresh = match &items.kind {
                     js::ExprKind::Call(callee, _) => match &callee.kind {
-                        js::ExprKind::Member(_, name) => {
-                            ["map", "filter", "slice", "toReversed", "split", "from", "toArray"]
+                        js::ExprKind::Member(_, name) => [
+                            "map",
+                            "filter",
+                            "slice",
+                            "toReversed",
+                            "split",
+                            "from",
+                            "toArray",
+                            "flatMap",
+                            "flat",
+                            "concat",
+                        ]
+                        .contains(&name.as_str()),
+                        js::ExprKind::Var(name) => {
+                            ["$range", "$zip", "$takeWhile", "$skipWhile", "$windows", "$chunks"]
                                 .contains(&name.as_str())
                         }
-                        js::ExprKind::Var(name) => name == "$range",
                         _ => false,
                     },
                     _ => false,

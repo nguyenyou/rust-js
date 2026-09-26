@@ -27,6 +27,18 @@ pub enum Helper {
     OrInsert,
     OrInsertWith,
     SortedEntries,
+    Extend,
+    InsertAt,
+    RemoveAt,
+    Swap,
+    Truncate,
+    Dedup,
+    Windows,
+    Chunks,
+    Zip,
+    TakeWhile,
+    SkipWhile,
+    Partition,
     SortedKeys,
     StripPrefix,
     StripSuffix,
@@ -496,6 +508,130 @@ function $remove(map, key) {
   const old = map.get(key);
   map.delete(key);
   return old;
+}
+"#
+            }
+            // `v.extend(items)` (ADR 0062): a `push` of each, not of an array
+            // too long for a call's arguments.
+            Helper::Extend => {
+                r#"
+function $extend(v, items) {
+  for (const item of items) {
+    v.push(item);
+  }
+}
+"#
+            }
+            // `v.insert(i, x)`, which panics past the end, where `splice` wouldn't.
+            Helper::InsertAt => {
+                r#"
+function $insertAt(v, index, item) {
+  if (index > v.length) {
+    throw new Error(`insertion index (is ${index}) should be <= len (is ${v.length})`);
+  }
+  v.splice(index, 0, item);
+}
+"#
+            }
+            // `v.remove(i)`: the item, and a panic past the end.
+            Helper::RemoveAt => {
+                r#"
+function $removeAt(v, index) {
+  if (index >= v.length) {
+    throw new Error(`removal index (is ${index}) should be < len (is ${v.length})`);
+  }
+  return v.splice(index, 1)[0];
+}
+"#
+            }
+            Helper::Swap => {
+                r#"
+function $swap(v, a, b) {
+  if (a >= v.length || b >= v.length) {
+    throw new Error(`index out of bounds: the len is ${v.length} but the index is ${Math.max(a, b)}`);
+  }
+  [v[a], v[b]] = [v[b], v[a]];
+}
+"#
+            }
+            Helper::Truncate => {
+                r#"
+function $truncate(v, length) {
+  if (length < v.length) {
+    v.length = length;
+  }
+}
+"#
+            }
+            // `v.dedup()`: each run of equal items as one.
+            Helper::Dedup => {
+                r#"
+function $dedup(v) {
+  let n = 0;
+  for (const item of v) {
+    if (n === 0 || v[n - 1] !== item) {
+      v[n++] = item;
+    }
+  }
+  v.length = n;
+}
+"#
+            }
+            // `v.windows(n)`: each run of `n` in a row. It panics for 0, as Rust's does.
+            Helper::Windows => {
+                r#"
+function $windows(v, size) {
+  if (size === 0) {
+    throw new Error("window size must be non-zero");
+  }
+  return Array.from({ length: Math.max(0, v.length - size + 1) }, (_, i) => v.slice(i, i + size));
+}
+"#
+            }
+            Helper::Chunks => {
+                r#"
+function $chunks(v, size) {
+  if (size === 0) {
+    throw new Error("chunk size must be non-zero");
+  }
+  return Array.from({ length: Math.ceil(v.length / size) }, (_, i) => v.slice(i * size, i * size + size));
+}
+"#
+            }
+            // `a.zip(b)`: pairs, as many as the shorter has.
+            Helper::Zip => {
+                r#"
+function $zip(a, b) {
+  return Array.from({ length: Math.min(a.length, b.length) }, (_, i) => [a[i], b[i]]);
+}
+"#
+            }
+            Helper::TakeWhile => {
+                r#"
+function $takeWhile(items, keep) {
+  const end = items.findIndex((item) => !keep(item));
+  return end < 0 ? items.slice() : items.slice(0, end);
+}
+"#
+            }
+            Helper::SkipWhile => {
+                r#"
+function $skipWhile(items, skip) {
+  const start = items.findIndex((item) => !skip(item));
+  return start < 0 ? [] : items.slice(start);
+}
+"#
+            }
+            // `partition(p)`: those it holds for, and the rest.
+            Helper::Partition => {
+                r#"
+function $partition(items, keep) {
+  const yes = [];
+  const no = [];
+  for (const item of items) {
+    (keep(item) ? yes : no).push(item);
+  }
+  return [yes, no];
 }
 "#
             }
