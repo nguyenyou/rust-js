@@ -707,27 +707,32 @@ impl<'a> Cx<'a> {
             children.push(self.jsx_newline(depth));
         }
         if let JsxTag::Fragment = jsx.tag {
-            let (open, close) = (JSXOpeningFragment::new(SPAN, b), JSXClosingFragment::new(SPAN, b));
+            let (open, close) = (JSXOpeningFragment::new(sp, b), JSXClosingFragment::new(SPAN, b));
             return Expression::new_jsx_fragment(sp, open, children, close, b);
         }
         let attrs = jsx.props.iter().filter_map(|prop| self.jsx_attribute(prop));
-        let opening =
-            JSXOpeningElement::boxed(SPAN, self.jsx_name(&jsx.tag), None, ArenaVec::from_iter_in(attrs, b), b);
+        let opening = JSXOpeningElement::boxed(
+            sp,
+            self.jsx_name(&jsx.tag, sp),
+            None,
+            ArenaVec::from_iter_in(attrs, b),
+            b,
+        );
         // `<img />` has nothing to close.
-        let closing = (!children.is_empty()).then(|| JSXClosingElement::boxed(SPAN, self.jsx_name(&jsx.tag), b));
+        let closing = (!children.is_empty()).then(|| JSXClosingElement::boxed(SPAN, self.jsx_name(&jsx.tag, SPAN), b));
         Expression::new_jsx_element(sp, opening, children, closing, b)
     }
 
     /// `div`, `Counter`, or `stats.Chart` from another module.
-    fn jsx_name(&self, tag: &JsxTag) -> JSXElementName<'a> {
+    fn jsx_name(&self, tag: &JsxTag, sp: Span) -> JSXElementName<'a> {
         let b = &self.b;
         let component = match tag {
-            JsxTag::Intrinsic(tag) => return JSXElementName::new_identifier(SPAN, self.name(tag), b),
+            JsxTag::Intrinsic(tag) => return JSXElementName::new_identifier(sp, self.name(tag), b),
             JsxTag::Component(component) => component,
             JsxTag::Fragment => unreachable!("a fragment has no name"),
         };
         match &component.kind {
-            ExprKind::Var(name) => JSXElementName::new_identifier_reference(SPAN, self.name(name), b),
+            ExprKind::Var(name) => JSXElementName::new_identifier_reference(sp, self.name(name), b),
             ExprKind::Member(object, property) => {
                 let property = JSXIdentifier::new(SPAN, self.name(property), b);
                 JSXElementName::new_member_expression(SPAN, self.jsx_object(object), property, b)

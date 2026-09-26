@@ -20,13 +20,17 @@
 
 extern crate rustc_ast;
 extern crate rustc_driver;
+extern crate rustc_expand;
 extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_middle;
+extern crate rustc_parse;
+extern crate rustc_session;
 extern crate rustc_span;
 
 mod format;
 mod js;
+mod jsx_syntax;
 mod lower;
 mod output;
 mod prepare;
@@ -45,6 +49,11 @@ struct RustJs {
 }
 
 impl Callbacks for RustJs {
+    fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
+        jsx_syntax::expand(&compiler.sess, krate);
+        Compilation::Continue
+    }
+
     fn after_expansion<'tcx>(&mut self, _compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
         // 1. Copy each function's THIR. MIR building (for borrowck) steals it.
         let bodies = lower::collect_bodies(tcx);
@@ -119,6 +128,7 @@ fn main() -> ExitCode {
         // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
         // and `#![rust_js::import = "./App.css"]` inside a module.
         "-Zcrate-attr=feature(register_tool, custom_inner_attributes)".to_string(),
+        "-Zcrate-attr=feature(decl_macro)".to_string(),
         "-Zcrate-attr=register_tool(rust_js)".to_string(),
     ];
     if test {

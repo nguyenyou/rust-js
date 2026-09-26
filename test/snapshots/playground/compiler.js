@@ -38,12 +38,14 @@ export async function load(stat) {
   const start = performance.now();
   const module = loadCompiler(start, stat);
   const sysroot = loadSysroot(start, stat);
-  const webCrate = loadWebCrate(start, stat);
+  const webCrate = loadBindingCrate("web", start, stat);
+  const reactCrate = loadBindingCrate("react", start, stat);
   const examples = loadExamples();
   const loaded = {
     module: await module,
     sysroot: await sysroot,
     webCrate: await webCrate,
+    reactCrate: await reactCrate,
     examples: await examples,
   };
   stat("ready after", ms(performance.now() - start));
@@ -82,9 +84,9 @@ async function loadSysrootFile(name) {
   return [name, new File(bytes, { readonly: true })];
 }
 
-async function loadWebCrate(start, stat) {
-  const bytes = await (await window.fetch("./web/libweb.rmeta")).arrayBuffer();
-  stat("download web crate", `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
+async function loadBindingCrate(name, start, stat) {
+  const bytes = await (await window.fetch(`./web/lib${name}.rmeta`)).arrayBuffer();
+  stat(`download ${name} crate`, `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
   return new File(new Uint8Array(bytes), { readonly: true });
 }
 
@@ -140,7 +142,7 @@ function jsFilesIn(folder, prefix, found) {
   for (const [name, entry] of Array.from(folder.contents)) {
     if (entry instanceof Directory) {
       jsFilesIn(entry, `${prefix}${name}/`, found);
-    } else if (entry instanceof File && name.endsWith(".js")) {
+    } else if (entry instanceof File && (name.endsWith(".js") || name.endsWith(".jsx"))) {
       const text = new TextDecoder().decode(entry.data);
       found.push([prefix + name, text]);
     }
@@ -167,7 +169,13 @@ export async function compile(loaded, sources, rootFile, test) {
       "/sysroot",
       new Map([["lib", dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysrootDir)))]]),
     ),
-    new PreopenDirectory("/web", new Map([["libweb.rmeta", loaded.webCrate]])),
+    new PreopenDirectory(
+      "/web",
+      new Map([
+        ["libweb.rmeta", loaded.webCrate],
+        ["libreact.rmeta", loaded.reactCrate],
+      ]),
+    ),
   ];
   let outFile;
   const match = $stripSuffix(rootFile, ".rs");
@@ -191,6 +199,9 @@ export async function compile(loaded, sources, rootFile, test) {
   }
   args.push("--extern");
   args.push("web=/web/libweb.rmeta");
+  for (const arg$2 of ["--extern", "react=/web/libreact.rmeta", "-L", "/web"]) {
+    args.push(arg$2);
+  }
   const wasi = new WASI(args, ["RUSTC_ICE=0"], fds, { debug: false });
   const t0 = performance.now();
   const imports = { wasi_snapshot_preview1: wasi.wasiImport };

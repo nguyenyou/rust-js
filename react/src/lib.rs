@@ -155,6 +155,13 @@ pub fn inner_html(html: impl Value) -> InnerHtml {
 }
 
 impl Element {
+    /// Spread a props struct into this element. Fields keep the JS names of
+    /// their Rust struct (including the crate's camel_case setting).
+    #[rust_js::link_name = "prop ..."]
+    pub fn props<P>(self, props: P) -> Element {
+        unreachable!()
+    }
+
     /// Its children: one [`Node`], or several as a tuple.
     #[rust_js::link_name = "prop children"]
     pub fn children(self, children: impl Node) -> Element {

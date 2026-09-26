@@ -115,6 +115,10 @@ pub fn App() -> Element {
         runs.set_current(n);
         match prepare(files, root_js, test, n) {
             Prepared::Nothing => set_program.set(None),
+            Prepared::Jsx => {
+                set_program.set(None);
+                set_status.update(|s| say(format!("{} Preview React with the Vite example.", s.text), Tone::Plain));
+            }
             Prepared::Blocked(imports) => {
                 set_program.set(None);
                 let names: Vec<String> = imports.iter().map(|s| format!("\"{s}\"")).collect();
@@ -153,6 +157,8 @@ pub fn App() -> Element {
             if r.ok {
                 let files = text_entries(r.files);
                 let count = files.len();
+                let root_jsx = format!("{root_js}x");
+                let root_js = if files.iter().any(|(path, _)| *path == root_jsx) { root_jsx } else { root_js };
                 // Keep showing the same file if it's still there; otherwise the root's.
                 let shown = if files.iter().any(|(path, _)| *path == shown) { shown } else { root_js.clone() };
                 set_output.set(Output::Files { files, shown });

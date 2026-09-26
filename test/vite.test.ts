@@ -20,11 +20,10 @@ test("Vite builds and refreshes affected crates, recovers from errors and module
   writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   const source = `#![allow(non_snake_case)]
 use react::{Element, use_state};
-use react::html::button;
 mod text;
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
-    button().on_click(move |_| set_count.update(|n| n + 1)).children((text::label(), count))
+    jsx! { <button onClick={move |_| set_count.update(|n| n + 1)}>{text::label()}{count}</button> }
 }
 `;
   const app = join(dir, "src/App.rs"), text = join(dir, "src/text.rs"), output = join(dir, "src/App.jsx");
@@ -63,6 +62,10 @@ process.exit(code);
     writeFileSync(text, 'pub fn label() -> &\'static str { "Changed " }');
     await button.filter({ hasText: "Changed 1" }).waitFor();
     expect(calls().slice(before)).toEqual(["src/App.rs"]);
+
+    writeFileSync(app, source.replace("<button onClick", '<button className="updated" onClick'));
+    await page.locator("button.updated").waitFor();
+    expect(await button.textContent()).toBe("Changed 1");
 
     const good = readFileSync(output, "utf8");
     writeFileSync(app, source + "pub fn broken(");

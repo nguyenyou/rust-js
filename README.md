@@ -29,9 +29,11 @@ For example, a React component:
 ```rust
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
-    button()
-        .on_click(move |_| set_count.update(|count| count + 1))
-        .children(("Count is ", count))
+    jsx! {
+        <button onClick={move |_| set_count.update(|count| count + 1)}>
+            {"Count is "}{count}
+        </button>
+    }
 }
 ```
 

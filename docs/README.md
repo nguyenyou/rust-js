@@ -42,6 +42,7 @@ This folder is where we write those choices down.
 | File | Job |
 |---|---|
 | `src/main.rs` | CLI, rustc callbacks, analysis and the diagnostic gate |
+| `src/jsx_syntax.rs`, `src/jsx_syntax/` | Load configured modules and expand JSX tokens into typed Rust before resolution; shared by native and WASM |
 | `src/lower/link.rs` | Resolve actual module dependencies and collision-free aliases after lowering |
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
 | `src/runtime.rs` | Runtime helpers emitted on demand |
@@ -137,6 +138,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0040 JSX: bindings whose `link_name` is a tag, printed as JSX in a `.jsx` file](decisions/0040-jsx.md)
 - [0041 React: the `react` crate, and Vite with Fast Refresh](decisions/0041-react.md)
 - [0043 React's whole API, gated by the release that added it](decisions/0043-react-versions.md)
+- [0072 JSX syntax in the native and browser compilers](decisions/0072-jsx-syntax.md)
 
 **Scope and process**
 

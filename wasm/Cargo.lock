@@ -1798,9 +1798,12 @@ dependencies = [
  "oxc_syntax",
  "rustc_ast",
  "rustc_driver_impl",
+ "rustc_expand",
  "rustc_hir",
  "rustc_interface",
  "rustc_middle",
+ "rustc_parse",
+ "rustc_session",
  "rustc_span",
  "serde_json",
 ]

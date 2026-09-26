@@ -3,10 +3,11 @@
 // compiler it runs; without one, this is skipped.
 
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
 import { expectSnapshot, root, run } from "./support";
+import { decodeMappings, lookup } from "./sourcemap";
 
 const wasm = join(root, "wasm/target/wasm32-wasip1/release/rust-js.wasm");
 
@@ -21,6 +22,13 @@ test.skipIf(!existsSync(wasm))("rust-js.wasm compiles the playground as the nati
     hint: "rust-js.wasm writes other JS than test/snapshots/playground: if test/snapshots.test.ts passes, the wasm is out of date; rebuild it with `bun run wasm`",
     bless: false,
   });
+  const file = join(root, "wasm/web/rust/components/status_line");
+  const source = readFileSync(`${file}.rs`, "utf8");
+  const js = readFileSync(`${file}.jsx`, "utf8").split("\n");
+  const map = JSON.parse(readFileSync(`${file}.jsx.map`, "utf8"));
+  const line = js.findIndex(l => l.includes("<span"));
+  expect(lookup(decodeMappings(map.mappings), line, js[line].indexOf("<span"))?.srcLine)
+    .toBe(source.split("\n").findIndex(l => l.includes("<span")));
 }, 300_000);
 
 test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and shows errors, as React components", async () => {
@@ -52,6 +60,27 @@ test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and s
     await page.locator("#output-files button", { hasText: "stats.js" }).click();
     await page.locator("#output-files button[aria-current=true]", { hasText: "stats.js" }).waitFor();
     await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "from /in/stats.rs" }).waitFor();
+    // React metadata and the same JSX parser are available inside WASM.
+    await page.locator(".cm-content[aria-label='Rust source']").click();
+    await page.keyboard.press("ControlOrMeta+a");
+    // Paste the full source so editor auto-closing does not turn a Rust
+    // lifetime's apostrophe into a character literal while typing it.
+    await page.keyboard.insertText(`#![allow(non_snake_case)]
+use react::Element;
+pub struct Props { pub text: &'static str }
+pub fn Tile(p: Props) -> Element { jsx! { <button disabled>{p.text}</button> } }
+pub fn App() -> Element { jsx! { <Tile text="Hello JSX" /> } }
+`);
+    await page.evaluate(() => { (window as any).lastResult = undefined; });
+    await page.locator("#compile").click();
+    await page.waitForFunction(() => (window as any).lastResult !== undefined, undefined, { timeout: 60_000 });
+    const jsxResult = await page.evaluate(() => ({ ok: (window as any).lastResult.ok, stderr: (window as any).lastResult.stderr }));
+    expect(jsxResult.ok, jsxResult.stderr).toBe(true);
+    await status.filter({ hasText: "Compiled: 1 JS file." }).waitFor({ timeout: 60_000 });
+    await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "Hello JSX" }).waitFor();
+    expect(await page.locator("#output-files li").textContent()).toContain(".jsx");
+    await page.locator("#test").click();
+    await status.filter({ hasText: "Preview React with the Vite example." }).waitFor({ timeout: 60_000 });
     // An unsaved edit, compiled with ⌘/Ctrl-Enter: rustc's errors, as text.
     await page.locator(".cm-content[aria-label='Rust source']").click();
     await page.keyboard.press("ControlOrMeta+a");

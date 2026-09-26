@@ -24,7 +24,7 @@
     "deploy": "gh workflow run deploy-playground.yml",
     "ship": "bun run wasm && wasm/prebuilt.sh publish && bun run deploy",
     "test:compiler": "bun test test/compiler.test.ts test/diagnostics.test.ts test/emission.test.ts test/traits.test.ts test/semantics.test.ts test/link.test.ts",
-    "test:react": "bun test test/react.test.ts",
+    "test:react": "bun test test/react.test.ts test/jsx.test.ts",
     "test:browser": "bun test test/browser.test.ts",
     "test:vite": "bun test test/vite.test.ts",
     "test:playground": "bun test test/playground.test.ts",

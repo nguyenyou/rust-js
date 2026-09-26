@@ -109,6 +109,7 @@ export function playgroundFiles(): Plugin {
     const name = path.match(/^\/sysroot\/([^/]+)$/)?.[1];
     if (name && sysroot.includes(name)) return { file: join(sysrootDir, name) };
     if (path === "/web/libweb.rmeta") return { file: webCrate };
+    if (path === "/web/libreact.rmeta") return { file: join(dirname(webCrate), "libreact.rmeta") };
     if (path === "/examples.json") return { json: examplesManifest() };
     // Only files an example lists: never an arbitrary path.
     const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
@@ -118,7 +119,7 @@ export function playgroundFiles(): Plugin {
   }
   // Every path the build needs, for `generateBundle`.
   function all(): string[] {
-    const paths = ["/rust-js.wasm", "/sysroot.json", "/web/libweb.rmeta", "/examples.json"];
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/web/libweb.rmeta", "/web/libreact.rmeta", "/examples.json"];
     paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
     for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
     return paths;
@@ -126,7 +127,7 @@ export function playgroundFiles(): Plugin {
   return {
     name: "playground-files",
     buildStart() {
-      buildWebCrate(webCrate);
+      buildReactCrate(dirname(webCrate));
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

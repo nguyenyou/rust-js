@@ -64,7 +64,8 @@ export function link(files, start) {
 export function prepare(files, rootFile, test, run) {
   const sources = Array.from(files);
   let tests;
-  const match = $stripSuffix(rootFile, ".js");
+  const option = $stripSuffix(rootFile, ".jsx");
+  const match = option ?? $stripSuffix(rootFile, ".js");
   if (match != null) {
     tests = `${match}.test.js`;
   } else {
@@ -76,6 +77,9 @@ export function prepare(files, rootFile, test, run) {
     : sources.some((param) => param[0] === rootFile && hasMain.test(param[1]));
   if (!runnable) {
     return "Nothing";
+  }
+  if (sources.some((param) => param[0].endsWith(".jsx"))) {
+    return "Jsx";
   }
   const imports = new RegExp('^import .* from "([^"]+)";$', "gm");
   let external = [];

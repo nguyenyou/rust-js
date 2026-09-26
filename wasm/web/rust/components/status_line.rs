@@ -1,7 +1,6 @@
 // The line beside the buttons: what the page is doing, or how it went.
 
 use react::Element;
-use react::html::span;
 
 pub enum Tone {
     Plain,
@@ -24,5 +23,5 @@ pub fn StatusLine(StatusLineProps { status }: StatusLineProps) -> Element {
         Tone::Good => "text-good",
         Tone::Bad => "text-bad",
     };
-    span().id("status").role("status").class_name(color).children(status.text.clone())
+    jsx! { <span id="status" role="status" className={color}>{status.text.clone()}</span> }
 }

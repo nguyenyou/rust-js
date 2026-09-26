@@ -24,10 +24,13 @@ path = "../src/main.rs"
 [dependencies]
 serde_json = "1"
 rustc_driver = { path = "rustc/compiler/rustc_driver_impl", package = "rustc_driver_impl" }
+rustc_expand = { path = "rustc/compiler/rustc_expand" }
 rustc_ast = { path = "rustc/compiler/rustc_ast" }
 rustc_hir = { path = "rustc/compiler/rustc_hir" }
 rustc_interface = { path = "rustc/compiler/rustc_interface" }
 rustc_middle = { path = "rustc/compiler/rustc_middle" }
+rustc_parse = { path = "rustc/compiler/rustc_parse" }
+rustc_session = { path = "rustc/compiler/rustc_session" }
 rustc_span = { path = "rustc/compiler/rustc_span" }
 # The same oxc release as ../Cargo.toml, from its tag (see there).
 oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }

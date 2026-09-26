@@ -132,6 +132,7 @@ pub struct Loaded {
     pub module: &'static WebAssemblyModule,
     pub sysroot: &'static JsMap,
     pub web_crate: &'static WasiFile,
+    pub react_crate: &'static WasiFile,
     pub examples: Vec<Example>,
 }
 
@@ -156,13 +157,14 @@ pub fn mb(n: f64) -> String {
 /// giving `stat` each one's time as it arrives.
 pub async fn load(stat: Stat) -> Loaded {
     let start = now();
-    // All four start here, together: a JS promise runs as soon as it's made
+    // All downloads start here, together: a JS promise runs as soon as it's made
     // (ADR 0029). Awaiting them one by one below only collects the results.
     let module = load_compiler(start, stat.clone());
     let sysroot = load_sysroot(start, stat.clone());
-    let web_crate = load_web_crate(start, stat.clone());
+    let web_crate = load_binding_crate("web", start, stat.clone());
+    let react_crate = load_binding_crate("react", start, stat.clone());
     let examples = load_examples();
-    let loaded = Loaded { module: module.await, sysroot: sysroot.await, web_crate: web_crate.await, examples: examples.await };
+    let loaded = Loaded { module: module.await, sysroot: sysroot.await, web_crate: web_crate.await, react_crate: react_crate.await, examples: examples.await };
     stat("ready after".to_string(), ms(now() - start));
     loaded
 }
@@ -197,9 +199,9 @@ async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
     (name, new_file(bytes, &FileOptions { readonly: true }))
 }
 
-async fn load_web_crate(start: f64, stat: Stat) -> &'static WasiFile {
-    let bytes = response::array_buffer(window::fetch_with_str(window, "./web/libweb.rmeta").await).await;
-    stat("download web crate".to_string(), format!("{} ({})", ms(now() - start), mb(array_buffer::byte_length(bytes) as f64)));
+async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {
+    let bytes = response::array_buffer(window::fetch_with_str(window, &format!("./web/lib{name}.rmeta")).await).await;
+    stat(format!("download {name} crate"), format!("{} ({})", ms(now() - start), mb(array_buffer::byte_length(bytes) as f64)));
     new_file(uint8_array::new(bytes), &FileOptions { readonly: true })
 }
 
@@ -281,12 +283,12 @@ fn directory_of(sources: &JsMap) -> &'static JsMap {
     top
 }
 
-/// Every `.js` file under a WASI directory, as `path → text`.
+/// Every `.js` or `.jsx` file under a WASI directory, as `path → text`.
 fn js_files_in(folder: &WasiDirectory, prefix: &str, found: &mut Vec<(String, String)>) {
     for (name, entry) in inode_entries(contents(folder)) {
         if is_directory(entry) {
             js_files_in(as_directory(entry), &format!("{prefix}{name}/"), found);
-        } else if is_file(entry) && name.ends_with(".js") {
+        } else if is_file(entry) && (name.ends_with(".js") || name.ends_with(".jsx")) {
             let text = text_decoder::decode_with_uint8_array(text_decoder::new(), file_data(as_file(entry)));
             found.push((format!("{prefix}{name}"), text));
         }
@@ -312,7 +314,10 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
             "/sysroot",
             new_inode_map(vec![("lib".to_string(), dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysroot_dir))))]),
         )),
-        preopen_fd(new_preopen("/web", new_inode_map(vec![("libweb.rmeta".to_string(), file_inode(loaded.web_crate))]))),
+        preopen_fd(new_preopen("/web", new_inode_map(vec![
+            ("libweb.rmeta".to_string(), file_inode(loaded.web_crate)),
+            ("libreact.rmeta".to_string(), file_inode(loaded.react_crate)),
+        ]))),
     ];
     let out_file = match root_file.strip_suffix(".rs") {
         Some(stem) => format!("/out/{stem}.js"),
@@ -337,6 +342,9 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     }
     args.push("--extern".to_string());
     args.push("web=/web/libweb.rmeta".to_string());
+    for arg in ["--extern", "react=/web/libreact.rmeta", "-L", "/web"] {
+        args.push(arg.to_string());
+    }
     // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI
     // has none). Without options, the shim logs every call it handles.
     let wasi = new_wasi(args, vec!["RUSTC_ICE=0".to_string()], fds, &WasiOptions { debug: false });

@@ -69,6 +69,8 @@ pub enum Prepared {
     Nothing,
     /// It imports JS the playground can't load: these specifiers.
     Blocked(Vec<String>),
+    /// The output needs a JSX transform and React runtime before it can run.
+    Jsx,
     Page(String),
 }
 
@@ -174,7 +176,7 @@ const FRAME_HEAD: &str = r#"<!doctype html>
 /// crate's tests, and reports as run number `run`.
 pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared {
     let sources = text_entries(files);
-    let tests = match root_file.strip_suffix(".js") {
+    let tests = match root_file.strip_suffix(".jsx").or_else(|| root_file.strip_suffix(".js")) {
         Some(stem) => format!("{stem}.test.js"),
         None => root_file.to_string(),
     };
@@ -187,6 +189,9 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
     };
     if !runnable {
         return Prepared::Nothing;
+    }
+    if sources.iter().any(|(path, _)| path.ends_with(".jsx")) {
+        return Prepared::Jsx;
     }
     // Imports from JS modules (ADR 0028) name packages or files the page
     // doesn't have. A bundler would bring them in; the playground has none.

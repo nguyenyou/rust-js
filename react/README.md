@@ -9,15 +9,15 @@ whichever React from 18.0 on your project has installed
 ```rust
 #![allow(non_snake_case)]
 
-use react::html::button;
 use react::{Element, use_state};
 
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
-    button()
-        .class_name("counter")
-        .on_click(move |_| set_count.update(|count| count + 1))
-        .children(("Count is ", count))
+    jsx! {
+        <button className="counter" onClick={move |_| set_count.update(|count| count + 1)}>
+            {"Count is "}{count}
+        </button>
+    }
 }
 ```
 
@@ -33,6 +33,13 @@ export function App() {
 
 It's all bindings: rustc checks the types, and nothing of this crate ends up
 in the JS.
+
+`jsx!` is built into rust-js, in both the native and browser compilers.
+Tags and attributes look like JSX; expressions inside braces are Rust.
+Text is quoted (`{"Hello"}`), and handlers are Rust closures. See the
+[syntax guide](../docs/jsx.md) for components, spreads and current limits.
+
+The builder API remains available and can be mixed with `jsx!`:
 
 | Rust | JSX |
 |---|---|

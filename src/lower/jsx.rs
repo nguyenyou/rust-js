@@ -232,11 +232,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             jsx.children.extend(children);
         } else {
+            if name == "..." && !matches!(self.shape(self.thir[value].ty), Shape::Object(_)) {
+                return Err(self.unsupported(self.thir[value].span, "JSX props spread of a non-struct value"));
+            }
             let value = self.expr(value, out)?;
             let js::ExprKind::Jsx(jsx) = &mut element.kind else {
                 unreachable!("checked above")
             };
-            jsx.props.push(Prop::Field(name, value));
+            jsx.props.push(if name == "..." {
+                Prop::Spread(value)
+            } else {
+                Prop::Field(name, value)
+            });
         }
         Ok(element)
     }

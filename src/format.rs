@@ -45,10 +45,33 @@ pub fn formatted(code: &str, map: &SourceMap<'_>, jsx: bool, js_file_name: &str)
         out.set_source_and_content(source, content.unwrap_or_default());
     }
     let name_ids: Vec<u32> = map.get_names().map(|name| out.add_name(name)).collect();
-    for t in map.get_tokens() {
-        let Some(offset) = old_lines.offset(t.get_dst_line(), t.get_dst_col()) else {
-            continue;
-        };
+    let mut tokens: Vec<_> = map
+        .get_tokens()
+        .filter_map(|t| {
+            old_lines
+                .offset(t.get_dst_line(), t.get_dst_col())
+                .map(|offset| (offset, t))
+        })
+        .collect();
+    // Codegen coalesces identical mappings on one line: `return <button>`
+    // may have only the return's mapping. Formatting moves the tag onto a
+    // new line, where that mapping no longer applies. Carry the mapping
+    // active at the original opening tag onto its new position as well.
+    let mut openings = Vec::new();
+    for &(ty, offset) in &before {
+        if matches!(ty, AstType::JSXOpeningElement | AstType::JSXOpeningFragment) {
+            let at = tokens.partition_point(|&(old, _)| old <= offset);
+            if let Some(&(old, token)) = at.checked_sub(1).map(|i| &tokens[i])
+                && old != offset
+                && !code[old as usize..offset as usize].contains('\n')
+            {
+                openings.push((offset, token));
+            }
+        }
+    }
+    tokens.extend(openings);
+    tokens.sort_by_key(|&(offset, _)| offset);
+    for (offset, t) in tokens {
         // The node that starts here, or else the last one before it on the
         // same line, and as far into it.
         let at = pairs.partition_point(|&(old, _)| old <= offset);
