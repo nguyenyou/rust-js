@@ -91,6 +91,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0048 Let chains: each part runs only once the ones before it held](decisions/0048-let-chains.md)
 - [0051 `Option<T>` in generic code: boxed only when it looks like `None`](decisions/0051-generic-options.md)
 - [0052 The crate's own `Default`, `From` and `Clone`, and the trait ABI kept](decisions/0052-std-trait-impls.md)
+- [0053 `==`: JS's `===` or `$eq`, until a hand-written `eq` is in it](decisions/0053-partial-eq.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

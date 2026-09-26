@@ -1,7 +1,8 @@
-// The crate's own impls of std traits (ADR 0052): `Default`, `From` and
-// `Clone`, hand-written and derived. A clone is a copy only where it could
-// be told apart from the value: something changes one of them, or a
-// hand-written `clone` makes something else.
+// The crate's own impls of std traits (ADRs 0052, 0053): `Default`,
+// `From`, `Clone` and `PartialEq`, hand-written and derived. A clone is a
+// copy only where it could be told apart from the value: something changes
+// one of them, or a hand-written `clone` makes something else. A
+// hand-written `eq` decides wherever it is.
 
 #[derive(Clone, Default)]
 pub struct Settings {
@@ -166,4 +167,81 @@ pub fn conversions() -> (f64, f64, f64) {
     let b: Meters = 3u32.into();
     let c: Meters = 1.5.into();
     (a.0, b.0, c.0)
+}
+
+/// Versions are equal when their majors are: the label doesn't count.
+pub struct Version {
+    pub major: u32,
+    pub label: String,
+}
+
+impl PartialEq for Version {
+    fn eq(&self, other: &Self) -> bool {
+        self.major == other.major
+    }
+}
+
+impl Eq for Version {}
+
+#[derive(PartialEq)]
+pub struct Release {
+    pub version: Version,
+    pub notes: Vec<String>,
+}
+
+#[derive(PartialEq)]
+pub enum Change {
+    Nothing,
+    Bump(Version),
+    Note(String),
+}
+
+fn version(major: u32, label: &str) -> Version {
+    Version { major, label: label.to_string() }
+}
+
+pub fn same<T: PartialEq>(a: &T, b: &T) -> bool {
+    a == b
+}
+
+/// A `T: Eq` compares with `T`'s `PartialEq`.
+pub fn count_equal<T: Eq>(items: &[T], x: &T) -> usize {
+    items.iter().filter(|item| *item == x).count()
+}
+
+/// A hand-written `eq` decides, directly, from derived ones, and through generics.
+pub fn equalities() -> (bool, bool, bool, bool, bool, bool) {
+    let r1 = Release { version: version(1, "a"), notes: vec!["x".to_string()] };
+    let r2 = Release { version: version(1, "b"), notes: vec!["x".to_string()] };
+    let r3 = Release { version: version(1, "c"), notes: vec![] };
+    (
+        r1 == r2,
+        r1 != r3,
+        same(&version(2, "a"), &version(3, "a")),
+        Change::Bump(version(4, "a")) == Change::Bump(version(4, "b")),
+        Change::Note("n".to_string()) == Change::Nothing,
+        Some(version(5, "a")) == Some(version(5, "b")),
+    )
+}
+
+pub fn generic_equalities() -> (usize, bool, bool) {
+    let all = vec![version(1, "a"), version(2, "b"), version(1, "c")];
+    let pairs = vec![(1, "a"), (2, "b")];
+    (
+        count_equal(&all, &version(1, "z")),
+        same(&pairs, &vec![(1, "a"), (2, "b")]),
+        same(&vec![version(1, "a")], &vec![version(2, "a")]),
+    )
+}
+
+/// A `PartialEq` with another type on the right: `!=` is its `eq` too.
+impl PartialEq<f64> for Meters {
+    fn eq(&self, other: &f64) -> bool {
+        self.0 == *other
+    }
+}
+
+pub fn compared() -> (bool, bool, bool) {
+    let m = Meters::from(2.0);
+    (m == 2.0, m != 3.0, m != 2.0)
 }

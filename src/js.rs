@@ -466,6 +466,16 @@ impl Expr {
         Some(Expr { kind, span: self.span })
     }
 
+    /// Is this the same value, cheaply, however often it's read? A variable,
+    /// a property of one, or a constant: what can be written twice.
+    pub fn reads_same(&self) -> bool {
+        match &self.kind {
+            ExprKind::Var(_) => true,
+            ExprKind::Member(object, _) => object.reads_same(),
+            _ => self.is_constant(),
+        }
+    }
+
     /// Could evaluating this do something observable (call a function, throw)?
     pub fn has_effects(&self) -> bool {
         match &self.kind {

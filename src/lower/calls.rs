@@ -257,8 +257,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A `Ref` or `RefMut` guard is what it guards: the object itself.
             Std::Borrow => Expr::member(arg(), "value"),
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
-            Std::Eq(eq) => Expr::bin(if eq { Op::Eq } else { Op::Ne }, arg(), arg()),
-            Std::LooseEq(eq) => Expr::bin(if eq { Op::LooseEq } else { Op::LooseNe }, arg(), arg()),
             Std::Method("pop") if boxed => {
                 self.runtime.extend([Helper::Pop, Helper::Some]);
                 Expr::call(Expr::var("$pop"), vec![arg()])
@@ -539,11 +537,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::Debug);
                 Expr::call(Expr::var("$debug"), vec![arg()])
             }
-            Std::StructEq(eq) => {
-                self.runtime.insert(Helper::Eq);
-                let same = Expr::call(Expr::var("$eq"), vec![arg(), arg()]);
-                if eq { same } else { Expr::unary(UnaryOp::Not, same) }
-            }
             Std::Push => {
                 let (v, x) = (arg(), arg());
                 Expr::call(Expr::member(v, "push"), vec![x])
@@ -655,13 +648,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 /// the arguments: `((s) => s.value)(START)` is `START.value`. Only for
 /// arguments that read the same however often they're read.
 fn apply(f: Expr, args: Vec<Expr>) -> Expr {
-    fn reads_same(e: &Expr) -> bool {
-        match &e.kind {
-            js::ExprKind::Var(_) => true,
-            js::ExprKind::Member(object, _) => reads_same(object),
-            _ => e.is_constant(),
-        }
-    }
     if let js::ExprKind::Arrow(params, body) = &f.kind
         && let [
             js::Stmt {
@@ -670,7 +656,7 @@ fn apply(f: Expr, args: Vec<Expr>) -> Expr {
             },
         ] = body.as_slice()
         && params.len() <= args.len()
-        && args.iter().all(reads_same)
+        && args.iter().all(Expr::reads_same)
     {
         let names: Option<Vec<&str>> = params
             .iter()

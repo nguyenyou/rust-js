@@ -19,13 +19,15 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
     id.is_local()
         || tcx.is_lang_item(id, LangItem::Copy)
         || tcx.is_lang_item(id, LangItem::Clone)
+        || tcx.is_lang_item(id, LangItem::PartialEq)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
 
 /// A trait the crate may implement. `From` has no dictionaries: its impls
-/// are only called where the types are known (ADR 0052).
+/// are only called where the types are known (ADR 0052). `Eq` has no
+/// methods: a `T: Eq` bound is its `PartialEq` (ADR 0053).
 pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    operational(tcx, id) || tcx.is_diagnostic_item(sym::From, id)
+    operational(tcx, id) || tcx.is_diagnostic_item(sym::From, id) || tcx.is_diagnostic_item(sym::Eq, id)
 }
 
 pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
@@ -105,18 +107,26 @@ pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tc
         result.push(ty::TraitRef::identity(tcx, trait_id));
     }
     for (clause, _) in tcx.predicates_of(id).instantiate_identity(tcx) {
-        if let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder()
-            && operational(tcx, predicate.trait_ref.def_id)
-            && !result.contains(&predicate.trait_ref)
-        {
-            result.push(predicate.trait_ref);
+        let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder() else {
+            continue;
+        };
+        let mut tr = predicate.trait_ref;
+        // `Eq` promises more than `PartialEq`, but it's `PartialEq`'s `eq`
+        // that's called.
+        if tcx.is_diagnostic_item(sym::Eq, tr.def_id) {
+            let partial_eq = tcx.require_lang_item(LangItem::PartialEq, tcx.def_span(id));
+            tr = ty::TraitRef::new(tcx, partial_eq, [tr.self_ty(), tr.self_ty()]);
+        }
+        if operational(tcx, tr.def_id) && !result.contains(&tr) {
+            result.push(tr);
         }
     }
     result
 }
 
-/// The type, then the trait, then the trait's arguments: `circleShape`,
-/// `metersFromF64` for `impl From<f64> for Meters` (ADR 0052).
+/// The type, then the trait, then the trait's arguments other than their
+/// defaults: `circleShape`, `metersFromF64` for `impl From<f64> for
+/// Meters`, and `versionPartialEq`, whose `Rhs` is `Self` (ADR 0052).
 pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
     let tr = tcx.impl_trait_ref(id).instantiate_identity();
     let word = |ty: Ty<'_>| match ty.kind() {
@@ -128,7 +138,12 @@ pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
         lower_first(&js_word(&word(tr.self_ty()))),
         tcx.item_name(tr.def_id)
     );
-    for arg in tr.args.types().skip(1) {
+    let generics = tcx.generics_of(tr.def_id);
+    for (param, arg) in generics.own_params.iter().zip(tr.args).skip(1) {
+        let Some(arg) = arg.as_type() else { continue };
+        if param.default_value(tcx).map(|d| d.instantiate(tcx, tr.args)) == Some(arg.into()) {
+            continue;
+        }
         let arg = js_word(&word(arg.peel_refs()));
         let mut chars = arg.chars();
         name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
@@ -200,7 +215,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty = tr.self_ty();
         let default = self.tcx.is_diagnostic_item(Symbol::intern("Default"), tr.def_id);
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
-        if (default || clone) && !self.has_user_impl(tr.def_id, ty) {
+        let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
+        if (default || clone || eq) && !self.has_user_impl(tr.def_id, ty) {
+            if eq {
+                let eq = self.eq_fn(ty, span)?;
+                return Ok(Expr::object(vec![Prop::Field("eq".into(), eq)]));
+            }
             if default {
                 let value = self.default_value(ty, span)?;
                 return Ok(Expr::object(vec![Prop::Field(
@@ -310,6 +330,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) {
             return Ok(Some(self.default_value(tr.self_ty(), span)?));
         }
+        // `a != b` is `!(a == b)`, as Rust requires them to agree (ADR 0053).
+        if self.tcx.is_lang_item(trait_id, LangItem::PartialEq) {
+            let [a, b]: [Expr; 2] = values.try_into().map_err(|_| self.unsupported(span, "this `==`"))?;
+            // A hand-written `PartialEq<Rhs>` is its own `eq`, whatever `Rhs` is.
+            let eq = if self.is_user_impl(tr) {
+                let eq = self.tcx.associated_item_def_ids(trait_id)[0];
+                self.impl_call(eq, tr.args, vec![a, b], span)?
+            } else {
+                self.eq_value(a, b, tr.self_ty(), span, out)?
+            };
+            return Ok(Some(match self.tcx.item_name(id).as_str() {
+                "ne" => super::std_impls::negate(eq),
+                _ => eq,
+            }));
+        }
         // A std trait's dictionary has only its required methods.
         if operational(self.tcx, trait_id) && !trait_id.is_local() && self.tcx.defaultness(id).has_value() {
             let what = format!("calling `{}`", self.tcx.def_path_str(id));
@@ -395,16 +430,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn lower_dictionary(&mut self, id: DefId, cache: &str) -> R<js::Function> {
         let span = self.tcx.def_span(id);
+        // The crate's own generic traits are errors (`validate`); a std one's
+        // impl, like `PartialEq<Rhs>`'s, is for its arguments.
         let tr = self.tcx.impl_trait_ref(id).instantiate_identity();
-        if self
-            .tcx
-            .generics_of(tr.def_id)
-            .own_params
-            .iter()
-            .any(|p| p.index != 0 && !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-        {
-            return Err(self.unsupported(span, "generic trait parameters"));
-        }
         let params = self.evidence_params(id);
         let mut props = Vec::new();
         for (clause, _) in self

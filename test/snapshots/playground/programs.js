@@ -112,7 +112,7 @@ export function outcome(report) {
       TAG: "Failed",
       _0: report.error
     };
-  } else if (report.ran == true) {
+  } else if (report.ran === true) {
     return "Ran";
   } else if (report.tested != null) {
     return {

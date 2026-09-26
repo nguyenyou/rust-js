@@ -1,10 +1,12 @@
-//! `Clone` and `Default` where rust-js writes the implementation: derived
-//! ones and std types' (ADR 0052). A hand-written one is called instead.
+//! `Clone`, `Default` and `PartialEq` where rust-js writes the
+//! implementation: derived ones and std types' (ADRs 0052, 0053). A
+//! hand-written one is called instead.
 
 use super::bindings::variant_name;
 use super::representation::Num;
-use super::{FnCx, R, Shape};
-use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
+use super::{FnCx, R, Shape, is_fieldless_enum};
+use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
+use crate::runtime::Helper;
 use rustc_hir as hir;
 use rustc_hir::LangItem;
 use rustc_hir::def::{DefKind, Res};
@@ -14,20 +16,45 @@ use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// The trait's arguments for `Self = ty`, with `ty` for any others too:
+    /// `PartialEq`'s `Rhs` is `Self` unless it says otherwise.
+    fn args_of(&self, trait_id: DefId, ty: Ty<'tcx>) -> ty::GenericArgsRef<'tcx> {
+        let ty = self.tcx.erase_and_anonymize_regions(ty);
+        self.tcx.mk_args_from_iter(std::iter::repeat_n(
+            ty::GenericArg::from(ty),
+            self.tcx.generics_of(trait_id).count(),
+        ))
+    }
+
     /// Does `ty` use a hand-written impl of `trait_id` from this crate?
     pub(super) fn has_user_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
-        let tr = ty::TraitRef::new(self.tcx, trait_id, [self.tcx.erase_and_anonymize_regions(ty)]);
+        self.is_user_impl(ty::TraitRef::new_from_args(
+            self.tcx,
+            trait_id,
+            self.args_of(trait_id, ty),
+        ))
+    }
+
+    /// Is `tr` a hand-written impl from this crate?
+    pub(super) fn is_user_impl(&self, tr: ty::TraitRef<'tcx>) -> bool {
+        let tr = self.tcx.erase_and_anonymize_regions(tr);
         matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
             Ok(ImplSource::UserDefined(imp)) if self.krate.trait_impls.contains(&imp.impl_def_id))
     }
 
-    /// `method` of `Self = ty`'s hand-written impl, called directly:
-    /// `counterClone_clone(c)`.
-    fn impl_call(&mut self, method: DefId, ty: Ty<'tcx>, mut values: Vec<Expr>, span: Span) -> R<Expr> {
-        let args = self.tcx.mk_args(&[self.tcx.erase_and_anonymize_regions(ty).into()]);
+    /// `method` of the hand-written impl for the trait's `args`, called
+    /// directly: `counterClone_clone(c)`.
+    pub(super) fn impl_call(
+        &mut self,
+        method: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+        mut values: Vec<Expr>,
+        span: Span,
+    ) -> R<Expr> {
+        let args = self.tcx.erase_and_anonymize_regions(args);
         let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args)?
             .filter(|i| self.krate.fns.contains_key(&i.def_id()))
-            .ok_or_else(|| self.unsupported(span, &format!("this implementation for `{ty}`")))?;
+            .ok_or_else(|| self.unsupported(span, "this implementation"))?;
         values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
         Ok(Expr::call(self.fn_ref(instance.def_id()), values))
     }
@@ -104,7 +131,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.has_user_impl(self.clone_trait(), ty) {
             let method = self.tcx.require_lang_item(LangItem::CloneFn, span);
-            return self.impl_call(method, ty, vec![place], span);
+            let args = self.args_of(self.clone_trait(), ty);
+            return self.impl_call(method, args, vec![place], span);
         }
         // A constant, like `"Dot"`, is a value no one else holds.
         if place.is_constant() {
@@ -114,7 +142,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(self.copy(place, ty));
         }
         // Read more than once below.
-        let place = if place.has_effects() {
+        let place = if !place.reads_same() {
             self.spill("value", place, out)
         } else {
             place
@@ -249,7 +277,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.has_user_impl(default, ty) {
             let method = self.tcx.associated_item_def_ids(default)[0];
-            return self.impl_call(method, ty, Vec::new(), span);
+            return self.impl_call(method, self.args_of(default, ty), Vec::new(), span);
         }
         self.check_value_ty(ty, span)?;
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
@@ -288,5 +316,222 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Shape::Other => return Err(self.unsupported(span, &format!("`Default` of `{ty}`"))),
             },
         })
+    }
+
+    pub(super) fn partial_eq_trait(&self) -> DefId {
+        self.tcx.require_lang_item(LangItem::PartialEq, rustc_span::DUMMY_SP)
+    }
+
+    /// Is `==` on `ty` JS's `===`: strings, numbers, `bool`s, `()` and
+    /// fieldless enums, all JS primitives?
+    fn is_primitive_eq(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        self.is_string_like(ty)
+            || Num::of(ty).is_some()
+            || ty.is_bool()
+            || ty.is_unit()
+            || matches!(ty.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt))
+    }
+
+    /// Does `==` on `ty` run code of its own anywhere in it: a hand-written
+    /// `eq`, or a `T`'s, which might be one? If not, it compares field by
+    /// field, element by element, which `$eq` does.
+    pub(super) fn custom_eq(&self, ty: Ty<'tcx>) -> bool {
+        self.custom_eq_in(ty, &mut Vec::new())
+    }
+
+    fn custom_eq_in(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+        let ty = ty.peel_refs();
+        if seen.contains(&ty) || self.is_primitive_eq(ty) {
+            return false;
+        }
+        seen.push(ty);
+        let custom = match ty.kind() {
+            ty::Param(_) => true,
+            ty::Tuple(tys) => tys.iter().any(|t| self.custom_eq_in(t, seen)),
+            ty::Array(item, _) | ty::Slice(item) => self.custom_eq_in(*item, seen),
+            ty::Adt(..) if self.has_user_impl(self.partial_eq_trait(), ty) => true,
+            // `Vec`, `Box`, `Rc` and cells compare what they hold.
+            ty::Adt(_, args) if self.is_std_wrapper(ty) => args.types().any(|t| self.custom_eq_in(t, seen)),
+            ty::Adt(adt, args) => adt.all_fields().any(|f| self.custom_eq_in(f.ty(self.tcx, args), seen)),
+            _ => false,
+        };
+        seen.pop();
+        custom
+    }
+
+    /// `a == b` for values of type `ty`: `a === b` for JS primitives, a call
+    /// of a hand-written `eq`, `TPartialEq.eq(a, b)` in generic code, and
+    /// `$eq(a, b)` for what compares field by field. A derived `==` of a
+    /// type with a custom part compares its parts one by one.
+    pub(super) fn eq_value(&mut self, a: Expr, b: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let ty = ty.peel_refs();
+        if self.is_primitive_eq(ty) {
+            return Ok(Expr::bin(Op::Eq, a, b));
+        }
+        if let ty::Param(_) = ty.kind() {
+            let tr = ty::TraitRef::new_from_args(
+                self.tcx,
+                self.partial_eq_trait(),
+                self.args_of(self.partial_eq_trait(), ty),
+            );
+            let dictionary = self
+                .evidence_for(tr)
+                .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
+            return Ok(Expr::call(Expr::member(dictionary, "eq"), vec![a, b]));
+        }
+        if self.has_user_impl(self.partial_eq_trait(), ty) {
+            let eq = self.tcx.associated_item_def_ids(self.partial_eq_trait())[0];
+            let args = self.args_of(self.partial_eq_trait(), ty);
+            return self.impl_call(eq, args, vec![a, b], span);
+        }
+        // A constant, like a fieldless variant's `"Nothing"`, is a JS
+        // primitive: only itself is equal to it. `None` is also `null`.
+        if a.is_constant() || b.is_constant() {
+            let none = [&a, &b].iter().any(|x| matches!(x.kind, js::ExprKind::Undefined));
+            let op = if none { Op::LooseEq } else { Op::Eq };
+            return Ok(Expr::bin(op, a, b));
+        }
+        if let Some(inner) = self.option_of(ty) {
+            // `==`, so that `null` and `undefined` are both `None`.
+            if self.is_primitive_eq(inner) {
+                return Ok(Expr::bin(Op::LooseEq, a, b));
+            }
+        }
+        let structural = matches!(ty.kind(), ty::Tuple(_) | ty::Array(..) | ty::Slice(_))
+            || self.is_std_wrapper(ty)
+            || matches!(ty.kind(), ty::Adt(adt, _) if !self.is_std(adt.did()) || self.is_known_std(ty));
+        if !structural || self.is_js_object(ty) || self.is_lang_adt(ty, LangItem::String) {
+            return Err(self.unsupported(span, &format!("`==` on `{ty}`")));
+        }
+        if !self.custom_eq(ty) {
+            self.runtime.insert(Helper::Eq);
+            return Ok(Expr::call(Expr::var("$eq"), vec![a, b]));
+        }
+        // Each is read more than once below.
+        let a = if a.reads_same() { a } else { self.spill("a", a, out) };
+        let b = if b.reads_same() { b } else { self.spill("b", b, out) };
+        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        match ty.kind() {
+            ty::Array(item, _) | ty::Slice(item) => self.eq_items(a, b, *item, span),
+            ty::Adt(_, args) if std("Vec") => self.eq_items(a, b, args.type_at(0), span),
+            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.eq_value(a, b, args.type_at(0), span, out),
+            ty::Adt(_, args) if std("Cell") || std("RefCell") => self.eq_value(
+                Expr::member(a, "value"),
+                Expr::member(b, "value"),
+                args.type_at(0),
+                span,
+                out,
+            ),
+            ty::Adt(_, args) if self.option_of(ty).is_some() => {
+                let inner = args.type_at(0);
+                let (x, y) = if self.boxed_payload(inner) {
+                    (self.some_value(a.clone()), self.some_value(b.clone()))
+                } else {
+                    (a.clone(), b.clone())
+                };
+                let some = self.eq_value(x, y, inner, span, out)?;
+                let none = Expr::bin(
+                    Op::Or,
+                    Expr::bin(Op::LooseEq, a.clone(), Expr::null()),
+                    Expr::bin(Op::LooseEq, b.clone(), Expr::null()),
+                );
+                Ok(Expr::cond(none, Expr::bin(Op::LooseEq, a, b), some))
+            }
+            ty::Adt(adt, args) if adt.is_enum() => {
+                // `{ TAG: "Line", _0: .. }` (ADR 0033): a variant with a custom
+                // part compares its fields, and `$eq` the rest.
+                self.runtime.insert(Helper::Eq);
+                let mut value = Expr::call(Expr::var("$eq"), vec![a.clone(), b.clone()]);
+                for variant in adt.variants().iter().rev() {
+                    let fields = self.variant_fields(variant, args);
+                    if !fields.iter().any(|&(_, t)| self.custom_eq(t)) {
+                        continue;
+                    }
+                    let name = variant_name(self.tcx, variant);
+                    let tag = |x: &Expr| Expr::bin(Op::Eq, Expr::member(x.clone(), "TAG"), Expr::str(name.clone()));
+                    let mut same = tag(&b);
+                    for (field, t) in fields {
+                        let field = self.eq_value(
+                            Expr::member(a.clone(), field.clone()),
+                            Expr::member(b.clone(), field),
+                            t,
+                            span,
+                            out,
+                        )?;
+                        same = Expr::bin(Op::And, same, field);
+                    }
+                    value = Expr::cond(tag(&a), same, value);
+                }
+                Ok(value)
+            }
+            _ => {
+                let parts: Vec<(Expr, Expr, Ty<'tcx>)> = match self.shape(ty) {
+                    Shape::Object(fields) => fields
+                        .into_iter()
+                        .map(|(name, t)| (Expr::member(a.clone(), name.clone()), Expr::member(b.clone(), name), t))
+                        .collect(),
+                    Shape::Array(tys) => tys
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, t)| {
+                            (
+                                Expr::index(a.clone(), Expr::int(i as i128)),
+                                Expr::index(b.clone(), Expr::int(i as i128)),
+                                t,
+                            )
+                        })
+                        .collect(),
+                    Shape::Other => return Err(self.unsupported(span, &format!("`==` on `{ty}`"))),
+                };
+                let mut all: Option<Expr> = None;
+                for (x, y, t) in parts {
+                    let part = self.eq_value(x, y, t, span, out)?;
+                    all = Some(match all {
+                        Some(all) => Expr::bin(Op::And, all, part),
+                        None => part,
+                    });
+                }
+                Ok(all.unwrap_or_else(|| Expr::bool(true)))
+            }
+        }
+    }
+
+    /// `a.length === b.length && a.every((x, i) => <x == b[i]>)`.
+    fn eq_items(&mut self, a: Expr, b: Expr, item: Ty<'tcx>, span: Span) -> R<Expr> {
+        let mut body = Vec::new();
+        let other = Expr::index(b.clone(), Expr::var("i"));
+        let same = self.eq_value(Expr::var("x"), other, item, span, &mut body)?;
+        body.push(StmtKind::Return(Some(same)).at(js::Span::NONE));
+        let every = Expr::call(
+            Expr::member(a.clone(), "every"),
+            vec![Expr::arrow(vec!["x".into(), "i".into()], body)],
+        );
+        let lengths = Expr::bin(Op::Eq, Expr::member(a, "length"), Expr::member(b, "length"));
+        Ok(Expr::bin(Op::And, lengths, every))
+    }
+
+    /// `(a, b) => <a == b>` for a dictionary's `eq`, or `$eq` itself.
+    pub(super) fn eq_fn(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        let mut body = Vec::new();
+        let same = self.eq_value(Expr::var("a"), Expr::var("b"), ty, span, &mut body)?;
+        if body.is_empty()
+            && let js::ExprKind::Call(callee, _) = &same.kind
+            && let js::ExprKind::Var(name) = &callee.kind
+            && name == "$eq"
+        {
+            return Ok(Expr::var("$eq"));
+        }
+        body.push(StmtKind::Return(Some(same)).at(js::Span::NONE));
+        Ok(Expr::arrow(vec!["a".into(), "b".into()], body))
+    }
+}
+
+/// `!(a == b)`, as JS writes it: `a !== b` for `a === b`.
+pub(super) fn negate(eq: Expr) -> Expr {
+    match eq.kind {
+        js::ExprKind::Binary(Op::Eq, a, b) => Expr::bin(Op::Ne, *a, *b),
+        js::ExprKind::Binary(Op::LooseEq, a, b) => Expr::bin(Op::LooseNe, *a, *b),
+        _ => Expr::unary(UnaryOp::Not, eq),
     }
 }

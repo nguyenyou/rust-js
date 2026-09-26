@@ -1,7 +1,7 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
 use super::representation::Num;
-use super::{FnCx, R, Shape, is_fieldless_enum};
+use super::{FnCx, R};
 use crate::js;
 use crate::js::{Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
@@ -9,8 +9,6 @@ use rustc_hir::LangItem;
 use rustc_middle::mir::{BinOp, UnOp};
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty;
-use rustc_middle::ty::Ty;
-use rustc_span::def_id::DefId;
 use rustc_span::{ErrorGuaranteed, Span, Symbol, sym};
 
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
@@ -32,8 +30,6 @@ pub(super) enum Std {
     ToString,
     /// `String + &str`.
     Concat,
-    /// `==` (true) or `!=` (false) on strings and fieldless enums.
-    Eq(bool),
     StringNew,
     Trim,
     /// `is_empty` on a string or a `Vec`: `x.length === 0`.
@@ -45,8 +41,6 @@ pub(super) enum Std {
     Len,
     Clear,
     Retain,
-    /// `==` (true) or `!=` (false) on structs, tuples, arrays and `Vec`s.
-    StructEq(bool),
     /// `panic!("..")`, `assert!(..)`: `throw new Error(..)`.
     Panic,
     /// `panic!("{}", x)`: the same, with a formatted message.
@@ -70,9 +64,6 @@ pub(super) enum Std {
     UnwrapOr,
     /// `map(f)`: `o != null ? f(o) : undefined`, with a closure's body in place.
     OptionMap,
-    /// `==` (true) or `!=` (false) on options of strings, numbers and the
-    /// like: `==`, so that `null` and `undefined` are both `None`.
-    LooseEq(bool),
     /// A string method that is a JS one (ADR 0034): `s.starts_with(p)` is
     /// `s.startsWith(p)`. Also `join` on a slice of strings.
     Method(&'static str),
@@ -250,32 +241,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if tcx.is_lang_item(trait_, LangItem::Add) {
                 return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
             }
-            if tcx.is_lang_item(trait_, LangItem::PartialEq) {
-                let simple = self.is_string_like(ty)
-                    || Num::of(ty.peel_refs()).is_some()
-                    || ty.peel_refs().is_bool()
-                    || matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
-                let eq = match tcx.item_name(def_id).as_str() {
-                    "eq" => true,
-                    "ne" => false,
-                    _ => return None,
-                };
-                if simple {
-                    return Some(Std::Eq(eq));
-                }
-                if let Some(inner) = self.option_of(ty) {
-                    let simple = self.is_string_like(inner)
-                        || inner.is_bool()
-                        || Num::of(inner).is_some()
-                        || matches!(inner.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
-                    return if simple {
-                        Some(Std::LooseEq(eq))
-                    } else {
-                        self.is_structural_eq(trait_, inner).then_some(Std::StructEq(eq))
-                    };
-                }
-                return self.is_structural_eq(trait_, ty).then_some(Std::StructEq(eq));
-            }
             // An iterator is a JS array (ADR 0036), and a `split` one of strings
             // (ADR 0034). Its adapters are the array's methods.
             if tcx.is_diagnostic_item(sym::Iterator, trait_) {
@@ -419,21 +384,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "unwrap_or" if result => Std::ResultOr,
             _ => return None,
         })
-    }
-
-    /// Does `==` on `ty` compare field by field or element by element? True
-    /// for tuples, arrays, slices and `Vec`s, and structs with a derived `PartialEq`.
-    pub(super) fn is_structural_eq(&self, partial_eq: DefId, ty: Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
-        if ty.is_array() || ty.is_slice() || matches!(ty.kind(), ty::Tuple(_)) || self.is_std_adt(ty, sym::Vec) {
-            return true;
-        }
-        let mut derived = false;
-        self.tcx
-            .for_each_relevant_impl(partial_eq, ty, |imp| derived |= self.tcx.is_automatically_derived(imp));
-        derived
-            && (matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
-                || matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()))
     }
 
     /// A `format_args!` template, decoded (its encoding is documented in

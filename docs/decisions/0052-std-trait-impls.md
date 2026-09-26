@@ -25,7 +25,7 @@ callers depend on. So before adding std traits, this ADR settles them.
 | | JS | Rule |
 |---|---|---|
 | An impl's dictionary | `circleShape()` | Lazy and cached. Named after the type, then the trait, then the trait's arguments: `metersFromF64`. Two impls whose names collide are an error. |
-| A dictionary | `{ area, name }` | A plain object of the trait's methods. A std trait's has only its required methods: `{ clone }`, `{ default }`. |
+| A dictionary | `{ area, name }` | A plain object of the trait's methods. A std trait's has only its required methods: `{ clone }`, `{ default }`, `{ eq }` ([0053](0053-partial-eq.md)). |
 | A generic function | `total(shapes, TShape)` | The dictionaries come after the value arguments, in the order the bounds are written, `where` clauses included. |
 | A trait object | `{ value, impl }` | |
 | A generic impl | `vecShape(TShape)` | Cached by its dictionary arguments, so the same arguments give the same object. |

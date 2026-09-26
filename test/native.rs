@@ -187,6 +187,9 @@ fn main() {
     case("std_traits.hand_written", &[], std_traits::hand_written);
     case("std_traits.enum_clones", &[], std_traits::enum_clones);
     case("std_traits.conversions", &[], std_traits::conversions);
+    case("std_traits.equalities", &[], std_traits::equalities);
+    case("std_traits.generic_equalities", &[], std_traits::generic_equalities);
+    case("std_traits.compared", &[], std_traits::compared);
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

@@ -778,3 +778,20 @@ pub fn read_only(v: &Vec<u32>, p: &Point) -> (Vec<u32>, Point) {
   // Nothing changes a `Vec<u32>` or a `Point`: a clone is the value itself.
   expect(await Bun.file(join(dir, "lib.js")).text()).toContain("  return [v, p];");
 });
+
+// ADR 0053: `==` is `===` for JS primitives and `$eq` for what compares field
+// by field, until a hand-written `eq` is in it: then it's called, part by part.
+test("== calls a hand-written eq wherever it's inside, and generics take a dictionary", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  expect(js).toContain("export function same(a, b, TPartialEq) {\n  return TPartialEq.eq(a, b);");
+  expect(js).toContain("    versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),");
+  expect(js).toContain("    !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),");
+  expect(js).toContain('    a.TAG === "Bump" ? b.TAG === "Bump" && versionPartialEq_eq(a._0, b._0) : $eq(a, b),');
+  // A fieldless variant is a string: only itself is equal to it.
+  expect(js).toContain('    } === "Nothing",');
+  // A `T: Eq` is given `T`'s `PartialEq`, and one that compares field by field is `$eq`.
+  expect(js).toContain("count_equal(all, version(1, \"z\"), versionPartialEq())");
+  expect(js).toContain("{ eq: $eq }");
+  // `!=` of a hand-written `PartialEq<f64>` negates its `eq`.
+  expect(js).toContain("return [\n    metersPartialEqF64_eq(m, 2),\n    !metersPartialEqF64_eq(m, 3),");
+});
