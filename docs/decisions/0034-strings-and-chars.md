@@ -101,7 +101,7 @@ one by a range, say that JS counts differently. `is_empty()` works.
 - JS and Rust disagree at the edges: `trim_*` uses JS's whitespace, which is
   nearly Rust's, and comparing `char`s with `<` compares UTF-16 units, which
   orders a few characters above U+FFFF differently than Rust does.
-- `{}` takes strings, `char`s, integers and `bool`, as before. Floats and
-  formatting options (`{:>8}`, `{:.2}`) are still errors.
+- `{}` takes strings, `char`s, integers, `bool`s and floats, and formatting
+  options (`{:>8}`, `{:.2}`, `{:#x}`) are ADR 0058's.
 - Not yet: `lines`, `find`, `chars`, `char_indices`, `parse`, `split` beyond
   those uses, and patterns that are closures.

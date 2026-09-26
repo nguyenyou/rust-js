@@ -573,13 +573,24 @@ impl<'a> Cx<'a> {
             ExprKind::Undefined => Expression::new_identifier(sp, "undefined", b),
             ExprKind::Null => Expression::new_null_literal(sp, b),
             ExprKind::Var(name) => Expression::new_identifier(sp, self.name(name), b),
-            ExprKind::Member(object, property) => Expression::new_static_member_expression(
-                sp,
-                self.expr(object),
-                IdentifierName::new(SPAN, self.name(property), b),
-                false,
-                b,
-            ),
+            ExprKind::Member(object, property) => {
+                // `5.toString()` would read `5.` as a number: `(5).toString()`.
+                // An integer is printed as its digits (`number`), so oxc can't
+                // tell it needs them.
+                let object = match object.kind {
+                    ExprKind::Num(n) if n.fract() == 0.0 && (0.0..9_007_199_254_740_992.0).contains(&n) => {
+                        Expression::new_identifier(sp, self.name(&format!("({})", n as u64)), b)
+                    }
+                    _ => self.expr(object),
+                };
+                Expression::new_static_member_expression(
+                    sp,
+                    object,
+                    IdentifierName::new(SPAN, self.name(property), b),
+                    false,
+                    b,
+                )
+            }
             ExprKind::Index(object, index) => {
                 Expression::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)
             }

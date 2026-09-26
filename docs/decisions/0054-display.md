@@ -59,7 +59,9 @@ function pointDisplay_fmt(point) {
 - **Still errors:**
   - `Err(fmt::Error)`;
   - using a `fmt::Result` as a value: matching it, `is_ok()`;
-  - `Formatter`'s options: `alternate()`, `width()`, `{:>5}`;
+  - `Formatter`'s options inside a `fmt`: `alternate()`, `width()`. A
+    `{:>5}` of a value whose `fmt` writes with `write!` ignores its
+    options, as in Rust (ADR 0058);
   - a `Formatter` outside a function that writes to one.
 - **`s = s + t` prints as `s += t`,** everywhere, as JS writes a string built up.
 

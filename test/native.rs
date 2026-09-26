@@ -260,6 +260,14 @@ fn main() {
         case_with("strings.labeled", &[&"box", &(n as i64)], || strings::labeled("box", n));
         case("strings.built", &[n as i64], || strings::built(n));
         case("strings.format_order", &[n as i64], || strings::format_order(n));
+        for name in ["ab", "héllo", "日本語テキスト"] {
+            for m in [n as i32, -(n as i32) - 7, 300] {
+                case_with("strings.padded", &[&m, &name], || strings::padded(m, name));
+            }
+        }
+        for q in [n as i32, 1, 2, 3, 5, 6, 10, -2, -6] {
+            case("strings.rounded", &[q as i64], || strings::rounded(q));
+        }
         case_with("strings.repeated", &[&"ab", &(n as i64)], || strings::repeated("ab", n));
     }
     for s in ["", "abc", "ab/c", "/a//b/", "  Mixed Case  ", "src/geometry.rs", "stats.rs", "äbc/Ö"] {

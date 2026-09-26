@@ -1,5 +1,6 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
+use super::format_spec::{Radix, Spec};
 use super::representation::Num;
 use super::{FnCx, R};
 use crate::js;
@@ -58,6 +59,10 @@ pub(super) enum Std {
     FmtDisplay,
     /// An argument for `{:?}`.
     FmtDebug,
+    /// `Argument::new_lower_hex` and the like: `{:x}` (ADR 0058).
+    FmtRadix(Radix),
+    /// `Argument::from_usize`: a width or precision from an argument, `{:>w$}`.
+    FmtUsize,
     /// `Option` (ADR 0030): `o != null`, `o == null`.
     IsSome,
     IsNone,
@@ -155,8 +160,8 @@ impl Std {
 /// A piece of a `format_args!` template.
 pub(super) enum Piece {
     Text(String),
-    /// A placeholder: which of the arguments goes there.
-    Argument(usize),
+    /// A placeholder: which of the arguments goes there, and its options.
+    Argument(usize, Spec),
 }
 
 /// A `format_args!`, taken apart (`as_format_args`).
@@ -334,6 +339,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "new" if arguments => Std::FmtNew,
             "new_display" if argument => Std::FmtDisplay,
             "new_debug" if argument => Std::FmtDebug,
+            "new_lower_hex" if argument => Std::FmtRadix(Radix::LowerHex),
+            "new_upper_hex" if argument => Std::FmtRadix(Radix::UpperHex),
+            "new_binary" if argument => Std::FmtRadix(Radix::Binary),
+            "new_octal" if argument => Std::FmtRadix(Radix::Octal),
+            "from_usize" if argument => Std::FmtUsize,
             "new" if adt("Rc") => Std::Same,
             "new" if adt("Cell") || adt("RefCell") => Std::CellNew,
             "get" if adt("Cell") => Std::CellGet,
@@ -442,9 +452,30 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     i += 2 + len;
                 }
                 _ if b & 0xc0 == 0xc0 => {
-                    // Flags, width or precision (`{:>8}`, `{:.2}`, `{:#?}`).
-                    if b & 0b111 != 0 {
-                        return Err(bad("formatting options like width and precision"));
+                    // Then, if its bits say so: flags, width, precision, and
+                    // which argument (ADR 0058).
+                    let mut spec = Spec::plain();
+                    if b & 0b1 != 0 {
+                        let flags = u32::from_le_bytes([byte(i)?, byte(i + 1)?, byte(i + 2)?, byte(i + 3)?]);
+                        spec = Spec::from_flags(flags);
+                        i += 4;
+                    }
+                    // An indirect one is the index of the argument that holds it.
+                    if b & 0b10 != 0 {
+                        let field = u16_at(i)?;
+                        match b & 0b1_0000 != 0 {
+                            true => spec.width_from = Some(field),
+                            false => spec.width = Some(field as u16),
+                        }
+                        i += 2;
+                    }
+                    if b & 0b100 != 0 {
+                        let field = u16_at(i)?;
+                        match b & 0b10_0000 != 0 {
+                            true => spec.precision_from = Some(field),
+                            false => spec.precision = Some(field as u16),
+                        }
+                        i += 2;
                     }
                     let index = if b & 0b1000 != 0 {
                         let k = u16_at(i)?;
@@ -454,7 +485,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         next
                     };
                     next = index + 1;
-                    pieces.push(Piece::Argument(index));
+                    pieces.push(Piece::Argument(index, spec));
                 }
                 _ => return Err(bad("this format string")),
             }
@@ -469,13 +500,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .decode_template(template, span)?
             .into_iter()
             .map(|piece| match piece {
-                Piece::Text(text) => Expr::str(text),
-                Piece::Argument(index) => match &items.kind {
+                Piece::Argument(index, spec) if spec == Spec::plain() => Ok(match &items.kind {
                     js::ExprKind::Array(values) => values[index].clone(),
                     _ => Expr::index(items.clone(), Expr::int(index as i128)),
-                },
-            });
+                }),
+                Piece::Argument(..) => Err(self.unsupported(span, "formatting options here")),
+                Piece::Text(text) => Ok(Expr::str(text)),
+            })
+            .collect::<R<Vec<_>>>()?;
         Ok(parts
+            .into_iter()
             .reduce(|a, b| Expr::bin(Op::Add, a, b))
             .unwrap_or_else(|| Expr::str("")))
     }
@@ -528,7 +562,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 let kind = self
                     .std_fn(fun)
-                    .filter(|k| matches!(k, Std::FmtDisplay | Std::FmtDebug))?;
+                    .filter(|k| matches!(k, Std::FmtDisplay | Std::FmtDebug | Std::FmtRadix(_) | Std::FmtUsize))?;
                 let &ty::FnDef(_, generic_args) = thir[self.strip(fun)].ty.kind() else {
                     return None;
                 };
@@ -540,7 +574,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return None;
                 };
                 matches!(thir[self.strip(lhs)].kind, ExprKind::VarRef { id } if id == tuple)
-                    .then(|| generic_args.types().next().map(|ty| (name.as_usize(), kind, ty)))
+                    .then(|| {
+                        let ty = match kind {
+                            Std::FmtUsize => Some(self.tcx.types.usize),
+                            _ => generic_args.types().next(),
+                        };
+                        ty.map(|ty| (name.as_usize(), kind, ty))
+                    })
                     .flatten()
             })
             .collect::<Option<Vec<_>>>()?;
@@ -598,7 +638,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         pieces
             .into_iter()
             .filter_map(|piece| match piece {
-                Piece::Argument(slot) => Some(f.slots.get(slot).map(|&(value, _, _)| value)),
+                Piece::Argument(slot, _) => Some(f.slots.get(slot).map(|&(value, _, _)| value)),
                 Piece::Text(_) => None,
             })
             .collect()
@@ -637,18 +677,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 *value = self.spill("arg", v, out);
             }
         }
-        let mut items = Vec::new();
-        for (value, kind, ty) in f.slots {
-            let value = values[value].clone();
-            items.push(match kind {
-                Std::FmtDisplay => self.display_string(value, ty, span)?,
-                _ => {
-                    self.runtime.insert(Helper::Debug);
-                    Expr::call(Expr::var("$debug"), vec![value])
+        // Each placeholder with its own options: `{:>5}` and `{}` of one value differ.
+        let mut parts = Vec::new();
+        for piece in self.decode_template(&f.template, span)? {
+            parts.push(match piece {
+                Piece::Text(text) => Expr::str(text),
+                Piece::Argument(slot, spec) => {
+                    let slot_value = |slot: usize| f.slots.get(slot).map(|&(value, _, _)| values[value].clone());
+                    let bad = || self.unsupported(span, "this format string");
+                    let &(value, kind, ty) = f.slots.get(slot).ok_or_else(bad)?;
+                    let width = match spec.width_from {
+                        Some(from) => Some(slot_value(from).ok_or_else(bad)?),
+                        None => spec.width.map(|w| Expr::int(w.into())),
+                    };
+                    let precision = match spec.precision_from {
+                        Some(from) => Some(slot_value(from).ok_or_else(bad)?),
+                        None => spec.precision.map(|p| Expr::int(p.into())),
+                    };
+                    self.format_value(values[value].clone(), (kind, ty), spec, (width, precision), span)?
                 }
             });
         }
-        self.format(&f.template, Expr::array(items), span)
+        Ok(parts
+            .into_iter()
+            .reduce(|a, b| Expr::bin(Op::Add, a, b))
+            .unwrap_or_else(|| Expr::str("")))
     }
 
     /// An iterator's method (ADR 0036). The iterator is a JS array: a range

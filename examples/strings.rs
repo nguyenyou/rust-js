@@ -120,3 +120,22 @@ pub fn format_order(start: u32) -> String {
     let c = std::cell::Cell::new(start);
     format!("{1} {0} {0} {2}", tick(&c), tick(&c), c.get())
 }
+
+/// Format options (ADR 0058): width, fill and alignment, `+`, zeros, a
+/// precision, and other bases, as Rust applies them.
+pub fn padded(n: i32, name: &str) -> String {
+    format!(
+        "[{n:>6}] [{n:<6}] [{name:^9}] [{name:*>9}] [{n:06}] [{n:+}] [{:#x}] [{:#010b}] [{:X}] [{:.2}] [{name:.3}]",
+        n,
+        n as u32,
+        n,
+        n as f64 / 8.0,
+    )
+}
+
+/// `{:.1}` rounds a tie to even, as Rust does, where JS's `toFixed` rounds
+/// it up; and `{:?}` of an `f64` keeps its `.0`.
+pub fn rounded(quarters: i32) -> String {
+    let x = quarters as f64 / 4.0;
+    format!("{x:.0} {x:.1} {x:8.3} {x:?}")
+}

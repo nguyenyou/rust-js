@@ -37,6 +37,7 @@ mod analysis;
 mod bindings;
 mod calls;
 mod display;
+mod format_spec;
 mod jsx;
 mod ordering;
 mod representation;

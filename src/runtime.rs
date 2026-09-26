@@ -31,6 +31,11 @@ pub enum Helper {
     Range,
     Cmp,
     PartialCmp,
+    ToFixed,
+    DebugF64,
+    Plus,
+    ZeroPad,
+    Pad,
     CmpIn,
     CmpItems,
     ThenCmp,
@@ -151,6 +156,78 @@ function $range(start, end) {
                 r#"
 function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+"#
+            }
+            // `{:.2}` of an `f64`: its exact value, rounded to even on a tie, as
+            // Rust does. JS's `toFixed` rounds a tie up, and past 1e21 it
+            // switches to an exponent.
+            Helper::ToFixed => {
+                r#"
+function $toFixed(value, digits) {
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, Math.abs(value));
+  const bits = view.getBigUint64(0);
+  const exponent = Number((bits >> 52n) & 2047n);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const significand = exponent === 0 ? fraction : fraction | (1n << 52n);
+  const shift = exponent === 0 ? -1074 : exponent - 1075;
+  // |value| * 10^digits, as a fraction.
+  let numerator = significand * 10n ** BigInt(digits);
+  let denominator = 1n;
+  if (shift >= 0) numerator <<= BigInt(shift);
+  else denominator <<= BigInt(-shift);
+  let rounded = numerator / denominator;
+  const twice = 2n * (numerator % denominator);
+  if (twice > denominator || (twice === denominator && rounded % 2n === 1n)) rounded += 1n;
+  const text = rounded.toString().padStart(digits + 1, "0");
+  return sign + (digits === 0 ? text : text.slice(0, -digits) + "." + text.slice(-digits));
+}
+"#
+            }
+            // `{:?}` of an `f64`: `1.0`, and `1e16` or `1e-5` past `[1e-4, 1e16)`.
+            Helper::DebugF64 => {
+                r#"
+function $debugF64(value) {
+  const size = Math.abs(value);
+  if (Number.isFinite(value) && size !== 0 && (size < 1e-4 || size >= 1e16)) {
+    return value.toExponential().replace("e+", "e");
+  }
+  const text = $displayF64(value);
+  return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
+}
+"#
+            }
+            // `{:+}`: a sign for a number that has none.
+            Helper::Plus => {
+                r#"
+function $plus(text) {
+  return text.startsWith("-") || text === "NaN" ? text : "+" + text;
+}
+"#
+            }
+            // `{:05}`: zeros after the sign and any `0x`.
+            Helper::ZeroPad => {
+                r#"
+function $zeroPad(text, width) {
+  const head = /^[+-]?(0[xbo])?/.exec(text)[0];
+  return head + text.slice(head.length).padStart(width - head.length, "0");
+}
+"#
+            }
+            // `{:>8}` of a string: Rust counts its `char`s, where JS's `padStart`
+            // would count UTF-16 units.
+            Helper::Pad => {
+                r#"
+function $pad(text, width, align, fill = " ") {
+  const room = width - [...text].length;
+  if (room <= 0) return text;
+  const before = align === ">" ? room : align === "^" ? Math.floor(room / 2) : 0;
+  return fill.repeat(before) + text + fill.repeat(room - before);
 }
 "#
             }

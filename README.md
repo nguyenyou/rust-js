@@ -69,7 +69,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
 - A closure is an arrow function; `Rc<Cell<T>>` is one shared `{ value }`; strings are JS strings,
   with JS's methods (`split`, `starts_with`, `replace`, ..), a `char` is a one-character string,
-  and `format!` is `+`. Byte counts (`len()`, slicing) are errors: JS counts UTF-16 units.
+  and `format!` is `+`, with its options: `{:>8.2}` is `$toFixed(x, 2).padStart(8)` ([ADR 0058](docs/decisions/0058-format-options.md)). Byte counts (`len()`, slicing) are errors: JS counts UTF-16 units.
 - `async fn` is an `async function` and `.await` is `await`: a future is a JS promise, which starts
   as soon as it's made rather than when first polled.
 - React elements are JSX, in a `.jsx` file: `div().class_name("hero").children(title)` is

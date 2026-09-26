@@ -539,6 +539,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::Debug);
                 Expr::call(Expr::var("$debug"), vec![arg()])
             }
+            // Only in a `format_args!` it recognizes whole (ADR 0058).
+            Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
             Std::Push => {
                 let (v, x) = (arg(), arg());
                 Expr::call(Expr::member(v, "push"), vec![x])

@@ -852,3 +852,14 @@ test("PartialOrd and Ord compare with $cmp, a hand-written cmp, or the parts in 
   // `NaN` isn't ordered: `$thenCmp` stops at an `undefined`, which `||` wouldn't.
   expect(js).toContain("$thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) < 0");
 });
+
+// ADR 0058: format options, where Rust applies them.
+test("format options pad, round and change base as Rust does", async () => {
+  const js = await Bun.file(join(target, "strings.js")).text();
+  // Numbers are ASCII: JS's own padding. Strings count `char`s: `$pad`.
+  expect(js).toContain('"[" + String(n).padStart(6) + "] [" + String(n).padEnd(6) + "] [" + $pad(name, 9, "^") + "]');
+  expect(js).toContain('$pad(name, 9, ">", "*")');
+  expect(js).toContain('("0x" + (n >>> 0).toString(16))');
+  // `{:.1}` rounds a tie to even, exactly, and `{:?}` of an `f64` keeps its `.0`.
+  expect(js).toContain('return $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x);');
+});
