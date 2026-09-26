@@ -86,3 +86,27 @@ pub fn label(n: i32) -> String {
         None => String::from("none"),
     }
 }
+
+fn double(n: i32) -> i32 {
+    n * 2
+}
+
+fn pair(n: i32) -> Option<(i32, i32)> {
+    if n > 0 { Some((n, n + 1)) } else { None }
+}
+
+/// `map`: the closure runs on the value, for `Some` only.
+pub fn mapped(n: i32) -> (Option<i32>, Option<i32>, Option<bool>, Option<i32>) {
+    let h = half(n);
+    (half(n).map(|h| h + 1), h.map(double), h.map(|x| x > 2), half(n).map(|h| h + 1).map(|x| x * 3))
+}
+
+/// `map` with a closure of statements, and with a pattern for its parameter.
+pub fn mapped_more(n: i32) -> (Option<i32>, Option<i32>, u32, Option<i32>) {
+    let calls = Cell::new(0);
+    let counted = half(n).map(|h| {
+        calls.set(calls.get() + 1);
+        h - 1
+    });
+    (pair(n).map(|(a, b)| a * b), counted, calls.get(), half(n).map(|_| 7))
+}

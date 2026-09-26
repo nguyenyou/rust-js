@@ -65,6 +65,8 @@ pub(super) enum Std {
     Unwrap,
     /// `unwrap_or(d)`: `o ?? d`.
     UnwrapOr,
+    /// `map(f)`: `o != null ? f(o) : undefined`, with a closure's body in place.
+    OptionMap,
     /// `==` (true) or `!=` (false) on options of strings, numbers and the
     /// like: `==`, so that `null` and `undefined` are both `None`.
     LooseEq(bool),
@@ -374,6 +376,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_some" if option => Std::IsSome,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
+            "map" if option => Std::OptionMap,
             // A thread-local (ADR 0037) is its `Cell` or `RefCell`: `{ value }`.
             "with" if local_key => Std::LocalWith,
             "get" if local_key => Std::CellGet,

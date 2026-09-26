@@ -48,6 +48,7 @@ test("state, reducers, effects and events work in the DOM", async () => {
   expect([...container.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["milk", "eggs"]);
   expect($("input").value).toBe("");
   expect($(".empty")).toBeNull();
+  expect($(".latest").textContent).toBe("eggs");
   expect($(".left").textContent).toBe("2 left");
 
   // A click on an item toggles it, through the reducer.

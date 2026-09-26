@@ -381,6 +381,52 @@ impl Expr {
         }
     }
 
+    /// This with each variable that `with` names replaced by its expression:
+    /// a closure's parameter by its argument, to put its body in place.
+    /// `None` if there's a closure inside, whose own names could shadow them.
+    pub fn substitute(&self, with: &dyn Fn(&str) -> Option<Expr>) -> Option<Expr> {
+        let all = |items: &[Expr]| items.iter().map(|e| e.substitute(with)).collect::<Option<Vec<_>>>();
+        let one = |e: &Expr| e.substitute(with).map(Box::new);
+        let props = |props: &[Prop]| {
+            props
+                .iter()
+                .map(|p| match p {
+                    Prop::Field(name, value) => Some(Prop::Field(name.clone(), value.substitute(with)?)),
+                    Prop::Spread(value) => Some(Prop::Spread(value.substitute(with)?)),
+                })
+                .collect::<Option<Vec<_>>>()
+        };
+        let kind = match &self.kind {
+            ExprKind::Var(name) => match with(name) {
+                Some(e) => return Some(e.or_at(self.span)),
+                None => ExprKind::Var(name.clone()),
+            },
+            ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => return None,
+            ExprKind::Member(a, field) => ExprKind::Member(one(a)?, field.clone()),
+            ExprKind::Index(a, b) => ExprKind::Index(one(a)?, one(b)?),
+            ExprKind::Array(items) => ExprKind::Array(all(items)?),
+            ExprKind::Object(fields) => ExprKind::Object(props(fields)?),
+            ExprKind::Unary(op, a) => ExprKind::Unary(*op, one(a)?),
+            ExprKind::Binary(op, a, b) => ExprKind::Binary(*op, one(a)?, one(b)?),
+            ExprKind::Cond(a, b, c) => ExprKind::Cond(one(a)?, one(b)?, one(c)?),
+            ExprKind::Call(f, args) => ExprKind::Call(one(f)?, all(args)?),
+            ExprKind::New(f, args) => ExprKind::New(one(f)?, all(args)?),
+            ExprKind::Await(a) => ExprKind::Await(one(a)?),
+            ExprKind::Jsx(jsx) => ExprKind::Jsx(Box::new(Jsx {
+                tag: match &jsx.tag {
+                    JsxTag::Component(c) => JsxTag::Component(c.substitute(with)?),
+                    tag => tag.clone(),
+                },
+                props: props(&jsx.props)?,
+                children: all(&jsx.children)?,
+            })),
+            ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null => {
+                self.kind.clone()
+            }
+        };
+        Some(Expr { kind, span: self.span })
+    }
+
     /// Could evaluating this do something observable (call a function, throw)?
     pub fn has_effects(&self) -> bool {
         match &self.kind {

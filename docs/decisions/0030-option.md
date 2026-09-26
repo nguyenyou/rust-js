@@ -34,6 +34,7 @@ conversion:
 | `o.is_some()`, `o.is_none()` | `o != null`, `o == null` |
 | `o.unwrap()`, `o.expect("why")` | `$unwrap(o)`, `$unwrap(o, "why")`, which throw Rust's message on `None` |
 | `o.unwrap_or(d)` | `o ?? d` |
+| `o.map(\|x\| x + 1)`, `o.map(f)` | `o != null ? o + 1 : undefined`, `o != null ? f(o) : undefined` |
 | `a == b` on options of numbers, strings, `bool` and fieldless enums | `a == b` |
 | `a == b` on options of structs | `$eq(a, b)`, where `null` and `undefined` are equal |
 
@@ -48,6 +49,12 @@ conversion:
 - **`unwrap_or`'s argument runs even when it isn't needed**, as in Rust. `??`
   skips it, so an argument with effects is computed first, in order:
   `const option = half(n); const fallback = bump(); option ?? fallback`.
+- **`map` puts a closure's body in place**, with the option for its
+  parameter, as in `o != null ? o + 1 : undefined`. An option that's computed
+  goes in a `const` first, named like the parameter, so it's computed once. A
+  function, or a closure with statements, is called: `f(o)`. Mapping to a
+  type that can itself be `undefined` or `null`, like `()`, is an error, as
+  `Option<()>` is.
 - **`if let`** is new, and works with any pattern (`if let (0, y) = p`).
   When its value isn't already in a variable, it goes into a `const` named
   like the pattern's variable, which that variable then just is.
@@ -94,6 +101,6 @@ const app = $unwrap(document.getElementById("app"), "the page has an #app");
 - `{:?}` of an option prints the value for `Some` and `()` for `None`, since
   `$debug` can't tell `None` from `()` at run time. `assert_eq!` messages on
   options read that way too.
-- `?` on an `Option` came with ADR 0035. Not yet: `map`, `and_then`, `ok_or`, `take`, `as_ref`,
+- `?` on an `Option` came with ADR 0035. Not yet: `and_then`, `ok_or`, `take`, `as_ref`,
   `as_mut`, and nested options. Other enums with fields are tagged objects
   (ADR 0033); `Option` is the special case that needs no tag.

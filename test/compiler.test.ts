@@ -431,6 +431,11 @@ test("options are the value or undefined", async () => {
   expect(js).toContain('  return $unwrap(half(n), "an even number");');
   // `==` on options is `==`: `null` from JS equals `undefined` from Rust.
   expect(js).toContain("  return a == b;");
+  // `map` puts the closure's body in place, on the option read once.
+  expect(js).toContain("    h != null ? double(h) : undefined,\n    h != null ? h > 2 : undefined,");
+  expect(js).toContain("    option != null ? Math.imul(option[0], option[1]) : undefined,");
+  // A closure of statements is called, by a name.
+  expect(js).toContain("  const counted = h != null ? map(h) : undefined;");
   expect(options.same(null, undefined)).toBe(true);
   expect(options.describe(null)).toBe(0);
 });

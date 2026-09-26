@@ -25,6 +25,8 @@ test("React components are hand-written JSX, and React runs them", () => {
   // A list, with its keys.
   expect(js).toContain('return <li key={t.id} className={t.done ? "done" : ""} onClick={onClick}>{t.text}</li>;');
   expect(js).toContain("<ul>{items}</ul>");
+  // `Option::map` to an element: the element, or nothing.
+  expect(js).toContain('{t != null ? <p className="latest">{t.text}</p> : undefined}');
   // `()` as an effect's dependencies is `[]`, and its cleanup is a function it returns.
   expect(js).toContain("useEffect(() => {\n    setTicks((t) => t + 10 | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
   // Components by name, as JSX tags.

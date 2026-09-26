@@ -81,6 +81,7 @@ pub fn Todos() -> Element {
                     .collect::<Vec<_>>(),
             ),
             if todos.is_empty() { Some(p().class_name("empty").children("Nothing to do")) } else { None },
+            todos.last().map(|t| p().class_name("latest").children(t.text.clone())),
             span().class_name("left").children((left, " left")),
         )),
     })

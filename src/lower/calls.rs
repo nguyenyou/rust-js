@@ -320,6 +320,62 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 Expr::bin(Op::Coalesce, option, default)
             }
+            // `o.map(|x| value)` is `o != null ? value : undefined`, with the
+            // option for `x`, read once: `const h = half(n); h != null ? h + 1 : undefined`.
+            // A function, or a closure of statements, is called with it.
+            Std::OptionMap => {
+                let (option, f) = (arg(), arg());
+                let mapped = generic_args.type_at(1);
+                if self.can_be_nullish(mapped) {
+                    let what = format!("`map` to a `{mapped}`, whose `Some` would be `None` in JS");
+                    return Err(self.unsupported(span, &what));
+                }
+                // `|_| 7` has no parameter left (ADR 0038): `Some(None)`.
+                let param = match &f.kind {
+                    js::ExprKind::Arrow(params, _) if params.len() <= 1 => Some(params.first().cloned()),
+                    _ => None,
+                };
+                let body = match &f.kind {
+                    js::ExprKind::Arrow(_, body) => match body.as_slice() {
+                        [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => Some(value.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let base = match &param {
+                    Some(Some(js::Pattern::Name(name))) => name.clone(),
+                    _ => "option".to_string(),
+                };
+                let option = match option.kind {
+                    js::ExprKind::Var(_) => option,
+                    _ => self.spill(&base, option, out),
+                };
+                let value = param.zip(body).and_then(|(param, body)| {
+                    let with = |name: &str| match &param {
+                        None => None,
+                        Some(js::Pattern::Name(p)) => (p == name).then(|| option.clone()),
+                        Some(js::Pattern::Array(items)) => items
+                            .iter()
+                            .position(|item| item.as_deref() == Some(name))
+                            .map(|i| Expr::index(option.clone(), Expr::int(i as i128))),
+                        Some(js::Pattern::Object(fields)) => fields
+                            .iter()
+                            .find(|(_, var)| var == name)
+                            .map(|(field, _)| Expr::member(option.clone(), field.clone())),
+                    };
+                    body.substitute(&with)
+                });
+                let value = match value {
+                    Some(value) => value,
+                    // Not `((h) => { .. })(h)`: the closure gets a name first.
+                    None if matches!(f.kind, js::ExprKind::Arrow(..)) => {
+                        let f = self.spill("map", f, out);
+                        Expr::call(f, vec![option.clone()])
+                    }
+                    None => Expr::call(f, vec![option.clone()]),
+                };
+                Expr::cond(Expr::bin(Op::LooseNe, option, Expr::null()), value, Expr::undefined())
+            }
             Std::StringNew => Expr::str(""),
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
             Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),

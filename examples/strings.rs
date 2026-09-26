@@ -99,10 +99,7 @@ pub fn kind(s: &str) -> u32 {
 
 /// String literals inside other patterns: an option, a tuple.
 pub fn tagged(s: &str) -> (u32, bool) {
-    let top = match s.split_once('/') {
-        Some((top, _)) => Some(top),
-        None => None,
-    };
+    let top = s.split_once('/').map(|(top, _)| top);
     let n = match (top, s.ends_with('/')) {
         (Some("ab"), _) => 1,
         (Some(""), true) => 2,
