@@ -104,3 +104,19 @@ pub fn negated(v: &[i32]) -> (Vec<i32>, Vec<bool>) {
     let positive: Vec<bool> = v.iter().map(|x| *x > 0).collect();
     (v.iter().map(|x| -x).collect(), positive.iter().map(|p| !p).collect())
 }
+
+/// `a..=b` includes its end: `i <= n` in a `for`, `$range(a, b + 1)` as an
+/// iterator.
+pub fn inclusive(n: u32) -> (u32, Vec<u32>, u32) {
+    let mut total = 0;
+    for i in 1..=n {
+        total += i;
+    }
+    let down: Vec<u32> = (0..=n).rev().collect();
+    (total, down, (1..=n).map(|x| x * x).sum())
+}
+
+/// An `Ordering` is -1, 0 or 1 already, so `as` changes nothing.
+pub fn order_number(a: i32, b: i32) -> (i32, u8) {
+    (a.cmp(&b) as i32, a.cmp(&b) as u8)
+}

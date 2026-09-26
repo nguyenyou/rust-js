@@ -133,4 +133,96 @@ export function div_or(a, b, fallback) {
     return fallback;
   }
 }
+
+export function discriminants(i) {
+  let level;
+  const match = i % 3;
+  if (match === 0) {
+    level = "Low";
+  } else if (match === 1) {
+    level = "Mid";
+  } else {
+    level = "High";
+  }
+  let status;
+  const match$1 = i % 3;
+  if (match$1 === 0) {
+    status = "Ok";
+  } else if (match$1 === 1) {
+    status = "NotFound";
+  } else {
+    status = "Teapot";
+  }
+  return [
+    [
+      "Low",
+      "Mid",
+      "High"
+    ].indexOf(level),
+    {
+      Ok: 200,
+      NotFound: 404,
+      Teapot: 418
+    }[status],
+    418 - {
+      Ok: 200,
+      NotFound: 404,
+      Teapot: 418
+    }[status] | 0
+  ];
+}
+
+function grow(f) {
+  if (f !== "Dot") {
+    if (f.TAG === "Poly") {
+      f._0.push(0);
+    } else {
+      f.r *= 2;
+    }
+  }
+}
+
+function points(f) {
+  if (f.TAG === "Poly") {
+    return f._0.length;
+  } else {
+    return 0;
+  }
+}
+
+export function changed_in_place(r) {
+  let poly = {
+    TAG: "Poly",
+    _0: [1]
+  };
+  const before = poly.TAG === "Poly" ? {
+    ...poly,
+    _0: poly._0.slice()
+  } : poly.TAG === "Circle" ? { ...poly } : poly;
+  grow(poly);
+  let circle$1 = {
+    TAG: "Circle",
+    r
+  };
+  grow(circle$1);
+  const value = circle$1;
+  if (value.TAG === "Circle") {
+    value.r += .5;
+  }
+  let dot = "Dot";
+  grow(dot);
+  let radius;
+  if (circle$1.TAG === "Circle") {
+    const r$1 = circle$1.r;
+    radius = r$1;
+  } else {
+    radius = 0;
+  }
+  return [
+    points(poly),
+    points(before),
+    radius,
+    points(dot)
+  ];
+}
 //# sourceMappingURL=enums.js.map

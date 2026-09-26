@@ -88,3 +88,75 @@ pub fn div_or(a: i32, b: i32, fallback: i32) -> i32 {
         Err(_) => fallback,
     }
 }
+
+/// A fieldless enum `as` a number is its discriminant: counted from 0, or
+/// as written.
+#[derive(Clone, Copy)]
+pub enum Level {
+    Low,
+    Mid,
+    High,
+}
+
+#[derive(Clone, Copy)]
+pub enum Status {
+    Ok = 200,
+    NotFound = 404,
+    Teapot = 418,
+}
+
+pub fn discriminants(i: u32) -> (u8, u32, i32) {
+    let level = match i % 3 {
+        0 => Level::Low,
+        1 => Level::Mid,
+        _ => Level::High,
+    };
+    let status = match i % 3 {
+        0 => Status::Ok,
+        1 => Status::NotFound,
+        _ => Status::Teapot,
+    };
+    (level as u8, status as u32, Status::Teapot as i32 - status as i32)
+}
+
+/// `&mut` to an enum is the variant's object (ADR 0033): its fields are
+/// changed in place, and a clone made before is its own.
+#[derive(Clone)]
+pub enum Figure {
+    Dot,
+    Poly(Vec<u32>),
+    Circle { r: f64 },
+}
+
+fn grow(f: &mut Figure) {
+    match f {
+        Figure::Dot => {}
+        Figure::Poly(points) => points.push(0),
+        Figure::Circle { r } => *r *= 2.0,
+    }
+}
+
+fn points(f: &Figure) -> usize {
+    match f {
+        Figure::Poly(points) => points.len(),
+        _ => 0,
+    }
+}
+
+pub fn changed_in_place(r: i32) -> (usize, usize, f64, usize) {
+    let mut poly = Figure::Poly(vec![1]);
+    let before = poly.clone();
+    grow(&mut poly);
+    let mut circle = Figure::Circle { r: r as f64 };
+    grow(&mut circle);
+    if let Figure::Circle { r } = &mut circle {
+        *r += 0.5;
+    }
+    let mut dot = Figure::Dot;
+    grow(&mut dot);
+    let radius = match circle {
+        Figure::Circle { r } => r,
+        _ => 0.0,
+    };
+    (points(&poly), points(&before), radius, points(&dot))
+}

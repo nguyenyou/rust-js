@@ -418,10 +418,19 @@ impl<'a> Cx<'a> {
                 Statement::new_variable_declaration(sp, kind, ArenaVec::from_iter_in([declarator], b), false, b)
             }
             StmtKind::Assign(target, value) => {
-                // `s = s + t` is `s += t`, as JS writes a string built up.
+                // `s = s + t` is `s += t`, as JS writes a string built up, and
+                // `r = r * 2` is `r *= 2`.
+                let compound = |op: &Op| match op {
+                    Op::Add => Some(AssignmentOperator::Addition),
+                    Op::Sub => Some(AssignmentOperator::Subtraction),
+                    Op::Mul => Some(AssignmentOperator::Multiplication),
+                    Op::Div => Some(AssignmentOperator::Division),
+                    Op::Rem => Some(AssignmentOperator::Remainder),
+                    _ => None,
+                };
                 let (operator, value) = match &value.kind {
-                    ExprKind::Binary(Op::Add, lhs, rhs) if same_place(lhs, target) => {
-                        (AssignmentOperator::Addition, &**rhs)
+                    ExprKind::Binary(op, lhs, rhs) if same_place(lhs, target) && compound(op).is_some() => {
+                        (compound(op).unwrap_or(AssignmentOperator::Assign), &**rhs)
                     }
                     _ => (AssignmentOperator::Assign, value),
                 };

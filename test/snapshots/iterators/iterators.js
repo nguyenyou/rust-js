@@ -133,4 +133,21 @@ export function negated(v) {
   const positive = v.map((x) => x > 0);
   return [v.map((x) => -x | 0), positive.map((p) => !p)];
 }
+
+export function inclusive(n) {
+  let total = 0;
+  for (let i = 1; i <= n; i++) {
+    total = total + i >>> 0;
+  }
+  const down = $range(0, n + 1).toReversed();
+  return [
+    total,
+    down,
+    $range(1, n + 1).map((x) => Math.imul(x, x) >>> 0).reduce((a, b) => a + b >>> 0, 0)
+  ];
+}
+
+export function order_number(a, b) {
+  return [$cmp(a, b), $cmp(a, b) & 255];
+}
 //# sourceMappingURL=iterators.js.map

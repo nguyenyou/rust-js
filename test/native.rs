@@ -244,8 +244,14 @@ fn main() {
     }
     for (a, b) in [(1, 2), (2, 2), (3, -1)] {
         case("iterators.compare", &[a, b], || iterators::compare(a as i32, b as i32));
+        case("iterators.order_number", &[a, b], || iterators::order_number(a as i32, b as i32));
     }
     case("iterators.bigger", &[3, 9], || iterators::bigger(3, 9));
+    for n in [0, 1, 4, 10] {
+        case("iterators.inclusive", &[n], || iterators::inclusive(n as u32));
+        case("enums.discriminants", &[n], || enums::discriminants(n as u32));
+        case("enums.changed_in_place", &[n], || enums::changed_in_place(n as i32));
+    }
     for text in ["a b a c b a", "one", "x x x"] {
         case_with("collections.word_counts", &[&text], || collections::word_counts(text));
     }
@@ -378,6 +384,12 @@ impl Json for i32 {
 }
 
 impl Json for u32 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for u8 {
     fn json(&self) -> String {
         self.to_string()
     }

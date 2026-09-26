@@ -745,6 +745,31 @@ fn mutated_types<'tcx>(all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
     let mut mutated = HashSet::new();
     for body in all_bodies {
         for expr in body.thir.exprs.iter() {
+            // An enum something takes `&mut` of, or matches with a `ref mut`
+            // binding, may have a variant's field changed through it.
+            let enum_ty = |ty: Ty<'tcx>| matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if adt.is_enum());
+            match expr.kind {
+                ExprKind::Borrow {
+                    borrow_kind: BorrowKind::Mut { .. },
+                    arg,
+                } if enum_ty(body.thir[arg].ty) => {
+                    mutated.insert(body.thir[arg].ty.peel_refs());
+                }
+                ExprKind::Match {
+                    scrutinee, ref arms, ..
+                } if enum_ty(body.thir[scrutinee].ty)
+                    && arms.iter().any(|&arm| binds_ref_mut(&body.thir[arm].pattern)) =>
+                {
+                    mutated.insert(body.thir[scrutinee].ty.peel_refs());
+                }
+                ExprKind::Let {
+                    expr: scrutinee,
+                    ref pat,
+                } if enum_ty(body.thir[scrutinee].ty) && binds_ref_mut(pat) => {
+                    mutated.insert(body.thir[scrutinee].ty.peel_refs());
+                }
+                _ => {}
+            }
             // `a[i] = ..` changes the array `a` the same way.
             if let ExprKind::Assign { lhs, .. } | ExprKind::AssignOp { lhs, .. } = expr.kind
                 && let ExprKind::Field { lhs: object, .. } | ExprKind::Index { lhs: object, .. } =
@@ -755,6 +780,19 @@ fn mutated_types<'tcx>(all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
         }
     }
     mutated
+}
+
+/// Does `pat` bind a variable by `ref mut`, or through a `&mut` subject?
+fn binds_ref_mut(pat: &rustc_middle::thir::Pat<'_>) -> bool {
+    let mut found = false;
+    pat.walk_always(|p| {
+        if let rustc_middle::thir::PatKind::Binding { mode, .. } = p.kind
+            && matches!(mode.0, rustc_hir::ByRef::Yes(_, rustc_ast::Mutability::Mut))
+        {
+            found = true;
+        }
+    });
+    found
 }
 
 /// The `Vec` types something takes `&mut` of: `push`, `sort`, `v[i] = x`

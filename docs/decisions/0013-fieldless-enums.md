@@ -42,8 +42,11 @@ The enum declaration itself emits nothing.
 
 ## Consequences
 
-- `order as i32` (enum to integer cast) isn't supported yet. It will need the
-  variant's discriminant, not its name.
+- `level as u8` is the variant's discriminant, not its name:
+  `["Low", "Mid", "High"].indexOf(level)` when the discriminants count up from
+  0, and `{ Ok: 200, NotFound: 404 }[status]` when they're written out. It's
+  wrapped into the target type only if a discriminant doesn't fit it. An
+  `Ordering` is -1, 0 or 1 already, so `as` of one is the number itself.
 - Enums **with** fields are a separate, future decision. They'll likely be
   tagged objects, as ReScript does (see [0020](0020-structs-and-tuples.md) for
   structs), so a mixed enum could use strings for its fieldless

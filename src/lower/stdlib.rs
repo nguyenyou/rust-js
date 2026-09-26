@@ -859,6 +859,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if self.is_lang_adt(receiver_ty, LangItem::Range) => {
                 return Err(self.unsupported(span, "a range in a variable, as an iterator"));
             }
+            // `a..=b`: `$range(a, b + 1)`.
+            _ if let Some((start, end)) = self.inclusive_range(args[0]) => {
+                self.runtime.insert(Helper::Range);
+                let [start, end]: [Expr; 2] = self.operands(&[start, end], out)?.try_into().ok().unwrap();
+                Expr::call(Expr::var("$range"), vec![start, Expr::bin(Op::Add, end, Expr::int(1))])
+            }
             _ => {
                 let value = self.expr(args[0], out)?;
                 self.iter_source(value, receiver_ty, span)?

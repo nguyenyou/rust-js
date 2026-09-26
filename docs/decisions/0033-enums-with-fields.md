@@ -77,5 +77,16 @@ clones):
   needs the type at the `{:?}`.
 - A `matches!` (a `match` of `pat => true, _ => false`) is its test alone:
   `s.TAG === "Circle"`.
-- `?` and `Result`'s methods came with ADR 0035. Not yet: enums with explicit
-  discriminants, and `as` casts of them.
+- `?` and `Result`'s methods came with ADR 0035. Casts of a fieldless enum
+  are its discriminant (ADR 0013).
+- **`&mut` to an enum with fields is the variant's object,** as a `&mut` to
+  a struct is (ADR 0025), and `Option` excepted, which is its value itself.
+  - A field bound by `ref mut`, or through a `&mut` subject, names its
+    place, so `*r *= 2.0` is `f.r *= 2`.
+  - A fieldless variant is a string, so it can't be changed through the
+    `&mut`; replacing the whole value (`*f = Figure::Dot`) is still an error.
+  - An enum that's taken `&mut`, or matched with a `ref mut` binding,
+    changes in place, so copying and cloning one copies its variants'
+    objects (ADR 0020, 0052).
+- An arm that does nothing, before others, is the negated test:
+  `if (f !== "Dot") { .. }`, not an empty `if` with an `else`.

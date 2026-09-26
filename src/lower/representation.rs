@@ -118,6 +118,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || ty.is_array()
             || ["Vec", "Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_map(ty)
+            // An enum with fields: those variants are objects (ADR 0033). A
+            // fieldless one's string can't be changed through a `&mut` anyway,
+            // since `*r = ..` of a whole value isn't supported. `Option` is
+            // its value itself (ADR 0030), not an object.
+            || matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()
+                && !self.tcx.is_lang_item(adt.did(), LangItem::Option)
+                && adt.variants().iter().any(|v| !v.fields.is_empty()))
     }
 
     /// A struct that stands for a JS object, like `web::Element` (ADR 0024):
@@ -369,9 +376,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 // gets a copy, and every other value is itself.
                 once(place, &|e| {
                     let mut value = e.clone();
+                    // Changed in place itself, through a `&mut`: every variant with fields.
+                    let itself = self.mutated_itself(ty);
                     for variant in adt.variants().iter().rev() {
                         let fields = self.variant_fields(variant, args);
-                        if !fields.iter().any(|&(_, t)| self.contains_mutated(t)) {
+                        if fields.is_empty() || !(itself || fields.iter().any(|&(_, t)| self.contains_mutated(t))) {
                             continue;
                         }
                         let mut props = vec![Prop::Spread(e.clone())];
@@ -606,6 +615,19 @@ impl Num {
     /// Wrap an exact JS result back into this type's range, like Rust's
     /// wrapping arithmetic: `x | 0` for i32, `x >>> 0` for u32, and so on.
     pub(super) fn wrap(self, e: Expr) -> Expr {
+        // A constant is wrapped here, not in the JS: `Code::NotFound as u32`
+        // is `404`, not `(404 + 0 | 0) >>> 0`.
+        if self != Num::F64
+            && let Some(n) = const_int(&e)
+        {
+            let size = 1i128 << self.bits();
+            let wrapped = n.rem_euclid(size);
+            return Expr::int(if self.signed() && wrapped >= size / 2 {
+                wrapped - size
+            } else {
+                wrapped
+            });
+        }
         match self {
             Num::I32 => Expr::bin(Op::BitOr, e, Expr::num(0)),
             Num::U32 => Expr::bin(Op::UShr, e, Expr::num(0)),
@@ -617,6 +639,24 @@ impl Num {
             Num::F64 => e,
         }
     }
+}
+
+/// An integer the JS computes from constants alone: `404 + 0`.
+fn const_int(e: &Expr) -> Option<i128> {
+    Some(match &e.kind {
+        js::ExprKind::Num(n) if n.fract() == 0.0 && n.abs() < 9_007_199_254_740_992.0 => *n as i128,
+        js::ExprKind::Unary(js::UnaryOp::Neg, x) => -const_int(x)?,
+        js::ExprKind::Binary(op, a, b) => {
+            let (a, b) = (const_int(a)?, const_int(b)?);
+            match op {
+                Op::Add => a.checked_add(b)?,
+                Op::Sub => a.checked_sub(b)?,
+                Op::Mul => a.checked_mul(b)?,
+                _ => return None,
+            }
+        }
+        _ => return None,
+    })
 }
 
 pub(super) fn is_fieldless_enum(adt: ty::AdtDef<'_>) -> bool {

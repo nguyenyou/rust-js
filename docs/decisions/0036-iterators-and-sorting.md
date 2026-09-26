@@ -84,6 +84,9 @@ Two things came with it:
   Rust stops at the first match, and JS has run earlier steps on every
   element. Infinite iterators (`0..`) don't work.
 - `$cmp` on strings compares UTF-16 units, as `<` does (ADR 0034).
+- `a..=b` includes its end: `for (let i = a; i <= b; i++)`, and
+  `$range(a, b + 1)` as an iterator.
+- Sorting by `Ord` came with ADR 0057, and an iterator of the crate's own,
+  lazy and possibly endless, with ADR 0055.
 - Not yet: `filter_map`, `flat_map`, `zip`, `chain`, `peekable`, `next()` on a
-  held iterator, ranges in variables, sorting tuples or structs by `Ord`, and
-  `binary_search`.
+  held iterator, ranges in variables, and `binary_search`.

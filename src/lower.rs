@@ -158,6 +158,9 @@ struct Binding<'tcx> {
     var: LocalVarId,
     name: String,
     mutable: bool,
+    /// `ref mut`, or bound through a `&mut` subject: writes through it
+    /// write the place it matched.
+    by_ref_mut: bool,
     place: Expr,
     ty: Ty<'tcx>,
 }
@@ -875,7 +878,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
         for b in bindings {
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
-            if stable && !b.mutable && !b.place.has_effects() {
+            // A `ref mut` one always does: `*r = x` writes the place it names.
+            if (stable || b.by_ref_mut) && !b.mutable && !b.place.has_effects() {
                 self.vars.insert(
                     b.var,
                     Var {
@@ -1050,21 +1054,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let head_ty = self.thir[f.head].ty;
         let head_span = self.thir[f.head].span;
-        let range = self.is_lang_adt(head_ty, LangItem::Range);
+        let inclusive = self.inclusive_range(f.head);
+        let range = self.is_lang_adt(head_ty, LangItem::Range) || inclusive.is_some();
 
         // What to loop over: a range's bounds, or a sequence.
         let (iterable, start_end) = if range {
-            let ExprKind::Adt(ref adt) = self.thir[self.strip(f.head)].kind else {
-                return Err(self.unsupported(head_span, "this range"));
-            };
-            let bound = |i: usize| {
-                adt.fields
-                    .iter()
-                    .find(|field| field.name.as_usize() == i)
-                    .map(|field| field.expr)
-            };
-            let (Some(start), Some(end)) = (bound(0), bound(1)) else {
-                unreachable!("a range has a start and an end")
+            let (start, end) = match inclusive {
+                Some(bounds) => bounds,
+                None => {
+                    let ExprKind::Adt(ref adt) = self.thir[self.strip(f.head)].kind else {
+                        return Err(self.unsupported(head_span, "this range"));
+                    };
+                    let bound = |i: usize| {
+                        adt.fields
+                            .iter()
+                            .find(|field| field.name.as_usize() == i)
+                            .map(|field| field.expr)
+                    };
+                    let (Some(start), Some(end)) = (bound(0), bound(1)) else {
+                        unreachable!("a range has a start and an end")
+                    };
+                    (start, end)
+                }
             };
             self.num(self.thir[start].ty, head_span)?;
             let [start_js, end_js] = self.operands(&[start, end], out)?.try_into().ok().unwrap();
@@ -1134,7 +1145,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     body,
                 },
                 (None, Some((start, end))) => {
-                    let test = Expr::bin(Op::Lt, Expr::var(&name), end);
+                    // `1..=n` includes its end.
+                    let op = if inclusive.is_some() { Op::Le } else { Op::Lt };
+                    let test = Expr::bin(op, Expr::var(&name), end);
                     StmtKind::For {
                         label,
                         name,
@@ -1237,6 +1250,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut rest: Option<Vec<Stmt>> = None;
         for (test, body, span) in chain.into_iter().rev() {
             rest = match test {
+                // An arm that does nothing, `Dot => {}`, before others:
+                // `if (s !== "Dot") { .. }`, not `if (s === "Dot") {} else ..`.
+                Some(t) if body.is_empty() && rest.is_some() => Some(vec![
+                    StmtKind::If(std_impls::negate(t), rest.unwrap_or_default(), None).at(span),
+                ]),
                 Some(t) => Some(vec![StmtKind::If(t, body, rest).at(span)]),
                 // A last arm that does nothing, `None => {}`: no `else {}`.
                 None if body.is_empty() => None,
@@ -1419,11 +1437,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ty,
                 ..
             } => {
-                self.check_by_value(*mode, *ty, pat.span)?;
+                // A `ref mut` binding names the place it matched (`bind_all`),
+                // so even a number's can be written through.
+                let by_ref_mut = matches!(mode.0, ByRef::Yes(_, Mutability::Mut));
+                if !by_ref_mut {
+                    self.check_by_value(*mode, *ty, pat.span)?;
+                }
                 bindings.push(Binding {
                     var: *var,
                     name: name.to_string(),
                     mutable: mode.1 == Mutability::Mut,
+                    by_ref_mut,
                     place: subject.clone(),
                     ty: *ty,
                 });
@@ -1991,7 +2015,53 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if from.is_bool() && target != Num::F64 {
             return Ok(Expr::cond(v, Expr::num(1), Expr::num(0)));
         }
-        let source = self.num(from, span)?;
+        // An `Ordering` is -1, 0 or 1 already (ADR 0036).
+        let (v, source) = if self.is_lang_adt(from, LangItem::OrderingEnum) {
+            (v, Num::I8)
+        } else if let ty::Adt(adt, _) = from.kind()
+            && is_fieldless_enum(*adt)
+        {
+            // A fieldless enum is its variant's name (ADR 0013): its
+            // discriminant, `["Red", "Green"].indexOf(color)` when they count
+            // up from 0, and looked up by name otherwise.
+            let discriminants: Vec<(String, i128)> = adt
+                .discriminants(self.tcx)
+                .map(|(index, d)| {
+                    let variant = adt.variant(index);
+                    let value = d.val as i128;
+                    let value = if d.ty.is_signed() {
+                        let bits = d.ty.primitive_size(self.tcx).bits();
+                        (value << (128 - bits)) >> (128 - bits)
+                    } else {
+                        value
+                    };
+                    (bindings::variant_name(self.tcx, variant), value)
+                })
+                .collect();
+            let counting = discriminants.iter().enumerate().all(|(i, &(_, d))| d == i as i128);
+            // Each one fits the target type, so there's nothing to wrap.
+            let (lo, hi) = target.range();
+            let fits = target == Num::F64 || discriminants.iter().all(|&(_, d)| lo <= d && d <= hi);
+            let value = if counting {
+                let names = Expr::array(discriminants.into_iter().map(|(n, _)| Expr::str(n)).collect());
+                Expr::call(Expr::member(names, "indexOf"), vec![v])
+            } else {
+                let table = Expr::object(
+                    discriminants
+                        .into_iter()
+                        .map(|(n, d)| Prop::Field(n, Expr::int(d)))
+                        .collect(),
+                );
+                Expr::index(table, v)
+            };
+            if fits {
+                return Ok(value);
+            }
+            let repr = rustc_middle::ty::util::IntTypeExt::to_ty(&adt.repr().discr_type(), self.tcx);
+            (value, Num::of(repr).unwrap_or(Num::I32))
+        } else {
+            (v, self.num(from, span)?)
+        };
         match (source, target) {
             (Num::F64, Num::F64) => Ok(v),
             // `as` from float to int saturates; we don't do that yet.
@@ -2503,6 +2573,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// `a..=b`: `RangeInclusive::new(a, b)`, with its bounds.
+    pub(super) fn inclusive_range(&self, e: ExprId) -> Option<(ExprId, ExprId)> {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Call { fun, ref args, .. } if matches!(self.thir[self.strip(fun)].ty.kind(), &ty::FnDef(d, _) if self.tcx.is_lang_item(d, LangItem::RangeInclusiveNew)) => {
+                Some((args[0], args[1]))
+            }
+            _ => None,
+        }
+    }
+
     /// A local variable of this function, or a field of one: not reached
     /// through a reference, nor captured by a closure.
     fn is_local_place(&self, e: ExprId) -> bool {
@@ -2516,12 +2596,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The place an assignment writes to.
     fn assignee(&self, e: ExprId) -> R<Expr> {
         // `*r = v` with a `&mut` variable `r` would only rebind the JS variable.
+        // One that names a place, as a `ref mut` binding does, writes it.
+        let names_place = |arg: ExprId| match self.thir[self.strip(arg)].kind {
+            ExprKind::VarRef { id } => self
+                .vars
+                .get(&id)
+                .is_some_and(|v| matches!(v.place.kind, js::ExprKind::Member(..) | js::ExprKind::Index(..))),
+            _ => false,
+        };
         if let ExprKind::Deref { arg } = self.thir[self.strip(e)].kind
             && matches!(self.thir[arg].ty.kind(), ty::Ref(..))
             && matches!(
                 self.thir[self.strip(arg)].kind,
                 ExprKind::VarRef { .. } | ExprKind::Field { .. }
             )
+            && !names_place(arg)
         {
             return Err(self.unsupported(self.thir[e].span, "assigning a whole value through a `&mut`"));
         }
