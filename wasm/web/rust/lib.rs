@@ -3,20 +3,21 @@
 // the page runs (see ../compile-rust.ts), and main.ts imports it. More of
 // main.ts moves here, a part at a time.
 //
-// So far: loading what the page needs, the stats table, the file trees,
-// running rust-js.wasm on a crate, under the WASI shim, and linking what it
-// wrote into one script for the Result frame.
+// So far: loading what the page needs, the stats table and the status line,
+// the file trees, running rust-js.wasm on a crate under the WASI shim, and
+// running what it wrote in the Result frame.
 
 #![feature(extern_types)]
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::rc::Rc;
 
 use web::{
-    Element, JsError, JsObject, Promise, RegExp, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
+    Element, Event, HtmlIFrameElement, JsError, JsObject, Promise, RegExp, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
     WebAssemblyModule, array_buffer, css_style_declaration, document, element, event_target, html_element,
-    html_table_element, html_table_row_element, js_error, node, reg_exp, response, text_decoder, text_encoder, uint8_array,
+    html_i_frame_element, html_table_element, html_table_row_element, js_error, node, reg_exp, response, text_decoder,
+    text_encoder, uint8_array,
     web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
@@ -528,4 +529,236 @@ pub fn link(files: &JsMap, start: &str) -> String {
     parts.push(start.to_string());
     // A `</script>` in a string would end the script early; `<\/script>` is the same string.
     parts.join("\n").replace("</script", "<\\/script")
+}
+
+// ── The status line ─────────────────────────────────────────────────────
+
+/// The line beside the buttons. `kind` is `""`, `"good"` or `"bad"`.
+pub fn set_status(text: &str, kind: &str) {
+    let status = document::get_element_by_id(document, "status").expect("the page has a #status");
+    node::set_text_content(status, text);
+    element::set_class_name(status, kind);
+}
+
+fn status_text() -> String {
+    let status = document::get_element_by_id(document, "status").expect("the page has a #status");
+    node::text_content(status).unwrap_or(String::new())
+}
+
+// ── Running the program ─────────────────────────────────────────────────
+// If the root module exports `main`, run it in a frame with a
+// `<div id="app">` to render into. The modules are linked into one plain
+// `<script>` (see `link`), which every browser runs the same way, and the
+// page reports back whether `main` ran, so the status line always says.
+//
+// The frame isn't sandboxed. Chrome runs a sandboxed frame in a process of
+// its own, and some setups then don't draw it until something else changes
+// the layout: the program ran, but the frame stayed blank. The program is
+// the one in the editor, so it may share this page's origin.
+
+// What the page keeps between runs (ADR 0037).
+thread_local! {
+    /// How many programs have run: a report from an older one is ignored.
+    static PROGRAM_RUNS: Cell<u32> = Cell::new(0);
+    /// Whether the latest one reported back.
+    static REPORTED: Cell<bool> = Cell::new(false);
+    /// The Result frame: a new one for each run.
+    static RESULT_FRAME: Cell<&'static HtmlIFrameElement> = Cell::new(frame_by_id("result"));
+}
+
+// Some JS functions are declared more than once, typed for each use.
+#[allow(clashing_extern_declarations)]
+unsafe extern "Rust" {
+    #[link_name = "setTimeout"]
+    safe fn set_timeout(callback: Box<dyn FnOnce()>, ms: u32);
+    #[link_name = "matchAll"]
+    safe fn match_all(this: &str, pattern: &RegExp) -> &'static JsObject;
+    /// Each match of a pattern with one group, as `(match, group)`.
+    #[link_name = "Array.from"]
+    safe fn matches_of(matches: &JsObject) -> Vec<(String, String)>;
+    #[link_name = "get contentWindow"]
+    safe fn content_window(this: &HtmlIFrameElement) -> Option<&'static JsObject>;
+    #[link_name = "get source"]
+    safe fn message_source(this: &Event) -> Option<&'static JsObject>;
+    #[link_name = "get data"]
+    safe fn message_data(this: &Event) -> Option<Report>;
+    #[link_name = "Object.is"]
+    safe fn same_object(a: Option<&JsObject>, b: Option<&JsObject>) -> bool;
+}
+
+fn frame_by_id(id: &str) -> &'static HtmlIFrameElement {
+    html_i_frame_element::unchecked_from(document::get_element_by_id(document, id).expect("the page has the Result frame"))
+}
+
+/// What the Result frame posts back. Fields it doesn't send are `undefined`.
+pub struct Report {
+    pub run: Option<u32>,
+    pub error: Option<String>,
+    pub ran: Option<bool>,
+    pub tested: Option<Tested>,
+}
+
+pub struct Tested {
+    pub passed: u32,
+    pub failed: u32,
+    pub ignored: u32,
+}
+
+/// A small `bun test` look-alike for the Result frame: `test` and `test.skip`
+/// collect the tests, which then run one after another. What they leave in
+/// the page is replaced by the report.
+const TEST_RUNNER: &str = r#"
+    const results = registered.map(({ name, f }) => {
+      if (!f) return { name, outcome: "skip" };
+      try {
+        f();
+        return { name, outcome: "pass" };
+      } catch (e) {
+        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {
+      const line = document.createElement("div");
+      line.className = outcome;
+      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");
+      if (message) {
+        const why = document.createElement("pre");
+        why.textContent = message;
+        line.append(why);
+      }
+      return line;
+    }));
+    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;"#;
+
+/// The frame's style, before its scripts.
+const FRAME_HEAD: &str = r#"<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
+  body { margin: 12px; }
+  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
+  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
+  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }
+  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }
+  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }
+</style>
+<div id="app"></div>"#;
+
+/// Run the root module's `main()`, or with `test`, the crate's tests.
+pub fn run_program(files: &JsMap, root_file: &str, test: bool) {
+    let sources = text_entries(files);
+    let tests = match root_file.strip_suffix(".js") {
+        Some(stem) => format!("{stem}.test.js"),
+        None => root_file.to_string(),
+    };
+    PROGRAM_RUNS.set(PROGRAM_RUNS.get() + 1);
+    // `main`, sync or async (ADR 0029).
+    let has_main = reg_exp::new(r"^export (async )?function main\(\)", "m");
+    let runnable = if test {
+        sources.iter().any(|(path, _)| *path == tests)
+    } else {
+        sources.iter().any(|(path, code)| path == root_file && reg_exp::test(has_main, code))
+    };
+    // Imports from JS modules (ADR 0028) name packages or files the page
+    // doesn't have. A bundler would bring them in; the playground has none.
+    let imports = reg_exp::new(r#"^import .* from "([^"]+)";$"#, "gm");
+    let mut external: Vec<String> = Vec::new();
+    for (path, code) in &sources {
+        for (_, specifier) in matches_of(match_all(code, imports)) {
+            let target = resolve(path, &specifier);
+            if !sources.iter().any(|(p, _)| *p == target) && !external.contains(&specifier) {
+                external.push(specifier);
+            }
+        }
+    }
+    let section = html_element::unchecked_from(document::get_element_by_id(document, "result-section").expect("the page has a #result-section"));
+    if !runnable || !external.is_empty() {
+        html_element::set_hidden(section, true);
+        html_i_frame_element::set_srcdoc(RESULT_FRAME.get(), "");
+        if runnable {
+            let names: Vec<String> = external.iter().map(|s| format!("\"{s}\"")).collect();
+            let text = format!(
+                "{} Not run: it imports {}, which the playground can't load. Bundle it with bun build.",
+                status_text(),
+                names.join(", ")
+            );
+            set_status(&text, "bad");
+        }
+        return;
+    }
+    let run = PROGRAM_RUNS.get();
+    let report = |message: &str| format!("parent.postMessage({{ run: {run}, {message} }}, \"*\")");
+    REPORTED.set(false);
+    // If the page never reports, say so: something stopped its script.
+    set_timeout(
+        Box::new(move || {
+            if run == PROGRAM_RUNS.get() && !REPORTED.get() {
+                set_status("The Result frame didn't run. Is something blocking its script? See the console.", "bad");
+            }
+        }),
+        3000,
+    );
+    html_element::set_hidden(section, false);
+    // A new frame each run: the program starts from a clean page, and a frame
+    // made while its section is showing gets drawn right away.
+    let frame = html_i_frame_element::unchecked_from(node::clone_node(RESULT_FRAME.get()));
+    element::replace_with(RESULT_FRAME.get(), frame);
+    RESULT_FRAME.set(frame);
+    let linked = if test { link(files, TEST_RUNNER) } else { link(files, &format!("modules[{}].main();", json_string(root_file))) };
+    let finished = if test {
+        report(r#"tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }"#)
+    } else {
+        report("ran: true")
+    };
+    let page = format!(
+        r#"{FRAME_HEAD}
+<script>
+  // Errors later on, in an event handler say.
+  addEventListener("error", (e) => {});
+  // And in async code, which rejects its promise instead (ADR 0029).
+  addEventListener("unhandledrejection", (e) => {});
+  // What a test file calls, as bun test provides it (ADR 0026).
+  const registered = [];
+  globalThis.test = (name, f) => registered.push({{ name, f }});
+  test.skip = (name) => registered.push({{ name }});
+</script>
+<script>
+  try {{
+{linked}
+    {finished};
+  }} catch (e) {{
+    {};
+  }}
+</script>"#,
+        report("error: String(e.message)"),
+        report("error: String(e.reason)"),
+        report("error: String(e)"),
+    );
+    html_i_frame_element::set_srcdoc(frame, &page);
+}
+
+/// Listen for the Result frame's reports, and say what they say.
+pub fn listen_for_reports() {
+    event_target::add_event_listener(window, "message", Box::new(|e| {
+        let from_frame = same_object(message_source(e), content_window(RESULT_FRAME.get()));
+        let report = match message_data(e) {
+            Some(report) if from_frame && report.run == Some(PROGRAM_RUNS.get()) => report,
+            _ => return,
+        };
+        REPORTED.set(true);
+        if let Some(error) = report.error {
+            set_status(&format!("Runtime error: {error}"), "bad");
+        } else if report.ran == Some(true) {
+            set_status(&format!("{} Ran main().", status_text()), "good");
+        } else if let Some(tested) = report.tested {
+            let total = tested.passed + tested.failed;
+            let ignored = if tested.ignored > 0 { format!(", {} ignored", tested.ignored) } else { String::new() };
+            let summary = if total == 0 {
+                "No tests.".to_string()
+            } else {
+                format!("Tests: {} passed, {} failed{ignored}.", tested.passed, tested.failed)
+            };
+            set_status(&summary, if tested.failed > 0 { "bad" } else { "good" });
+        }
+    }));
 }

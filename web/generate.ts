@@ -23,7 +23,7 @@ const INTERFACES = [
   "HTMLHeadingElement", "HTMLImageElement", "HTMLInputElement", "HTMLLabelElement", "HTMLLIElement",
   "HTMLOListElement", "HTMLOptionElement", "HTMLOutputElement", "HTMLParagraphElement",
   "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement", "HTMLUListElement",
-  "HTMLTableElement", "HTMLTableSectionElement", "HTMLTableRowElement", "HTMLTableCellElement",
+  "HTMLTableElement", "HTMLTableSectionElement", "HTMLTableRowElement", "HTMLTableCellElement", "HTMLIFrameElement",
   "Window", "Location", "History", "Storage",
   // uievents
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
@@ -130,7 +130,10 @@ if (missing.length) throw new Error(`not in ${SPECS.join(", ")}: ${missing.join(
 // ── Names ───────────────────────────────────────────────────────────────
 
 /** `HTMLInputElement` → `["HTML", "Input", "Element"]`, `innerHTML` → `["inner", "HTML"]`. */
-const words = (name: string) => name.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+/g) ?? [name];
+// "HTML" then a one-letter word (`HTMLIFrameElement`) would read as "HTMLI":
+// split it off first, as web-sys does (`HtmlIFrameElement`).
+const words = (name: string) =>
+  name.replace(/^HTML(?=[A-Z][A-Z])/, "Html").match(/[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+/g) ?? [name];
 
 /** An interface's name with its namespace, if it has one: `WebAssemblyModule`. */
 const qualified = (name: string) => (interfaces.get(name)?.legacyNamespace ?? "") + name;
@@ -328,12 +331,14 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const result = rustType(m.idlType!, "result");
-      if (typeof result !== "string") {
-        skip(result.skip);
-        continue;
-      }
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
-      fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: self, result: orNull(result, m.idlType!), doc });
+      // A getter whose type isn't supported (a union, say) is skipped, but
+      // its setter can still take the union's first supported member.
+      if (typeof result === "string") {
+        fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: self, result: orNull(result, m.idlType!), doc });
+      } else {
+        skip(result.skip);
+      }
       const forwards = (m.extAttrs ?? []).some((a) => a.name === "PutForwards" || a.name === "Replaceable");
       const value = alternatives(m.idlType!)[0];
       if (!m.readonly && !forwards && value) {

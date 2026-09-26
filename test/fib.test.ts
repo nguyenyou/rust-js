@@ -31,6 +31,7 @@ let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
 let results: Record<string, (...args: any[]) => unknown>;
 let iterators: Record<string, (...args: any[]) => unknown>;
+let threadLocals: Record<string, (...args: any[]) => unknown>;
 let throws: Record<string, (...args: any[]) => any>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
@@ -66,6 +67,8 @@ beforeAll(async () => {
   results = await import(join(target, "results.js"));
   run([join(target, "debug", "rust-js"), "examples/iterators.rs", "-o", join(target, "iterators.js")]);
   iterators = await import(join(target, "iterators.js"));
+  run([join(target, "debug", "rust-js"), "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
+  threadLocals = await import(join(target, "thread_locals.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -126,6 +129,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "thread_locals") {
+        return threadLocals[path[1]](...c.args);
       }
       if (path[0] === "iterators") {
         return JSON.parse(JSON.stringify(iterators[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
@@ -344,7 +350,7 @@ test("async code becomes async functions and await", async () => {
 test("the playground's own Rust compiles to the JS main.ts imports", async () => {
   const js = await Bun.file(join(target, "playground", "lib.js")).text();
   expect(js).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve"]) {
+  for (const name of ["load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve", "run_program", "set_status"]) {
     expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
@@ -362,6 +368,18 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
   expect(js).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
   expect(js).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
+  // The Result frame's state is thread-locals (ADR 0037).
+  expect(js).toContain('const PROGRAM_RUNS = { value: 0 };\nconst REPORTED = { value: false };\nconst RESULT_FRAME = { value: frame_by_id("result") };');
+});
+
+// ADR 0037: `thread_local!` is a variable of its module.
+test("thread-locals are module variables", async () => {
+  const js = await Bun.file(join(target, "thread_locals.js")).text();
+  expect(js).toContain("const COUNT = { value: 0 };\nconst LOG = { value: [] };\nconst START = { value: Math.imul(10, 4) + 2 | 0 };");
+  expect(js).toContain("  COUNT.value = COUNT.value + 1 >>> 0;\n  return COUNT.value;");
+  expect(js).toContain("  })(LOG.value);");
+  // Nothing of std's storage.
+  expect(js).not.toContain("__rust_std_internal");
 });
 
 // ADR 0036: an iterator is a JS array, and `Ordering` a comparator's number.

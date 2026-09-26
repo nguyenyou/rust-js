@@ -695,6 +695,14 @@ pub mod element {
         #[link_name = "getHTML"]
         pub safe fn get_html(this: &Element) -> String;
 
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/innerHTML)
+        #[link_name = "set innerHTML"]
+        pub safe fn set_inner_html(this: &Element, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/outerHTML)
+        #[link_name = "set outerHTML"]
+        pub safe fn set_outer_html(this: &Element, value: &str);
+
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/insertAdjacentHTML)
         #[link_name = "insertAdjacentHTML"]
         pub safe fn insert_adjacent_html(this: &Element, position: &str, string: &str);
@@ -1495,6 +1503,10 @@ pub mod html_element {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/dir)
         #[link_name = "set dir"]
         pub safe fn set_dir(this: &HtmlElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/hidden)
+        #[link_name = "set hidden"]
+        pub safe fn set_hidden(this: &HtmlElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/inert)
         #[link_name = "get inert"]
@@ -2984,9 +2996,9 @@ pub mod html_label_element {
 }
 
 /// [`HTMLLIElement`](https://developer.mozilla.org/docs/Web/API/HTMLLIElement)
-pub struct HtmlliElement(PhantomData<JsObject>);
+pub struct HtmlLiElement(PhantomData<JsObject>);
 
-impl Deref for HtmlliElement {
+impl Deref for HtmlLiElement {
     type Target = HtmlElement;
 
     fn deref(&self) -> &HtmlElement {
@@ -2995,40 +3007,40 @@ impl Deref for HtmlliElement {
     }
 }
 
-pub mod htmlli_element {
+pub mod html_li_element {
     use super::*;
 
     unsafe extern "Rust" {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/HTMLLIElement)
         #[link_name = "new HTMLLIElement"]
-        pub safe fn new() -> &'static HtmlliElement;
+        pub safe fn new() -> &'static HtmlLiElement;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/value)
         #[link_name = "get value"]
-        pub safe fn value(this: &HtmlliElement) -> i32;
+        pub safe fn value(this: &HtmlLiElement) -> i32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/value)
         #[link_name = "set value"]
-        pub safe fn set_value(this: &HtmlliElement, value: i32);
+        pub safe fn set_value(this: &HtmlLiElement, value: i32);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/type)
         #[link_name = "get type"]
-        pub safe fn type_(this: &HtmlliElement) -> String;
+        pub safe fn type_(this: &HtmlLiElement) -> String;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type(this: &HtmlliElement, value: &str);
+        pub safe fn set_type(this: &HtmlLiElement, value: &str);
 
-        /// Treats `this` as `HtmlliElement` without checking that it is one.
+        /// Treats `this` as `HtmlLiElement` without checking that it is one.
         #[link_name = "this"]
-        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlliElement;
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlLiElement;
     }
 }
 
 /// [`HTMLOListElement`](https://developer.mozilla.org/docs/Web/API/HTMLOListElement)
-pub struct HtmloListElement(PhantomData<JsObject>);
+pub struct HtmlOListElement(PhantomData<JsObject>);
 
-impl Deref for HtmloListElement {
+impl Deref for HtmlOListElement {
     type Target = HtmlElement;
 
     fn deref(&self) -> &HtmlElement {
@@ -3037,49 +3049,49 @@ impl Deref for HtmloListElement {
     }
 }
 
-pub mod htmlo_list_element {
+pub mod html_o_list_element {
     use super::*;
 
     unsafe extern "Rust" {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/HTMLOListElement)
         #[link_name = "new HTMLOListElement"]
-        pub safe fn new() -> &'static HtmloListElement;
+        pub safe fn new() -> &'static HtmlOListElement;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/reversed)
         #[link_name = "get reversed"]
-        pub safe fn reversed(this: &HtmloListElement) -> bool;
+        pub safe fn reversed(this: &HtmlOListElement) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/reversed)
         #[link_name = "set reversed"]
-        pub safe fn set_reversed(this: &HtmloListElement, value: bool);
+        pub safe fn set_reversed(this: &HtmlOListElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/start)
         #[link_name = "get start"]
-        pub safe fn start(this: &HtmloListElement) -> i32;
+        pub safe fn start(this: &HtmlOListElement) -> i32;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/start)
         #[link_name = "set start"]
-        pub safe fn set_start(this: &HtmloListElement, value: i32);
+        pub safe fn set_start(this: &HtmlOListElement, value: i32);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/type)
         #[link_name = "get type"]
-        pub safe fn type_(this: &HtmloListElement) -> String;
+        pub safe fn type_(this: &HtmlOListElement) -> String;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type(this: &HtmloListElement, value: &str);
+        pub safe fn set_type(this: &HtmlOListElement, value: &str);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/compact)
         #[link_name = "get compact"]
-        pub safe fn compact(this: &HtmloListElement) -> bool;
+        pub safe fn compact(this: &HtmlOListElement) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/compact)
         #[link_name = "set compact"]
-        pub safe fn set_compact(this: &HtmloListElement, value: bool);
+        pub safe fn set_compact(this: &HtmlOListElement, value: bool);
 
-        /// Treats `this` as `HtmloListElement` without checking that it is one.
+        /// Treats `this` as `HtmlOListElement` without checking that it is one.
         #[link_name = "this"]
-        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmloListElement;
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlOListElement;
     }
 }
 
@@ -3696,9 +3708,9 @@ pub mod html_text_area_element {
 }
 
 /// [`HTMLUListElement`](https://developer.mozilla.org/docs/Web/API/HTMLUListElement)
-pub struct HtmluListElement(PhantomData<JsObject>);
+pub struct HtmlUListElement(PhantomData<JsObject>);
 
-impl Deref for HtmluListElement {
+impl Deref for HtmlUListElement {
     type Target = HtmlElement;
 
     fn deref(&self) -> &HtmlElement {
@@ -3707,33 +3719,33 @@ impl Deref for HtmluListElement {
     }
 }
 
-pub mod htmlu_list_element {
+pub mod html_u_list_element {
     use super::*;
 
     unsafe extern "Rust" {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/HTMLUListElement)
         #[link_name = "new HTMLUListElement"]
-        pub safe fn new() -> &'static HtmluListElement;
+        pub safe fn new() -> &'static HtmlUListElement;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/compact)
         #[link_name = "get compact"]
-        pub safe fn compact(this: &HtmluListElement) -> bool;
+        pub safe fn compact(this: &HtmlUListElement) -> bool;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/compact)
         #[link_name = "set compact"]
-        pub safe fn set_compact(this: &HtmluListElement, value: bool);
+        pub safe fn set_compact(this: &HtmlUListElement, value: bool);
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/type)
         #[link_name = "get type"]
-        pub safe fn type_(this: &HtmluListElement) -> String;
+        pub safe fn type_(this: &HtmlUListElement) -> String;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/type)
         #[link_name = "set type"]
-        pub safe fn set_type(this: &HtmluListElement, value: &str);
+        pub safe fn set_type(this: &HtmlUListElement, value: &str);
 
-        /// Treats `this` as `HtmluListElement` without checking that it is one.
+        /// Treats `this` as `HtmlUListElement` without checking that it is one.
         #[link_name = "this"]
-        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmluListElement;
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlUListElement;
     }
 }
 
@@ -4198,6 +4210,160 @@ pub mod html_table_cell_element {
         /// Treats `this` as `HtmlTableCellElement` without checking that it is one.
         #[link_name = "this"]
         pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlTableCellElement;
+    }
+}
+
+/// [`HTMLIFrameElement`](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement)
+pub struct HtmlIFrameElement(PhantomData<JsObject>);
+
+impl Deref for HtmlIFrameElement {
+    type Target = HtmlElement;
+
+    fn deref(&self) -> &HtmlElement {
+        // Never runs: rust-js compiles this `Deref` to the object itself.
+        unsafe { &*(self as *const Self as *const HtmlElement) }
+    }
+}
+
+pub mod html_i_frame_element {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/HTMLIFrameElement)
+        #[link_name = "new HTMLIFrameElement"]
+        pub safe fn new() -> &'static HtmlIFrameElement;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/src)
+        #[link_name = "get src"]
+        pub safe fn src(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/src)
+        #[link_name = "set src"]
+        pub safe fn set_src(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/srcdoc)
+        #[link_name = "set srcdoc"]
+        pub safe fn set_srcdoc(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/name)
+        #[link_name = "get name"]
+        pub safe fn name(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/name)
+        #[link_name = "set name"]
+        pub safe fn set_name(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/sandbox)
+        #[link_name = "get sandbox"]
+        pub safe fn sandbox(this: &HtmlIFrameElement) -> &'static DomTokenList;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/allow)
+        #[link_name = "get allow"]
+        pub safe fn allow(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/allow)
+        #[link_name = "set allow"]
+        pub safe fn set_allow(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/allowFullscreen)
+        #[link_name = "get allowFullscreen"]
+        pub safe fn allow_fullscreen(this: &HtmlIFrameElement) -> bool;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/allowFullscreen)
+        #[link_name = "set allowFullscreen"]
+        pub safe fn set_allow_fullscreen(this: &HtmlIFrameElement, value: bool);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/width)
+        #[link_name = "get width"]
+        pub safe fn width(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/width)
+        #[link_name = "set width"]
+        pub safe fn set_width(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/height)
+        #[link_name = "get height"]
+        pub safe fn height(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/height)
+        #[link_name = "set height"]
+        pub safe fn set_height(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/referrerPolicy)
+        #[link_name = "get referrerPolicy"]
+        pub safe fn referrer_policy(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/referrerPolicy)
+        #[link_name = "set referrerPolicy"]
+        pub safe fn set_referrer_policy(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/loading)
+        #[link_name = "get loading"]
+        pub safe fn loading(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/loading)
+        #[link_name = "set loading"]
+        pub safe fn set_loading(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/contentDocument)
+        #[link_name = "get contentDocument"]
+        pub safe fn content_document(this: &HtmlIFrameElement) -> Option<&'static Document>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/getSVGDocument)
+        #[link_name = "getSVGDocument"]
+        pub safe fn get_svg_document(this: &HtmlIFrameElement) -> Option<&'static Document>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/align)
+        #[link_name = "get align"]
+        pub safe fn align(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/align)
+        #[link_name = "set align"]
+        pub safe fn set_align(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/scrolling)
+        #[link_name = "get scrolling"]
+        pub safe fn scrolling(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/scrolling)
+        #[link_name = "set scrolling"]
+        pub safe fn set_scrolling(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/frameBorder)
+        #[link_name = "get frameBorder"]
+        pub safe fn frame_border(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/frameBorder)
+        #[link_name = "set frameBorder"]
+        pub safe fn set_frame_border(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/longDesc)
+        #[link_name = "get longDesc"]
+        pub safe fn long_desc(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/longDesc)
+        #[link_name = "set longDesc"]
+        pub safe fn set_long_desc(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/marginHeight)
+        #[link_name = "get marginHeight"]
+        pub safe fn margin_height(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/marginHeight)
+        #[link_name = "set marginHeight"]
+        pub safe fn set_margin_height(this: &HtmlIFrameElement, value: &str);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/marginWidth)
+        #[link_name = "get marginWidth"]
+        pub safe fn margin_width(this: &HtmlIFrameElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/marginWidth)
+        #[link_name = "set marginWidth"]
+        pub safe fn set_margin_width(this: &HtmlIFrameElement, value: &str);
+
+        /// Treats `this` as `HtmlIFrameElement` without checking that it is one.
+        #[link_name = "this"]
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlIFrameElement;
     }
 }
 

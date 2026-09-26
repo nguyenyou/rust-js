@@ -25,6 +25,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.
 - An iterator is a JS array, and its adapters the array's methods (`v.iter().map(f)` is `v.map(f)`);
   sorting takes comparators, and `Ordering` is -1, 0 or 1.
+- `thread_local!` is a variable of its module: `const COUNT = { value: 0 };`.
 - A JS call whose binding returns a `Result` runs in a `try`: a throw is an `Err`. `?` returns
   an `Err` or a `None` early.
 - `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.

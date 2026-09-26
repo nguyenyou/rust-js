@@ -135,7 +135,11 @@ with the few members programs need so far: `uint8_array::new(buffer)`,
   `source.instance`. Only those whose fields are all required, supported,
   and named the same in Rust; for now that's `WebAssemblyInstantiatedSource`.
 - **Names:** snake_case of the IDL names, and web-sys-style type names
-  (`HTMLInputElement` is `HtmlInputElement`). A Rust keyword gets a `_`.
+  (`HTMLInputElement` is `HtmlInputElement`, `HTMLIFrameElement` is
+  `HtmlIFrameElement`). A Rust keyword gets a `_`.
+- **An attribute whose getter's type isn't supported** (a union, like
+  `hidden` or `srcdoc`) still gets its setter, taking the first supported
+  member: `html_element::set_hidden(e, true)`.
 
 **Which interfaces:** a list in `generate.ts`, the everyday DOM, grown as
 programs need more. The Fetch Standard's `Request`, `Response` and

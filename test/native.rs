@@ -44,6 +44,10 @@ mod results;
 #[allow(dead_code)]
 mod iterators;
 
+#[path = "../examples/thread_locals.rs"]
+#[allow(dead_code)]
+mod thread_locals;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -150,6 +154,14 @@ fn main() {
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
     }
+    // Each call sees what the one before left, natively and in JS.
+    for _ in 0..3 {
+        case("thread_locals.bump", &[], thread_locals::bump);
+    }
+    for line in ["a", "b", "c"] {
+        case_with("thread_locals.record", &[&line], || thread_locals::record(line));
+    }
+    case("thread_locals.start", &[], thread_locals::start);
     for n in [0, 1, 5] {
         case("iterators.squares", &[n], || iterators::squares(n as u32));
     }

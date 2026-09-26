@@ -127,10 +127,30 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     };
     let all_bodies: Vec<&Body<'tcx>> = all_bodies.iter().filter(|body| !is_harness(body.def_id)).collect();
 
+    // `thread_local!` (ADR 0037) is a `const NAME: LocalKey<T>` whose block holds
+    // `fn __rust_std_internal_init_fn() -> T { init }`, then std's storage for
+    // it. In JS, it's a variable of its module, made from `init`.
+    let is_thread_local = |d: LocalDefId| {
+        matches!(tcx.def_kind(d), DefKind::Const { .. })
+            && matches!(tcx.type_of(d).instantiate_identity().kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(Symbol::intern("LocalKey"), adt.did()))
+    };
+    let in_thread_local = |d: LocalDefId| {
+        let mut parent = tcx.opt_local_parent(d);
+        while let Some(p) = parent {
+            if is_thread_local(p) {
+                return Some(p);
+            }
+            parent = tcx.opt_local_parent(p);
+        }
+        None
+    };
+
     let mut failed = false;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
             _ if markers.iter().any(|&(marker, _)| marker == def_id) => continue,
+            // std's storage for a thread-local: JS needs none.
+            _ if in_thread_local(def_id).is_some() => continue,
             // `#[derive(Clone, Copy)]` and friends write impls we never call.
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn => "methods",
@@ -195,6 +215,14 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         })
         .collect();
     let globals = reserved;
+
+    // Each thread-local's `init` function: lowered like any function, its
+    // body is the variable's value.
+    let thread_local_inits: HashMap<LocalDefId, LocalDefId> = bodies
+        .iter()
+        .filter(|body| tcx.def_kind(body.def_id) == DefKind::Fn)
+        .filter_map(|body| Some((body.def_id, in_thread_local(body.def_id)?)))
+        .collect();
 
     // `const` items (ADR 0031), with the values rustc has computed. One in a
     // function goes beside it, in its module.
@@ -310,7 +338,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     }
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
-    for &def_id in &consts {
+    for &def_id in consts.iter().filter(|&&d| !is_thread_local(d)) {
         let span = tcx.def_span(def_id);
         let typing_env = ty::TypingEnv::fully_monomorphized();
         let args = ty::GenericArgs::identity_for_item(tcx, def_id);
@@ -358,6 +386,24 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             runtime: HashSet::new(),
         };
         match cx.lower_fn(body) {
+            Ok(lowered) if let Some(&key) = thread_local_inits.get(&body.def_id) => {
+                // `const COUNT = { value: 0 };`: made when the module loads.
+                let function = lowered.function;
+                let value = match function.body.as_slice() {
+                    [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => value.clone(),
+                    _ => Expr::call(Expr::arrow(Vec::new(), function.body), Vec::new()),
+                };
+                let info = &fns[&key.to_def_id()];
+                let file = module_file(tcx, info.module);
+                let span = tcx.def_span(key).source_callsite();
+                const_items.entry(info.module).or_default().push(js::Const {
+                    name: info.name.clone(),
+                    value,
+                    export: tcx.visibility(key).is_public() || called_from_elsewhere.contains(&key.to_def_id()),
+                    span: js::Span { lo: (span.lo() - file.start_pos).0, hi: (span.hi() - file.start_pos).0 },
+                });
+                runtime.entry(module).or_default().extend(lowered.runtime);
+            }
             Ok(mut lowered) => {
                 lowered.function.export |= called_from_elsewhere.contains(&def_id);
                 functions.entry(module).or_default().push(lowered.function);
@@ -883,6 +929,10 @@ enum Std {
     /// An operator on references to numbers, `x % 10` with `x: &i32`,
     /// which rustc writes as a call of the operator's trait.
     Operator(BinOp),
+    /// A thread-local's `with(f)`: `f(key)`; and `with_borrow(f)`,
+    /// `with_borrow_mut(f)` of a `RefCell` one: `f(key.value)`.
+    LocalWith,
+    LocalBorrow,
     /// `Ordering::then`, `then_with`, `reverse`.
     Then,
     ThenWith,
@@ -2401,6 +2451,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (l, r) = (arg(), arg());
                 self.binary(op, l, r, None, ty, span)?
             }
+            Std::LocalWith => {
+                let (key, f) = (arg(), arg());
+                Expr::call(f, vec![key])
+            }
+            Std::LocalBorrow => {
+                let (key, f) = (arg(), arg());
+                Expr::call(f, vec![Expr::member(key, "value")])
+            }
             Std::Then => Expr::bin(Op::Or, arg(), arg()),
             Std::ThenWith => {
                 let (first, next) = (arg(), arg());
@@ -2667,6 +2725,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let option = self.is_lang_adt(owner, LangItem::Option);
         let result = self.is_std_adt(owner, sym::Result);
         let ordering = self.is_lang_adt(owner, LangItem::OrderingEnum);
+        let local_key = adt("LocalKey");
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
@@ -2717,6 +2776,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_some" if option => Std::IsSome,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
+            // A thread-local (ADR 0037) is its `Cell` or `RefCell`: `{ value }`.
+            "with" if local_key => Std::LocalWith,
+            "get" if local_key => Std::CellGet,
+            "set" if local_key => Std::CellSet,
+            "with_borrow" | "with_borrow_mut" if local_key => Std::LocalBorrow,
             "then" if ordering => Std::Then,
             "then_with" if ordering => Std::ThenWith,
             "reverse" if ordering => Std::Reverse,
@@ -2726,6 +2790,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "sort_by" | "sort_unstable_by" if owner.is_slice() => Std::SortBy,
             "sort_by_key" | "sort_unstable_by_key" if owner.is_slice() => Std::SortByKey,
             "reverse" if owner.is_slice() => Std::Method("reverse"),
+            // `includes` compares strings and numbers by value, as `==` does,
+            // but objects by identity: only for those.
+            "contains" if owner.is_slice() && self_ty.is_some_and(|t| self.is_string_like(t) || Num::of(t).is_some() || t.is_bool()) => {
+                Std::Method("includes")
+            }
             "is_ok" if result => Std::IsOk(true),
             "is_err" if result => Std::IsOk(false),
             "ok" if result => Std::ResultOk,
@@ -3442,6 +3511,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Some(ty);
             }
             ty::Adt(_, args) if self.is_std_wrapper(ty) => return args.types().next().and_then(|t| self.unsupported_in(t, seen)),
+            // A thread-local is its value (ADR 0037).
+            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("LocalKey")) => {
+                return args.types().next().and_then(|t| self.unsupported_in(t, seen));
+            }
             _ => {}
         }
         if seen.contains(&ty) {

@@ -19,7 +19,7 @@ import { basicSetup, EditorView } from "codemirror";
 
 // The part of the playground written in Rust: rust/lib.rs, which build.ts
 // and serve.ts compile to rust/lib.js with rust-js itself (compile-rust.ts).
-import { compile, link as linkModules, load, mb, ms, render_tree, resolve as resolveSpecifier, stat } from "./rust/lib.js";
+import { compile, listen_for_reports, load, mb, ms, render_tree, run_program, set_status, stat } from "./rust/lib.js";
 
 type Example = { name: string; title: string; root: string; files: string[] };
 
@@ -27,12 +27,8 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const exampleSelect = $<HTMLSelectElement>("example");
 const button = $<HTMLButtonElement>("compile");
 const testButton = $<HTMLButtonElement>("test");
-const status = $<HTMLSpanElement>("status");
-
-function setStatus(text: string, kind: "" | "good" | "bad" = "") {
-  status.textContent = text;
-  status.className = kind;
-}
+// `set_status`, in rust/lib.rs: the line beside the buttons.
+const setStatus = (text: string, kind: "" | "good" | "bad" = "") => set_status(text, kind);
 
 // ── Editors ─────────────────────────────────────────────────────────────
 // Rust in, JavaScript out. Both follow the system's light or dark setting.
@@ -209,135 +205,11 @@ type Result = {
 };
 
 // ── Running the program ─────────────────────────────────────────────────
-// If the root module exports `main`, run it in a frame with a
-// `<div id="app">` to render into. The modules are linked into one plain
-// `<script>` (see `link`), which every browser runs the same way, and the
-// page reports back whether `main` ran, so the status line always says.
-//
-// The frame isn't sandboxed. Chrome runs a sandboxed frame in a process of
-// its own, and some setups then don't draw it until something else changes
-// the layout: the program ran, but the frame stayed blank. The program is
-// the one in the editor, so it may share this page's origin.
+// `run_program`, in rust/lib.rs: `main()` or the tests, in the Result frame,
+// which reports back to `listen_for_reports`.
 
-const resultSection = $<HTMLElement>("result-section");
-let resultFrame = $<HTMLIFrameElement>("result");
-
-// `resolve` and `link`, in rust/lib.rs, join the modules into one classic
-// script: each module a function filling in its exports object.
-const resolve = resolveSpecifier as (from: string, specifier: string) => string;
-const link = linkModules as (files: Map<string, string>, start: string) => string;
-
-let programRuns = 0;
-let reported = false;
-
-// A small `bun test` look-alike for the Result frame: `test` and `test.skip`
-// collect the tests, which then run one after another. What they leave in
-// the page is replaced by the report.
-const TEST_RUNNER = `
-    const results = registered.map(({ name, f }) => {
-      if (!f) return { name, outcome: "skip" };
-      try {
-        f();
-        return { name, outcome: "pass" };
-      } catch (e) {
-        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };
-      }
-    });
-    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {
-      const line = document.createElement("div");
-      line.className = outcome;
-      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");
-      if (message) {
-        const why = document.createElement("pre");
-        why.textContent = message;
-        line.append(why);
-      }
-      return line;
-    }));
-    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;`;
-
-/** Run the root module's `main()`, or with `test`, the crate's tests. */
-function runProgram(files: Map<string, string>, rootFile: string, test = false) {
-  const main = files.get(rootFile);
-  const tests = rootFile.replace(/\.js$/, ".test.js");
-  programRuns++;
-  const runnable = test ? files.has(tests) : main !== undefined && /^export function main\(\)/m.test(main);
-  // Imports from JS modules (ADR 0028) name packages or files the page
-  // doesn't have. A bundler would bring them in; the playground has none.
-  const external = new Set<string>();
-  for (const [path, code] of files) {
-    for (const [, specifier] of code.matchAll(/^import .* from "([^"]+)";$/gm)) {
-      if (!files.has(resolve(path, specifier))) external.add(specifier);
-    }
-  }
-  if (!runnable || external.size > 0) {
-    resultSection.hidden = true;
-    resultFrame.srcdoc = "";
-    if (runnable) {
-      const names = [...external].map((s) => `"${s}"`).join(", ");
-      setStatus(`${status.textContent} Not run: it imports ${names}, which the playground can't load. Bundle it with bun build.`, "bad");
-    }
-    return;
-  }
-  const run = programRuns;
-  const report = (message: string) => `parent.postMessage({ run: ${run}, ${message} }, "*")`;
-  reported = false;
-  // If the page never reports, say so: something stopped its script.
-  setTimeout(() => {
-    if (run === programRuns && !reported) {
-      setStatus("The Result frame didn't run. Is something blocking its script? See the console.", "bad");
-    }
-  }, 3000);
-  resultSection.hidden = false;
-  // A new frame each run: the program starts from a clean page, and a frame
-  // made while its section is showing gets drawn right away.
-  const frame = resultFrame.cloneNode() as HTMLIFrameElement;
-  resultFrame.replaceWith(frame);
-  resultFrame = frame;
-  resultFrame.srcdoc = `<!doctype html>
-<meta charset="utf-8">
-<style>
-  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
-  body { margin: 12px; }
-  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
-  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
-  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }
-  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }
-  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }
-</style>
-<div id="app"></div>
-<script>
-  // Errors later on, in an event handler say.
-  addEventListener("error", (e) => ${report("error: String(e.message)")});
-  // And in async code, which rejects its promise instead (ADR 0029).
-  addEventListener("unhandledrejection", (e) => ${report("error: String(e.reason)")});
-  // What a test file calls, as bun test provides it (ADR 0026).
-  const registered = [];
-  globalThis.test = (name, f) => registered.push({ name, f });
-  test.skip = (name) => registered.push({ name });
-</script>
-<script>
-  try {
-${test ? link(files, TEST_RUNNER) : link(files, `modules[${JSON.stringify(rootFile)}].main();`)}
-    ${test ? report(`tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }`) : report("ran: true")};
-  } catch (e) {
-    ${report("error: String(e)")};
-  }
-</script>`;
-}
-
-addEventListener("message", (e) => {
-  if (e.source !== resultFrame.contentWindow || e.data?.run !== programRuns) return;
-  reported = true;
-  if (e.data.error) setStatus(`Runtime error: ${e.data.error}`, "bad");
-  else if (e.data.ran) setStatus(`${status.textContent} Ran main().`, "good");
-  else if (e.data.tested) {
-    const { passed, failed, ignored } = e.data.tested;
-    const total = passed + failed;
-    const summary = total === 0 ? "No tests." : `Tests: ${passed} passed, ${failed} failed${ignored ? `, ${ignored} ignored` : ""}.`;
-    setStatus(summary, failed ? "bad" : "good");
-  }
-});
+const runProgram = (files: Map<string, string>, rootFile: string, test = false) => run_program(files, rootFile, test);
+listen_for_reports();
 
 // ── Loading ─────────────────────────────────────────────────────────────
 // Downloading the compiler, the sysroot, the web crate and the examples is
