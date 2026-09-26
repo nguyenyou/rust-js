@@ -236,6 +236,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ty = self.thir[args[0]].ty.peel_refs();
             return self.number_call(op, args, ty, span, out);
         }
+        if let Std::Step(op) = known {
+            return self.step_call(op, fun, args, generic_args, span, out);
+        }
         if let Std::Heap(op) = known {
             return self.heap_call(op, args, span, out);
         }
@@ -648,7 +651,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Number(_)
             | Std::FromElem
             | Std::Heap(_)
-            | Std::DequeRemove => {
+            | Std::DequeRemove
+            | Std::Step(_) => {
                 unreachable!("handled above")
             }
             // `Some(&x)` is `x`, and its clone is `x`'s.

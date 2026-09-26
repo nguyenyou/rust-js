@@ -256,6 +256,11 @@ struct FnCx<'a, 'tcx> {
     /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
     /// in (ADR 0059). While it lives, nothing else can change that entry.
     slots: HashMap<LocalVarId, (Expr, Expr)>,
+    /// Locals that `next()` is called on (ADR 0071): an iterator over an
+    /// array that's stepped through, a `$iter` object that knows where it is.
+    stepped: HashSet<LocalVarId>,
+    /// Those of them bound as a `$iter`, which `next()` can step.
+    iterators: HashSet<LocalVarId>,
     /// The call being lowered is a statement of its own: its value isn't used,
     /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
     discarded: bool,
@@ -700,6 +705,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn lower_let(&mut self, pat: &Pat<'tcx>, init: Option<ExprId>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
+        // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,
+        // which knows where it is (ADR 0071).
+        if let PatKind::Binding {
+            name,
+            var,
+            mode: BindingMode(ByRef::No, mutability),
+            subpattern: None,
+            ty,
+            ..
+        } = pat.kind
+            && let Some(init) = init
+            && self.stepped.contains(&var)
+            && self.is_array_iter(ty)
+            && !self.is_peekable(ty)
+        {
+            let items = self.iter_value(init, out)?;
+            let items = self.iter_source(items, ty, span)?;
+            self.runtime.insert(Helper::Iter);
+            let value = Expr::call(Expr::var("$iter"), vec![items]);
+            let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
+            self.iterators.insert(var);
+            let kind = if mutability == Mutability::Mut {
+                StmtKind::Let(name, Some(value))
+            } else {
+                StmtKind::Const(name, value)
+            };
+            out.push(kind.at(self.js_span(span)));
+            return Ok(());
+        }
         // `let f = { let c = ..; move |n| .. };`: the block's statements
         // first, then `const f = ..` of its value. Every local has a JS name
         // of its own, so none of them can clash where they now are.
@@ -1169,7 +1203,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
             }
-            let head = self.expr(f.head, out)?;
+            let head = self.iter_value(f.head, out)?;
             let head = self.in_order_of(head, head_ty, head_span)?;
             (Some(self.iter_source(head, head_ty, head_span)?), None)
         };
@@ -3362,4 +3396,33 @@ fn without_refs<'p, 'tcx>(mut pat: &'p Pat<'tcx>) -> &'p Pat<'tcx> {
         pat = subpattern;
     }
     pat
+}
+
+/// The locals a body calls `next()` on, directly or through `&mut`: the
+/// ones that must know where they are (ADR 0071).
+fn stepped_locals(tcx: TyCtxt<'_>, thir: &Thir<'_>) -> HashSet<LocalVarId> {
+    let mut stepped = HashSet::new();
+    for expr in thir.exprs.iter() {
+        let ExprKind::Call { fun, ref args, .. } = expr.kind else {
+            continue;
+        };
+        let &ty::FnDef(def_id, _) = thir[fun].ty.kind() else {
+            continue;
+        };
+        let steps = tcx
+            .trait_of_assoc(def_id)
+            .is_some_and(|t| tcx.is_diagnostic_item(sym::Iterator, t))
+            && tcx.item_name(def_id) == sym::next;
+        let Some(&receiver) = args.first() else {
+            continue;
+        };
+        let receiver = match thir[strip(thir, receiver)].kind {
+            ExprKind::Borrow { arg, .. } => strip(thir, arg),
+            _ => strip(thir, receiver),
+        };
+        if steps && let ExprKind::VarRef { id } = thir[receiver].kind {
+            stepped.insert(id);
+        }
+    }
+    stepped
 }

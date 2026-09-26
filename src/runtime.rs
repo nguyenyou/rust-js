@@ -42,6 +42,12 @@ pub enum Helper {
     CountOnes,
     BinarySearch,
     RemoveOpt,
+    Iter,
+    Next,
+    Peek,
+    NextIf,
+    Rest,
+    RestStr,
     UnwrapErr,
     DebugParseError,
     SiftUp,
@@ -849,6 +855,66 @@ function $debugParseError(message, name) {
     "too many characters in string": "TooManyChars",
   };
   return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
+}
+"#
+            }
+            // An iterator that knows where it is (ADR 0071): a `Peekable`, or one
+            // that `next()` steps through. It's a JS iterator too.
+            Helper::Iter => {
+                r#"
+function $iter(items) {
+  return {
+    items,
+    at: 0,
+    next() {
+      return this.at < this.items.length ? { value: this.items[this.at++], done: false } : { value: undefined, done: true };
+    },
+    [Symbol.iterator]() {
+      return this;
+    },
+  };
+}
+"#
+            }
+            // `it.next()` of any JS iterator: its next item, or `undefined` at the end.
+            Helper::Next => {
+                r#"
+function $next(it) {
+  const step = it.next();
+  return step.done ? undefined : step.value;
+}
+"#
+            }
+            Helper::Peek => {
+                r#"
+function $peek(it) {
+  return it.items[it.at];
+}
+"#
+            }
+            // `it.next_if(f)`: the next item if `f` says so, and then past it.
+            Helper::NextIf => {
+                r#"
+function $nextIf(it, f) {
+  return it.at < it.items.length && f(it.items[it.at]) ? it.items[it.at++] : undefined;
+}
+"#
+            }
+            // What's left of one, as an array; it then has nothing left.
+            Helper::Rest => {
+                r#"
+function $rest(it) {
+  const rest = it.items.slice(it.at);
+  it.at = it.items.length;
+  return rest;
+}
+"#
+            }
+            // `chars.as_str()`: what's left, as a string, still there to step through.
+            Helper::RestStr => {
+                r#"
+function $restStr(it) {
+  return it.items.slice(it.at).join("");
 }
 "#
             }

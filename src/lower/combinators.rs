@@ -68,6 +68,19 @@ pub(super) enum IterComb {
     Partition,
 }
 
+/// Stepping through an iterator (ADR 0071): a `Peekable`, and a local that
+/// `next()` is called on, are a `$iter` object, `{ items, at }`.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum StepOp {
+    Next,
+    Peekable,
+    Peek,
+    NextIf,
+    NextIfEq,
+    /// `Chars::as_str`: the rest, as a string.
+    AsStr,
+}
+
 /// A `BinaryHeap`'s: a JS array kept in the order Rust's heap keeps it,
 /// by the same steps, so `{:?}` and `into_vec()` show what Rust's do.
 #[derive(Clone, Copy, PartialEq)]
@@ -80,6 +93,148 @@ pub(super) enum HeapOp {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Is `ty` a `Peekable`, which is always a `$iter` (ADR 0071)?
+    pub(super) fn is_peekable(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
+            && self.tcx.item_name(adt.did()).as_str() == "Peekable")
+    }
+
+    /// Does `e` name one that knows where it is: a `Peekable`, or a local
+    /// `next()` steps through?
+    fn is_stepping(&self, e: ExprId) -> bool {
+        let e = match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } => self.strip(arg),
+            _ => self.strip(e),
+        };
+        let ty = self.thir[e].ty;
+        self.is_peekable(ty) || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.iterators.contains(&id))
+    }
+
+    /// Is `e` a place, not an iterator just made?
+    fn is_kept(&self, e: ExprId) -> bool {
+        let e = match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } => self.strip(arg),
+            _ => self.strip(e),
+        };
+        matches!(
+            self.thir[e].kind,
+            ExprKind::VarRef { .. } | ExprKind::UpvarRef { .. } | ExprKind::Field { .. } | ExprKind::Deref { .. }
+        )
+    }
+
+    /// An iterator as where items come from: of one that knows where it is,
+    /// the items it has left, `$rest(it)`, which it then has none of.
+    pub(super) fn iter_value(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        let value = self.expr(e, out)?;
+        if self.is_stepping(e) {
+            self.runtime.insert(Helper::Rest);
+            return Ok(Expr::call(Expr::var("$rest"), vec![value]));
+        }
+        Ok(value)
+    }
+
+    pub(super) fn step_call(
+        &mut self,
+        op: StepOp,
+        fun: ExprId,
+        args: &[ExprId],
+        generic_args: ty::GenericArgsRef<'tcx>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let receiver_ty = self.reveal(self.thir[args[0]].ty.peel_refs());
+        // What it gives, which `undefined` can't stand for if it's nullish.
+        if let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() {
+            let output = self
+                .tcx
+                .fn_sig(def_id)
+                .instantiate(self.tcx, generic_args)
+                .skip_binder()
+                .output();
+            let output = self.tcx.normalize_erasing_regions(self.typing_env, output);
+            if let Some(item) = self.option_of(output)
+                && self.can_be_nullish(item)
+            {
+                let what = format!("stepping through `{item}`s, which `None` would look like in JS");
+                return Err(self.unsupported(span, &what));
+            }
+        }
+        let stepping = self.is_stepping(args[0]);
+        let helper = |this: &mut Self, helper: Helper, name: &str, list: Vec<Expr>| {
+            this.runtime.insert(helper);
+            Expr::call(Expr::var(name), list)
+        };
+        Ok(match op {
+            StepOp::Next if stepping || self.is_lazy_iter(receiver_ty) => {
+                let it = self.expr(args[0], out)?;
+                helper(self, Helper::Next, "$next", vec![it])
+            }
+            // One kept elsewhere, as a field or a parameter, would have to know
+            // where it is too: a `Peekable` does.
+            StepOp::Next if self.is_kept(args[0]) => {
+                let message = format!(
+                    "rust-js does not support `next()` of a `{receiver_ty}` kept in a field, a parameter or a closure: make it a `Peekable`"
+                );
+                return Err(self.tcx.dcx().span_err(span, message));
+            }
+            // A new one, `v.iter().skip(2).next()`: its first item.
+            StepOp::Next => {
+                let items = self.iter_value(args[0], out)?;
+                let items = self.iter_source(items, receiver_ty, span)?;
+                Expr::index(items, Expr::int(0))
+            }
+            StepOp::Peekable => {
+                if self.is_lazy_iter(receiver_ty) {
+                    return Err(self.unsupported(span, "`peekable` of a lazy iterator"));
+                }
+                let items = self.iter_value(args[0], out)?;
+                let items = self.iter_source(items, receiver_ty, span)?;
+                helper(self, Helper::Iter, "$iter", vec![items])
+            }
+            StepOp::Peek => {
+                let it = self.expr(args[0], out)?;
+                helper(self, Helper::Peek, "$peek", vec![it])
+            }
+            StepOp::NextIf => {
+                let [it, f]: [Expr; 2] = self
+                    .operands(args, out)?
+                    .try_into()
+                    .ok()
+                    .expect("an iterator and a test");
+                helper(self, Helper::NextIf, "$nextIf", vec![it, f])
+            }
+            StepOp::NextIfEq => {
+                let [it, x]: [Expr; 2] = self
+                    .operands(args, out)?
+                    .try_into()
+                    .ok()
+                    .expect("an iterator and a value");
+                let item = self.thir[args[1]].ty.peel_refs();
+                if !self.eq_is_identity(item) {
+                    return Err(self.unsupported(span, &format!("`next_if_eq` of `{item}`s")));
+                }
+                let x = if x.reads_same() {
+                    x
+                } else {
+                    self.spill("expected", x, out)
+                };
+                let same = Expr::arrow(
+                    vec!["item".into()],
+                    vec![StmtKind::Return(Some(Expr::bin(Op::Eq, Expr::var("item"), x))).at(js::Span::NONE)],
+                );
+                helper(self, Helper::NextIf, "$nextIf", vec![it, same])
+            }
+            StepOp::AsStr if stepping => {
+                let it = self.expr(args[0], out)?;
+                helper(self, Helper::RestStr, "$restStr", vec![it])
+            }
+            StepOp::AsStr => {
+                let items = self.expr(args[0], out)?;
+                Expr::call(Expr::member(items, "join"), vec![Expr::str("")])
+            }
+        })
+    }
+
     /// One of `HeapOp`'s, with the items' `cmp` (ADR 0057).
     pub(super) fn heap_call(&mut self, op: HeapOp, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let heap_ty = match op {

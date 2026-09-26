@@ -1,7 +1,7 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
-use super::combinators::HeapOp;
 use super::combinators::{self, Comb, IterComb};
+use super::combinators::{HeapOp, StepOp};
 use super::format_spec::{Radix, Spec};
 use super::maps::{MapOp, Part};
 use super::numbers::{self, NumOp};
@@ -75,6 +75,8 @@ pub(super) enum Std {
     Number(NumOp),
     /// A `BinaryHeap`'s own methods (ADR 0068).
     Heap(HeapOp),
+    /// `it.next()`, `peekable()`, `peek()` and the like (ADR 0071).
+    Step(StepOp),
     /// `VecDeque::remove(i)`: an `Option`, where `Vec`'s panics.
     DequeRemove,
     /// `vec![x; n]`.
@@ -347,6 +349,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .is_some_and(|b| self.is_lang_adt(b, LangItem::String))
                 };
                 return Some(match tcx.item_name(def_id).as_str() {
+                    // One of the crate's own is its impl's `next` (ADR 0055).
+                    "next" if !self.is_user_iterator(ty) => Std::Step(StepOp::Next),
+                    "peekable" => Std::Step(StepOp::Peekable),
                     "map" => Std::ArrayMethod("map"),
                     "filter" => Std::ArrayMethod("filter"),
                     "any" => Std::ArrayMethod("some"),
@@ -444,7 +449,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (deque, heap) = (adt("VecDeque"), adt("BinaryHeap"));
         // Theirs first: `push` and `pop` keep a heap's order, and a deque's
         // `remove` is an `Option` (ADR 0068).
+        let peekable = self.is_peekable(owner);
+        let chars = matches!(owner.kind(), ty::Adt(adt, _) if tcx.crate_name(adt.did().krate) == sym::core
+            && tcx.item_name(adt.did()).as_str() == "Chars");
         let own = match name.as_str() {
+            "peek" if peekable => Some(Std::Step(StepOp::Peek)),
+            "next_if" if peekable => Some(Std::Step(StepOp::NextIf)),
+            "next_if_eq" if peekable => Some(Std::Step(StepOp::NextIfEq)),
+            "as_str" if chars => Some(Std::Step(StepOp::AsStr)),
             "push" if heap => Some(Std::Heap(HeapOp::Push)),
             "pop" if heap => Some(Std::Heap(HeapOp::Pop)),
             "peek" if heap => Some(Std::First),
@@ -1027,7 +1039,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var("$range"), vec![start, Expr::bin(Op::Add, end, Expr::int(1))])
             }
             _ => {
-                let value = self.expr(args[0], out)?;
+                let value = self.iter_value(args[0], out)?;
                 self.iter_source(value, receiver_ty, span)?
             }
         };
@@ -1088,7 +1100,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let zero = if num == Num::F64 { Expr::num(-0.0) } else { Expr::int(0) };
                 method(items, "reduce", vec![f, zero])
             }
-            Std::CollectString => method(items, "join", vec![Expr::str("")]),
+            // `Array.from(s).join("")` is `s`.
+            Std::CollectString => match items.kind {
+                js::ExprKind::Call(ref callee, ref args)
+                    if matches!(&callee.kind, js::ExprKind::Member(object, name)
+                        if name == "from" && matches!(&object.kind, js::ExprKind::Var(v) if v == "Array"))
+                        && args.len() == 1 =>
+                {
+                    args[0].clone()
+                }
+                _ => method(items, "join", vec![Expr::str("")]),
+            },
             // A new `Vec`: an adapter's result is a new array already, and the
             // array an iterator started from is copied, so changing one of
             // them doesn't change the other.
@@ -1118,6 +1140,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             "$splitBy",
                             "$lines",
                             "$slice",
+                            "$rest",
                         ]
                         .contains(&name.as_str()),
                         _ => false,

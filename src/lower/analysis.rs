@@ -242,6 +242,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             jsx: false,
             writer: None,
             slots: HashMap::new(),
+            stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
+            iterators: HashSet::new(),
             discarded: false,
             item: def_id,
         };
