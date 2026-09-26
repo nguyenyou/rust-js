@@ -774,8 +774,10 @@ impl<'a> Cx<'a> {
                 b,
             )),
         };
-        let name = JSXAttributeName::new_identifier(SPAN, self.name(name), b);
-        Some(JSXAttributeItem::new_attribute(SPAN, name, value, b))
+        // An inline callback may have no mapping before its first argument.
+        // Anchor the attribute to its value so a newly wrapped line still maps.
+        let name = JSXAttributeName::new_identifier(sp, self.name(name), b);
+        Some(JSXAttributeItem::new_attribute(sp, name, value, b))
     }
 
     /// Text as text, `Count is `; anything else in braces, `{count}`.

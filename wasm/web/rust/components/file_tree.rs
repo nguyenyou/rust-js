@@ -3,10 +3,9 @@
 
 use std::rc::Rc;
 
-use react::html::{div, li, span, ul};
-use react::{Element, Style, component, fragment};
+use react::{Element, Style};
 
-use super::file_item::{FileItem, FileItemProps};
+use super::file_item::FileItem;
 use crate::styles::ROW;
 use crate::tree::{Entry, Tree, in_order};
 
@@ -26,33 +25,38 @@ pub fn FileTree(FileTreeProps { tree, depth, first, selected, on_open, on_delete
     let rows: Vec<Element> = in_order(tree, &first)
         .into_iter()
         .map(|(name, entry)| match entry {
-            Entry::Folder(children) => li().key(format!("{name}/")).class_name("flex items-center").children(
-                div().class_name("w-full").children((
-                    span()
-                        .class_name(format!("block {ROW} text-muted"))
-                        .style(Style::new().padding_left(8 + depth * 12))
-                        .children(format!("{name}/")),
-                    ul().children(component(FileTree, FileTreeProps {
-                        tree: children,
-                        depth: depth + 1,
-                        first: first.clone(),
-                        selected: selected.clone(),
-                        on_open: on_open.clone(),
-                        on_delete: on_delete.clone(),
-                    })),
-                )),
-            ),
-            Entry::File(path) => component(FileItem, FileItemProps {
-                name: name.clone(),
-                path: path.clone(),
-                depth,
-                open: *path == selected,
-                root: *path == first,
-                on_open: on_open.clone(),
-                on_delete: on_delete.clone(),
-            })
-            .key(path.clone()),
+            Entry::Folder(children) => jsx! {
+                <li key={format!("{name}/")} className="flex items-center">
+                    <div className="w-full">
+                        <span className={format!("block {ROW} text-muted")} style={Style::new().padding_left(8 + depth * 12)}>
+                            {format!("{name}/")}
+                        </span>
+                        <ul>
+                            <FileTree
+                                tree={children}
+                                depth={depth + 1}
+                                first={first.clone()}
+                                selected={selected.clone()}
+                                onOpen={on_open.clone()}
+                                onDelete={on_delete.clone()}
+                            />
+                        </ul>
+                    </div>
+                </li>
+            },
+            Entry::File(path) => jsx! {
+                <FileItem
+                    name={name.clone()}
+                    path={path.clone()}
+                    depth={depth}
+                    open={*path == selected}
+                    root={*path == first}
+                    onOpen={on_open.clone()}
+                    onDelete={on_delete.clone()}
+                    key={path.clone()}
+                />
+            },
         })
         .collect();
-    fragment(rows)
+    jsx! { <>{rows}</> }
 }

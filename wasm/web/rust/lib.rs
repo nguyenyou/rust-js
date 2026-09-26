@@ -23,7 +23,6 @@ mod styles;
 mod tree;
 
 use react::dom::client::create_root;
-use react::{component, strict_mode};
 use web::document;
 
 use components::app::App;
@@ -31,5 +30,5 @@ use components::app::App;
 /// Render the page into `#app`.
 pub fn start() {
     let root = create_root(document::get_element_by_id(document, "app").expect("the page has an #app"));
-    root.render(strict_mode(component(App, ())));
+    root.render(jsx! { <StrictMode><App /></StrictMode> });
 }

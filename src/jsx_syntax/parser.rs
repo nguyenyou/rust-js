@@ -8,7 +8,7 @@ use rustc_parse::parser::{AllowConstBlockItems, ForceCollect, Parser};
 use rustc_session::Session;
 use rustc_span::{ErrorGuaranteed, Span};
 
-use super::template;
+use super::{rust_expression, template};
 
 type R<T> = Result<T, ErrorGuaranteed>;
 
@@ -89,14 +89,12 @@ impl Jsx<'_> {
                     }
                 };
                 if expression {
-                    return Ok(value);
+                    return rust_expression(self.sess, value);
                 }
-                Ok(TokenStream::new(vec![TokenTree::Delimited(
-                    span,
-                    spacing,
-                    Delimiter::Brace,
-                    value,
-                )]))
+                rust_expression(
+                    self.sess,
+                    TokenStream::new(vec![TokenTree::Delimited(span, spacing, Delimiter::Brace, value)]),
+                )
             }
             Some(TokenTree::Token(ref token, _)) if matches!(token.kind, TokenKind::Literal(_)) => {
                 let value = self.tokens[self.at].clone();
@@ -139,7 +137,10 @@ impl Jsx<'_> {
                 if spread.is_some() {
                     return Err(self.error("only one props spread is supported"));
                 }
-                spread = Some(TokenStream::new(tokens.iter().skip(1).cloned().collect()));
+                spread = Some(rust_expression(
+                    self.sess,
+                    TokenStream::new(tokens.iter().skip(1).cloned().collect()),
+                )?);
                 self.at += 1;
                 if !self.is(TokenKind::Gt) && !self.is(TokenKind::Slash) {
                     return Err(self.error("put the props spread last"));
@@ -239,12 +240,23 @@ impl Jsx<'_> {
             }
             return Ok(expr);
         }
+        // A props literal already evaluates its fields in source order.
+        // Capture only when the separate key or spread would change that
+        // order. Ordinary components must stay ordinary JSX expressions.
+        let capture = attrs
+            .iter()
+            .position(|(name, _, _)| name == "key")
+            .is_some_and(|at| at + 1 != attrs.len() || spread.is_some() || has_children)
+            || (spread.is_some() && has_children);
         // Evaluate attributes in written order, including `key`, before
         // constructing props. The match bindings cannot capture user names:
         // every user expression is in the scrutinee, outside their scope.
         let mut values = Vec::new();
         let mut bindings = Vec::new();
         let mut bind = |value: TokenStream, at: Span| {
+            if !capture {
+                return value;
+            }
             let name = template(self.sess, format!("__jsx{}", values.len()), at);
             values.push(value);
             bindings.push(name.clone());

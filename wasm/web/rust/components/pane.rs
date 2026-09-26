@@ -1,7 +1,6 @@
 // One side of the page: a heading, and a file explorer beside an editor.
 
 use react::Element;
-use react::html::{div, h2, nav, section};
 
 use crate::styles::HEADING;
 
@@ -14,14 +13,15 @@ pub struct PaneProps {
 }
 
 pub fn Pane(PaneProps { title, label, explorer, editor }: PaneProps) -> Element {
-    section().children((
-        h2().class_name(HEADING).children(title),
-        div().class_name("grid h-[460px] grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-md border border-line").children((
-            nav()
-                .class_name("overflow-auto border-r border-line bg-panel py-1.5 font-mono text-[13px]")
-                .attr("aria-label", label)
-                .children(explorer),
-            editor,
-        )),
-    ))
+    jsx! {
+        <section>
+            <h2 className={HEADING}>{title}</h2>
+            <div className="grid h-[460px] grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-md border border-line">
+                <nav className="overflow-auto border-r border-line bg-panel py-1.5 font-mono text-[13px]" aria-label={label}>
+                    {explorer}
+                </nav>
+                {editor}
+            </div>
+        </section>
+    }
 }

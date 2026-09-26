@@ -369,7 +369,16 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
     expect([...js.matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1])).toEqual([name]);
   }
   // A folder's entries are a FileTree inside it: the component is recursive.
-  expect(await read("components/file_tree.jsx")).toContain("<FileTree\n                tree={param[1]._0}\n                depth={(depth + 1) >>> 0}");
+  const { FileTree } = await import(join(target, "playground/components/file_tree.jsx"));
+  const children = [["leaf.rs", { TAG: "File", _0: "nested/leaf.rs" }]];
+  const onOpen = () => {};
+  const folder = FileTree({
+    tree: [["nested", { TAG: "Folder", _0: children }]], depth: 2,
+    first: "lib.rs", selected: "nested/leaf.rs", onOpen, onDelete: undefined,
+  }).props.children[0];
+  const nested = folder.props.children.props.children[1].props.children;
+  expect(nested.type).toBe(FileTree);
+  expect(nested.props).toMatchObject({ tree: children, depth: 3, first: "lib.rs", selected: "nested/leaf.rs", onOpen });
   expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree, depth, first, selected, onOpen, onDelete }) {");
   // The editor's view is made in an effect, and destroyed in its cleanup.
   expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");

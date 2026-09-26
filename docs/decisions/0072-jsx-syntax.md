@@ -35,9 +35,14 @@ For a capitalized, nongeneric function returning `Element`, generate a hygienic
 companion macro in the same module and with the same visibility. It constructs
 the function's named props struct. Rust resolves the function and macro through
 the same imports, including aliases; the props name is not guessed from the
-component name. Component expressions evaluate inputs before binding generated
-temporaries, so those names cannot capture user expressions. Macro scaffolding
-uses original spans; virtual lexer inputs never become files in the manifest.
+component name. Ordinary component expressions construct typed props directly,
+so markup becomes nested JSX without artificial `match` or `tmp` variables.
+Expand nested JSX in Rust expressions before passing their tokens into the
+props macro, preserving source spans and leaving other macros' bodies alone.
+Only key/spread positions that would change evaluation order capture inputs
+before constructing props; those bindings cannot capture user expressions.
+Macro scaffolding uses original spans; virtual lexer inputs never become files
+in the manifest.
 
 Both executables compile this same source. The playground supplies React's
 metadata and collects `.jsx` outputs alongside `.js` outputs. No dynamic
@@ -70,6 +75,6 @@ Named component props cannot be mixed with a spread: use an explicit Rust
 struct update. The syntax reserves `jsx!` and a component's name in the macro
 namespace. See the [syntax guide](../jsx.md) for the complete current boundary.
 
-Tests cover runtime rendering, evaluation order, props errors, module loading,
-original source lines, native/WASM output parity, browser compilation and state
-preservation through actual Vite edits in Chromium.
+Tests cover handwritten-style output, runtime rendering, evaluation order,
+props errors, module loading, original source lines, native/WASM output parity,
+browser compilation and state preservation through actual Vite edits in Chromium.

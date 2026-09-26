@@ -3,7 +3,6 @@
 
 use std::rc::Rc;
 
-use react::html::{button, li, span};
 use react::{Element, Style};
 
 use crate::styles::ROW;
@@ -21,24 +20,30 @@ pub struct FileItemProps {
 pub fn FileItem(FileItemProps { name, path, depth, open, root, on_open, on_delete }: FileItemProps) -> Element {
     let opened = path.clone();
     let end = match on_delete {
-        Some(_) if root => Some(span().class_name("text-[11px] text-muted").children("root ")),
-        Some(delete) => Some(
-            button()
-                .class_name("invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible")
-                .attr("aria-label", format!("Delete {path}"))
-                .on_click(move |_| delete(path.clone()))
-                .children("×"),
-        ),
+        Some(_) if root => Some(jsx! { <span className="text-[11px] text-muted">{"root "}</span> }),
+        Some(delete) => Some(jsx! {
+            <button
+                className="invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible"
+                aria-label={format!("Delete {path}")}
+                onClick={move |_| delete(path.clone())}
+            >
+                {"×"}
+            </button>
+        }),
         None => None,
     };
     // `group`: its delete button shows while the row is hovered.
-    li().class_name("group flex items-center").children((
-        button()
-            .class_name(format!("min-w-0 flex-1 cursor-pointer truncate {ROW} text-left aria-[current=true]:bg-selected"))
-            .style(Style::new().padding_left(8 + depth * 12))
-            .attr("aria-current", open)
-            .on_click(move |_| on_open(opened.clone()))
-            .children(name),
-        end,
-    ))
+    jsx! {
+        <li className="group flex items-center">
+            <button
+                className={format!("min-w-0 flex-1 cursor-pointer truncate {ROW} text-left aria-[current=true]:bg-selected")}
+                style={Style::new().padding_left(8 + depth * 12)}
+                aria-current={open}
+                onClick={move |_| on_open(opened.clone())}
+            >
+                {name}
+            </button>
+            {end}
+        </li>
+    }
 }

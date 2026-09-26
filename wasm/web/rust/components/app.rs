@@ -9,17 +9,16 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use react::html::{button, div, h1, li, p, ul};
-use react::{Element, component, fragment, use_effect, use_memo, use_ref, use_state, use_transition};
+use react::{Element, use_effect, use_memo, use_ref, use_state, use_transition};
 use web::{reg_exp, spawn, window};
 
-use super::editor::{Editor, EditorProps};
-use super::file_tree::{FileTree, FileTreeProps};
-use super::pane::{Pane, PaneProps};
-use super::result_frame::{ResultFrame, ResultFrameProps};
-use super::stats_table::{StatsTable, StatsTableProps};
+use super::editor::Editor;
+use super::file_tree::FileTree;
+use super::pane::Pane;
+use super::result_frame::ResultFrame;
+use super::stats_table::StatsTable;
 use super::status_line::{Status, Tone};
-use super::toolbar::{Toolbar, ToolbarProps};
+use super::toolbar::Toolbar;
 use crate::codemirror::{EditorView, editor_state, output_state, source_state};
 use crate::compiler::{Example, JsMap, Loaded, Stat, compile, load, load_example, mb, ms, set_last_result, text_entries};
 use crate::programs::{Outcome, Prepared, Program, prepare};
@@ -281,61 +280,77 @@ pub fn App() -> Element {
     };
     let submit = on_compile.clone();
 
-    fragment((
-        h1().class_name("mb-1 text-lg font-bold").children("rust-js playground"),
-        p().class_name("mb-3 text-muted").children("rustc's front end and rust-js, as WebAssembly. No server compiles anything."),
-        component(Toolbar, ToolbarProps {
-            examples,
-            example: example.clone(),
-            on_example,
-            ready: loaded.is_some() && !compiling,
-            on_compile,
-            status,
-        }),
-        div().class_name("grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-3").children((
-            component(Pane, PaneProps {
-                title: "Rust",
-                label: "Rust files",
-                explorer: fragment((
-                    ul().id("source-files").children(component(FileTree, FileTreeProps {
-                        tree: source_tree,
-                        depth: 0,
-                        first: project.root.clone(),
-                        selected: project.current.clone(),
-                        on_open: open_file,
-                        on_delete: Some(delete_file),
-                    })),
-                    button()
-                        .id("new-file")
-                        .class_name("mx-2 mt-1.5 block cursor-pointer text-muted")
-                        .on_click(move |_| new_file())
-                        .children("+ New file"),
-                )),
-                editor: component(Editor, EditorProps {
-                    state: current,
-                    view: Some(source),
-                    on_submit: Some(Rc::new(move || submit(false))),
-                }),
-            }),
-            component(Pane, PaneProps {
-                title: "JavaScript",
-                label: "JavaScript files",
-                explorer: ul().id("output-files").children(if output_tree.is_empty() {
-                    li().class_name("flex items-center px-2 py-0.5 text-muted").children("(none)")
-                } else {
-                    component(FileTree, FileTreeProps {
-                        tree: output_tree,
-                        depth: 0,
-                        first: js_name(&project.root),
-                        selected: shown,
-                        on_open: open_output,
-                        on_delete: None,
-                    })
-                }),
-                editor: component(Editor, EditorProps { state: shown_state, view: None, on_submit: None }),
-            }),
-        )),
-        component(ResultFrame, ResultFrameProps { program, on_outcome }),
-        component(StatsTable, StatsTableProps { rows: stats }),
-    ))
+    jsx! {
+        <>
+            <h1 className="mb-1 text-lg font-bold">{"rust-js playground"}</h1>
+            <p className="mb-3 text-muted">{"rustc's front end and rust-js, as WebAssembly. No server compiles anything."}</p>
+            <Toolbar
+                examples={examples}
+                example={example.clone()}
+                onExample={on_example}
+                ready={loaded.is_some() && !compiling}
+                onCompile={on_compile}
+                status={status}
+            />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-3">
+                <Pane
+                    title="Rust"
+                    label="Rust files"
+                    explorer={jsx! {
+                        <>
+                            <ul id="source-files">
+                                <FileTree
+                                    tree={source_tree}
+                                    depth={0}
+                                    first={project.root.clone()}
+                                    selected={project.current.clone()}
+                                    onOpen={open_file}
+                                    onDelete={Some(delete_file)}
+                                />
+                            </ul>
+                            <button
+                                id="new-file"
+                                className="mx-2 mt-1.5 block cursor-pointer text-muted"
+                                onClick={move |_| new_file()}
+                            >
+                                {"+ New file"}
+                            </button>
+                        </>
+                    }}
+                    editor={jsx! {
+                        <Editor
+                            state={current}
+                            view={Some(source)}
+                        onSubmit={Some(Rc::new(move || submit(false)))}
+                        />
+                    }}
+                />
+                <Pane
+                    title="JavaScript"
+                    label="JavaScript files"
+                    explorer={jsx! {
+                        <ul id="output-files">
+                            {if output_tree.is_empty() {
+                                jsx! { <li className="flex items-center px-2 py-0.5 text-muted">{"(none)"}</li> }
+                            } else {
+                                jsx! {
+                                    <FileTree
+                                        tree={output_tree}
+                                        depth={0}
+                                        first={js_name(&project.root)}
+                                        selected={shown}
+                                        onOpen={open_output}
+                                        onDelete={None}
+                                    />
+                                }
+                            }}
+                        </ul>
+                    }}
+                    editor={jsx! { <Editor state={shown_state} view={None} onSubmit={None} /> }}
+                />
+            </div>
+            <ResultFrame program={program} onOutcome={on_outcome} />
+            <StatsTable rows={stats} />
+        </>
+    }
 }

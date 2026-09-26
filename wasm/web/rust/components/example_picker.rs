@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use react::Element;
 use react::event::Change;
-use react::html::{option, select};
 
 use crate::compiler::Example;
 use crate::styles::CONTROL;
@@ -16,16 +15,17 @@ pub struct ExamplePickerProps {
 }
 
 pub fn ExamplePicker(ExamplePickerProps { examples, chosen, on_choose }: ExamplePickerProps) -> Element {
-    select()
-        .id("example")
-        .class_name(CONTROL)
-        .attr("aria-label", "Example")
-        .value(chosen)
-        .on_change(move |e: &Change| on_choose(e.value()))
-        .children(
-            examples
-                .iter()
-                .map(|example| option().key(example.name.clone()).value(example.name.clone()).children(example.title.clone()))
-                .collect::<Vec<_>>(),
-        )
+    jsx! {
+        <select
+            id="example"
+            className={CONTROL}
+            aria-label="Example"
+            value={chosen}
+            onChange={move |e: &Change| on_choose(e.value())}
+        >
+            {examples.iter().map(|example| jsx! {
+                <option key={example.name.clone()} value={example.name.clone()}>{example.title.clone()}</option>
+            }).collect::<Vec<_>>()}
+        </select>
+    }
 }

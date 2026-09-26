@@ -4,7 +4,6 @@
 use std::rc::Rc;
 
 use react::event::Keyboard;
-use react::html::div;
 use react::{Element, Ref, use_effect, use_ref};
 
 use crate::codemirror::{EditorState, EditorView, destroy, open_view, set_theme, show};
@@ -50,18 +49,21 @@ pub fn Editor(EditorProps { state, view, on_submit }: EditorProps) -> Element {
         },
         (state, dark),
     );
-    div()
-        .class_name("min-w-0 overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:text-[13px]")
-        .r#ref(parent)
-        // Before CodeMirror sees it, since its own Mod-Enter inserts a line.
-        .on_key_down_capture(move |e: &Keyboard| {
-            if let Some(submit) = &on_submit
-                && (e.meta_key() || e.ctrl_key())
-                && e.key() == "Enter"
-            {
-                e.prevent_default();
-                e.stop_propagation();
-                submit();
-            }
-        })
+    jsx! {
+        <div
+            className="min-w-0 overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:text-[13px]"
+            ref={parent}
+            // Before CodeMirror sees it, since its own Mod-Enter inserts a line.
+            onKeyDownCapture={move |e: &Keyboard| {
+                if let Some(submit) = &on_submit
+                    && (e.meta_key() || e.ctrl_key())
+                    && e.key() == "Enter"
+                {
+                    e.prevent_default();
+                    e.stop_propagation();
+                    submit();
+                }
+            }}
+        />
+    }
 }

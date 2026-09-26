@@ -44,6 +44,11 @@ App                      the state, and the page's layout
 └── StatsTable
 ```
 
+The page's entire component tree, including its `StrictMode` root, uses
+`jsx!` markup ([0072](0072-jsx-syntax.md)). Hooks and callback wiring remain
+ordinary Rust; tags, props, fragments and keyed lists use the shared syntax
+that the native and WASM compilers both expand.
+
 What isn't a component is in modules of its own beside `components/`:
 `compiler.rs` (downloading and running `rust-js.wasm`), `programs.rs`
 (linking the output, and the Result frame's page), `codemirror.rs`,
@@ -68,7 +73,7 @@ up as callbacks** (`on_compile`, `on_open`, `on_outcome`) that set it:
   open file's latest edits from it when it switches files or compiles.
 - **`Editor` makes its view in an effect, and destroys it in the cleanup.**
   A second effect shows a new state, and follows the theme. ⌘/Ctrl-Enter is
-  a React `on_key_down_capture` on its element. That runs before
+  a React `onKeyDownCapture` on its element. That runs before
   CodeMirror's own Mod-Enter, and always calls the latest `on_compile`.
 - **`ResultFrame` keys its `<iframe>` by the run's number**, so each run
   gets a new frame. It listens for the frame's report in an effect, and an

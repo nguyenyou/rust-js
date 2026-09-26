@@ -110,6 +110,82 @@ pub fn App() -> Element {
   }
 });
 
+test("nested component JSX stays readable, contextually typed and mapped to the original Rust", async () => {
+  const source = `#![deny(warnings)]
+#![allow(non_snake_case)]
+#![rust_js::camel_case]
+use react::Element;
+use std::rc::Rc;
+unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32); }
+pub struct Props { pub title: &'static str, pub content: Element, pub on_submit: Option<Rc<dyn Fn()>> }
+pub fn Card(p: Props) -> Element { jsx! { <section title={p.title}>{p.content}</section> } }
+pub fn App(active: bool) -> Element {
+    jsx! {
+        <main>
+            <Card
+                title="Ready"
+                content={if active {
+                    jsx! { <button onClick={move |_| { record(7); }}>{"Save"}</button> }
+                } else {
+                    jsx! { <span>{"Waiting"}</span> }
+                }}
+                onSubmit={Some(Rc::new(move || record(8)))}
+            />
+        </main>
+    }
+}
+pub fn Tokens() -> Element {
+    jsx! { <Card
+        title={stringify!(jsx! { untouched })}
+        content={
+            jsx! { <i /> }
+            jsx! { <span /> }
+        }
+        onSubmit={None}
+    /> }
+}
+`;
+  const { dir, args } = compile(source);
+  run(args);
+  const output = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(output).toContain(`export function App(active) {
+  return (
+    <main>
+      <Card
+        title="Ready"
+        content={
+          active ? <button onClick={() => globalThis.record(7)}>Save</button> : <span>Waiting</span>
+        }
+        onSubmit={() => globalThis.record(8)}
+      />
+    </main>
+  );
+}`);
+  const result = await import(join(dir, "lib.jsx"));
+  const log: number[] = [];
+  const previous = globalThis.record;
+  globalThis.record = (n: number) => { log.push(n); };
+  try {
+    const card = result.App(true).props.children;
+    expect(card.type).toBe(result.Card);
+    card.props.content.props.onClick();
+    card.props.onSubmit();
+    expect(log).toEqual([7, 8]);
+    expect(renderToStaticMarkup(result.App(false))).toBe('<main><section title="Ready"><span>Waiting</span></section></main>');
+    expect(result.Tokens().props.title).toContain("jsx!");
+    expect(result.Tokens().props.title).toContain("untouched");
+  } finally { globalThis.record = previous; }
+  const js = output.split("\n");
+  const map = JSON.parse(readFileSync(join(dir, "lib.jsx.map"), "utf8"));
+  expect(map.sourcesContent).toEqual([source]);
+  const segments = decodeMappings(map.mappings);
+  for (const [generated, original] of [["Card", "<Card"], ["button", "<button"], ["globalThis.record(7)", "record(7);"], ["globalThis.record(8)", "record(8)"]]) {
+    const line = js.findIndex((l, i) => i > js.findIndex(l => l.includes("export function App")) && l.includes(generated));
+    expect(lookup(segments, line, js[line].indexOf(generated))?.srcLine, generated)
+      .toBe(source.split("\n").findIndex(l => l.includes(original)));
+  }
+});
+
 test("JSX children have no twelve-sibling tuple limit", async () => {
   const {dir, args} = compile('use react::Element; pub fn View() -> Element { jsx! { <div>' + Array.from({length: 40}, (_, i) => `<span>{${i}}</span>`).join('') + '</div> } }');
   run(args);

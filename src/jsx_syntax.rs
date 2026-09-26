@@ -4,12 +4,14 @@
 
 mod parser;
 
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use rustc_ast::ast_traits::{HasAttrs, HasTokens};
 use rustc_ast::mut_visit::{self, MutVisitor};
-use rustc_ast::tokenstream::LazyAttrTokenStream;
+use rustc_ast::token::TokenKind;
+use rustc_ast::tokenstream::{LazyAttrTokenStream, TokenStream, TokenTree};
 use rustc_ast::{self as ast, ExprKind, Inline, ItemKind, ModKind};
 use rustc_expand::config::StripUnconfigured;
 use rustc_expand::module::{DirOwnership, default_submod_path};
@@ -17,7 +19,98 @@ use rustc_parse::lexer::StripTokens;
 use rustc_parse::parser::Parser;
 use rustc_parse::{exp, new_parser_from_file};
 use rustc_session::Session;
-use rustc_span::{FileName, Span, sym};
+use rustc_span::{BytePos, ErrorGuaranteed, FileName, Span, sym};
+
+/// Expand JSX within a Rust expression before placing it in a component's
+/// props macro. An AST visit selects real expression/statement macros, so
+/// tokens inside `stringify!`, macro definitions, etc. remain untouched.
+/// Replace only those calls in the original token tree: no pretty-printing
+/// round trip, and no loss of the surrounding Rust tokens' source spans.
+fn rust_expression(sess: &Session, tokens: TokenStream) -> Result<TokenStream, ErrorGuaranteed> {
+    struct Calls<'a> {
+        sess: &'a Session,
+        replacements: BTreeMap<BytePos, (Span, TokenStream)>,
+        error: Option<ErrorGuaranteed>,
+    }
+    impl Calls<'_> {
+        fn mac(&mut self, mac: &ast::MacCall, needs_semicolon: bool) {
+            if mac.path.segments.len() == 1 && mac.path.segments[0].ident.as_str() == "jsx" {
+                match parser::jsx(self.sess, mac.args.tokens.clone(), mac.span()) {
+                    Ok(mut tokens) => {
+                        if needs_semicolon {
+                            tokens = TokenStream::new(
+                                tokens
+                                    .iter()
+                                    .cloned()
+                                    .chain([TokenTree::token_alone(TokenKind::Semi, mac.span().shrink_to_hi())])
+                                    .collect(),
+                            );
+                        }
+                        self.replacements.insert(mac.span().lo(), (mac.span(), tokens));
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
+        fn replace(&self, tokens: &TokenStream) -> TokenStream {
+            let mut result = Vec::new();
+            let mut it = tokens.iter().peekable();
+            while let Some(tree) = it.next() {
+                if matches!(tree, TokenTree::Token(..))
+                    && let Some((span, value)) = self.replacements.get(&tree.span().lo())
+                {
+                    result.extend(value.iter().cloned());
+                    while it.peek().is_some_and(|t| t.span().hi() <= span.hi()) {
+                        it.next();
+                    }
+                } else if let TokenTree::Delimited(span, spacing, delimiter, inner) = tree {
+                    result.push(TokenTree::Delimited(*span, *spacing, *delimiter, self.replace(inner)));
+                } else {
+                    result.push(tree.clone());
+                }
+            }
+            TokenStream::new(result)
+        }
+    }
+    impl MutVisitor for Calls<'_> {
+        fn visit_expr(&mut self, expr: &mut ast::Expr) {
+            if let ExprKind::MacCall(mac) = &expr.kind {
+                self.mac(mac, false);
+            }
+            mut_visit::walk_expr(self, expr);
+        }
+        fn visit_block(&mut self, block: &mut ast::Block) {
+            for (i, stmt) in block.stmts.iter().enumerate() {
+                if let ast::StmtKind::MacCall(mac) = &stmt.kind {
+                    // A braced macro statement can omit `;`, but its expanded
+                    // function call cannot. Keep the block's last value intact.
+                    self.mac(
+                        &mac.mac,
+                        mac.style == ast::MacStmtStyle::Braces && i + 1 < block.stmts.len(),
+                    );
+                }
+            }
+            mut_visit::walk_block(self, block);
+        }
+    }
+    let mut p = Parser::new(&sess.psess, tokens.clone(), Some("JSX Rust expression"));
+    let mut expr = p.parse_expr().map_err(|e| e.emit())?;
+    p.expect(exp!(Eof)).map_err(|e| e.emit())?;
+    let mut calls = Calls {
+        sess,
+        replacements: Default::default(),
+        error: None,
+    };
+    calls.visit_expr(&mut expr);
+    if let Some(error) = calls.error {
+        return Err(error);
+    }
+    Ok(if calls.replacements.is_empty() {
+        tokens
+    } else {
+        calls.replace(&tokens)
+    })
+}
 
 pub fn expand(sess: &Session, krate: &mut ast::Crate) {
     if configured_attrs(sess, &krate.attrs).is_none() {

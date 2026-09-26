@@ -5,7 +5,6 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use react::html::{code, h2, iframe, section, span};
 use react::{Element, use_effect, use_ref};
 use web::{Event, HtmlIFrameElement, JsObject, abort_controller, abort_signal, window};
 
@@ -82,23 +81,24 @@ pub fn ResultFrame(ResultFrameProps { program, on_outcome }: ResultFrameProps) -
         },
         (run,),
     );
-    section().id("result-section").class_name("mt-3").hidden(program.is_none()).children((
-        h2().class_name(HEADING).children((
-            "Result ",
-            span().class_name("font-normal").children((
-                "the root module's ",
-                code().children("main()"),
-                ", or with Test its ",
-                code().children("#[test]"),
-                "s, in a frame of their own",
-            )),
-        )),
-        iframe()
-            .key(run)
-            .r#ref(frame)
-            .id("result")
-            .class_name("block h-[280px] w-full rounded-md border border-line bg-page")
-            .title("Result")
-            .src_doc(page),
-    ))
+    jsx! {
+        <section id="result-section" className="mt-3" hidden={program.is_none()}>
+            <h2 className={HEADING}>
+                {"Result "}
+                <span className="font-normal">
+                    {"the root module's "}<code>{"main()"}</code>
+                    {", or with Test its "}<code>{"#[test]"}</code>
+                    {"s, in a frame of their own"}
+                </span>
+            </h2>
+            <iframe
+                key={run}
+                ref={frame}
+                id="result"
+                className="block h-[280px] w-full rounded-md border border-line bg-page"
+                title="Result"
+                srcDoc={page}
+            />
+        </section>
+    }
 }
