@@ -22,6 +22,8 @@ pub(super) enum Std {
     /// An iterator's `cloned()` and `copied()`: its items, each cloned if
     /// that could be told apart from sharing it (ADR 0052).
     Cloned,
+    /// `v[i]` of a `Vec`, `Index::index` or `IndexMut::index_mut`: `$index(v, i)`.
+    Index,
     /// `Cell::new(x)` and `RefCell::new(x)`: `{ value: x }`.
     CellNew,
     CellGet,
@@ -254,6 +256,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         _ => return None,
                     }));
                 }
+            }
+            // `v[i]` of a `Vec` is a slice's, checked the same way.
+            if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
+                && self.is_std_adt(ty.peel_refs(), sym::Vec)
+                && args.types().nth(1).is_some_and(|i| i.is_usize())
+            {
+                return Some(Std::Index);
             }
             if tcx.is_lang_item(trait_, LangItem::Add) {
                 return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);

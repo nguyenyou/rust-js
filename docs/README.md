@@ -94,6 +94,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0053 `==`: JS's `===` or `$eq`, until a hand-written `eq` is in it](decisions/0053-partial-eq.md)
 - [0054 `Display`: a `fmt` returns the string it writes](decisions/0054-display.md)
 - [0055 The crate's own `Iterator` is a JS iterator](decisions/0055-iterator.md)
+- [0056 Indexing: `$index(v, i)` to read, `v[$at(v, i)] = x` to write](decisions/0056-indexing.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

@@ -5,6 +5,7 @@
 pub enum Helper {
     TraitImpl,
     Index,
+    At,
     DisplayF64,
     F64Max,
     F64Min,
@@ -39,6 +40,10 @@ impl Helper {
         match self {
             Helper::Index => {
                 "\nfunction $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return items[index];\n}\n"
+            }
+            // `v[i] = x`: `v[$at(v, i)] = x`, since JS would make the array longer.
+            Helper::At => {
+                "\nfunction $at(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return index;\n}\n"
             }
             Helper::DisplayF64 => include_str!("runtime/display_f64.js"),
             Helper::F64Max => {

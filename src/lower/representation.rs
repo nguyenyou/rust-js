@@ -276,6 +276,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Expr::call(Expr::member(dictionary.clone(), "copy"), vec![place]);
         }
+        // A copy reads its source once per part: a value that isn't a place,
+        // like `$unwrap(v[0])`, is taken once, `((value) => ..)(source)`.
+        let many = match self.shape(ty) {
+            Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
+            Shape::Array(tys) => tys.len() > 1,
+            Shape::Other => false,
+        };
+        if many && !place.reads_same() {
+            let body = self.copy(Expr::var("value"), ty);
+            return Expr::call(
+                Expr::arrow(
+                    vec!["value".into()],
+                    vec![js::StmtKind::Return(Some(body)).at(js::Span::NONE)],
+                ),
+                vec![place],
+            );
+        }
         match self.shape(ty) {
             Shape::Object(fields) => {
                 let mut props = vec![Prop::Spread(place.clone())];
@@ -324,6 +341,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         let none = Expr::bin(Op::LooseEq, o.clone(), Expr::null());
                         Expr::cond(none, o.clone(), self.copy(o, inner))
                     });
+                }
+                // An array that's changed in place: `a.slice()`, or a copy of
+                // each item that is too.
+                if let ty::Array(item, _) = ty.kind() {
+                    if !self.contains_mutated(*item) {
+                        return Expr::call(Expr::member(place, "slice"), Vec::new());
+                    }
+                    let body = self.copy(Expr::var("item"), *item);
+                    let copy = Expr::arrow(
+                        vec!["item".into()],
+                        vec![js::StmtKind::Return(Some(body)).at(js::Span::NONE)],
+                    );
+                    return Expr::call(Expr::member(place, "map"), vec![copy]);
                 }
                 let ty::Adt(adt, args) = ty.kind() else { return place };
                 if !self.is_copy_enum(ty) {

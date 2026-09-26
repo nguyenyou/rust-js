@@ -744,8 +744,10 @@ fn mutated_types<'tcx>(all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
     let mut mutated = HashSet::new();
     for body in all_bodies {
         for expr in body.thir.exprs.iter() {
+            // `a[i] = ..` changes the array `a` the same way.
             if let ExprKind::Assign { lhs, .. } | ExprKind::AssignOp { lhs, .. } = expr.kind
-                && let ExprKind::Field { lhs: object, .. } = body.thir[strip(&body.thir, lhs)].kind
+                && let ExprKind::Field { lhs: object, .. } | ExprKind::Index { lhs: object, .. } =
+                    body.thir[strip(&body.thir, lhs)].kind
             {
                 mutated.insert(body.thir[object].ty);
             }

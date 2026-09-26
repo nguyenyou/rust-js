@@ -157,3 +157,39 @@ pub fn words(s: &str) -> (String, bool, bool) {
     let trimmed = owned.trim();
     (trimmed.to_string(), trimmed.is_empty(), trimmed == "hi")
 }
+
+/// Indexing (ADR 0056): `v[i]` of a `Vec` is a slice's, `$index(v, i)`,
+/// which panics as Rust does past the end. A write checks first too,
+/// `v[$at(v, i)] = x`, since JS would make the array longer.
+pub fn indexed(i: usize) -> (u32, u32, Vec<u32>) {
+    let mut v = vec![10, 20, 30];
+    let read = v[i];
+    v[i] = read + 1;
+    v[0] += 5;
+    let slice: &mut [u32] = &mut v;
+    slice[2] *= 2;
+    (read, v[i], v)
+}
+
+#[derive(Clone, Copy)]
+pub struct Cell2 {
+    pub hits: u32,
+}
+
+/// An element's fields are written in place, and a copy of one is its own.
+pub fn element_fields(i: usize) -> (u32, u32, u32) {
+    let mut cells = vec![Cell2 { hits: 0 }, Cell2 { hits: 0 }];
+    cells[i].hits += 1;
+    let before = cells[i];
+    let r = &mut cells[i];
+    r.hits = 10;
+    (before.hits, cells[i].hits, cells[1 - i].hits)
+}
+
+/// An array changed in place is copied when it's copied.
+pub fn arrays(i: usize) -> (u32, u32) {
+    let mut a = [1, 2, 3];
+    let b = a;
+    a[i] = 9;
+    (a[i], b[i])
+}

@@ -530,6 +530,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Rust evaluates the right side of an assignment first. The target
             // is a variable or its fields, which reading can't change.
+            // `v[i] = x` or `v[i].x = y`: Rust runs the right side first.
+            ExprKind::Assign { lhs, rhs } if self.place(lhs).is_none() && self.in_element(lhs) => {
+                let value = self.expr(rhs, out)?;
+                let target = self.element_target(lhs, out)?;
+                out.push(StmtKind::Assign(target, value).at(span));
+                Ok(())
+            }
             ExprKind::Assign { lhs, rhs } => {
                 let target = self.assignee(lhs)?;
                 match &target.kind {
@@ -546,7 +553,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::AssignOp { op, lhs, rhs } => {
                 let rhs_js = self.expr(rhs, out)?;
-                let target = self.assignee(lhs)?;
+                let target = match self.place(lhs) {
+                    Some(_) => self.assignee(lhs)?,
+                    None => self.element_target(lhs, out)?,
+                };
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
                 let known = self.known_int(rhs);
@@ -1539,7 +1549,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 arg,
             } => match self.place(arg) {
                 Some((place, _)) => Ok(place),
-                None => self.expr(arg, out),
+                None => self.referent(arg, out),
             },
             // `&mut` to a JS object is the object (ADR 0025).
             ExprKind::Borrow {
@@ -1547,14 +1557,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 arg,
             } if self.is_object(self.thir[arg].ty) => match self.place(arg) {
                 Some((place, _)) => Ok(place),
-                None => self.expr(arg, out),
+                None => self.referent(arg, out),
             },
             ExprKind::Borrow { arg, .. } => {
                 Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
             }
             ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
             ExprKind::Index { lhs, index } => {
-                let values = self.operands(&[lhs, index], out)?;
+                let values = self.indexed(lhs, index, out)?;
                 self.runtime.insert(Helper::Index);
                 Ok(self.copy_if_needed(Expr::call(Expr::var("$index"), values), ty))
             }
@@ -1778,6 +1788,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::NamedConst { .. }
             | ExprKind::ZstLiteral { .. } => true,
             ExprKind::Field { lhs, .. } => self.is_simple(lhs),
+            ExprKind::Index { lhs, index } => self.is_simple(lhs) && self.is_simple(index),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => self.is_simple(awaited),
             // Its body's statements go inside the arrow; only snapshots come first.
             ExprKind::Closure(ref closure) => closure.upvars.iter().all(|&u| !self.needs_snapshot(u)),
@@ -2389,6 +2400,82 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// What a reference made with `&` or `&mut` refers to, which is the JS
+    /// value itself: `&v[i]` is the element, not a copy of it.
+    fn referent(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        match self.thir[self.strip(e)].kind {
+            // `&*f()`: the reference `f` returned.
+            ExprKind::Deref { arg } => self.expr(arg, out),
+            ExprKind::Index { lhs, index } => {
+                let values = self.indexed(lhs, index, out)?;
+                self.runtime.insert(Helper::Index);
+                Ok(Expr::call(Expr::var("$index"), values))
+            }
+            _ => self.expr(e, out),
+        }
+    }
+
+    /// An array or slice and an index into it: the array itself, not a
+    /// copy, since only the element is read or written.
+    fn indexed(&mut self, items: ExprId, index: ExprId, out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
+        match self.place(items) {
+            Some((place, _)) => Ok(vec![place, self.expr(index, out)?]),
+            None => self.operands(&[items, index], out),
+        }
+    }
+
+    /// An element of an array, a slice or a `Vec`, as its collection and
+    /// its index: `a[i]`, or `*IndexMut::index_mut(&mut v, i)`.
+    fn element(&self, e: ExprId) -> Option<(ExprId, ExprId)> {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Index { lhs, index } => Some((lhs, index)),
+            ExprKind::Deref { arg } => match self.thir[self.strip(arg)].kind {
+                ExprKind::Call { fun, ref args, .. } if self.std_fn(fun) == Some(Std::Index) => {
+                    Some((args[0], args[1]))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// An element, or a field of one: what `element_target` writes.
+    fn in_element(&self, e: ExprId) -> bool {
+        self.element(e).is_some()
+            || matches!(self.thir[self.strip(e)].kind, ExprKind::Field { lhs, .. } if self.in_element(lhs))
+    }
+
+    /// An element as the target of an assignment, `v[$at(v, i)]`, checked
+    /// first since JS would make the array longer. A field of one is
+    /// `$index(v, i).x`.
+    fn element_target(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        if let Some((items, index)) = self.element(e) {
+            let [items, index]: [Expr; 2] = self.indexed(items, index, out)?.try_into().ok().unwrap();
+            // `items` is read twice.
+            let items = if items.reads_same() {
+                items
+            } else {
+                self.spill("items", items, out)
+            };
+            self.runtime.insert(Helper::At);
+            return Ok(Expr::index(
+                items.clone(),
+                Expr::call(Expr::var("$at"), vec![items, index]),
+            ));
+        }
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Field { lhs, name, .. } => {
+                let base = match (self.place(lhs), self.element(lhs)) {
+                    (Some((place, _)), _) => place,
+                    (None, Some(_)) => self.referent(lhs, out)?,
+                    (None, None) => self.element_target(lhs, out)?,
+                };
+                Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
+            }
+            _ => self.assignee(e),
+        }
+    }
+
     /// A local variable of this function, or a field of one: not reached
     /// through a reference, nor captured by a closure.
     fn is_local_place(&self, e: ExprId) -> bool {
@@ -2425,12 +2512,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match self.thir[self.strip(e)].kind {
             // A field of a temporary, like `f().x`: nothing else can see the rest.
             ExprKind::Field { lhs, name, .. } => {
+                // A field of an element, `v[i].x`, or of what a reference points
+                // at, `f().unwrap().x`: that itself, and a copy of just the
+                // field if it needs one.
+                if self.element(lhs).is_some() || matches!(self.thir[self.strip(lhs)].kind, ExprKind::Deref { .. }) {
+                    let base = self.referent(lhs, out)?;
+                    let field = self.project(base, self.thir[lhs].ty, name.as_usize());
+                    return Ok(self.copy_if_needed(field, ty));
+                }
                 let base = self.expr(lhs, out)?;
                 Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
             }
             // `*f()`, including `Deref::deref` on a `String` or `Rc`: a
-            // reference is its value.
-            ExprKind::Deref { arg } => self.expr(arg, out),
+            // reference is its value. Reading a `Copy` one copies it, as
+            // reading a place does: `*v.first().unwrap()` isn't `v[0]` itself.
+            ExprKind::Deref { arg } => {
+                let value = self.expr(arg, out)?;
+                Ok(self.copy_if_needed(value, ty))
+            }
             _ => Err(self.unsupported(self.thir[e].span, "reading this")),
         }
     }

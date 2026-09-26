@@ -20,6 +20,13 @@ function $rem(a, b, min) {
   return a % b;
 }
 
+function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 export function point(x, y) {
   return {
     x,
@@ -121,6 +128,13 @@ export function option_copy_is_separate(x) {
     kept = 0;
   }
   return [kept, p.x];
+}
+
+export function deref_copy_is_separate(x) {
+  const points = [point(x, 0)];
+  let p = { ...$unwrap(points[0]) };
+  p.x = p.x + 1 | 0;
+  return [$unwrap(points[0]).x, p.x];
 }
 
 export function with_x(x, y) {

@@ -80,7 +80,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 
 `i8`–`i32`, `u8`–`u32`, `f64`, `bool`, enums (with fields too), structs, tuples, `Option`, `const` items; `let`, `if`, `if let`, `while let`, let chains,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
-struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
+struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes, indexing arrays, slices and `Vec`s ([ADR 0056](docs/decisions/0056-indexing.md)),
 struct update syntax; inherent methods, local traits with defaults and supertraits,
 generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)),
 `Default`, `Clone`, `From`, `PartialEq`, `Display` and `Iterator` impls ([ADRs 0052](docs/decisions/0052-std-trait-impls.md)–[0055](docs/decisions/0055-iterator.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,

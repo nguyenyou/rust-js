@@ -119,6 +119,14 @@ pub fn option_copy_is_separate(x: i32) -> (i32, i32) {
     (kept, p.x)
 }
 
+/// `*r` of a reference a call returns is a copy too.
+pub fn deref_copy_is_separate(x: i32) -> (i32, i32) {
+    let points = vec![point(x, 0)];
+    let mut p = *points.first().unwrap();
+    p.x += 1;
+    (points.first().unwrap().x, p.x)
+}
+
 /// Struct update syntax: fields not written come from `base`.
 pub fn with_x(x: i32, y: i32) -> Point {
     let base = point(0, y);

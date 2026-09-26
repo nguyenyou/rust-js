@@ -120,6 +120,7 @@ fn main() {
         case("structs.bound_before_move", &[x as i64], || structs::bound_before_move(x));
         case("structs.returned_copy_is_separate", &[x as i64], || structs::returned_copy_is_separate(x));
         case("structs.option_copy_is_separate", &[x as i64], || structs::option_copy_is_separate(x));
+        case("structs.deref_copy_is_separate", &[x as i64], || structs::deref_copy_is_separate(x));
     }
     for (w, h) in [(0, 0), (3, 4), (65_536, 65_536), (u32::MAX, 2)] {
         case("structs.rect", &[-1, 2, w as i64, h as i64], || structs::rect(-1, 2, w, h));
@@ -150,6 +151,10 @@ fn main() {
         case("collections.iterate", &[n], || collections::iterate(n as u32));
         case("collections.labeled", &[n], || collections::labeled(n as u32));
         case("collections.toggled", &[n], || collections::toggled(n as u32));
+        // 3 is past the end: a panic in Rust, a throw in JS.
+        case("collections.indexed", &[n], || collections::indexed(n as usize));
+        case("collections.element_fields", &[n], || collections::element_fields(n as usize));
+        case("collections.arrays", &[n], || collections::arrays(n as usize));
         case("collections.cell", &[n], || collections::cell(n as i32));
         case("collections.shared", &[n], || collections::shared(n as i32));
     }
