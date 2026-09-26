@@ -111,7 +111,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             let mut pending = Vec::new();
             let values = self.operands(args, &mut pending)?;
-            if let Some(call) = self.trait_call(def_id, generic_args, values, span)? {
+            if let Some(call) = self.trait_call(def_id, generic_args, values, span, &mut pending)? {
                 out.extend(pending);
                 return Ok(call);
             }

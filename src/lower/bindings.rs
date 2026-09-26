@@ -131,7 +131,9 @@ pub(super) fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
     if let Some(prop) = name.strip_prefix("prop ") {
         return JsForm::Prop(Some(prop.to_string()));
     }
-    let forms: [(&str, fn(String) -> JsForm); 4] = [
+    // Each prefix, and the form of what follows it.
+    type Form = fn(String) -> JsForm;
+    let forms: [(&str, Form); 4] = [
         ("get ", JsForm::Get),
         ("set ", JsForm::Set),
         ("new ", JsForm::New),

@@ -2,4 +2,4 @@
 # Pin the exact nightly the code was written against.
 [toolchain]
 channel = "nightly-2026-03-25"
-components = ["rustc-dev", "llvm-tools", "rust-src"]
+components = ["rustc-dev", "llvm-tools", "rust-src", "rustfmt", "clippy"]

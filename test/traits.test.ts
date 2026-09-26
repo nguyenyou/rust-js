@@ -86,6 +86,13 @@ test("dictionaries are explicit, cached and usable from JavaScript", () => {
   expect(output).toContain("circleShape_area(c)");
   expect(output).toMatch(/function total\(shapes, TShape\)/);
   expect(output).not.toContain("function shape_name"); // defaults are copied into dictionaries
+  // No IIFEs: an upcast of a variable reads it twice, a conversion to the same
+  // trait is the pair itself, and a receiver with effects is one `const`.
+  expect(output).toContain("  const s = {\n    value: x.value,\n    impl: x.impl.Shape()\n  };");
+  expect(output).toContain("function make(c) {\n  return {\n    value: bump(c),\n    impl: i32Compute()\n  };");
+  expect(output).toContain("  const receiver = make(c);\n  return receiver.impl.add(receiver.value, bump(c) + shape | 0) + Math.imul(c.value, 100) | 0;");
+  // A copied default knows its Self: Circle's `name` and `area` are called directly.
+  expect(output).toContain("const arg = circleShape_name(self);\n        const arg$1 = circleShape_area(self);");
   expect(() => module.first([], { copy: (x: unknown) => x })).toThrow("index out of bounds");
 });
 

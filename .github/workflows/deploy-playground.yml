@@ -85,6 +85,11 @@ jobs:
           bun install --frozen-lockfile
           bun run site
 
+      # The site's JS must be what the native compiler's snapshots have
+      # (ADR 0050): otherwise this wasm isn't the compiler that was tested.
+      - name: Check rust-js.wasm against the snapshots
+        run: bun test test/playground.test.ts -t "as the native compiler does"
+
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5

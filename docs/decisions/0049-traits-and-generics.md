@@ -146,7 +146,9 @@ supertrait from an existing subtrait bound.
 
 Default bodies are copied into each implementation's dictionary, with their
 Self evidence specialized to that implementation. Calls inside a default
-therefore honor overrides. The body's original Rust definition still
+therefore honor overrides. Self is known there, so a call on it resolves
+like any concrete call: Circle's copy of `label` calls `circleShape_name(self)`
+directly, and a default it doesn't override goes through its accessor. The body's original Rust definition still
 controls lexical name resolution: a private helper in the trait's module
 remains a reference to that helper, exported internally if needed.
 JavaScript bindings used by a copied default are imported into the
@@ -167,8 +169,9 @@ shape.impl.area(shape.value);
 The same payload convention works for structs, tuples, enums, primitives,
 and the supported erased Box/Rc/reference wrappers. Each conversion creates
 a pair, not a collection of bound-method closures. Upcasts retain the payload
-and obtain the supertrait dictionary. Nontrivial receivers are evaluated
-once, in Rust argument order.
+and obtain the supertrait dictionary; a conversion to the same trait is the
+pair itself. Nontrivial receivers are evaluated once, in Rust argument
+order, in a `const` before the call: `const receiver = make(c);`.
 
 This does not make wrapper identity Rust pointer identity, and does not
 provide equality, reference counts, `Any`, or downcasting. Mutable dyn

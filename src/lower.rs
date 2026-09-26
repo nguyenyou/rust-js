@@ -204,6 +204,9 @@ struct FnCx<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+    /// In a trait's default body copied into an impl (ADR 0049): the impl's
+    /// arguments for the trait's parameters, `Self` among them.
+    self_args: Option<ty::GenericArgsRef<'tcx>>,
     /// While lowering a closure: the places it captured into snapshots.
     captures: HashMap<(LocalVarId, Vec<usize>), Var>,
     /// The range, in rustc's global source map, of the `.rs` file this
@@ -1515,7 +1518,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ..
             } => {
                 let value = self.expr(source, out)?;
-                self.unsize_trait(self.thir[source].ty, ty, value, span)
+                self.unsize_trait(self.thir[source].ty, ty, value, span, out)
             }
             ExprKind::PointerCoercion {
                 cast: PointerCoercion::ReifyFnPointer(_),
@@ -1538,7 +1541,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let params: Vec<String> = (0..count).map(|i| self.fresh(&format!("arg{i}"))).collect();
                     let values = params.iter().map(|name| Expr::var(name)).collect();
                     let call = self
-                        .trait_call(def_id, args, values, span)?
+                        .trait_call(def_id, args, values, span, out)?
                         .ok_or_else(|| self.unsupported(span, "this trait function value"))?;
                     return Ok(Expr::arrow(
                         params.into_iter().map(Into::into).collect(),

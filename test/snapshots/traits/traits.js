@@ -13,6 +13,9 @@ function $traitImpl(cache, keys, make) {
 
 // Shortest round-trip decimal, using exact rational arithmetic.
 // Rust Display uses decimal notation, including for very small/large values.
+// Not JS's `String(x)`, though its digits are also the shortest: when two are
+// equally close, JS takes the even one (1888570120608320.2), and Rust the
+// larger (1888570120608320.3).
 function $displayF64(value) {
   if (Number.isNaN(value)) return 'NaN';
   if (value === Infinity) return 'inf';
@@ -196,8 +199,8 @@ export function circleLabeled() {
     $circleLabeled = {
       Shape: () => circleShape(),
       label: (self) => {
-        const arg = circleLabeled().Shape().name(self);
-        const arg$1 = circleLabeled().Shape().area(self);
+        const arg = circleShape_name(self);
+        const arg$1 = circleShape_area(self);
         return arg + " of area " + $displayF64(arg$1);
       }
     };

@@ -26,6 +26,8 @@ jobs:
         run: rustup show
       - run: bun install --frozen-lockfile
       - run: bunx --bun playwright install --with-deps chromium
+      - run: cargo fmt --check
+      - run: cargo clippy --locked -- -D warnings
       - run: cargo test --locked
       - run: bun test
       - run: bun run --cwd examples/vite-react build

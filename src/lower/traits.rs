@@ -89,10 +89,10 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
 /// Signature order, including parent impl bounds. Never depend on body usage.
 pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tcx>> {
     let mut result = Vec::new();
-    if let Some(trait_id) = tcx.trait_of_assoc(id) {
-        if operational(tcx, trait_id) {
-            result.push(ty::TraitRef::identity(tcx, trait_id));
-        }
+    if let Some(trait_id) = tcx.trait_of_assoc(id)
+        && operational(tcx, trait_id)
+    {
+        result.push(ty::TraitRef::identity(tcx, trait_id));
     }
     for (clause, _) in tcx.predicates_of(id).instantiate_identity(tcx) {
         if let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder()
@@ -111,11 +111,15 @@ pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
         ty::Adt(adt, _) => tcx.item_name(adt.did()).to_string(),
         _ => tr.self_ty().to_string(),
     };
-    let name: String = name
-        .chars()
+    format!("{}{}", lower_first(&js_word(&name)), tcx.item_name(tr.def_id))
+}
+
+/// A type's name as part of a JS name: what isn't a letter or a digit is
+/// `_`, so `Vec<T>` is `Vec_T_`.
+fn js_word(text: &str) -> String {
+    text.chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect();
-    format!("{}{}", lower_first(&name), tcx.item_name(tr.def_id))
+        .collect()
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -123,12 +127,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         bounds(self.tcx, id)
             .into_iter()
             .map(|tr| {
-                let base = format!("{}{}", tr.self_ty(), self.tcx.item_name(tr.def_id));
-                let base: String = base
-                    .chars()
-                    .map(|c| if c.is_alphanumeric() { c } else { '_' })
-                    .collect();
-                let name = self.fresh(&base);
+                let name = self.fresh(&js_word(&format!("{}{}", tr.self_ty(), self.tcx.item_name(tr.def_id))));
                 self.evidence.push((tr, Expr::var(&name)));
                 name.into()
             })
@@ -225,12 +224,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// Select user code before std intrinsics, so custom implementations win.
+    /// A trait method call, or `None` if it isn't one rust-js dispatches.
+    /// `out` gets what must run first, like a receiver computed once.
     pub(super) fn trait_call(
         &mut self,
         id: DefId,
         generic_args: ty::GenericArgsRef<'tcx>,
         values: Vec<Expr>,
         span: Span,
+        out: &mut Vec<js::Stmt>,
     ) -> R<Option<Expr>> {
         let Some(trait_id) = self.tcx.trait_of_assoc(id) else {
             return Ok(None);
@@ -238,32 +240,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.fn_trait_kind_from_def_id(trait_id).is_some() {
             return Ok(None);
         }
+        // In a copied default, `Self` is the impl's type: a call on it
+        // resolves to the impl's method, called directly.
+        let generic_args = match self.self_args {
+            Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+            None => generic_args,
+        };
         let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
         if matches!(tr.self_ty().kind(), ty::Dynamic(..)) && operational(self.tcx, trait_id) {
             let mut values = values;
             let receiver = values.remove(0);
-            // `operands` already preserves Rust evaluation order. Evaluate a
-            // receiver expression only once even though the pair is read twice.
-            let temporary = receiver.has_effects().then(|| self.fresh("shape"));
-            let pair = temporary
-                .as_ref()
-                .map_or_else(|| receiver.clone(), |name| Expr::var(name));
+            // The pair is read twice, so one with effects goes in a `const`
+            // first. It's still first: `operands` put anything before it that
+            // needed statements in `const`s of its own.
+            let pair = if receiver.has_effects() {
+                self.spill("receiver", receiver, out)
+            } else {
+                receiver
+            };
             let principal = self.dyn_trait_ref(tr.self_ty(), tr.self_ty()).unwrap();
             let dictionary = self
                 .super_evidence(principal, tr, Expr::member(pair.clone(), "impl"))
                 .ok_or_else(|| self.unsupported(span, "this trait object supertrait"))?;
             values.insert(0, Expr::member(pair, "value"));
-            let call = Expr::call(Expr::member(dictionary, bindings::fn_name(self.tcx, id)), values);
-            return Ok(Some(match temporary {
-                Some(name) => Expr::call(
-                    Expr::arrow(
-                        vec![name.into()],
-                        vec![StmtKind::Return(Some(call)).at(self.js_span(span))],
-                    ),
-                    vec![receiver],
-                ),
-                None => call,
-            }));
+            return Ok(Some(Expr::call(
+                Expr::member(dictionary, bindings::fn_name(self.tcx, id)),
+                values,
+            )));
         }
         if let Some(instance) = ty::Instance::try_resolve(self.tcx, self.typing_env, id, generic_args)?
             && self.krate.fns.contains_key(&instance.def_id())
@@ -308,7 +311,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    pub(super) fn unsize_trait(&mut self, source: Ty<'tcx>, target: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
+    /// `x as &dyn Trait`: `{ value, impl }`, or for a trait object, the same
+    /// value with its supertrait's dictionary. `out` gets a value computed once.
+    pub(super) fn unsize_trait(
+        &mut self,
+        source: Ty<'tcx>,
+        target: Ty<'tcx>,
+        value: Expr,
+        span: Span,
+        out: &mut Vec<js::Stmt>,
+    ) -> R<Expr> {
         if self.dynamic_trait(target).is_none() {
             return Ok(value);
         }
@@ -317,21 +329,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let self_ty = self.pointee(source);
             let from = self.dyn_trait_ref(source, self_ty).unwrap();
             let to = self.dyn_trait_ref(target, self_ty).unwrap();
-            let pair = Expr::var("shape");
+            // The same trait (a `Box<dyn T>` to a `Box<dyn T>`): the same pair.
+            if self.tcx.erase_and_anonymize_regions(from) == self.tcx.erase_and_anonymize_regions(to) {
+                return Ok(value);
+            }
+            // Read twice, so one with effects goes in a `const` first.
+            let pair = if value.has_effects() {
+                self.spill("receiver", value, out)
+            } else {
+                value
+            };
             let dictionary = self
                 .super_evidence(from, to, Expr::member(pair.clone(), "impl"))
                 .ok_or_else(|| self.unsupported(span, "this trait upcast"))?;
-            let pair = Expr::object(vec![
+            return Ok(Expr::object(vec![
                 Prop::Field("value".into(), Expr::member(pair, "value")),
                 Prop::Field("impl".into(), dictionary),
-            ]);
-            return Ok(Expr::call(
-                Expr::arrow(
-                    vec!["shape".into()],
-                    vec![StmtKind::Return(Some(pair)).at(self.js_span(span))],
-                ),
-                vec![value],
-            ));
+            ]));
         }
         let tr = self.dyn_trait_ref(target, self.pointee(source)).unwrap();
         Ok(Expr::object(vec![
@@ -479,6 +493,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let body = self.krate.bodies[&id];
         let evidence = std::mem::replace(&mut self.evidence, specialized);
+        let self_args = self.self_args.replace(args);
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let typing_env = std::mem::replace(&mut self.typing_env, ty::TypingEnv::post_analysis(self.tcx, id));
         let vars = std::mem::take(&mut self.vars);
@@ -496,6 +511,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let is_async = self.lower_body(body.expr, &dest, &mut out)?;
         self.evidence = evidence;
+        self.self_args = self_args;
         self.thir = thir;
         self.typing_env = typing_env;
         self.vars = vars;
