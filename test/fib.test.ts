@@ -4,6 +4,7 @@
 //                  └─rust-js───► fib.js ──► actual results ───┴─► must be equal
 
 import { beforeAll, expect, test } from "bun:test";
+import { copyFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -26,6 +27,8 @@ let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
+// Imports from JS modules: the root, and a module two directories down.
+let imports: Record<string, Record<string, () => unknown>>;
 
 beforeAll(async () => {
   run(["cargo", "build", "--quiet"]);
@@ -66,6 +69,13 @@ beforeAll(async () => {
     lib: await import(join(target, "modules", "lib.js")),
     stats: await import(join(target, "modules", "stats.js")),
     util: await import(join(target, "modules", "util.js")),
+  };
+  // Imports (ADR 0028): `./greet.js` is relative to the root's JS, so it goes beside it.
+  run([join(target, "debug", "rust-js"), "test/imports/lib.rs", "-o", join(target, "imports", "lib.js")]);
+  copyFileSync(join(root, "test/imports/greet.js"), join(target, "imports", "greet.js"));
+  imports = {
+    lib: await import(join(target, "imports", "lib.js")),
+    leaf: await import(join(target, "imports", "inner", "leaf.js")),
   };
 }, 600_000);
 
@@ -182,6 +192,32 @@ test("a crate split across files becomes one JS file per module", async () => {
   expect(await sources("geometry/area.js")).toEqual(["../../../examples/modules/geometry/area.rs"]);
   // An inline module lives in its parent's file.
   expect(await sources("util.js")).toEqual(["../../examples/modules/lib.rs"]);
+});
+
+// ADR 0028: `#[link_name = "module#path"]` imports from a JS module.
+test("extern items from JS modules become import statements", async () => {
+  // They run: Node's modules, and a hand-written file.
+  expect(imports.lib.paths()).toBe("a/b/c.txt");
+  expect(imports.lib.file_name()).toBe("y.txt");
+  expect(imports.lib.urls()).toEqual(["https://example.com/a", "https://example.com/b"]);
+  expect(imports.lib.greetings()).toEqual(["Hello, world!", "Good day, world.", "!?"]);
+  expect(imports.leaf.hello()).toBe("Hello, leaf!");
+
+  const lib = await Bun.file(join(target, "imports", "lib.js")).text();
+  // One statement per module and kind, as a person would write them. A
+  // default or namespace import is named after its module.
+  expect(lib).toContain('import greet, { punctuation } from "./greet.js";\nimport * as greet$1 from "./greet.js";\n');
+  expect(lib).toContain('import { join, posix } from "node:path";');
+  // Beside the global `URL`, the imported one is renamed.
+  expect(lib).toContain('import { URL as URL$1 } from "node:url";');
+  expect(lib).toContain('return [new URL$1("https://example.com/a").href, new URL("https://example.com/b").href];');
+  // A path goes on from the import, and a local doesn't hide one.
+  expect(lib).toContain('return posix.basename("/tmp/x/y.txt");');
+  expect(lib).toContain('const join$1 = "c.txt";\n  return join(join("a", "b"), join$1);');
+  expect(lib).toContain('greet$1.polite("world")');
+  // Two directories down, only what the file uses, from the same file.
+  const leaf = await Bun.file(join(target, "imports", "inner", "leaf.js")).text();
+  expect(leaf).toMatch(/\nimport greet from "\.\.\/greet\.js";\n\nexport function hello/);
 });
 
 // ADR 0020: structs are objects, tuples are arrays, and only some reads copy.

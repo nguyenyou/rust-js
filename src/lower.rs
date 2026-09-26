@@ -13,7 +13,7 @@
 //! integer arithmetic wraps. Division by zero and `MIN / -1` still panic,
 //! because Rust panics on those in every profile.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use rustc_ast::{LitKind, Mutability};
@@ -72,6 +72,9 @@ pub struct LoweredModule {
     pub path: Vec<String>,
     /// The `.rs` file the module's code lives in.
     pub file: Arc<SourceFile>,
+    /// What it imports from JS modules (ADR 0028), with the modules' names
+    /// as written in `#[link_name]`.
+    pub packages: Vec<js::Package>,
     /// The modules this one calls into, as `(alias, path)`.
     pub imports: Vec<(String, Vec<String>)>,
     pub functions: Vec<js::Function>,
@@ -149,18 +152,46 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // JS globals the crate uses, whether declared here or in another crate
     // (`web`, ADR 0024): every module reserves them, so a local named
     // `console` can't hide the real one.
+    // Imports from JS modules (ADR 0028) are found the same way, with the
+    // modules that use each one.
     let mut globals: HashSet<String> = HashSet::new();
+    let mut imported: BTreeMap<Export, HashSet<LocalModDefId>> = BTreeMap::new();
     for body in all_bodies {
+        let module = tcx.parent_module_from_def_id(body.def_id);
         for expr in body.thir.exprs.iter() {
             let def_id = match (&expr.kind, expr.ty.kind()) {
                 (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) | (ExprKind::StaticRef { def_id, .. }, _) => *def_id,
                 _ => continue,
             };
-            if tcx.is_foreign_item(def_id) {
-                globals.extend(js_global(tcx, def_id));
+            if !tcx.is_foreign_item(def_id) {
+                continue;
+            }
+            match js_path(tcx, def_id).as_deref().map(|path| (path, js_import(path))) {
+                Some((_, Some((export, _)))) => {
+                    imported.entry(export).or_default().insert(module);
+                }
+                Some((path, None)) => {
+                    globals.insert(path.split('.').next().unwrap_or_default().to_string());
+                }
+                None => {}
             }
         }
     }
+    // Each import's name, the same in every file, and unique in the crate:
+    // after the export, or the module for a default or namespace import.
+    // Like globals, every module reserves them. Namespaces are named last,
+    // so a module's default export gets its plain name.
+    let mut reserved = globals;
+    let (namespaces, others): (Vec<&Export>, Vec<&Export>) = imported.keys().partition(|(_, export)| export == "*");
+    let import_names: HashMap<Export, String> = others
+        .into_iter()
+        .chain(namespaces)
+        .map(|(from, export)| {
+            let base = if export == "default" || export == "*" { module_binding(from) } else { export.clone() };
+            ((from.clone(), export.clone()), fresh_in(&mut reserved, &base))
+        })
+        .collect();
+    let globals = reserved;
 
     // The modules that get a JS file: the root, then every module with a
     // function, in the order their first function appears.
@@ -280,6 +311,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             fns: &fns,
             module,
             aliases: &aliases[&module],
+            imports: &import_names,
             vars: HashMap::new(),
             // Locals must never shadow a function or an import of this file.
             names: taken[&module].clone(),
@@ -308,11 +340,29 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 .map(|(target, alias)| (alias.clone(), paths[target].clone()))
                 .collect();
             imports.sort_by(|a, b| a.1.cmp(&b.1));
+            // One `import` per JS module, of what this file uses from it.
+            let mut packages: BTreeMap<&str, js::Package> = BTreeMap::new();
+            for export in imported.iter().filter(|(_, users)| users.contains(&module)).map(|(export, _)| export) {
+                let (from, name) = export;
+                let package = packages.entry(from).or_insert_with(|| js::Package {
+                    from: from.clone(),
+                    default: None,
+                    named: Vec::new(),
+                    namespace: None,
+                });
+                let local = import_names[export].clone();
+                match name.as_str() {
+                    "default" => package.default = Some(local),
+                    "*" => package.namespace = Some(local),
+                    _ => package.named.push((name.clone(), local)),
+                }
+            }
             let mut helpers: Vec<Helper> = runtime.remove(&module).unwrap_or_default().into_iter().collect();
             helpers.sort();
             LoweredModule {
                 path: paths[&module].clone(),
                 file: module_file(tcx, module),
+                packages: packages.into_values().collect(),
                 imports,
                 functions: functions.remove(&module).unwrap_or_default(),
                 runtime: helpers,
@@ -367,18 +417,49 @@ fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
     JsForm::Call(name)
 }
 
-/// The JS global a JS item refers to, if any: `document`, `console` for
-/// `console.log`, `Event` for `new Event`. Methods and properties have none.
-fn js_global(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
-    let root = |name: &str| name.split('.').next().unwrap_or_default().to_string();
+/// The path a JS item is reached by, if it isn't a method or a property:
+/// `document`, `console.log`, `Event` for `new Event`, or an import like
+/// `node:path#join`.
+fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
     match tcx.def_kind(def_id) {
-        DefKind::Static { .. } => Some(root(&js_name(tcx, def_id))),
+        DefKind::Static { .. } => Some(js_name(tcx, def_id)),
         DefKind::Fn if !is_method(tcx, def_id) => match js_form(tcx, def_id) {
-            JsForm::Call(name) | JsForm::New(name) => Some(root(&name)),
+            JsForm::Call(name) | JsForm::New(name) => Some(name),
             _ => None,
         },
         _ => None,
     }
+}
+
+/// What a JS module exports under a name, `("node:path", "join")`, or
+/// `"default"` or `"*"` for its default export or the module itself.
+type Export = (String, String);
+
+/// An import from a JS module (ADR 0028): `"@codemirror/state#EditorState.create"`
+/// is the export `("@codemirror/state", "EditorState")`, then the rest of
+/// the path, `".create"`. The last `#` splits them, since a module's name
+/// can start with one (Node's `#internal`).
+fn js_import(path: &str) -> Option<(Export, &str)> {
+    let (from, path) = path.rsplit_once('#')?;
+    let export = path.split('.').next().unwrap_or_default();
+    (!from.is_empty() && !export.is_empty()).then(|| ((from.to_string(), export.to_string()), &path[export.len()..]))
+}
+
+/// What a default or namespace import is called: after its module, as in
+/// ReScript. `./greet.js` is `greet`, and `@codemirror/lang-rust` is `langRust`.
+fn module_binding(from: &str) -> String {
+    let file = from.rsplit(['/', ':']).find(|s| !s.is_empty()).unwrap_or_default();
+    let stem = file.split('.').next().unwrap_or_default();
+    let words = stem.split(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '$').filter(|w| !w.is_empty());
+    let mut name = String::new();
+    for (i, word) in words.enumerate() {
+        let mut chars = word.chars();
+        if i > 0 && let Some(first) = chars.next() {
+            name.push(first.to_ascii_uppercase());
+        }
+        name.extend(chars);
+    }
+    if name.is_empty() || name.starts_with(|c: char| c.is_ascii_digit()) { format!("_{name}") } else { name }
 }
 
 /// A module's path below the crate root, e.g. `["math", "stats"]`.
@@ -700,6 +781,8 @@ struct FnCx<'a, 'tcx> {
     /// The module being lowered, and its import aliases for other modules.
     module: LocalModDefId,
     aliases: &'a HashMap<LocalModDefId, String>,
+    /// Each import's name (ADR 0028).
+    imports: &'a HashMap<Export, String>,
     vars: HashMap<LocalVarId, Var>,
     /// JS names already taken in this function.
     names: HashSet<String>,
@@ -1704,11 +1787,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut args = self.operands(args, out)?;
             let this = is_method(self.tcx, def_id).then(|| args.remove(0));
             return Ok(match (js_form(self.tcx, def_id), this) {
-                (JsForm::Call(name), Some(this)) => Expr::call(Expr::member(this, name).or_at(fun_span), args),
-                (JsForm::Call(name), None) => Expr::call(global(&name).or_at(fun_span), args),
-                (JsForm::New(name), None) => Expr::new_(global(&name).or_at(fun_span), args),
-                (JsForm::Get(name), Some(this)) if args.is_empty() => Expr::member(this, name),
-                (JsForm::Set(name), Some(this)) if args.len() == 1 => {
+                // A method or a property is on `this`: it can't be an import.
+                (JsForm::Call(name), Some(this)) if !name.contains('#') => Expr::call(Expr::member(this, name).or_at(fun_span), args),
+                (JsForm::Call(name), None) => Expr::call(self.js_ref(&name).or_at(fun_span), args),
+                (JsForm::New(name), None) => Expr::new_(self.js_ref(&name).or_at(fun_span), args),
+                (JsForm::Get(name), Some(this)) if args.is_empty() && !name.contains('#') => Expr::member(this, name),
+                (JsForm::Set(name), Some(this)) if args.len() == 1 && !name.contains('#') => {
                     let value = args.remove(0);
                     out.push(StmtKind::Assign(Expr::member(this, name), value).at(self.js_span(span)));
                     Expr::undefined()
@@ -2262,7 +2346,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A JS global (ADR 0021).
             ExprKind::StaticRef { def_id, .. } if self.tcx.is_foreign_item(def_id) => {
-                Some((global(&js_name(self.tcx, def_id)), false))
+                Some((self.js_ref(&js_name(self.tcx, def_id)), false))
             }
             _ => None,
         }
@@ -2501,6 +2585,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn check_by_value(&self, mode: BindingMode, span: Span) -> R<()> {
         if mode.0 == ByRef::No { Ok(()) } else { Err(self.unsupported(span, "`ref` bindings")) }
+    }
+
+    /// A JS global or a path from one (`console.log`), or from an import
+    /// (`node:path#posix.join` is `posix.join`, ADR 0028).
+    fn js_ref(&self, path: &str) -> Expr {
+        match js_import(path) {
+            Some((export, rest)) => global(&format!("{}{rest}", self.imports[&export])),
+            None => global(path),
+        }
     }
 
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {

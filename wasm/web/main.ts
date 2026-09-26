@@ -446,9 +446,21 @@ function runProgram(files: Map<string, string>, rootFile: string, test = false) 
   const tests = rootFile.replace(/\.js$/, ".test.js");
   programRuns++;
   const runnable = test ? files.has(tests) : main !== undefined && /^export function main\(\)/m.test(main);
-  if (!runnable) {
+  // Imports from JS modules (ADR 0028) name packages or files the page
+  // doesn't have. A bundler would bring them in; the playground has none.
+  const external = new Set<string>();
+  for (const [path, code] of files) {
+    for (const [, specifier] of code.matchAll(/^import .* from "([^"]+)";$/gm)) {
+      if (!files.has(resolve(path, specifier))) external.add(specifier);
+    }
+  }
+  if (!runnable || external.size > 0) {
     resultSection.hidden = true;
     resultFrame.srcdoc = "";
+    if (runnable) {
+      const names = [...external].map((s) => `"${s}"`).join(", ");
+      setStatus(`${status.textContent} Not run: it imports ${names}, which the playground can't load. Bundle it with bun build.`, "bad");
+    }
     return;
   }
   const run = programRuns;

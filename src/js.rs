@@ -25,6 +25,8 @@ impl Span {
 
 pub struct Module {
     pub header: String,
+    /// Imports from JS modules, from `#[link_name = "module#path"]` (ADR 0028).
+    pub packages: Vec<Package>,
     /// `import * as <alias> from "<from>"`, one per module this one calls into.
     pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
@@ -36,6 +38,15 @@ pub struct Import {
     pub alias: String,
     /// A relative specifier, like `./math.js` or `../lib.js`.
     pub from: String,
+}
+
+/// What one file imports from one JS module: its default export, named
+/// exports as `(export, local)`, and the module itself.
+pub struct Package {
+    pub from: String,
+    pub default: Option<String>,
+    pub named: Vec<(String, String)>,
+    pub namespace: Option<String>,
 }
 
 pub struct Function {

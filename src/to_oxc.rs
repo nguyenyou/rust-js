@@ -72,6 +72,24 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     // The header, imports and runtime helpers are plain text above the
     // generated code. None of them map to Rust.
     let mut code = format!("{}\n", module.header);
+    if !module.packages.is_empty() {
+        code.push('\n');
+        for package in &module.packages {
+            let named: Vec<String> = package
+                .named
+                .iter()
+                .map(|(export, local)| if export == local { export.clone() } else { format!("{export} as {local}") })
+                .collect();
+            let named = (!named.is_empty()).then(|| format!("{{ {} }}", named.join(", ")));
+            let clause: Vec<String> = package.default.iter().cloned().chain(named).collect();
+            if !clause.is_empty() {
+                code.push_str(&format!("import {} from {:?};\n", clause.join(", "), package.from));
+            }
+            if let Some(namespace) = &package.namespace {
+                code.push_str(&format!("import * as {namespace} from {:?};\n", package.from));
+            }
+        }
+    }
     if !module.imports.is_empty() {
         code.push('\n');
         for import in &module.imports {

@@ -26,6 +26,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
+  `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
 - A closure is an arrow function; `Rc<Cell<T>>` is one shared `{ value }`; strings are JS strings.
 - Anything not supported yet is reported as a compiler error at the right span.
 

@@ -81,9 +81,9 @@ can't hide one: a local named `console` becomes `console$1`.
   will make that expressible.
 - Property access and `new` came later, as `#[link_name]` forms (`"get value"`,
   `"set value"`, `"new Event"`): see ADR 0024.
-- Importing from a JS module isn't expressible yet. `#[link(name = "..")]`
-  would be the obvious spelling, but rustc ignores it on a `"Rust"` block
-  (with a warning), so imports will need a spelling of their own.
+- Importing from a JS module came later, as `#[link_name = "module#path"]`:
+  see ADR 0028. `#[link(name = "..")]` would be the obvious spelling, but
+  rustc warns about it on a `"Rust"` block.
 - Rust forbids a `let` named like a static, so the reserved names matter for
   global functions and paths: a local `console` becomes `console$1`, next to
   `console.log(..)`.
