@@ -41,6 +41,11 @@ count: Rust's `len()` and `&s[a..b]` count UTF-8 bytes, and JS's `length` and
 a string pattern does (`split('/')`), and `==` and `to_string` work as on
 strings.
 
+**A string literal in a `match` is `===`**, since JS compares strings by
+content: `"abc" | "stats.rs" =>` tests `s === "abc" || s === "stats.rs"`.
+In `Some("ab")`, `top === "ab"` already rules out `None`, so there's no
+`!= null`.
+
 **`format!` is the pieces joined with `+`**, from the template rustc builds,
 as `panic!` already was (ADR 0026):
 

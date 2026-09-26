@@ -220,6 +220,8 @@ fn main() {
         case_with("strings.parts", &[&s], || strings::parts(s));
         case_with("strings.rejoined", &[&s], || strings::rejoined(s));
         case_with("strings.folder_and_file", &[&s], || strings::folder_and_file(s));
+        case_with("strings.kind", &[&s], || strings::kind(s));
+        case_with("strings.tagged", &[&s], || strings::tagged(s));
     }
     for windows in [false, true] {
         case_with("strings.separator", &[&windows], || strings::separator(windows));

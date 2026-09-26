@@ -379,6 +379,9 @@ test("string methods are JS's, and format! is concatenation", async () => {
   expect(js).toContain('    s = s + String(i);\n    s = s + ",";');
   // A `char` is a one-character string.
   expect(js).toContain('  const c = windows ? "\\\\" : "/";');
+  // A string literal pattern is `===` on the JS string, without `!= null` in `Some`.
+  expect(js).toContain('  } else if (s === "abc" || s === "stats.rs") {');
+  expect(js).toContain('  if (top === "ab") {');
 });
 
 // ADR 0033: enums with fields, in ReScript's shapes.

@@ -85,3 +85,29 @@ pub fn folder_and_file(path: &str) -> (String, String) {
 pub fn repeated(s: &str, n: u32) -> String {
     s.repeat(n as usize)
 }
+
+/// `match` on string literals, with `|`.
+pub fn kind(s: &str) -> u32 {
+    match s {
+        "" => 0,
+        "abc" | "stats.rs" => 1,
+        "äbc/Ö" => 2,
+        "ab/c" => 3,
+        _ => 4,
+    }
+}
+
+/// String literals inside other patterns: an option, a tuple.
+pub fn tagged(s: &str) -> (u32, bool) {
+    let top = match s.split_once('/') {
+        Some((top, _)) => Some(top),
+        None => None,
+    };
+    let n = match (top, s.ends_with('/')) {
+        (Some("ab"), _) => 1,
+        (Some(""), true) => 2,
+        (None, _) => 3,
+        _ => 4,
+    };
+    (n, matches!(top, Some("a" | "src")))
+}

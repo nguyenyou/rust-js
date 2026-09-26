@@ -559,15 +559,11 @@ pub fn link(files: &JsMap, start: &str) -> String {
 pub fn set_status(text: &str, kind: &str) {
     let status = document::get_element_by_id(document, "status").expect("the page has a #status");
     node::set_text_content(status, text);
-    // Not a `match` on the strings: rust-js can't compile string patterns yet.
-    let color = if kind == "good" {
-        "text-good"
-    } else if kind == "bad" {
-        "text-bad"
-    } else {
-        ""
-    };
-    element::set_class_name(status, color);
+    element::set_class_name(status, match kind {
+        "good" => "text-good",
+        "bad" => "text-bad",
+        _ => "",
+    });
 }
 
 fn status_text() -> String {

@@ -992,7 +992,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(Some(Expr::bin(Op::Eq, subject.clone(), value)))
             }
             // `Some(p)`: not `null` or `undefined`, and the value itself matches `p`.
-            // A constant needs no `!= null`: `o === 0` already says it.
+            // A constant needs no `!= null`: `o === 0` already says it. So does
+            // one through a reference, like every string literal: `o === "a"`.
             PatKind::Variant { adt_def, variant_index, subpatterns, .. } if self.tcx.is_lang_item(adt_def.did(), LangItem::Option) => {
                 let Some(field) = subpatterns.first() else {
                     return Ok(Some(Expr::bin(Op::LooseEq, subject.clone(), Expr::null())));
@@ -1000,8 +1001,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 debug_assert!(self.tcx.is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome));
                 let inner = self.pattern_test(&field.pattern, subject, bindings)?;
                 let present = Expr::bin(Op::LooseNe, subject.clone(), Expr::null());
+                let mut value = &field.pattern;
+                while let PatKind::Deref { subpattern, .. } = &value.kind {
+                    value = subpattern;
+                }
                 Ok(Some(match inner {
-                    Some(test) if matches!(field.pattern.kind, PatKind::Constant { .. }) => test,
+                    Some(test) if matches!(value.kind, PatKind::Constant { .. }) => test,
                     Some(test) => Expr::bin(Op::And, present, test),
                     None => present,
                 }))
@@ -1470,6 +1475,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(c) = char_value(value) {
             return Ok(Expr::str(c.to_string()));
+        }
+        // A string literal pattern is a `str` constant under a `Deref`. A
+        // reference's valtree is its pointee's, so rustc reads the bytes as a
+        // `&str`'s. It's a JS string (ADR 0034): `===` compares the contents.
+        if value.ty.is_str() {
+            let as_ref = ty::Value { ty: Ty::new_imm_ref(self.tcx, self.tcx.lifetimes.re_static, value.ty), valtree: value.valtree };
+            if let Some(bytes) = as_ref.try_to_raw_bytes(self.tcx) {
+                return Ok(Expr::str(str::from_utf8(bytes).expect("a `str` constant is UTF-8")));
+            }
         }
         let (Some(num), Some(leaf)) = (Num::of(value.ty), value.try_to_leaf()) else {
             return Err(self.unsupported(span, "this constant pattern"));
