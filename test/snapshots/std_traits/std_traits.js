@@ -385,11 +385,11 @@ export function compared() {
 }
 
 function write_loop(stops) {
-  return " (a loop of " + String(stops) + ")";
+  return ` (a loop of ${stops})`;
 }
 
 export function shown(x, TDisplay) {
-  return "<" + TDisplay.fmt(x) + ">";
+  return `<${TDisplay.fmt(x)}>`;
 }
 
 export function displays() {
@@ -405,8 +405,8 @@ export function displays() {
   const labeled = { label: "at", value: { x: 5, y: 6 } };
   return [
     pointDisplay_fmt(p),
-    routeDisplay_fmt(route) + " / " + routeDisplay_fmt(empty),
-    figureDisplay_fmt("Dot") + " and " + figureDisplay_fmt({ TAG: "Poly", _0: [1, 2] }),
+    `${routeDisplay_fmt(route)} / ${routeDisplay_fmt(empty)}`,
+    `${figureDisplay_fmt("Dot")} and ${figureDisplay_fmt({ TAG: "Poly", _0: [1, 2] })}`,
     labeledDisplay_fmt(labeled, pointDisplay()),
     shown(labeled, labeledDisplay(pointDisplay())),
     shown({ label: "n", value: 2.5 }, labeledDisplay({ fmt: $displayF64 })),
@@ -556,43 +556,15 @@ export function debugs(n) {
   const arg$1 = [5];
   return [
     posDebug_fmt(p),
-    dimsDebug_fmt([n, 2]) + " " + nothingDebug_fmt(undefined) + " " + glyphDebug_fmt("Dot"),
-    glyphDebug_fmt({ TAG: "Ring", _0: 1.5 }) + " " + glyphDebug_fmt({ TAG: "Box", w: n, h: 3 }),
+    `${dimsDebug_fmt([n, 2])} ${nothingDebug_fmt(undefined)} ${glyphDebug_fmt("Dot")}`,
+    `${glyphDebug_fmt({ TAG: "Ring", _0: 1.5 })} ${glyphDebug_fmt({ TAG: "Box", w: n, h: 3 })}`,
     sixDebug_fmt({ a: 1, b: 2, c: 3, d: 4, e: 5, f: "x" }),
-    boxedDebug_fmt({ item: p }, posDebug()) +
-      " " +
-      boxedDebug_fmt(
-        { item: "s" },
-        { fmt: (value) => (value == null ? "None" : "Some(" + $debugStr(value) + ")") },
-      ),
-    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") +
-      " " +
-      (undefined == null ? "None" : "Some(" + String(undefined) + ")") +
-      " (" +
-      String(arg[0]) +
-      ", " +
-      $debugStr(arg[1]) +
-      ", " +
-      $debugStr(arg[2], "'") +
-      ") (" +
-      String(arg$1[0]) +
-      ",)",
-    "[" +
-      [p, p].map((item) => posDebug_fmt(item)).join(", ") +
-      "] " +
-      (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") +
-      " " +
-      ["Less", "Equal", "Greater"][$cmp(n, 1) + 1],
-    hiddenDebug_fmt(undefined) +
-      " " +
-      debugged([[3, 4]], {
-        fmt: (value) =>
-          "[" +
-          value
-            .map((item) => (item == null ? "None" : "Some(" + dimsDebug_fmt(item) + ")"))
-            .join(", ") +
-          "]",
-      }),
+    `${boxedDebug_fmt({ item: p }, posDebug())} ${boxedDebug_fmt({ item: "s" }, { fmt: (value) => (value == null ? "None" : `Some(${$debugStr(value)})`) })}`,
+    `Some(${$debugF64(1)}) None (${arg[0]}, ${$debugStr(arg[1])}, ${$debugStr(arg[2], "'")}) (${arg$1[0]},)`,
+    `[${[p, p].map((item) => posDebug_fmt(item)).join(", ")}] ${r.TAG === "Ok" ? `Ok(${r._0})` : `Err(${$debugStr(r._0)})`} ${
+      ["Less", "Equal", "Greater"][$cmp(n, 1) + 1]
+    }`,
+    `${hiddenDebug_fmt(undefined)} ${debugged([[3, 4]], { fmt: (value) => `[${value.map((item) => (item == null ? "None" : `Some(${dimsDebug_fmt(item)})`)).join(", ")}]` })}`,
   ];
 }
 
@@ -666,7 +638,7 @@ function metersPartialEqF64_eq(meters, other) {
 }
 
 function pointDisplay_fmt(point) {
-  return "(" + String(point.x) + ", " + String(point.y) + ")";
+  return `(${point.x}, ${point.y})`;
 }
 
 function routeDisplay_fmt(route) {
@@ -691,12 +663,12 @@ function figureDisplay_fmt(figure) {
   if (figure === "Dot") {
     return "a dot";
   } else {
-    return "a polygon of " + String(figure._0.length);
+    return `a polygon of ${figure._0.length}`;
   }
 }
 
 function labeledDisplay_fmt(labeled, TDisplay) {
-  return labeled.label + ": " + TDisplay.fmt(labeled.value);
+  return `${labeled.label}: ${TDisplay.fmt(labeled.value)}`;
 }
 
 function countdownIterator_next(countdown$1) {
@@ -737,11 +709,11 @@ function wordOrd_cmp(word, other) {
 }
 
 function posDebug_fmt(pos) {
-  return "Pos { x: " + $debugF64(pos.x) + ", y: " + $debugF64(pos.y) + " }";
+  return `Pos { x: ${$debugF64(pos.x)}, y: ${$debugF64(pos.y)} }`;
 }
 
 function dimsDebug_fmt(dims) {
-  return "Dims(" + String(dims[0]) + ", " + String(dims[1]) + ")";
+  return `Dims(${dims[0]}, ${dims[1]})`;
 }
 
 function nothingDebug_fmt(nothing) {
@@ -752,9 +724,9 @@ function glyphDebug_fmt(glyph) {
   if (glyph === "Dot") {
     return "Dot";
   } else if (glyph.TAG === "Ring") {
-    return "Ring(" + $debugF64(glyph._0) + ")";
+    return `Ring(${$debugF64(glyph._0)})`;
   } else {
-    return "Box { w: " + String(glyph.w) + ", h: " + String(glyph.h) + " }";
+    return `Box { w: ${glyph.w}, h: ${glyph.h} }`;
   }
 }
 
@@ -772,7 +744,7 @@ function sixDebug_fmt(six) {
 }
 
 function boxedDebug_fmt(boxed, TDebug) {
-  return "Boxed { item: " + TDebug.fmt(boxed.item) + " }";
+  return `Boxed { item: ${TDebug.fmt(boxed.item)} }`;
 }
 
 function hiddenDebug_fmt(hidden) {

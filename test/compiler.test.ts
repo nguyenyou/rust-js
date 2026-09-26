@@ -363,8 +363,8 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   expect(compiler).toContain("  const module = loadCompiler(start, stat);\n  const sysroot = loadSysroot(start, stat);");
   expect(compiler).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
   // A `format!` value shown once, in order, is written in place.
-  expect(compiler).toContain('  return t.toFixed(0) + " ms";');
-  expect(compiler).toContain('  const response = await window.fetch("./sysroot/" + name);');
+  expect(compiler).toContain("  return `${t.toFixed(0)} ms`;");
+  expect(compiler).toContain("  const response = await window.fetch(`./sysroot/${name}`);");
   // A trapped compile is an `Err` (ADR 0035), and `instanceof` a binding.
   expect(compiler).toContain("  const started = $try(() => wasi.start(instance));");
   expect(compiler).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
@@ -437,9 +437,9 @@ test("a throwing JS call is a Result, and ? returns early", async () => {
 });
 
 // ADR 0034: strings are JS strings, and their methods JS's.
-test("string methods are JS's, and format! is concatenation", async () => {
+test("string methods are JS's, and format! is a template literal", async () => {
   const js = await Bun.file(join(target, "strings.js")).text();
-  expect(js).toContain('  return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");');
+  expect(js).toContain("  return `${name}: ${n} item${n === 1 ? \"\" : \"s\"}`;");
   expect(js).toContain("s.startsWith(\"ab\"), s.endsWith(\"c\"), s.includes(\"b/\"), s.includes(\"/\")");
   expect(js).toContain('  return s.replaceAll("/", " / ").replaceAll("a", "A");');
   expect(js).toContain('  return $stripSuffix(file, ".rs") ?? file;');
@@ -824,15 +824,15 @@ test("== calls a hand-written eq wherever it's inside, and generics take a dicti
 test("a Display impl's fmt returns the string it writes", async () => {
   const js = await Bun.file(join(target, "std_traits.js")).text();
   // One write: its string. One per way through: a `return` each.
-  expect(js).toContain('function pointDisplay_fmt(point) {\n  return "(" + String(point.x) + ", " + String(point.y) + ")";\n}');
-  expect(js).toContain('  if (figure === "Dot") {\n    return "a dot";\n  } else {\n    return "a polygon of " + String(figure._0.length);');
+  expect(js).toContain("function pointDisplay_fmt(point) {\n  return `(${point.x}, ${point.y})`;\n}");
+  expect(js).toContain("  if (figure === \"Dot\") {\n    return \"a dot\";\n  } else {\n    return `a polygon of ${figure._0.length}`;");
   // More: a string built up, with nested `fmt`s and a helper that writes.
   expect(js).toContain('    f += pointDisplay_fmt(stop);');
   expect(js).toContain('    f += write_loop(route.stops.length);');
-  expect(js).toContain('function write_loop(stops) {\n  return " (a loop of " + String(stops) + ")";');
+  expect(js).toContain("function write_loop(stops) {\n  return ` (a loop of ${stops})`;");
   // `{}` of one, and generics given a dictionary.
-  expect(js).toContain("return labeled.label + \": \" + TDisplay.fmt(labeled.value);");
-  expect(js).toContain("export function shown(x, TDisplay) {\n  return \"<\" + TDisplay.fmt(x) + \">\";");
+  expect(js).toContain("return `${labeled.label}: ${TDisplay.fmt(labeled.value)}`;");
+  expect(js).toContain("export function shown(x, TDisplay) {\n  return `<${TDisplay.fmt(x)}>`;");
   expect(js).toContain("{ fmt: $displayF64 }");
 });
 
@@ -854,15 +854,15 @@ test("an Iterator impl is a JS iterator, lazy until something wants all of it", 
 test("format! writes its arguments in place, in the order Rust runs them", async () => {
   const js = await Bun.file(join(target, "strings.js")).text();
   // Named arguments come after the others in Rust, but none has effects.
-  expect(js).toContain('return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");');
+  expect(js).toContain("return `${name}: ${n} item${n === 1 ? \"\" : \"s\"}`;");
   // Shown out of order, with effects: in `const`s first, in Rust's order.
   expect(js).toContain(
     "  const arg = tick(c);\n  const arg$1 = tick(c);\n  const arg$2 = c.value;\n" +
-      '  return String(arg$1) + " " + String(arg) + " " + String(arg) + " " + String(arg$2);',
+      "  return `${arg$1} ${arg} ${arg} ${arg$2}`;",
   );
   // And a call in one doesn't make the call before it a `const`.
   const traits = await Bun.file(join(root, "test/snapshots/traits/traits.js")).text();
-  expect(traits).toContain('label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self))');
+  expect(traits).toContain("label: (self) => `${circleShape_name(self)} of area ${$displayF64(circleShape_area(self))}`");
 });
 
 // ADR 0057: an `Ordering` is -1, 0 or 1; derived, the fields in turn with `||`.
@@ -881,11 +881,11 @@ test("PartialOrd and Ord compare with $cmp, a hand-written cmp, or the parts in 
 test("format options pad, round and change base as Rust does", async () => {
   const js = await Bun.file(join(target, "strings.js")).text();
   // Numbers are ASCII: JS's own padding. Strings count `char`s: `$pad`.
-  expect(js).toContain("\"[\" +\n    String(n).padStart(6) +\n    \"] [\" +\n    String(n).padEnd(6) +\n    \"] [\" +\n    $pad(name, 9, \"^\") +\n    \"]");
+  expect(js).toContain("`[${String(n).padStart(6)}] [${String(n).padEnd(6)}] [${$pad(name, 9, \"^\")}]");
   expect(js).toContain('$pad(name, 9, ">", "*")');
-  expect(js).toContain("\"] [0x\" +\n    (n >>> 0).toString(16) +\n    \"] [\"");
+  expect(js).toContain("[0x${(n >>> 0).toString(16)}] [");
   // `{:.1}` rounds a tie to even, exactly, and `{:?}` of an `f64` keeps its `.0`.
-  expect(js).toContain("return (\n    $toFixed(x, 0) + \" \" + $toFixed(x, 1) + \" \" + $toFixed(x, 3).padStart(8) + \" \" + $debugF64(x");
+  expect(js).toContain("return `${$toFixed(x, 0)} ${$toFixed(x, 1)} ${$toFixed(x, 3).padStart(8)} ${$debugF64(x)}`;");
 });
 
 // ADR 0059: a `HashMap` is a JS `Map`, and a `HashSet` a `Set`.
@@ -902,8 +902,8 @@ test("HashMap and HashSet are a JS Map and Set", async () => {
 // ADR 0060: `{:?}` by the type, and a derived `Debug` is a function of its own.
 test("a derived Debug is a function, left out unless something shows the type", async () => {
   const js = await Bun.file(join(target, "std_traits.js")).text();
-  expect(js).toContain('function posDebug_fmt(pos) {\n  return "Pos { x: " + $debugF64(pos.x) + ", y: " + $debugF64(pos.y) + " }";\n}');
-  expect(js).toContain('  if (glyph === "Dot") {\n    return "Dot";\n  } else if (glyph.TAG === "Ring") {\n    return "Ring(" + $debugF64(glyph._0) + ")";');
+  expect(js).toContain("function posDebug_fmt(pos) {\n  return `Pos { x: ${$debugF64(pos.x)}, y: ${$debugF64(pos.y)} }`;\n}");
+  expect(js).toContain("  if (glyph === \"Dot\") {\n    return \"Dot\";\n  } else if (glyph.TAG === \"Ring\") {\n    return `Ring(${$debugF64(glyph._0)})`;");
   // Generic: `T`'s `fmt`, from a dictionary.
   expect(js).toContain("export function debugged(x, TDebug) {\n  return TDebug.fmt(x);");
   // Derived, and never shown: not in the JS at all.
@@ -929,7 +929,7 @@ test("the calculator's JS is what a person would write", async () => {
   const js = await Bun.file(join(target, "calc.js")).text();
   expect(js).toContain("for (const [i, c] of Array.from(s).entries()) {");
   expect(js).toContain('const arg$1 = first_dup("abcdbe");');
-  expect(js).toContain('"Some((" + String(arg$1[0]) + ", " + $debugStr(arg$1[1], "\'") + "))"');
+  expect(js).toContain("`Some((${arg$1[0]}, ${$debugStr(arg$1[1], \"'\")}))`");
   expect(js).toContain('$splitBy(text, (c) => !/^[\\p{Alphabetic}\\p{N}]$/u.test(c))');
   // `?` from a `&str` error to a `String` one: the same string, returned as it is.
   expect(js).toContain("_0: \"underflow\" };\n      if (result$1.TAG === \"Err\") {\n        return result$1;");
@@ -941,9 +941,9 @@ test("numbers are Math's, operators call their impl, and vec![x; n] fills", asyn
   const js = await Bun.file(join(target, "numbers.js")).text();
   expect(js).toContain("return Math.sqrt(vec2.x * vec2.x + vec2.y * vec2.y);");
   expect(js).toContain("vec2Add_add(");
-  expect(js).toContain("$displayF64(Math.floor(x)) +\n    \" \" +\n    $displayF64(Math.ceil(x)) +\n    \" \" +\n    $displayF64($round(x))");
+  expect(js).toContain("`${$displayF64(Math.floor(x))} ${$displayF64(Math.ceil(x))} ${$displayF64($round(x))}");
   expect(js).toContain("$checked(b - 10, 0, 4294967295)");
-  expect(js).toContain("String(Math.max(b - 100, 0))");
+  expect(js).toContain(" ${Math.max(b - 100, 0)} ");
   // Each row made again; a struct cloned, since one is changed later.
   expect(js).toContain("Array.from({ length: n }, () => new Array(n).fill(0))");
   expect(js).toContain("Array.from({ length: 3 }, () => ({ ...cell }))");

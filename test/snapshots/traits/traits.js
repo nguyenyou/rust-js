@@ -187,7 +187,7 @@ export function circleLabeled() {
   if ($circleLabeled === undefined) {
     $circleLabeled = {
       Shape: () => circleShape(),
-      label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self)),
+      label: (self) => `${circleShape_name(self)} of area ${$displayF64(circleShape_area(self))}`,
     };
   }
   return $circleLabeled;

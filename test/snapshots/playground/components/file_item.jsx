@@ -11,7 +11,7 @@ export function FileItem({ name, path, depth, open, root, onOpen, onDelete }) {
     end = (
       <button
         className="invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible"
-        aria-label={"Delete " + path}
+        aria-label={`Delete ${path}`}
         onClick={() => onDelete(path)}
       >
         ×
@@ -23,11 +23,7 @@ export function FileItem({ name, path, depth, open, root, onOpen, onDelete }) {
   return (
     <li className="group flex items-center">
       <button
-        className={
-          "min-w-0 flex-1 cursor-pointer truncate " +
-          styles.ROW +
-          " text-left aria-[current=true]:bg-selected"
-        }
+        className={`min-w-0 flex-1 cursor-pointer truncate ${styles.ROW} text-left aria-[current=true]:bg-selected`}
         style={{ paddingLeft: (8 + (Math.imul(depth, 12) >>> 0)) >>> 0 }}
         aria-current={open}
         onClick={() => onOpen(opened)}

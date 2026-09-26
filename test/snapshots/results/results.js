@@ -122,11 +122,11 @@ function small_sum(a, b) {
 export function converted(a, b) {
   const match = small_sum(a, b);
   if (match.TAG === "Ok") {
-    return "ok " + String(match._0);
+    return `ok ${match._0}`;
   } else if (match.TAG === "Err" && match._0.TAG === "Parse") {
-    return "parse: " + match._0._0;
+    return `parse: ${match._0._0}`;
   } else {
-    return "too big: " + String(match._0._0);
+    return `too big: ${match._0._0}`;
   }
 }
 

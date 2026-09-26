@@ -216,6 +216,9 @@ pub enum ExprKind {
     Jsx(Box<Jsx>),
     /// A regular expression literal, as written: `/^\p{White_Space}$/u` (ADR 0063).
     Regex(String),
+    /// `\`Some(${x})\``: the texts around the values, as they read (one more
+    /// than the values), and the values (ADR 0066).
+    Template(Vec<String>, Vec<Expr>),
 }
 
 /// A JSX element (ADR 0040).
@@ -310,6 +313,11 @@ impl Expr {
     /// A regular expression literal, as written: `/^[0-9]$/`.
     pub fn regex(literal: &str) -> Expr {
         Expr::new(ExprKind::Regex(literal.to_string()))
+    }
+
+    pub fn template(texts: Vec<String>, values: Vec<Expr>) -> Expr {
+        debug_assert_eq!(texts.len(), values.len() + 1);
+        Expr::new(ExprKind::Template(texts, values))
     }
 
     pub fn undefined() -> Expr {
@@ -445,6 +453,7 @@ impl Expr {
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
             ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
             ExprKind::Call(f, args) | ExprKind::New(f, args) => f.contains_jsx() || args.iter().any(Expr::contains_jsx),
+            ExprKind::Template(_, values) => values.iter().any(Expr::contains_jsx),
             ExprKind::Num(_)
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
@@ -529,6 +538,7 @@ impl Expr {
             ExprKind::Call(f, args) => ExprKind::Call(one(f)?, all(args)?),
             ExprKind::New(f, args) => ExprKind::New(one(f)?, all(args)?),
             ExprKind::Await(a) => ExprKind::Await(one(a)?),
+            ExprKind::Template(texts, values) => ExprKind::Template(texts.clone(), all(values)?),
             ExprKind::Jsx(jsx) => ExprKind::Jsx(Box::new(Jsx {
                 tag: match &jsx.tag {
                     JsxTag::Component(c) => JsxTag::Component(c.replace(with, callbacks)?),
@@ -595,7 +605,7 @@ impl Expr {
             ExprKind::Await(_) => true,
             ExprKind::Member(object, _) => object.has_effects(),
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
-            ExprKind::Array(items) => items.iter().any(Expr::has_effects),
+            ExprKind::Array(items) | ExprKind::Template(_, items) => items.iter().any(Expr::has_effects),
             ExprKind::Object(props) => props.iter().any(|p| match p {
                 Prop::Field(_, value) | Prop::Spread(value) => value.has_effects(),
             }),

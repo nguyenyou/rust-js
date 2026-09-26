@@ -173,7 +173,7 @@ export function tokenize(src) {
       }
       const text = $slice(chars, start, i).join("");
       const result = $parseF64(text);
-      const result$1 = result.TAG === "Err" ? { TAG: "Err", _0: "bad number " + text } : result;
+      const result$1 = result.TAG === "Err" ? { TAG: "Err", _0: `bad number ${text}` } : result;
       if (result$1.TAG === "Err") {
         return result$1;
       }
@@ -187,7 +187,7 @@ export function tokenize(src) {
     } else if (c === ")") {
       out.push("RParen");
     } else {
-      return { TAG: "Err", _0: "unexpected " + $debugStr(c, "'") + " at " + String(i) };
+      return { TAG: "Err", _0: `unexpected ${$debugStr(c, "'")} at ${i}` };
     }
     i = (i + 1) >>> 0;
   }
@@ -339,42 +339,21 @@ export function report() {
   let out = "";
   for (const e of ["1 + 2 * 3", "(1 + 2) * 3", "10 / 4 - 1", "2 * (3 + 4) * 5", "1 +", "3 $ 4"]) {
     const arg = eval$(e);
-    out +=
-      e +
-      " = " +
-      (arg.TAG === "Ok" ? "Ok(" + $debugF64(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")") +
-      "\n";
+    out += `${e} = ${arg.TAG === "Ok" ? `Ok(${$debugF64(arg._0)})` : `Err(${$debugStr(arg._0)})`}\n`;
   }
-  out +=
-    "[" +
-    word_freq("The cat and the hat. THE end, and fin")
-      .map((item) => "(" + $debugStr(item[0]) + ", " + String(item[1]) + ")")
-      .join(", ") +
-    "]\n";
-  out += caesar("Hello, World!", 3) + " " + caesar(caesar("abcxyz", 13), 13) + "\n";
+  out += `[${word_freq("The cat and the hat. THE end, and fin")
+    .map((item) => `(${$debugStr(item[0])}, ${item[1]})`)
+    .join(", ")}]\n`;
+  out += `${caesar("Hello, World!", 3)} ${caesar(caesar("abcxyz", 13), 13)}\n`;
   const arg$1 = first_dup("abcdbe");
   const arg$2 = first_dup("xyz");
-  out +=
-    (arg$1 == null
-      ? "None"
-      : "Some((" + String(arg$1[0]) + ", " + $debugStr(arg$1[1], "'") + "))") +
-    " " +
-    (arg$2 == null
-      ? "None"
-      : "Some((" + String(arg$2[0]) + ", " + $debugStr(arg$2[1], "'") + "))") +
-    "\n";
+  out += `${arg$1 == null ? "None" : `Some((${arg$1[0]}, ${$debugStr(arg$1[1], "'")}))`} ${arg$2 == null ? "None" : `Some((${arg$2[0]}, ${$debugStr(arg$2[1], "'")}))`}\n`;
   const s = "hello world";
-  out +=
-    String(s.split("o").length) +
-    " [" +
-    $splitBy(s, (c) => c === "l")
-      .map((item) => $debugStr(item))
-      .join(", ") +
-    "] " +
-    Array.from(s).toReversed().join("") +
-    " " +
-    String(Array.from(s).filter((c) => "aeiou".includes(c)).length) +
-    "\n";
+  out += `${s.split("o").length} [${$splitBy(s, (c) => c === "l")
+    .map((item) => $debugStr(item))
+    .join(
+      ", ",
+    )}] ${Array.from(s).toReversed().join("")} ${Array.from(s).filter((c) => "aeiou".includes(c)).length}\n`;
   return out;
 }
 //# sourceMappingURL=calc.js.map

@@ -78,6 +78,11 @@ pub fn escapes() -> String {
         "a\"b\\c\n\t\r\0\u{1b}\u{7f}é\u{3000}\u{a0}\u{200b}\u{2028}\u{e000}\u{301}x\u{10ffff}", 'a', '\'', '"', "it's"
     )
 }
+// A template literal's own characters, in the text around the values.
+pub fn templates(n: u32) -> String {
+    format!("`{n}` costs ${{n}} \\ {}\t\u{2028}|\u{1}|", n + 1)
+}
+
 pub fn report() -> String {
     let mut out = String::new();
     for c in [
@@ -120,5 +125,6 @@ pub fn report() -> String {
         out.push_str(&format!("{:?}\n", words(text)));
     }
     out.push_str(&format!("{:?}\n{}\n", slices(&[1, 2, 3, 4]), escapes()));
+    out.push_str(&format!("{:?}\n", templates(7)));
     out
 }

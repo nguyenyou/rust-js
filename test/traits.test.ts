@@ -92,7 +92,7 @@ test("dictionaries are explicit, cached and usable from JavaScript", () => {
   expect(output).toContain("function make(c) {\n  return { value: bump(c), impl: i32Compute() };");
   expect(output).toContain("  const receiver = make(c);\n  return (receiver.impl.add(receiver.value, (bump(c) + shape) | 0) + Math.imul(c.value, 100)) | 0;");
   // A copied default knows its Self: Circle's `name` and `area` are called directly.
-  expect(output).toContain('label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self))');
+  expect(output).toContain("label: (self) => `${circleShape_name(self)} of area ${$displayF64(circleShape_area(self))}`");
   expect(() => module.first([], { copy: (x: unknown) => x })).toThrow("index out of bounds");
 });
 

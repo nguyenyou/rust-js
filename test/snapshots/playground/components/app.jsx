@@ -35,15 +35,12 @@ function appended(rows, label, value) {
 
 function testsSummary(passed, failed, ignored) {
   const total = (passed + failed) >>> 0;
-  const ignoredText = ignored > 0 ? ", " + String(ignored) + " ignored" : "";
+  const ignoredText = ignored > 0 ? `, ${ignored} ignored` : "";
   if (total === 0) {
     return say("No tests.", "Good");
   } else {
     const tone = failed > 0 ? "Bad" : "Good";
-    return say(
-      "Tests: " + String(passed) + " passed, " + String(failed) + " failed" + ignoredText + ".",
-      tone,
-    );
+    return say(`Tests: ${passed} passed, ${failed} failed${ignoredText}.`, tone);
   }
 }
 
@@ -103,14 +100,10 @@ export function App() {
       setProgram(undefined);
     } else if (match.TAG === "Blocked") {
       setProgram(undefined);
-      const names = match._0.map((s) => '"' + s + '"');
+      const names = match._0.map((s) => `"${s}"`);
       const names$1 = names.join(", ");
       setStatus((s) => {
-        const text =
-          s.text +
-          " Not run: it imports " +
-          names$1 +
-          ", which the playground can't load. Bundle it with bun build.";
+        const text = `${s.text} Not run: it imports ${names$1}, which the playground can't load. Bundle it with bun build.`;
         return say(text, "Bad");
       });
     } else {
@@ -147,26 +140,16 @@ export function App() {
           const count = files.length;
           const shown$1 = files.some((param) => param[0] === shown) ? shown : rootJs;
           setOutput({ TAG: "Files", files, shown: shown$1 });
-          setStatus(
-            say("Compiled: " + String(count) + " JS file" + (count === 1 ? "" : "s") + ".", "Good"),
-          );
+          setStatus(say(`Compiled: ${count} JS file${count === 1 ? "" : "s"}.`, "Good"));
           run(r.files, rootJs, test);
         } else {
           setOutput({ TAG: "Diagnostics", _0: r.stderr });
           setProgram(undefined);
-          setStatus(say("Failed: exit " + r.exit + ".", "Bad"));
+          setStatus(say(`Failed: exit ${r.exit}.`, "Bad"));
         }
         const result = r.ok ? "ok" : "error";
-        const times =
-          "instantiate " +
-          compiler.ms(r.instantiate) +
-          ", run " +
-          compiler.ms(r.run) +
-          ", memory " +
-          compiler.mb(r.memory) +
-          ", " +
-          result;
-        const label = "compile #" + String(n);
+        const times = `instantiate ${compiler.ms(r.instantiate)}, run ${compiler.ms(r.run)}, memory ${compiler.mb(r.memory)}, ${result}`;
+        const label = `compile #${n}`;
         setStats((rows) => appended(rows, label, times));
         window.lastResult = r;
       })(),
@@ -174,9 +157,9 @@ export function App() {
   };
   const onOutcome = (outcome) => {
     if (outcome.TAG === "Failed") {
-      setStatus(say("Runtime error: " + outcome._0, "Bad"));
+      setStatus(say(`Runtime error: ${outcome._0}`, "Bad"));
     } else if (outcome === "Ran") {
-      setStatus((s) => say(s.text + " Ran main().", "Good"));
+      setStatus((s) => say(`${s.text} Ran main().`, "Good"));
     } else if (outcome.TAG === "Tested") {
       setStatus(testsSummary(outcome._0.passed, outcome._0.failed, outcome._0.ignored));
     } else {
@@ -208,7 +191,7 @@ export function App() {
     setProject(projects.Project.opening(project, path, live()));
   };
   const deleteFile = (path) => {
-    if (window.confirm("Delete " + path + "?")) {
+    if (window.confirm(`Delete ${path}?`)) {
       setProject(projects.Project.removing(project, path));
     }
   };
@@ -226,13 +209,12 @@ export function App() {
     }
     const modulePath = new RegExp("^([a-z_][a-z0-9_]*/)*[a-z_][a-z0-9_]*\\.rs$", "");
     if (!modulePath.test(path)) {
-      const text =
-        '"' + path + "\" isn't a Rust module file name, like math.rs or geometry/shape.rs.";
+      const text = `"${path}" isn't a Rust module file name, like math.rs or geometry/shape.rs.`;
       setStatus(say(text, "Bad"));
       return;
     }
     if (projects.Project.has(project, path)) {
-      setStatus(say(path + " already exists.", "Bad"));
+      setStatus(say(`${path} already exists.`, "Bad"));
       return;
     }
     setProject(projects.Project.adding(project, path, live()));
@@ -244,12 +226,7 @@ export function App() {
       file = path;
     }
     const module = $stripSuffix(file, ".rs") ?? file;
-    const text$1 =
-      "Created " +
-      path +
-      ". Declare it with `mod " +
-      module +
-      ";` in its parent, or rustc won't include it.";
+    const text$1 = `Created ${path}. Declare it with \`mod ${module};\` in its parent, or rustc won't include it.`;
     setStatus(say(text$1, "Plain"));
   };
   const openOutput = (path) => {

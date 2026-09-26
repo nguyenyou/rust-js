@@ -76,7 +76,7 @@ back into the `.rs` file, so a debugger can show the Rust source.
   with JS's methods (`split`, `starts_with`, `replace`, ..), a `char` is a one-character string
   whose questions are Unicode regular expressions (`c.is_alphabetic()` is `/^\p{Alphabetic}$/u.test(c)`),
   `parse` is a `Result` of Rust's message ([ADR 0063](docs/decisions/0063-text.md)),
-  and `format!` is `+`, with its options: `{:>8.2}` is `$toFixed(x, 2).padStart(8)` ([ADR 0058](docs/decisions/0058-format-options.md)). Byte counts (`len()`, slicing a string) are errors: JS counts UTF-16 units.
+  and `format!` is a template literal, `` `${name}: ${n} items` `` ([ADR 0066](docs/decisions/0066-template-literals.md)), with its options: `{:>8.2}` is `$toFixed(x, 2).padStart(8)` ([ADR 0058](docs/decisions/0058-format-options.md)). Byte counts (`len()`, slicing a string) are errors: JS counts UTF-16 units.
 - `async fn` is an `async function` and `.await` is `await`: a future is a JS promise, which starts
   as soon as it's made rather than when first polled.
 - React elements are JSX, in a `.jsx` file: `div().class_name("hero").children(title)` is

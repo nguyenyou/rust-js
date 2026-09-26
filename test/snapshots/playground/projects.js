@@ -70,7 +70,7 @@ function copy(files) {
 export function jsName(path) {
   const match = $stripSuffix(path, ".rs");
   if (match != null) {
-    return match + ".js";
+    return `${match}.js`;
   } else {
     return path;
   }

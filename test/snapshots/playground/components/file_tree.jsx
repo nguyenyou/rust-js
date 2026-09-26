@@ -8,14 +8,12 @@ export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelet
   const rows = tree.inOrder(tree$1, first).map((param) => {
     if (param[1].TAG === "Folder") {
       return (
-        <li key={param[0] + "/"} className="flex items-center">
+        <li key={`${param[0]}/`} className="flex items-center">
           <div className="w-full">
             <span
-              className={"block " + styles.ROW + " text-muted"}
+              className={`block ${styles.ROW} text-muted`}
               style={{ paddingLeft: (8 + (Math.imul(depth, 12) >>> 0)) >>> 0 }}
-            >
-              {param[0] + "/"}
-            </span>
+            >{`${param[0]}/`}</span>
             <ul>
               <FileTree
                 tree={param[1]._0}

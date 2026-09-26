@@ -4,7 +4,7 @@ Status: Accepted. Extends [0034](0034-strings-and-chars.md) and [0052](0052-std-
 
 ## Context
 
-`format!` is string concatenation (ADR 0034): `format!("{} of {}", a, b)`
+`format!` is string concatenation (ADR 0034; a template literal since ADR 0066): `format!("{} of {}", a, b)`
 is `a + " of " + b`, with numbers through `String(x)` or `$displayF64(x)`.
 Only std types could appear in a `{}`. A hand-written `impl Display` was
 rejected, as was `x.to_string()` of one.

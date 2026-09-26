@@ -1,6 +1,6 @@
 # 0034. String methods are JS's; a `char` is a one-character string; `format!` is `+`
 
-Status: Accepted. Extends [0023](0023-strings-references-shared-state.md).
+Status: Accepted; `format!` is a template literal now ([0066](0066-template-literals.md)). Extends [0023](0023-strings-references-shared-state.md).
 
 ## Context
 

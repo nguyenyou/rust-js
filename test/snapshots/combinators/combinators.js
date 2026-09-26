@@ -140,7 +140,7 @@ function parse(c) {
   } else if (c === "2") {
     return { TAG: "Ok", _0: 2 };
   } else {
-    return { TAG: "Err", _0: "bad " + c };
+    return { TAG: "Err", _0: `bad ${c}` };
   }
 }
 
@@ -159,10 +159,10 @@ export function options(n) {
 export function more_options(n) {
   const h = half(n);
   const r = h != null ? { TAG: "Ok", _0: h } : { TAG: "Err", _0: "odd" };
-  const s = h != null ? { TAG: "Ok", _0: h } : { TAG: "Err", _0: "odd " + String(n) };
+  const s = h != null ? { TAG: "Ok", _0: h } : { TAG: "Err", _0: `odd ${n}` };
   return [
-    r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")",
-    s.TAG === "Ok" ? "Ok(" + String(s._0) + ")" : "Err(" + $debugStr(s._0) + ")",
+    r.TAG === "Ok" ? `Ok(${r._0})` : `Err(${$debugStr(r._0)})`,
+    s.TAG === "Ok" ? `Ok(${s._0})` : `Err(${$debugStr(s._0)})`,
     h ?? 0,
     h == null || h > 1,
     h != null ? (h + 1) >>> 0 : 1000,
@@ -182,8 +182,8 @@ export function results(c) {
   };
   const result = r.TAG === "Ok" ? then(r._0) : r;
   return [
-    arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")",
-    arg$1.TAG === "Ok" ? "Ok(" + String(arg$1._0) + ")" : "Err(" + String(arg$1._0) + ")",
+    arg.TAG === "Ok" ? `Ok(${arg._0})` : `Err(${$debugStr(arg._0)})`,
+    arg$1.TAG === "Ok" ? `Ok(${arg$1._0})` : `Err(${arg$1._0})`,
     result.TAG === "Ok" ? result._0 : 0,
     r.TAG === "Ok" ? r._0 : Array.from(r._0).length,
     r.TAG === "Err" ? r._0 : undefined,
@@ -253,100 +253,17 @@ export function report() {
   for (const n of [0, 4, 5, 8]) {
     const arg = options(n);
     const arg$1 = more_options(n);
-    out +=
-      "(" +
-      String(arg[0]) +
-      ", " +
-      String(arg[1]) +
-      ", " +
-      String(arg[2]) +
-      ", " +
-      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg[3]) +
-      ", " +
-      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg[4]) +
-      ", " +
-      String(arg[5]) +
-      ") (" +
-      $debugStr(arg$1[0]) +
-      ", " +
-      $debugStr(arg$1[1]) +
-      ", " +
-      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg$1[2]) +
-      ", " +
-      String(arg$1[3]) +
-      ", " +
-      String(arg$1[4]) +
-      ")\n";
+    out += `(${arg[0]}, ${arg[1]}, ${arg[2]}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg[3])}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg[4])}, ${arg[5]}) (${$debugStr(arg$1[0])}, ${$debugStr(arg$1[1])}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg$1[2])}, ${arg$1[3]}, ${arg$1[4]})\n`;
   }
   for (const c of ["1", "2", "x"]) {
     const arg$2 = results(c);
-    out +=
-      "(" +
-      $debugStr(arg$2[0]) +
-      ", " +
-      $debugStr(arg$2[1]) +
-      ", " +
-      String(arg$2[2]) +
-      ", " +
-      String(arg$2[3]) +
-      ", " +
-      ((value) => (value == null ? "None" : "Some(" + $debugStr(value) + ")"))(arg$2[4]) +
-      ", " +
-      String(arg$2[5]) +
-      ")\n";
+    out += `(${$debugStr(arg$2[0])}, ${$debugStr(arg$2[1])}, ${arg$2[2]}, ${arg$2[3]}, ${((value) => (value == null ? "None" : `Some(${$debugStr(value)})`))(arg$2[4])}, ${arg$2[5]})\n`;
   }
   for (const n$1 of [0, 5]) {
     const arg$3 = iters(n$1);
     const arg$4 = consumers(n$1);
     const arg$5 = vecs(n$1);
-    out +=
-      "([" +
-      arg$3[0].map((item) => String(item)).join(", ") +
-      "], [" +
-      arg$3[1].map((item) => String(item)).join(", ") +
-      "], [" +
-      arg$3[2]
-        .map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")")
-        .join(", ") +
-      "], [" +
-      arg$3[3].map((item) => String(item)).join(", ") +
-      "], [" +
-      arg$3[4].map((item) => String(item)).join(", ") +
-      "], [" +
-      arg$3[5].map((item) => String(item)).join(", ") +
-      "]) " +
-      ((tuple) =>
-        "(" +
-        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[0]) +
-        ", " +
-        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[1]) +
-        ", " +
-        String(tuple[2]) +
-        ", " +
-        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[3]) +
-        ", " +
-        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[4]) +
-        ", " +
-        ((tuple) =>
-          "([" +
-          tuple[0].map((item) => String(item)).join(", ") +
-          "], [" +
-          tuple[1].map((item) => String(item)).join(", ") +
-          "])")(tuple[5]) +
-        ")")(arg$4) +
-      " (" +
-      String(arg$5[0]) +
-      ", [" +
-      arg$5[1].map((item) => String(item)).join(", ") +
-      "], " +
-      String(arg$5[2]) +
-      ", [" +
-      arg$5[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") +
-      "], [" +
-      arg$5[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") +
-      "], [" +
-      arg$5[5].map((item) => String(item)).join(", ") +
-      "])\n";
+    out += `([${arg$3[0].map((item) => String(item)).join(", ")}], [${arg$3[1].map((item) => String(item)).join(", ")}], [${arg$3[2].map((item) => `(${item[0]}, ${$debugStr(item[1], "'")})`).join(", ")}], [${arg$3[3].map((item) => String(item)).join(", ")}], [${arg$3[4].map((item) => String(item)).join(", ")}], [${arg$3[5].map((item) => String(item)).join(", ")}]) ${((tuple) => `(${((value) => (value == null ? "None" : `Some(${value})`))(tuple[0])}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[1])}, ${tuple[2]}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[3])}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[4])}, ${((tuple) => `([${tuple[0].map((item) => String(item)).join(", ")}], [${tuple[1].map((item) => String(item)).join(", ")}])`)(tuple[5])})`)(arg$4)} (${arg$5[0]}, [${arg$5[1].map((item) => String(item)).join(", ")}], ${arg$5[2]}, [${arg$5[3].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[4].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[5].map((item) => String(item)).join(", ")}])\n`;
   }
   return out;
 }

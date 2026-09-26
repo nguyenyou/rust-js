@@ -108,7 +108,7 @@ export function Clock() {
 export function Badge({ label }) {
   globalThis.rendered(label);
   const theme = useContext(THEME);
-  return <span className={"badge " + theme}>{label}</span>;
+  return <span className={`badge ${theme}`}>{label}</span>;
 }
 
 export function Themed() {

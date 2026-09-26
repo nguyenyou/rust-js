@@ -44,7 +44,7 @@ export function extremes(v) {
 }
 
 export function indexed(words) {
-  return words.map((x, i) => [i, x]).map(([i, w]) => String(i) + ":" + w);
+  return words.map((x, i) => [i, x]).map(([i, w]) => `${i}:${w}`);
 }
 
 export function middle(v) {

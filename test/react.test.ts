@@ -210,7 +210,7 @@ pub fn full_name(person: &Person) -> String {
   expect(people).toContain("export function makePerson(firstName) {");
   // Fields: of a struct, of an enum's variant, and one kept by its `#[rust_js::name]`.
   expect(people).toContain("firstName, lastName: \"Doe\", user_id: 7");
-  expect(people).toContain('person.firstName + " " + person.lastName');
+  expect(people).toContain('`${person.firstName} ${person.lastName}`');
   expect(lib).toContain("export function rectWidth(shape) {\n  return (shape.bottomRight - shape.topLeft");
   // A hook React finds by its name, and props as React code names them.
   expect(lib).toContain("export function useClicks() {");

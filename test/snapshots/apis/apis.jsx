@@ -66,7 +66,7 @@ export function Store() {
 
 function submit(previous, data) {
   const name = data.get("name") ?? "";
-  return previous + name + ";";
+  return `${previous}${name};`;
 }
 
 export function SubmitStatus() {
@@ -144,7 +144,7 @@ export function Places() {
     flushSync(() => {
       setFlushed(1);
     });
-    globalThis.log("flushed " + globalThis.flushedText());
+    globalThis.log(`flushed ${globalThis.flushedText()}`);
   };
   return (
     <>
@@ -178,7 +178,7 @@ export function Misc() {
     } else {
       tmp = "nested";
     }
-    globalThis.log(id + " " + tmp);
+    globalThis.log(`${id} ${tmp}`);
   };
   const style = { color: "red", fontSize: 12, "--gap": "4px" };
   return (

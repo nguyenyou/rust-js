@@ -335,6 +335,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.impl_call(fmt, args, vec![value], span);
         }
         match ty.kind() {
+            // A constant is known: `Some(1.0)` is `"Some(1.0)"`, with no test.
+            _ if let Some(inner) = self.option_of(ty)
+                && value.is_constant()
+                && !self.boxed_payload(inner) =>
+            {
+                if matches!(value.kind, js::ExprKind::Undefined | js::ExprKind::Null) {
+                    return Ok(Expr::str("None"));
+                }
+                let shown = self.debug_string(value, inner, span)?;
+                Ok(join(vec![Expr::str("Some("), shown, Expr::str(")")]))
+            }
             _ if let Some(inner) = self.option_of(ty) => {
                 let inside = if self.boxed_payload(inner) {
                     self.some_value(Expr::var("value"))
@@ -512,17 +523,13 @@ fn as_returns(body: &[Stmt], name: &str) -> Option<Vec<Stmt>> {
     Some(vec![kind.at(stmt.span)])
 }
 
-/// `a + b + c`, with pieces that are constants joined first. A piece
-/// that's itself a string joined is taken apart: `"Some((" + a + ")"`,
-/// not `"Some(" + ("(" + a + ")") + ")"`.
+/// Strings joined: text alone is a string, text and values a template
+/// literal, \`Some(${x})\`, and values alone `a + b`. A part that's itself
+/// strings joined is taken apart, so templates don't nest needlessly.
 pub(super) fn join(parts: Vec<Expr>) -> Expr {
-    let mut folded: Vec<Expr> = Vec::new();
-    let mut pieces = Vec::new();
-    for part in parts {
-        pieces.extend(joined_pieces(part));
-    }
-    for part in pieces {
-        match (folded.last_mut(), &part.kind) {
+    let mut pieces: Vec<Expr> = Vec::new();
+    for piece in parts.into_iter().flat_map(joined_pieces) {
+        match (pieces.last_mut(), &piece.kind) {
             (
                 Some(Expr {
                     kind: js::ExprKind::Str(before),
@@ -530,18 +537,56 @@ pub(super) fn join(parts: Vec<Expr>) -> Expr {
                 }),
                 js::ExprKind::Str(after),
             ) => before.push_str(after),
-            _ => folded.push(part),
+            _ => pieces.push(piece),
         }
     }
-    folded
-        .into_iter()
-        .reduce(|a, b| Expr::bin(Op::Add, a, b))
-        .unwrap_or_else(|| Expr::str(""))
+    let is_text = |p: &Expr| matches!(p.kind, js::ExprKind::Str(_));
+    if pieces.iter().all(is_text) || !pieces.iter().any(is_text) {
+        return pieces
+            .into_iter()
+            .reduce(|a, b| Expr::bin(Op::Add, a, b))
+            .unwrap_or_else(|| Expr::str(""));
+    }
+    let (mut texts, mut values) = (vec![String::new()], Vec::new());
+    for piece in pieces {
+        match piece.kind {
+            js::ExprKind::Str(text) => texts.last_mut().expect("a text").push_str(&text),
+            _ => {
+                values.push(unstringed(piece));
+                texts.push(String::new());
+            }
+        }
+    }
+    Expr::template(texts, values)
 }
 
-/// The pieces of `"(" + a + ")"`, a join that starts with a string, so
-/// each `+` in it concatenates. Anything else is one piece.
+/// `String(x)` is `x` in a template, which makes it a string the same way.
+fn unstringed(value: Expr) -> Expr {
+    match value.kind {
+        js::ExprKind::Call(ref callee, ref args)
+            if matches!(&callee.kind, js::ExprKind::Var(name) if name == "String") && args.len() == 1 =>
+        {
+            args[0].clone()
+        }
+        _ => value,
+    }
+}
+
+/// The pieces of strings joined: of a template, its texts and values; of
+/// `"(" + a + ")"`, which starts with a string, so that each `+` in it
+/// concatenates, its operands. Anything else is one piece.
 fn joined_pieces(e: Expr) -> Vec<Expr> {
+    if let js::ExprKind::Template(texts, values) = e.kind {
+        let mut pieces = Vec::new();
+        let mut values = values.into_iter();
+        for text in texts {
+            if !text.is_empty() {
+                pieces.push(Expr::str(text));
+            }
+            pieces.extend(values.next());
+        }
+        return pieces;
+    }
     let mut pieces = Vec::new();
     let mut rest = e;
     while let js::ExprKind::Binary(Op::Add, left, right) = rest.kind {

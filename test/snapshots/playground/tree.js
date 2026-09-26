@@ -41,7 +41,7 @@ export function buildTree(paths) {
 export function inOrder(tree, first) {
   const key = (param) => {
     if (param[1].TAG === "Folder") {
-      return param[0] + "/";
+      return `${param[0]}/`;
     } else {
       return param[0];
     }

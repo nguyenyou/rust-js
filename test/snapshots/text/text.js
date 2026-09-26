@@ -257,19 +257,7 @@ export function parses(s) {
   const c = $parseChar(s);
   const owned = $unwrapOk({ TAG: "Ok", _0: s });
   const arg = i.TAG === "Err" ? { TAG: "Err", _0: i._0 } : i;
-  return (
-    (n.TAG === "Ok" ? "Ok(" + String(n._0) + ")" : "Err(" + $debugStr(n._0) + ")") +
-    " " +
-    (arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")") +
-    " " +
-    (f.TAG === "Ok" ? "Ok(" + $debugF64(f._0) + ")" : "Err(" + $debugStr(f._0) + ")") +
-    " " +
-    (b.TAG === "Ok" ? "Ok(" + String(b._0) + ")" : "Err(" + $debugStr(b._0) + ")") +
-    " " +
-    (c.TAG === "Ok" ? "Ok(" + $debugStr(c._0, "'") + ")" : "Err(" + $debugStr(c._0) + ")") +
-    " " +
-    $debugStr(owned)
-  );
+  return `${n.TAG === "Ok" ? `Ok(${n._0})` : `Err(${$debugStr(n._0)})`} ${arg.TAG === "Ok" ? `Ok(${arg._0})` : `Err(${$debugStr(arg._0)})`} ${f.TAG === "Ok" ? `Ok(${$debugF64(f._0)})` : `Err(${$debugStr(f._0)})`} ${b.TAG === "Ok" ? `Ok(${b._0})` : `Err(${$debugStr(b._0)})`} ${c.TAG === "Ok" ? `Ok(${$debugStr(c._0, "'")})` : `Err(${$debugStr(c._0)})`} ${$debugStr(owned)}`;
 }
 
 function sum(text) {
@@ -293,9 +281,9 @@ export function words(text) {
   let total;
   const match = sum(text);
   if (match.TAG === "Ok") {
-    total = "sum " + String(match._0);
+    total = `sum ${match._0}`;
   } else {
-    total = "error: " + match._0;
+    total = `error: ${match._0}`;
   }
   const pieces = $splitBy(text, (c) => /^[0-9]$/.test(c) || c === "\r").map((p) => p);
   return [words$1, lines, total, pieces, Array.from(text).some((c) => /^\p{Uppercase}$/u.test(c))];
@@ -319,17 +307,11 @@ export function slice_panics(start, end) {
 }
 
 export function escapes() {
-  return (
-    $debugStr('a"b\\c\n	\r\0\x1Bé　\xA0​\u2028́x􏿿') +
-    " " +
-    $debugStr("a", "'") +
-    " " +
-    $debugStr("'", "'") +
-    " " +
-    $debugStr('"', "'") +
-    " " +
-    $debugStr("it's")
-  );
+  return `${$debugStr('a"b\\c\n	\r\0\x1Bé　\xA0​\u2028́x􏿿')} ${$debugStr("a", "'")} ${$debugStr("'", "'")} ${$debugStr('"', "'")} ${$debugStr("it's")}`;
+}
+
+export function templates(n) {
+  return `\`${n}\` costs \${n} \\ ${(n + 1) >>> 0}\t\u2028|\u0001|`;
 }
 
 export function report() {
@@ -338,51 +320,7 @@ export function report() {
     const arg = chars(c);
     const arg$1 = ascii(c);
     const arg$2 = casts(c);
-    out +=
-      $debugStr(c, "'") +
-      " (" +
-      String(arg[0]) +
-      ", " +
-      String(arg[1]) +
-      ", " +
-      String(arg[2]) +
-      ", " +
-      String(arg[3]) +
-      ", " +
-      String(arg[4]) +
-      ", " +
-      String(arg[5]) +
-      ", " +
-      String(arg[6]) +
-      ", " +
-      String(arg[7]) +
-      ") (" +
-      String(arg$1[0]) +
-      ", " +
-      String(arg$1[1]) +
-      ", " +
-      String(arg$1[2]) +
-      ", " +
-      String(arg$1[3]) +
-      ", " +
-      $debugStr(arg$1[4], "'") +
-      ", " +
-      $debugStr(arg$1[5], "'") +
-      ", " +
-      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg$1[6]) +
-      ", " +
-      String(arg$1[7]) +
-      ") (" +
-      String(arg$2[0]) +
-      ", " +
-      String(arg$2[1]) +
-      ", " +
-      $debugStr(arg$2[2], "'") +
-      ", " +
-      $debugStr(arg$2[3], "'") +
-      ", " +
-      String(arg$2[4]) +
-      ")\n";
+    out += `${$debugStr(c, "'")} (${arg[0]}, ${arg[1]}, ${arg[2]}, ${arg[3]}, ${arg[4]}, ${arg[5]}, ${arg[6]}, ${arg[7]}) (${arg$1[0]}, ${arg$1[1]}, ${arg$1[2]}, ${arg$1[3]}, ${$debugStr(arg$1[4], "'")}, ${$debugStr(arg$1[5], "'")}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg$1[6])}, ${arg$1[7]}) (${arg$2[0]}, ${arg$2[1]}, ${$debugStr(arg$2[2], "'")}, ${$debugStr(arg$2[3], "'")}, ${arg$2[4]})\n`;
   }
   for (const s of [
     "42",
@@ -401,11 +339,11 @@ export function report() {
     " 1",
   ]) {
     const arg$3 = parses(s);
-    out += $debugStr(s) + " " + arg$3 + "\n";
+    out += `${$debugStr(s)} ${arg$3}\n`;
   }
   for (const s$1 of ["true", "false", "True", "x", "é", "ab"]) {
     const arg$4 = parses(s$1);
-    out += $debugStr(s$1) + " " + arg$4 + "\n";
+    out += `${$debugStr(s$1)} ${arg$4}\n`;
   }
   for (const text of [
     "1 2	3",
@@ -419,34 +357,11 @@ export function report() {
     "\r",
   ]) {
     const arg$5 = words(text);
-    out +=
-      "([" +
-      arg$5[0].map((item) => $debugStr(item)).join(", ") +
-      "], [" +
-      arg$5[1].map((item) => $debugStr(item)).join(", ") +
-      "], " +
-      $debugStr(arg$5[2]) +
-      ", [" +
-      arg$5[3].map((item) => $debugStr(item)).join(", ") +
-      "], " +
-      String(arg$5[4]) +
-      ")\n";
+    out += `([${arg$5[0].map((item) => $debugStr(item)).join(", ")}], [${arg$5[1].map((item) => $debugStr(item)).join(", ")}], ${$debugStr(arg$5[2])}, [${arg$5[3].map((item) => $debugStr(item)).join(", ")}], ${arg$5[4]})\n`;
   }
   const arg$6 = slices([1, 2, 3, 4]);
-  out +=
-    "([" +
-    arg$6[0].map((item) => String(item)).join(", ") +
-    "], [" +
-    arg$6[1].map((item) => String(item)).join(", ") +
-    "], [" +
-    arg$6[2].map((item) => String(item)).join(", ") +
-    "], [" +
-    arg$6[3].map((item) => String(item)).join(", ") +
-    "], " +
-    String(arg$6[4]) +
-    ")\n" +
-    escapes() +
-    "\n";
+  out += `([${arg$6[0].map((item) => String(item)).join(", ")}], [${arg$6[1].map((item) => String(item)).join(", ")}], [${arg$6[2].map((item) => String(item)).join(", ")}], [${arg$6[3].map((item) => String(item)).join(", ")}], ${arg$6[4]})\n${escapes()}\n`;
+  out += `${$debugStr(templates(7))}\n`;
   return out;
 }
 //# sourceMappingURL=text.js.map

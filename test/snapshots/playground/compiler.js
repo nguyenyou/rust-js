@@ -27,11 +27,11 @@ function $try(f) {
 }
 
 export function ms(t) {
-  return t.toFixed(0) + " ms";
+  return `${t.toFixed(0)} ms`;
 }
 
 export function mb(n) {
-  return (n / 1048576).toFixed(1) + " MB";
+  return `${(n / 1048576).toFixed(1)} MB`;
 }
 
 export async function load(stat) {
@@ -71,20 +71,20 @@ async function loadSysroot(start, stat) {
   }
   stat(
     "download sysroot",
-    ms(performance.now() - start) + " (" + String(entries.length) + " files, " + mb(size) + ")",
+    `${ms(performance.now() - start)} (${entries.length} files, ${mb(size)})`,
   );
   return new Map(entries);
 }
 
 async function loadSysrootFile(name) {
-  const response = await window.fetch("./sysroot/" + name);
+  const response = await window.fetch(`./sysroot/${name}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   return [name, new File(bytes, { readonly: true })];
 }
 
 async function loadWebCrate(start, stat) {
   const bytes = await (await window.fetch("./web/libweb.rmeta")).arrayBuffer();
-  stat("download web crate", ms(performance.now() - start) + " (" + mb(bytes.byteLength) + ")");
+  stat("download web crate", `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
   return new File(new Uint8Array(bytes), { readonly: true });
 }
 
@@ -93,7 +93,7 @@ async function loadExamples() {
 }
 
 async function fetchExampleFile(name, path) {
-  const response = await window.fetch("./examples/" + name + "/" + path);
+  const response = await window.fetch(`./examples/${name}/${path}`);
   return [path, await response.text()];
 }
 
@@ -139,7 +139,7 @@ function directoryOf(sources) {
 function jsFilesIn(folder, prefix, found) {
   for (const [name, entry] of Array.from(folder.contents)) {
     if (entry instanceof Directory) {
-      jsFilesIn(entry, prefix + name + "/", found);
+      jsFilesIn(entry, `${prefix}${name}/`, found);
     } else if (entry instanceof File && name.endsWith(".js")) {
       const text = new TextDecoder().decode(entry.data);
       found.push([prefix + name, text]);
@@ -172,15 +172,15 @@ export async function compile(loaded, sources, rootFile, test) {
   let outFile;
   const match = $stripSuffix(rootFile, ".rs");
   if (match != null) {
-    outFile = "/out/" + match + ".js";
+    outFile = `/out/${match}.js`;
   } else {
-    outFile = "/out/" + rootFile;
+    outFile = `/out/${rootFile}`;
   }
   let args = ["rust-js"];
   if (test) {
     args.push("--test");
   }
-  for (const arg of ["/in/" + rootFile, "-o", outFile]) {
+  for (const arg of [`/in/${rootFile}`, "-o", outFile]) {
     args.push(arg);
   }
   for (const arg$1 of ["--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"]) {
@@ -203,7 +203,7 @@ export async function compile(loaded, sources, rootFile, test) {
   if (started.TAG === "Ok") {
     exit = String(started._0);
   } else {
-    exit = "trap (" + (started._0 instanceof Error ? started._0.message : String(started._0)) + ")";
+    exit = `trap (${started._0 instanceof Error ? started._0.message : String(started._0)})`;
   }
   let files = [];
   if (ok) {

@@ -28,7 +28,8 @@ use oxc_ast::ast::{
     FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem, JSXAttributeName,
     JSXAttributeValue, JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier,
     JSXMemberExpressionObject, JSXOpeningElement, JSXOpeningFragment, LabelIdentifier, ObjectPropertyKind, Program,
-    PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, VariableDeclarationKind, VariableDeclarator,
+    PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, TemplateElement, TemplateElementValue,
+    VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -626,6 +627,18 @@ impl<'a> Cx<'a> {
             ExprKind::Jsx(jsx) => self.jsx(sp, jsx),
             // Printed as written, as `number` prints an integer.
             ExprKind::Regex(literal) => Expression::new_identifier(sp, self.name(literal), b),
+            ExprKind::Template(texts, values) => {
+                let quasis = texts.iter().enumerate().map(|(i, text)| {
+                    let value = TemplateElementValue {
+                        raw: self.name(&template_raw(text)).into(),
+                        cooked: Some(self.name(text).into()),
+                    };
+                    TemplateElement::new(SPAN, value, i + 1 == texts.len(), b)
+                });
+                let quasis = ArenaVec::from_iter_in(quasis, b);
+                let values = ArenaVec::from_iter_in(values.iter().map(|v| self.expr(v)), b);
+                Expression::new_template_literal(sp, quasis, values, b)
+            }
             ExprKind::Unary(op, arg) => {
                 let op = match op {
                     UnaryOp::Neg => UnaryOperator::UnaryNegation,
@@ -928,4 +941,26 @@ fn js_number(n: f64) -> String {
         };
         format!("{}{rest}e{sign}{}", &digits[..1], (point - 1).abs())
     }
+}
+
+/// `text` as a template literal writes it: what would end the text or start
+/// a value is escaped, and so are controls, as in a string.
+fn template_raw(text: &str) -> String {
+    let mut raw = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '`' => raw.push_str("\\`"),
+            '\\' => raw.push_str("\\\\"),
+            '$' if chars.peek() == Some(&'{') => raw.push_str("\\$"),
+            '\n' => raw.push_str("\\n"),
+            '\r' => raw.push_str("\\r"),
+            '\t' => raw.push_str("\\t"),
+            '\u{2028}' => raw.push_str("\\u2028"),
+            '\u{2029}' => raw.push_str("\\u2029"),
+            c if c.is_control() => raw.push_str(&format!("\\u{:04x}", c as u32)),
+            c => raw.push(c),
+        }
+    }
+    raw
 }

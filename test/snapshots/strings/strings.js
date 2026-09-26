@@ -143,7 +143,7 @@ function $pad(text, width, align, fill = " ") {
 }
 
 export function labeled(name, n) {
-  return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");
+  return `${name}: ${n} item${n === 1 ? "" : "s"}`;
 }
 
 export function tests(s) {
@@ -271,41 +271,15 @@ export function format_order(start) {
   const arg = tick(c);
   const arg$1 = tick(c);
   const arg$2 = c.value;
-  return String(arg$1) + " " + String(arg) + " " + String(arg) + " " + String(arg$2);
+  return `${arg$1} ${arg} ${arg} ${arg$2}`;
 }
 
 export function padded(n, name) {
-  return (
-    "[" +
-    String(n).padStart(6) +
-    "] [" +
-    String(n).padEnd(6) +
-    "] [" +
-    $pad(name, 9, "^") +
-    "] [" +
-    $pad(name, 9, ">", "*") +
-    "] [" +
-    $zeroPad(String(n), 6) +
-    "] [" +
-    $plus(String(n)) +
-    "] [0x" +
-    (n >>> 0).toString(16) +
-    "] [" +
-    $zeroPad("0b" + (n >>> 0).toString(2), 10) +
-    "] [" +
-    (n >>> 0).toString(16).toUpperCase() +
-    "] [" +
-    $toFixed(n / 8, 2) +
-    "] [" +
-    Array.from(name).slice(0, 3).join("") +
-    "]"
-  );
+  return `[${String(n).padStart(6)}] [${String(n).padEnd(6)}] [${$pad(name, 9, "^")}] [${$pad(name, 9, ">", "*")}] [${$zeroPad(String(n), 6)}] [${$plus(String(n))}] [0x${(n >>> 0).toString(16)}] [${$zeroPad("0b" + (n >>> 0).toString(2), 10)}] [${(n >>> 0).toString(16).toUpperCase()}] [${$toFixed(n / 8, 2)}] [${Array.from(name).slice(0, 3).join("")}]`;
 }
 
 export function rounded(quarters) {
   const x = quarters / 4;
-  return (
-    $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x)
-  );
+  return `${$toFixed(x, 0)} ${$toFixed(x, 1)} ${$toFixed(x, 3).padStart(8)} ${$debugF64(x)}`;
 }
 //# sourceMappingURL=strings.js.map
