@@ -885,3 +885,14 @@ test("a derived Debug is a function, left out unless something shows the type", 
   // Derived, and never shown: not in the JS at all.
   expect(js).not.toContain("neverShown");
 });
+
+// ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is
+// whatever JS iterable it's given.
+test("generic iterators take arrays and JS iterators alike", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  expect(js).toContain("export function evens_below(n) {\n  return $range(0, n).filter((x) => x % 2 === 0);");
+  expect(js).toContain("export function middle(items, k) {\n  return Iterator.from(items).drop(1).take(k).toArray();");
+  expect(js).toContain("for (const x of items) {");
+  // One of the crate's own, given where a generic one goes.
+  expect(js).toContain("total($iterator({ n }, countdownIterator_next))");
+});

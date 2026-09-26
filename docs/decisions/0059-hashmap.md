@@ -47,8 +47,15 @@ string (ADR 0013). Any other key is a compile error.
 - **Still errors:**
   - `==` on maps (`$eq` compares objects by their fields, and a `Map` has
     none);
-  - `BTreeMap`;
   - `entry` used other than as `m.entry(k).or_…`.
+
+### `BTreeMap` and `BTreeSet`
+
+They're the same `Map` and `Set`, and everything that goes over one
+goes in its keys' order, by their `Ord` (ADR 0057). That covers `for`,
+`iter()`, `keys()`, `values()`, `into_iter()` and `{:?}`:
+`$sortedEntries(m, $cmp)`, and `$sortedKeys(s, $cmp)` for a set. A fieldless
+enum key goes by its variants' declared order, as `Ord` has it.
 
 ### Also here
 

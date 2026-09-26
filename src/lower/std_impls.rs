@@ -160,7 +160,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `new Map(m)`, cloning each value that needs it; keys never do.
             ty::Adt(_, args) if self.is_map(ty) => {
-                let set = std("HashSet");
+                let set = self.is_set(ty);
                 let value = args.types().nth(1).filter(|&v| !set && self.needs_clone(v));
                 let entries = match value {
                     Some(v) => {
@@ -309,7 +309,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),
             _ if self.is_lang_adt(ty, LangItem::String) => Expr::str(""),
             _ if std("Vec") => Expr::array(Vec::new()),
-            _ if self.is_map(ty) => Expr::new_(Expr::var(if std("HashSet") { "Set" } else { "Map" }), Vec::new()),
+            _ if self.is_map(ty) => Expr::new_(Expr::var(if self.is_set(ty) { "Set" } else { "Map" }), Vec::new()),
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
             ty::Adt(_, args) if std("Cell") || std("RefCell") => Expr::object(vec![Prop::Field(
                 "value".into(),

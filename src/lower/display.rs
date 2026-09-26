@@ -364,8 +364,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let shown = self.debug_string(Expr::member(value, "value"), args.type_at(0), span)?;
                 Ok(join(vec![Expr::str(name), shown, Expr::str(" }")]))
             }
-            ty::Adt(_, args) if std("HashSet") => self.debug_items(value, args.type_at(0), "{", "}", span),
-            ty::Adt(_, args) if std("HashMap") => {
+            ty::Adt(_, args) if self.is_set(ty) => {
+                let items = self.in_order_of(value, ty, span)?;
+                self.debug_items(items, args.type_at(0), "{", "}", span)
+            }
+            ty::Adt(_, args) if self.is_map(ty) => {
+                let value = self.in_order_of(value, ty, span)?;
                 let (key, item) = (args.type_at(0), args.type_at(1));
                 let key = self.debug_string(Expr::var("key"), key, span)?;
                 let item = self.debug_string(Expr::var("value"), item, span)?;

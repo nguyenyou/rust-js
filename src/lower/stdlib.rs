@@ -281,7 +281,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
             // `m[k]` of a map: its value, or a panic, as `get(k).expect(..)`.
-            if tcx.is_lang_item(trait_, LangItem::Index) && self.is_std_adt(ty.peel_refs(), Symbol::intern("HashMap")) {
+            if tcx.is_lang_item(trait_, LangItem::Index) && self.is_map(ty) && !self.is_set(ty) {
                 return Some(Std::Map(MapOp::Index));
             }
             // `v[i]` of a `Vec` is a slice's, checked the same way.
@@ -328,10 +328,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "copied" | "cloned" => Std::Cloned,
                     "collect" if collects_string() => Std::CollectString,
                     "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
-                        let set = args
-                            .types()
-                            .nth(1)
-                            .is_some_and(|b| self.is_std_adt(b, Symbol::intern("HashSet")));
+                        let set = args.types().nth(1).is_some_and(|b| self.is_set(b));
                         Std::Map(MapOp::From { set })
                     }
                     "collect" => Std::Collect,
@@ -357,7 +354,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
             if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
-                let set = self.is_std_adt(ty, Symbol::intern("HashSet"));
+                let set = self.is_set(ty);
                 return Some(Std::Map(MapOp::From { set }));
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
@@ -373,8 +370,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let local_key = adt("LocalKey");
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
-        let (map, set) = (adt("HashMap"), adt("HashSet"));
-        let entry = adt("HashMapEntry");
+        let (map, set) = (adt("HashMap") || adt("BTreeMap"), adt("HashSet") || adt("BTreeSet"));
+        let entry = adt("HashMapEntry") || adt("BTreeEntry");
         Some(match tcx.item_name(def_id).as_str() {
             "new" | "with_capacity" if map || set => Std::Map(MapOp::New { set }),
             "insert" if map => Std::Map(MapOp::Insert),
@@ -771,17 +768,45 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         matches!(ty.peel_refs().kind(), ty::Adt(..)) && self.has_user_impl(iterator, ty.peel_refs())
     }
 
+    /// A type parameter that's an `Iterator`: `I: Iterator<Item = u32>`, or
+    /// `impl Iterator` as a parameter's type (ADR 0061).
+    pub(super) fn is_generic_iter(&self, ty: ty::Ty<'tcx>) -> bool {
+        self.bounded_by(ty, sym::Iterator)
+    }
+
+    /// A type parameter with a bound of the std trait `name`.
+    pub(super) fn bounded_by(&self, ty: ty::Ty<'tcx>, name: Symbol) -> bool {
+        let ty = ty.peel_refs();
+        let Some(trait_id) = self.tcx.get_diagnostic_item(name) else {
+            return false;
+        };
+        matches!(ty.kind(), ty::Param(_)) && {
+            let tr = ty::TraitRef::new(self.tcx, trait_id, [ty]);
+            matches!(
+                self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
+                Ok(rustc_middle::traits::ImplSource::Param(_))
+            )
+        }
+    }
+
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
     pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
+        let ty = self.reveal(ty.peel_refs());
         self.is_user_iterator(ty)
+            || self.is_generic_iter(ty)
             || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
     }
 
     /// An iterator of the crate's own as a JS one, `$iterator(it,
     /// countdownIterator_next)`. Anything else is `value` itself.
     pub(super) fn iter_source(&mut self, value: Expr, ty: ty::Ty<'tcx>, span: Span) -> R<Expr> {
+        let ty = self.reveal(ty);
+        // A generic one is an array or a JS iterator: `Iterator.from` takes
+        // either (ADR 0061).
+        if self.is_generic_iter(ty) {
+            return Ok(Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]));
+        }
         if !self.is_user_iterator(ty) {
             return Ok(value);
         }
@@ -845,7 +870,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        let receiver_ty = self.thir[args[0]].ty;
+        let receiver_ty = self.reveal(self.thir[args[0]].ty);
         let items = match self.thir[self.strip(args[0])].kind {
             ExprKind::Adt(ref range) if self.is_lang_adt(receiver_ty, LangItem::Range) => {
                 let bound = |i: usize| range.fields.iter().find(|f| f.name.as_usize() == i).map(|f| f.expr);

@@ -1,7 +1,7 @@
 // Vec, for loops, RefCell and `&mut` to objects (ADR 0025).
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
 pub struct Todo {
@@ -248,4 +248,32 @@ pub fn grouped(n: u32) -> Vec<(u32, Vec<u32>)> {
     let mut all: Vec<(u32, Vec<u32>)> = copy.into_iter().collect();
     all.sort();
     all
+}
+
+/// `BTreeMap` and `BTreeSet`: the same `Map` and `Set`, gone over in their
+/// keys' order, which for an enum is the order its variants are declared in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Tier {
+    Gold,
+    Bronze,
+    Silver,
+}
+
+pub fn sorted_maps(text: &str) -> (Vec<(String, u32)>, Vec<String>, String, String) {
+    let mut counts: BTreeMap<String, u32> = BTreeMap::new();
+    for word in text.split(' ') {
+        *counts.entry(word.to_string()).or_insert(0) += 1;
+    }
+    let mut order = Vec::new();
+    for (word, n) in &counts {
+        order.push(format!("{word}={n}"));
+    }
+    let set: BTreeSet<u32> = [30, 4, 100, 7].into_iter().collect();
+    let tiers: BTreeMap<Tier, u32> = [(Tier::Silver, 2), (Tier::Gold, 3), (Tier::Bronze, 1)].into_iter().collect();
+    (
+        counts.into_iter().collect(),
+        order,
+        format!("{set:?} {:?}", set.iter().rev().collect::<Vec<_>>()),
+        format!("{tiers:?} {}", tiers[&Tier::Bronze]),
+    )
 }

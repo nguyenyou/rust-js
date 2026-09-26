@@ -208,6 +208,7 @@ fn main() {
     case("std_traits.more_orderings", &[], std_traits::more_orderings);
     for n in [0, 1, 7] {
         case("std_traits.debugs", &[n], || std_traits::debugs(n as u32));
+        case("std_traits.generic_iterators", &[n], || std_traits::generic_iterators(n as u32));
     }
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
@@ -257,6 +258,7 @@ fn main() {
     }
     for text in ["a b a c b a", "one", "x x x"] {
         case_with("collections.word_counts", &[&text], || collections::word_counts(text));
+        case_with("collections.sorted_maps", &[&text], || collections::sorted_maps(text));
     }
     for (a, b) in [('1', '2'), ('3', '0'), ('3', '2'), ('x', '1'), ('2', 'y')] {
         case_with("results.sum_digits", &[&a, &b], || results::sum_digits(a, b));

@@ -576,3 +576,41 @@ pub fn debugs(n: u32) -> Vec<String> {
         format!("{:?} {}", Hidden, debugged(&vec![Some(Dims(3, 4))])),
     ]
 }
+
+/// Generic iterators (ADR 0061). An `impl Iterator` is the type it hides; a
+/// `T: Iterator` is an array or a JS iterator, so generic code takes it with
+/// `Iterator.from`, and one of the crate's own is given as a JS iterator.
+pub fn evens_below(n: u32) -> impl Iterator<Item = u32> {
+    (0..n).filter(|x| x % 2 == 0)
+}
+
+pub fn countdown(n: u32) -> impl Iterator<Item = u32> {
+    Countdown { n }
+}
+
+pub fn total<I: Iterator<Item = u32>>(items: I) -> u32 {
+    items.sum()
+}
+
+pub fn middle(items: impl Iterator<Item = u32>, k: usize) -> Vec<u32> {
+    items.skip(1).take(k).collect()
+}
+
+pub fn looped<I: IntoIterator<Item = u32>>(items: I) -> u32 {
+    let mut sum = 0;
+    for x in items {
+        sum += x;
+    }
+    sum
+}
+
+pub fn generic_iterators(n: u32) -> (u32, Vec<u32>, Vec<u32>, u32, u32, u32) {
+    (
+        total(evens_below(n)),
+        middle(countdown(n), 2),
+        middle(evens_below(n * 2), 3),
+        looped(vec![n, 2, 3]),
+        total(Countdown { n }),
+        countdown(n).map(|x| x + 1).sum(),
+    )
+}

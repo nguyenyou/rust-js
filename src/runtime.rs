@@ -26,6 +26,8 @@ pub enum Helper {
     Remove,
     OrInsert,
     OrInsertWith,
+    SortedEntries,
+    SortedKeys,
     StripPrefix,
     StripSuffix,
     SplitOnce,
@@ -494,6 +496,22 @@ function $remove(map, key) {
   const old = map.get(key);
   map.delete(key);
   return old;
+}
+"#
+            }
+            // A `BTreeMap`'s entries, in its keys' order.
+            Helper::SortedEntries => {
+                r#"
+function $sortedEntries(map, cmp) {
+  return Array.from(map).sort((a, b) => cmp(a[0], b[0]));
+}
+"#
+            }
+            // A `BTreeSet`'s items, in order.
+            Helper::SortedKeys => {
+                r#"
+function $sortedKeys(set, cmp) {
+  return Array.from(set).sort(cmp);
 }
 "#
             }

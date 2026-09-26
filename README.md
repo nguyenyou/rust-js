@@ -85,7 +85,7 @@ struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes
 struct update syntax; inherent methods, local traits with defaults and supertraits,
 generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)),
 `Default`, `Clone`, `From`, `PartialEq`, `PartialOrd`/`Ord`, `Display` and `Iterator` impls ([ADRs 0052](docs/decisions/0052-std-trait-impls.md)–[0055](docs/decisions/0055-iterator.md), [0057](docs/decisions/0057-ordering.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
-`RefCell`, `Vec`, `HashMap` and `HashSet` with primitive keys ([ADR 0059](docs/decisions/0059-hashmap.md)), `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
+`RefCell`, `Vec`, `HashMap`, `HashSet`, `BTreeMap` and `BTreeSet` with primitive keys ([ADR 0059](docs/decisions/0059-hashmap.md)), `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.
 

@@ -51,7 +51,7 @@ $iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)
   needs no JS.
 - **Still errors:**
   - `DoubleEndedIterator` and other iterator traits, so no `rev()`;
-  - a generic `T: Iterator`, which has no dictionary yet;
+  - `next()` on a generic `T: Iterator` (ADR 0061 has the rest of generic iterators);
   - std adapters' own `next()` on one of these.
 
 ## Why

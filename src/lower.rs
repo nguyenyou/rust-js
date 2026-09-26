@@ -1056,7 +1056,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             hir::ExprKind::Loop(_, Some(label), ..) => label.ident.name.as_str().trim_start_matches('\'').to_string(),
             _ => "loop".to_string(),
         };
-        let head_ty = self.thir[f.head].ty;
+        let head_ty = self.reveal(self.thir[f.head].ty);
         let head_span = self.thir[f.head].span;
         let inclusive = self.inclusive_range(f.head);
         let range = self.is_lang_adt(head_ty, LangItem::Range) || inclusive.is_some();
@@ -1102,11 +1102,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || self.is_array_iter(peeled)
                 || self.is_lazy_iter(peeled)
                 || self.is_map(peeled)
+                // A generic one, an array or a JS iterator: `for .. of` takes either (ADR 0061).
+                || self.bounded_by(peeled, sym::IntoIterator)
                 || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
             }
             let head = self.expr(f.head, out)?;
+            let head = self.in_order_of(head, head_ty, head_span)?;
             (Some(self.iter_source(head, head_ty, head_span)?), None)
         };
 

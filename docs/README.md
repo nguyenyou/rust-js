@@ -99,6 +99,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0058 Format options, where Rust applies them](decisions/0058-format-options.md)
 - [0059 `HashMap` is a JS `Map`, `HashSet` a `Set`, keyed by value](decisions/0059-hashmap.md)
 - [0060 `{:?}` by the type, and a derived `Debug` is a function](decisions/0060-debug.md)
+- [0061 `impl Iterator` is the type it hides; a generic iterator is any JS iterable](decisions/0061-generic-iterators.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

@@ -42,7 +42,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.krate.fns.contains_key(&def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
-            let mut args = self.operands(args, out)?;
+            let mut values = self.operands(args, out)?;
+            // An iterator of the crate's own, given where a generic one goes,
+            // is a JS iterator (ADR 0061).
+            let inputs = self
+                .tcx
+                .fn_sig(def_id)
+                .instantiate_identity()
+                .skip_binder()
+                .inputs()
+                .to_vec();
+            for ((value, &arg), input) in values.iter_mut().zip(args).zip(inputs) {
+                if matches!(input.kind(), ty::Param(_)) && self.is_user_iterator(self.reveal(self.thir[arg].ty)) {
+                    let taken = std::mem::replace(value, Expr::undefined());
+                    *value = self.iter_source(taken, self.thir[arg].ty, span)?;
+                }
+            }
+            let mut args = values;
             args.extend(self.evidence_args(def_id, generic_args, span)?);
             return Ok(Expr::call(callee.or_at(fun_span), args));
         }

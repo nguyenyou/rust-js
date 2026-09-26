@@ -25,6 +25,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// An iterator that's a JS array (ADR 0036): a slice's or a `Vec`'s, a
     /// `split` or `chars` of a string, and the adapters on them.
     pub(super) fn is_array_iter(&self, ty: Ty<'tcx>) -> bool {
+        let ty = self.reveal(ty);
         let ty::Adt(adt, _) = ty.kind() else { return false };
         let path = self.tcx.def_path_str(adt.did());
         let krate = self.tcx.crate_name(adt.did().krate);
@@ -39,6 +40,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .contains(&path.as_str())
                 || self.is_str_split(ty))
             // A map's `iter()`, `keys()` and `values()` are arrays too (ADR 0059).
+            || ((krate == sym::alloc || krate == sym::std)
+                && ["btree_map::Iter", "btree_map::IterMut", "btree_map::Keys", "btree_map::Values", "btree_map::ValuesMut", "btree_map::IntoIter", "btree_set::Iter", "btree_set::IntoIter"]
+                    .iter()
+                    .any(|name| path == format!("std::collections::{name}")))
             || (krate == sym::std
                 && ["hash_map::Iter", "hash_map::IterMut", "hash_map::Keys", "hash_map::Values", "hash_map::ValuesMut", "hash_map::IntoIter", "hash_set::Iter", "hash_set::IntoIter"]
                     .iter()
@@ -50,6 +55,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
             && self.tcx.item_name(adt.did()).as_str() == "Split"
             && self.tcx.def_path_str(adt.did()).contains("str::"))
+    }
+
+    /// The type an `impl Trait` stands for, which rustc knows after type
+    /// checking (ADR 0061); any other type is itself.
+    pub(super) fn reveal(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
+        if !rustc_middle::ty::TypeVisitableExt::has_opaque_types(&ty) {
+            return ty;
+        }
+        self.tcx
+            .try_normalize_erasing_regions(self.typing_env, ty)
+            .unwrap_or(ty)
     }
 
     /// `T`, for an `Option<T>`.
@@ -451,6 +467,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return None;
             }
+            // `impl Iterator<Item = u32>` is the type it hides (ADR 0061).
+            ty::Alias(ty::Opaque, _) if self.reveal(ty) != ty => return self.unsupported_in(self.reveal(ty), seen),
             ty::Dynamic(traits, ..)
                 if traits
                     .principal_def_id()
@@ -477,7 +495,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return Some(key);
                 }
                 // A map's value; after it, and after a set's key, the hasher.
-                let set = self.is_std_adt(ty, Symbol::intern("HashSet"));
+                let set = self.is_set(ty);
                 return args
                     .types()
                     .skip(1)

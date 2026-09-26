@@ -69,9 +69,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || matches!(ty.kind(), ty::Adt(adt, _) if super::is_fieldless_enum(*adt))
     }
 
+    /// A `HashMap`, `HashSet`, `BTreeMap` or `BTreeSet`: a JS `Map` or `Set`.
     pub(super) fn is_map(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        self.is_std_adt(ty, Symbol::intern("HashMap")) || self.is_std_adt(ty, Symbol::intern("HashSet"))
+        ["HashMap", "HashSet", "BTreeMap", "BTreeSet"]
+            .into_iter()
+            .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+    }
+
+    /// A `HashSet` or `BTreeSet`: a JS `Set`.
+    pub(super) fn is_set(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        self.is_std_adt(ty, Symbol::intern("HashSet")) || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
+    }
+
+    /// A `BTreeMap` or `BTreeSet`, whose order is its keys' (ADR 0059).
+    pub(super) fn is_sorted(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        self.is_std_adt(ty, Symbol::intern("BTreeMap")) || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
+    }
+
+    /// What goes over a map or a set, in order: `m` itself for a hashed one,
+    /// whose order is arbitrary, and `$sortedEntries(m, $cmp)` for a B-tree.
+    pub(super) fn in_order_of(&mut self, map: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        let ty = ty.peel_refs();
+        let ty::Adt(_, args) = ty.kind() else { return Ok(map) };
+        if !self.is_sorted(ty) {
+            return Ok(map);
+        }
+        let compare = self.cmp_fn(args.type_at(0), false, span)?;
+        Ok(if self.is_set(ty) {
+            self.runtime.insert(Helper::SortedKeys);
+            Expr::call(Expr::var("$sortedKeys"), vec![map, compare])
+        } else {
+            self.runtime.insert(Helper::SortedEntries);
+            Expr::call(Expr::var("$sortedEntries"), vec![map, compare])
+        })
     }
 
     /// A call of one of `op`'s kind. `discarded`: its result isn't used, so
@@ -159,6 +192,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             MapOp::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "size"), Expr::int(0)),
             MapOp::Iter(part) => {
                 let m = arg();
+                let map_ty = self.thir[args[0]].ty;
+                // A B-tree's in its keys' order.
+                if self.is_sorted(map_ty) {
+                    let entries = self.in_order_of(m, map_ty, span)?;
+                    if self.is_set(map_ty) {
+                        return Ok(entries);
+                    }
+                    let index = match part {
+                        Part::Entries => return Ok(entries),
+                        Part::Keys => 0,
+                        Part::Values => 1,
+                    };
+                    let pick = Expr::arrow(
+                        vec!["entry".into()],
+                        vec![
+                            StmtKind::Return(Some(Expr::index(Expr::var("entry"), Expr::int(index))))
+                                .at(crate::js::Span::NONE),
+                        ],
+                    );
+                    return Ok(method(entries, "map", vec![pick]));
+                }
                 let items = match part {
                     Part::Entries => m,
                     Part::Keys => method(m, "keys", Vec::new()),

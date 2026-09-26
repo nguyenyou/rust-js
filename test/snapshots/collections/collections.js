@@ -52,8 +52,20 @@ function $orInsert(map, key, value) {
   return map.get(key);
 }
 
+function $sortedEntries(map, cmp) {
+  return Array.from(map).sort((a, b) => cmp(a[0], b[0]));
+}
+
+function $sortedKeys(set, cmp) {
+  return Array.from(set).sort(cmp);
+}
+
 function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function $cmpIn(names, a, b) {
+  return $cmp(names.indexOf(a), names.indexOf(b));
 }
 
 function $cmpItems(a, b, cmp) {
@@ -335,5 +347,56 @@ export function grouped(n) {
     return $cmp(a[0], b[0]) || $cmpItems(left, right, $cmp);
   });
   return all;
+}
+
+export function sorted_maps(text) {
+  let counts = new Map();
+  for (const word of text.split(" ")) {
+    counts.set(word, (counts.get(word) ?? 0) + 1 >>> 0);
+  }
+  let order = [];
+  for (const item of $sortedEntries(counts, $cmp)) {
+    order.push(item[0] + "=" + String(item[1]));
+  }
+  const set = new Set([
+    30,
+    4,
+    100,
+    7
+  ]);
+  const tiers = new Map([
+    ["Silver", 2],
+    ["Gold", 3],
+    ["Bronze", 1]
+  ]);
+  const tmp = $sortedEntries(counts, $cmp).slice();
+  const tmp$1 = order;
+  const arg = $sortedKeys(set, $cmp).toReversed();
+  const tmp$2 = "{" + Array.from($sortedKeys(set, $cmp)).map((item) => String(item)).join(", ") + "}" + " " + ("[" + arg.map((item) => String(item)).join(", ") + "]");
+  const arg$1 = $unwrap(tiers.get("Bronze"), "key not found");
+  return [
+    tmp,
+    tmp$1,
+    tmp$2,
+    "{" + Array.from($sortedEntries(tiers, (a, b) => $cmpIn([
+      "Gold",
+      "Bronze",
+      "Silver"
+    ], a, b))).map(([key, value]) => tierDebug_fmt(key) + ": " + String(value)).join(", ") + "}" + " " + String(arg$1)
+  ];
+}
+
+function tierDebug_fmt(tier) {
+  let f = "";
+  let tmp;
+  if (tier === "Gold") {
+    tmp = "Gold";
+  } else if (tier === "Bronze") {
+    tmp = "Bronze";
+  } else {
+    tmp = "Silver";
+  }
+  f += tmp;
+  return f;
 }
 //# sourceMappingURL=collections.js.map

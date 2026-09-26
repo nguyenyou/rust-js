@@ -129,6 +129,10 @@ function $iterator(iterator, next, boxed = false) {
   });
 }
 
+function $range(start, end) {
+  return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
+}
+
 function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -471,14 +475,14 @@ function fibonacci() {
 }
 
 export function iterations() {
-  let total = 0;
+  let total$1 = 0;
   for (const x of $iterator({ n: 3 }, countdownIterator_next)) {
-    total = total + x >>> 0;
+    total$1 = total$1 + x >>> 0;
   }
   let c = { n: 2 };
   const first = countdownIterator_next(c) ?? 0;
   return [
-    total,
+    total$1,
     first,
     $iterator(fibonacci(), fibonacciIterator_next).drop(1).take(6).toArray(),
     $iterator(fibonacci(), fibonacciIterator_next).take(5).map((x) => Math.imul(x, 2) >>> 0).reduce((a, b) => a + b >>> 0, 0),
@@ -673,6 +677,45 @@ export function debugs(n) {
   ];
 }
 
+export function evens_below(n) {
+  return $range(0, n).filter((x) => x % 2 === 0);
+}
+
+export function countdown(n) {
+  return { n };
+}
+
+export function total(items) {
+  return Iterator.from(items).reduce((a, b) => a + b >>> 0, 0);
+}
+
+export function middle(items, k) {
+  return Iterator.from(items).drop(1).take(k).toArray();
+}
+
+export function looped(items) {
+  let sum = 0;
+  for (const x of items) {
+    sum = sum + x >>> 0;
+  }
+  return sum;
+}
+
+export function generic_iterators(n) {
+  return [
+    total(evens_below(n)),
+    middle($iterator(countdown(n), countdownIterator_next), 2),
+    middle(evens_below(Math.imul(n, 2) >>> 0), 3),
+    looped([
+      n,
+      2,
+      3
+    ]),
+    total($iterator({ n }, countdownIterator_next)),
+    $iterator(countdown(n), countdownIterator_next).map((x) => x + 1 >>> 0).reduce((a, b) => a + b >>> 0, 0)
+  ];
+}
+
 function configDefault_default() {
   return {
     retries: 3,
@@ -745,12 +788,12 @@ function labeledDisplay_fmt(labeled, TDisplay) {
   return labeled.label + ": " + TDisplay.fmt(labeled.value);
 }
 
-function countdownIterator_next(countdown) {
-  if (countdown.n === 0) {
+function countdownIterator_next(countdown$1) {
+  if (countdown$1.n === 0) {
     return undefined;
   } else {
-    countdown.n = countdown.n - 1 >>> 0;
-    return countdown.n + 1 >>> 0;
+    countdown$1.n = countdown$1.n - 1 >>> 0;
+    return countdown$1.n + 1 >>> 0;
   }
 }
 
