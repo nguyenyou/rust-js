@@ -28,6 +28,7 @@ let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
+let strings: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -56,6 +57,8 @@ beforeAll(async () => {
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
   enums = await import(join(target, "enums.js"));
+  run([join(target, "debug", "rust-js"), "examples/strings.rs", "-o", join(target, "strings.js")]);
+  strings = await import(join(target, "strings.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -114,6 +117,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "strings") {
+        return strings[path[1]](...c.args);
       }
       if (path[0] === "enums") {
         return enums[path[1]](...c.args);
@@ -329,7 +335,25 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   // The downloads all start before any is awaited.
   expect(js).toContain("  const module = load_compiler(start);\n  const sysroot = load_sysroot(start);");
   expect(js).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
-  expect(js).toContain("  return t.toFixed(0) + \" ms\";");
+  // A `format!` value with effects is computed first, once.
+  expect(js).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
+  expect(js).toContain('  const response = await window.fetch("./sysroot/" + name);');
+});
+
+// ADR 0034: strings are JS strings, and their methods JS's.
+test("string methods are JS's, and format! is concatenation", async () => {
+  const js = await Bun.file(join(target, "strings.js")).text();
+  expect(js).toContain('  return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");');
+  expect(js).toContain('    s.startsWith("ab"),\n    s.endsWith("c"),\n    s.includes("b/"),\n    s.includes("/")');
+  expect(js).toContain('  return s.replaceAll("/", " / ").replaceAll("a", "A");');
+  expect(js).toContain('  return $stripSuffix(file, ".rs") ?? file;');
+  expect(js).toContain('  for (const part of path.split("/")) {');
+  expect(js).toContain('  const last = path.split("/").at(-1) ?? "";');
+  expect(js).toContain('  return pieces.join(" > ");');
+  // A string that grows gets a new one each time: JS strings don't change.
+  expect(js).toContain('    s = s + String(i);\n    s = s + ",";');
+  // A `char` is a one-character string.
+  expect(js).toContain('  const c = windows ? "\\\\" : "/";');
 });
 
 // ADR 0033: enums with fields, in ReScript's shapes.

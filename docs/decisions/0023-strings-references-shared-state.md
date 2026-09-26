@@ -1,6 +1,7 @@
 # 0023. Strings, references and shared state
 
-Status: Accepted
+Status: Accepted. Extended by [0034](0034-strings-and-chars.md): more string
+methods, `char`, and `format!`.
 
 ## Context
 

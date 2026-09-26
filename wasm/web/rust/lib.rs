@@ -60,11 +60,11 @@ struct FileOptions {
 }
 
 pub fn ms(t: f64) -> String {
-    to_fixed(t, 0) + " ms"
+    format!("{} ms", to_fixed(t, 0))
 }
 
 pub fn mb(n: f64) -> String {
-    to_fixed(n / 1048576.0, 1) + " MB"
+    format!("{} MB", to_fixed(n / 1048576.0, 1))
 }
 
 /// A row of the stats table under the editors.
@@ -109,20 +109,19 @@ async fn load_sysroot(start: f64) -> &'static JsMap {
         size += uint8_array::length(file_data(entry.1));
         entries.push(entry);
     }
-    let count = entries.len().to_string();
-    stat("download sysroot", &(ms(now() - start) + " (" + &count + " files, " + &mb(size as f64) + ")"));
+    stat("download sysroot", &format!("{} ({} files, {})", ms(now() - start), entries.len(), mb(size as f64)));
     new_map(entries)
 }
 
 async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
-    let response = window::fetch_with_str(window, &("./sysroot/".to_string() + &name)).await;
+    let response = window::fetch_with_str(window, &format!("./sysroot/{name}")).await;
     let bytes = uint8_array::new(response::array_buffer(response).await);
     (name, new_file(bytes, &FileOptions { readonly: true }))
 }
 
 async fn load_web_crate(start: f64) -> &'static WasiFile {
     let bytes = response::array_buffer(window::fetch_with_str(window, "./web/libweb.rmeta").await).await;
-    stat("download web crate", &(ms(now() - start) + " (" + &mb(array_buffer::byte_length(bytes) as f64) + ")"));
+    stat("download web crate", &format!("{} ({})", ms(now() - start), mb(array_buffer::byte_length(bytes) as f64)));
     new_file(uint8_array::new(bytes), &FileOptions { readonly: true })
 }
 

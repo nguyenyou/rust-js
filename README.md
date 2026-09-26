@@ -30,7 +30,9 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
-- A closure is an arrow function; `Rc<Cell<T>>` is one shared `{ value }`; strings are JS strings.
+- A closure is an arrow function; `Rc<Cell<T>>` is one shared `{ value }`; strings are JS strings,
+  with JS's methods (`split`, `starts_with`, `replace`, ..), a `char` is a one-character string,
+  and `format!` is `+`. Byte counts (`len()`, slicing) are errors: JS counts UTF-16 units.
 - `async fn` is an `async function` and `.await` is `await`: a future is a JS promise, which starts
   as soon as it's made rather than when first polled.
 - Anything not supported yet is reported as a compiler error at the right span.

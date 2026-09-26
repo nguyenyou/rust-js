@@ -533,6 +533,8 @@ pub enum Helper {
     Eq,
     AssertFailed,
     Unwrap,
+    StripPrefix,
+    StripSuffix,
 }
 
 impl Helper {
@@ -606,6 +608,20 @@ function $eq(a, b) {
 "#
             }
             // `assert_eq!` and `assert_ne!` failing, with Rust's message.
+            Helper::StripPrefix => {
+                r#"
+function $stripPrefix(s, prefix) {
+  return s.startsWith(prefix) ? s.slice(prefix.length) : undefined;
+}
+"#
+            }
+            Helper::StripSuffix => {
+                r#"
+function $stripSuffix(s, suffix) {
+  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
+}
+"#
+            }
             Helper::Unwrap => {
                 r#"
 function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
@@ -724,6 +740,16 @@ enum Std {
     /// `==` (true) or `!=` (false) on options of strings, numbers and the
     /// like: `==`, so that `null` and `undefined` are both `None`.
     LooseEq(bool),
+    /// A string method that is a JS one (ADR 0034): `s.starts_with(p)` is
+    /// `s.startsWith(p)`. Also `join` on a slice of strings.
+    Method(&'static str),
+    /// `strip_prefix` and `strip_suffix`: an option (ADR 0030).
+    StripPrefix,
+    StripSuffix,
+    /// `s.push_str(t)` and `s.push(c)`: `s = s + t`.
+    PushStr,
+    /// `.last()` of a `split`: `.at(-1)`.
+    Last,
 }
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -1067,6 +1093,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     ) -> R<()> {
         // `async fn f(x)` moves `x` into its body with `let x = x;` (ADR 0029).
         // In JS the body is the function's, so they're one variable.
+        // `format_args!` holds its values in `super let args = (&a, &b);`, then
+        // `super let args = [Argument::new_display(args.0), ..];` (ADR 0034).
+        // Both are only read from, so they name their parts where they are:
+        // `format!("{} ms", t)` is `t + " ms"`, with no arrays in between.
+        if self.in_format_args(span)
+            && let PatKind::Binding { var, mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. } = pat.kind
+            && let Some(init) = init
+        {
+            let parts = match self.thir[self.strip(init)].kind {
+                ExprKind::Tuple { ref fields } => self.tuple_parts(fields, "arg", true, out)?,
+                _ => self.expr(init, out)?,
+            };
+            self.vars.insert(var, Var { place: parts, mutable: false, depth: self.loops.len() });
+            return Ok(());
+        }
         if span.is_desugaring(DesugaringKind::Async)
             && let PatKind::Binding { var, mode: BindingMode(ByRef::No, mutability), subpattern: None, .. } = pat.kind
             && let Some(init) = init
@@ -1144,18 +1185,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some((place, _)) = self.place(e) {
             return Ok((place, false));
         }
+        // `match (a, b)` tests `a` and `b` where they are. A part that isn't a
+        // place that stays put goes in a `const` of its own, in order.
         if let ExprKind::Tuple { ref fields } = self.thir[self.strip(e)].kind
             && !fields.is_empty()
         {
-            let places: Option<Vec<Expr>> = fields.iter().map(|&f| self.stable_place(f)).collect();
-            if let Some(places) = places {
-                return Ok((Expr::array(places), true));
-            }
+            return Ok((self.tuple_parts(fields, base, false, out)?, true));
         }
         let value = self.expr(e, out)?;
         let name = self.fresh(base);
         out.push(StmtKind::Const(name.clone(), value).at(self.js_span(self.thir[e].span)));
         Ok((Expr::var(&name), true))
+    }
+
+    /// `[a, b]` for a tuple `(a, b)` that's only taken apart: each part a
+    /// place that stays put, a constant, or else a `const` of its own, in order.
+    /// With `used_once`, a part without effects is written in place too.
+    fn tuple_parts(&mut self, fields: &[ExprId], base: &str, used_once: bool, out: &mut Vec<Stmt>) -> R<Expr> {
+        let mut parts = Vec::new();
+        for &f in fields {
+            // `format_args!`'s parts are references: `&a` is `a`.
+            let part = match self.stable_place(self.strip_refs(f)) {
+                Some(place) => place,
+                None => {
+                    let value = self.expr(f, out)?;
+                    if value.is_constant() || (used_once && !value.has_effects()) { value } else { self.spill(base, value, out) }
+                }
+            };
+            parts.push(part);
+        }
+        Ok(Expr::array(parts))
+    }
+
+    /// Is `span` rustc's lowering of a `format_args!` (so `format!`, `panic!`, ..)?
+    fn in_format_args(&self, span: Span) -> bool {
+        matches!(span.desugaring_kind(), Some(DesugaringKind::FormatLiteral { .. }))
     }
 
     /// Give a pattern's variables their JS meaning. Immutable ones bound into
@@ -1298,6 +1362,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || peeled.is_slice()
                 || self.is_std_adt(peeled, sym::Vec)
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
+                || self.is_str_split(peeled)
                 || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
@@ -1669,7 +1734,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for (i, &e) in list.iter().enumerate() {
             let v = self.expr(e, out)?;
             // Constants, and places that can't change, read the same later.
-            let settled = v.is_constant() || self.stable_place(e).is_some();
+            let settled = v.is_constant() || self.stable_place(self.strip_refs(e)).is_some();
             if last_complex.is_some_and(|k| i < k) && !settled {
                 let tmp = self.fresh("tmp");
                 let span = v.span;
@@ -1684,7 +1749,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Does calling `fun` become an assignment statement?
     fn is_assignment_call(&self, fun: ExprId) -> bool {
-        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt)) {
+        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr)) {
             return true;
         }
         let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else { return false };
@@ -1900,6 +1965,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match *lit {
             LitKind::Bool(b) => Ok(Expr::bool(b)),
             LitKind::Str(s, _) => Ok(Expr::str(s.as_str())),
+            // A `char` is a string of one character (ADR 0034).
+            LitKind::Char(c) => Ok(Expr::str(c.to_string())),
             LitKind::Int(n, _) => {
                 self.num(ty, span)?;
                 let n = n.get() as i128;
@@ -1982,6 +2049,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(callee, values));
         }
         let Some(known) = self.std_fn(fun) else {
+            // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
+            let on_string = args.first().is_some_and(|&a| self.is_string_like(self.thir[a].ty));
+            let indexing = self.tcx.trait_of_assoc(def_id).is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Index));
+            if on_string && (indexing || self.tcx.item_name(def_id).as_str() == "len") {
+                let what = if indexing { "indexing or slicing a string" } else { "`len()` of a string" };
+                let why = "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works";
+                return Err(self.tcx.dcx().span_err(span, format!("rust-js does not support {what}: {why}")));
+            }
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
         };
@@ -1991,6 +2066,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(span, "this `vec!`"));
             };
             return self.expr(inner[1], out);
+        }
+        // `s.push_str(t)`: JS strings don't change, so `s` gets a new one.
+        if known == Std::PushStr {
+            let ExprKind::Borrow { arg: place, .. } = self.thir[self.strip(args[0])].kind else {
+                return Err(self.unsupported(span, "`push_str` on this"));
+            };
+            let target = self.assignee(place)?;
+            let value = self.expr(args[1], out)?;
+            let js_span = self.js_span(span);
+            out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, value)).at(js_span));
+            return Ok(Expr::undefined());
         }
         if known == Std::FmtNew {
             // `format_arguments::new(template, &args)`, the template a byte string.
@@ -2035,6 +2121,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
             Std::Eq(eq) => Expr::bin(if eq { Op::Eq } else { Op::Ne }, arg(), arg()),
             Std::LooseEq(eq) => Expr::bin(if eq { Op::LooseEq } else { Op::LooseNe }, arg(), arg()),
+            Std::Method(name) => {
+                let this = arg();
+                let rest = (1..args.len()).map(|_| arg()).collect();
+                Expr::call(Expr::member(this, name), rest)
+            }
+            Std::StripPrefix | Std::StripSuffix => {
+                let (helper, name) = match known {
+                    Std::StripPrefix => (Helper::StripPrefix, "$stripPrefix"),
+                    _ => (Helper::StripSuffix, "$stripSuffix"),
+                };
+                self.runtime.insert(helper);
+                Expr::call(Expr::var(name), vec![arg(), arg()])
+            }
+            Std::Last => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
+            Std::PushStr => unreachable!("handled above"),
             Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
             Std::IsNone => Expr::bin(Op::LooseEq, arg(), Expr::null()),
             Std::Unwrap => {
@@ -2129,6 +2230,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if diagnostic("option_unwrap") || diagnostic("option_expect") {
             return Some(Std::Unwrap);
         }
+        // `format!(..)` is `must_use(format(format_args!(..)))`, and the
+        // arguments are a string already (ADR 0034).
+        let krate = tcx.crate_name(def_id.krate);
+        let name = tcx.item_name(def_id);
+        if (krate == sym::alloc && name.as_str() == "format" && tcx.def_path_str(def_id).ends_with("fmt::format"))
+            || (krate == sym::core && name.as_str() == "must_use")
+        {
+            return Some(Std::Same);
+        }
         if tcx.is_lang_item(def_id, LangItem::Panic) {
             return Some(Std::Panic);
         }
@@ -2171,9 +2281,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 return self.is_structural_eq(trait_, ty).then_some(Std::StructEq(eq));
             }
+            // A `split` is an array of strings (ADR 0034).
+            if tcx.is_diagnostic_item(sym::Iterator, trait_) && self.is_str_split(ty) {
+                return match tcx.item_name(def_id).as_str() {
+                    "collect" => Some(Std::Same),
+                    "last" => Some(Std::Last),
+                    "count" => Some(Std::Len),
+                    _ => None,
+                };
+            }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
-            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn) && self.is_std_adt(ty, sym::Rc);
+            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn) && (self.is_std_adt(ty, sym::Rc) || self.is_string_like(ty));
             return (from_str || to_owned || rc_clone).then_some(Std::Same);
         }
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
@@ -2201,6 +2320,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "new" if string => Std::StringNew,
             "as_str" if string => Std::Same,
             "trim" if owner.is_str() => Std::Trim,
+            // Methods taking a pattern: only a string or a `char` one.
+            "starts_with" | "ends_with" | "contains" | "replace" | "split" | "strip_prefix" | "strip_suffix"
+                if owner.is_str() && !self_ty.is_some_and(|p| self.is_string_like(p)) =>
+            {
+                return None;
+            }
+            "starts_with" if owner.is_str() => Std::Method("startsWith"),
+            "ends_with" if owner.is_str() => Std::Method("endsWith"),
+            "contains" if owner.is_str() => Std::Method("includes"),
+            "replace" if owner.is_str() => Std::Method("replaceAll"),
+            "split" if owner.is_str() => Std::Method("split"),
+            "strip_prefix" if owner.is_str() => Std::StripPrefix,
+            "strip_suffix" if owner.is_str() => Std::StripSuffix,
+            "to_uppercase" if owner.is_str() => Std::Method("toUpperCase"),
+            "to_lowercase" if owner.is_str() => Std::Method("toLowerCase"),
+            "trim_start" if owner.is_str() => Std::Method("trimStart"),
+            "trim_end" if owner.is_str() => Std::Method("trimEnd"),
+            "repeat" if owner.is_str() => Std::Method("repeat"),
+            "join" if owner.is_slice() => Std::Method("join"),
+            "push_str" | "push" if string => Std::PushStr,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
             "is_some" if option => Std::IsSome,
             "is_none" if option => Std::IsNone,
@@ -2261,7 +2400,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         next
                     };
                     next = index + 1;
-                    parts.push(Expr::index(items.clone(), Expr::int(index as i128)));
+                    // The values are usually written out, `[a, String(b)]`, with no
+                    // effects beyond the ones `format_args!` put in `const`s.
+                    parts.push(match &items.kind {
+                        js::ExprKind::Array(values) => values[index].clone(),
+                        _ => Expr::index(items.clone(), Expr::int(index as i128)),
+                    });
                 }
                 _ => return Err(bad("this format string")),
             }
@@ -2269,10 +2413,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(parts.into_iter().reduce(|a, b| Expr::bin(Op::Add, a, b)).unwrap_or_else(|| Expr::str("")))
     }
 
-    /// `str`, `String`, or a reference to one: all JS strings.
+    /// `str`, `String`, `char`, or a reference to one: all JS strings.
     fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        ty.is_str() || self.is_lang_adt(ty, LangItem::String)
+        ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
+    }
+
+    /// `str::split`'s iterator, which is a JS array of strings (ADR 0034).
+    fn is_str_split(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
+            && self.tcx.item_name(adt.did()).as_str() == "Split"
+            && self.tcx.def_path_str(adt.did()).contains("str::"))
     }
 
     /// `T`, for an `Option<T>`.
@@ -2825,7 +2976,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// inside itself (`Tree` in `Node(Box<Tree>, ..)`) is being checked
     /// already, further out.
     fn unsupported_in(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> Option<Ty<'tcx>> {
-        if ty.is_bool() || ty.is_unit() || ty.is_str() || Num::of(ty).is_some() {
+        if ty.is_bool() || ty.is_unit() || ty.is_str() || ty.is_char() || Num::of(ty).is_some() || self.is_str_split(ty) {
             return None;
         }
         match ty.kind() {

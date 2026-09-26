@@ -32,6 +32,10 @@ mod consts;
 #[allow(dead_code)]
 mod enums;
 
+#[path = "../examples/strings.rs"]
+#[allow(dead_code)]
+mod strings;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -137,6 +141,23 @@ fn main() {
         case("options.label", &[n], || options::label(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+    }
+    for n in [0, 1, 3] {
+        case_with("strings.labeled", &[&"box", &(n as i64)], || strings::labeled("box", n));
+        case("strings.built", &[n as i64], || strings::built(n));
+        case_with("strings.repeated", &[&"ab", &(n as i64)], || strings::repeated("ab", n));
+    }
+    for s in ["", "abc", "ab/c", "/a//b/", "  Mixed Case  ", "src/geometry.rs", "stats.rs", "äbc/Ö"] {
+        case_with("strings.tests", &[&s], || strings::tests(s));
+        case_with("strings.cases", &[&s], || strings::cases(s));
+        case_with("strings.trimmed", &[&s], || strings::trimmed(s));
+        case_with("strings.replaced", &[&s], || strings::replaced(s));
+        case_with("strings.module_name", &[&s], || strings::module_name(s));
+        case_with("strings.parts", &[&s], || strings::parts(s));
+        case_with("strings.rejoined", &[&s], || strings::rejoined(s));
+    }
+    for windows in [false, true] {
+        case_with("strings.separator", &[&windows], || strings::separator(windows));
     }
     let shapes = [enums::Shape::Empty, enums::Shape::Circle(2), enums::Shape::Circle(11), enums::Shape::Rect { w: 0, h: 5 }, enums::Shape::Rect { w: 2, h: 3 }];
     for s in shapes {
@@ -264,6 +285,12 @@ impl<T: Json> Json for Vec<T> {
     fn json(&self) -> String {
         let items: Vec<String> = self.iter().map(|x| x.json()).collect();
         format!("[{}]", items.join(","))
+    }
+}
+
+impl<A: Json, B: Json, C: Json, D: Json> Json for (A, B, C, D) {
+    fn json(&self) -> String {
+        format!("[{},{},{},{}]", self.0.json(), self.1.json(), self.2.json(), self.3.json())
     }
 }
 
