@@ -1,9 +1,10 @@
 # Build the in-browser playground (rust-js + rustc's front end, as Wasm) and
-# deploy it to GitHub Pages. Run it by hand from the Actions tab.
+# deploy it to GitHub Pages. Run it by hand from the Actions tab, or with
+# `bun run deploy` (`bun run ship` builds and publishes the wasm first).
 #
 # Compiling rustc's front end takes many minutes here, so if a prebuilt
-# rust-js.wasm was published for exactly these sources (wasm/prebuilt.sh
-# publish), it's downloaded instead. Otherwise it's built from source.
+# rust-js.wasm was published for exactly these sources (`bun run ship`, or
+# wasm/prebuilt.sh publish), it's downloaded instead. Otherwise it's built from source.
 name: Deploy playground
 
 on:
@@ -80,10 +81,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Build the static site
-        working-directory: wasm/web
         run: |
           bun install --frozen-lockfile
-          bun build.ts
+          bun run site
 
       - uses: actions/configure-pages@v6
 

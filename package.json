@@ -2,9 +2,19 @@
   "name": "rust-js",
   "private": true,
   "type": "module",
-  "description": "Compile Rust to readable JavaScript. This file only holds what the tests need.",
+  "description": "Compile Rust to readable JavaScript. Every task is a script here: `bun run` lists them.",
+  "workspaces": ["web", "wasm/web"],
   "scripts": {
-    "test": "bun test"
+    "setup": "bun install && bunx playwright install",
+    "build": "cargo build && web/build.sh -o \"$PWD/target/libweb.rmeta\"",
+    "test": "bun test",
+    "generate": "bun web/generate.ts",
+    "wasm": "wasm/build.sh",
+    "dev": "bun wasm/web/serve.ts",
+    "site": "bun wasm/web/build.ts",
+    "preview": "bun wasm/web/preview.ts",
+    "deploy": "gh workflow run deploy-playground.yml",
+    "ship": "bun run wasm && wasm/prebuilt.sh publish && bun run deploy"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.5",

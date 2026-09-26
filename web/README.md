@@ -39,7 +39,7 @@ element::append(app, b);                                  // app.append(b)
 ## Use it
 
 ```bash
-web/build.sh -o target/libweb.rmeta                              # its metadata, for the host
+bun run build                                                    # its metadata, for the host
 ./target/debug/rust-js app.rs -- --extern web=target/libweb.rmeta
 ```
 
@@ -48,7 +48,7 @@ The playground compiles every program with the `web` crate available.
 ## Regenerate it
 
 ```bash
-cd web && bun install && bun generate.ts
+bun run generate
 ```
 
 `generate.ts` holds every rule: which specs and interfaces, how WebIDL

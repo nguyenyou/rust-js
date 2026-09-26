@@ -16,7 +16,7 @@ rust-lang/rust clone to take rustc's source from:
 git -C <rust clone> worktree add --no-checkout "$PWD/rustc" 362211dc29abc4e8f8cfc384740237f144929b03
 git -C rustc sparse-checkout set --cone compiler library/proc_macro
 git -C rustc checkout
-./build.sh
+bun run wasm        # runs ./build.sh
 ```
 
 `build.sh` applies `patches/`, builds `target/wasm32-wasip1/release/rust-js.wasm`
@@ -44,7 +44,7 @@ id, which WASI doesn't have.
 WASI on an in-memory filesystem:
 
 ```bash
-cd web && bun install && bun serve.ts     # http://localhost:4400
+bun run dev     # http://localhost:4400
 ```
 
 The page compiles `rust-js.wasm` once, downloads the 15 metadata files rustc
@@ -75,14 +75,15 @@ before `main.ts` is bundled. On its own: `cd web && bun compile-rust.ts`.
 
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),
-which you run by hand from the Actions tab.
+which you run by hand from the Actions tab, or with `bun run deploy`.
 
 Compiling rustc's front end takes many minutes on CI, so build locally and
-publish the result first:
+publish the result first. `bun run ship` runs `./build.sh`, then
+`./prebuilt.sh publish`, which uploads `rust-js.wasm` as release `wasm-<hash>`,
+then starts the workflow:
 
 ```bash
-./build.sh               # after committing and pushing your changes
-./prebuilt.sh publish    # uploads rust-js.wasm as release `wasm-<hash>`
+bun run ship    # after committing and pushing your changes
 ```
 
 The hash covers the committed inputs (`src/`, `wasm/Cargo.*`, `.cargo/`,
@@ -92,8 +93,8 @@ changing `src/` without publishing, it builds from source, so a stale binary
 is never deployed. `publish` refuses a binary that wasn't built from exactly
 the committed, pushed inputs. Once the new one is uploaded, it deletes the
 previous `wasm-*` releases (and their tags), so only the newest is kept; an
-older commit simply builds from source if deployed. `bun build.ts` writes the same
-static site to `web/dist`, and `bun preview.ts` serves it under `/rust-js/`,
+older commit simply builds from source if deployed. `bun run site` writes the same
+static site to `web/dist`, and `bun run preview` serves it under `/rust-js/`,
 as Pages does. Each click
 gets a fresh instance of the already-compiled module, because rustc keeps
 global state and a failed compile ends in a trap.

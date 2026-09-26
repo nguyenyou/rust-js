@@ -7,7 +7,7 @@ Chromium, Firefox and WebKit, through Playwright, on Bun. See
 [ADR 0027](../docs/decisions/0027-real-browser-tests.md).
 
 ```bash
-bun install && bunx playwright install         # once: the tools, and the browsers
+bun run setup                                  # once: the tools, and the browsers
 
 # Compile the tests for a browser: `--cfg browser` turns on the ones that need one.
 ./target/debug/rust-js --test examples/counter.rs -o out/counter.js -- --extern web=target/libweb.rmeta --cfg=browser

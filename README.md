@@ -5,11 +5,25 @@ compiler's front end (rustc's parser, type checker and borrow checker), and
 replace the back end with one that prints JS from THIR.
 
 ```bash
-cargo build
-./target/debug/rust-js examples/fib.rs          # writes examples/fib.js + fib.js.map
-bun install && bunx playwright install      # test tools, and the browsers for real-browser tests
-bun test                                     # native vs. JS, source maps, Rust #[test]s in happy-dom and 3 browsers
+bun run setup                                # once: every package, and the browsers for real-browser tests
+bun run build                                # rust-js, and the web crate's metadata
+./target/debug/rust-js examples/fib.rs       # writes examples/fib.js + fib.js.map
+bun run test                                 # native vs. JS, source maps, Rust #[test]s in happy-dom and 3 browsers
 ```
+
+Every task is a script in [package.json](package.json), and `bun run` lists them:
+
+| Task | What it does |
+|---|---|
+| `setup` | `bun install` for every package (one [workspace](https://bun.sh/docs/install/workspaces)), and Playwright's browsers |
+| `build` | `cargo build`, and the `web` crate's metadata in `target/libweb.rmeta` |
+| `test` | `bun test` |
+| `generate` | regenerate the `web` crate from WebIDL ([web/](web/README.md)) |
+| `wasm` | build `rust-js.wasm`, with rustc's front end ([wasm/](wasm/README.md)) |
+| `dev` | the playground at http://localhost:4400 |
+| `site`, `preview` | the playground as static files in `wasm/web/dist`, and serving them as Pages does |
+| `deploy` | run the *Deploy playground* workflow |
+| `ship` | `wasm`, publish it for the workflow to download, then `deploy` |
 
 **Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
 and rust-js as WebAssembly, so nothing is compiled on a server (see [wasm/](wasm/README.md)).
@@ -62,7 +76,7 @@ counter written with it, [examples/todo.rs](examples/todo.rs) a todo list, and
 playground's Result pane:
 
 ```bash
-web/build.sh -o target/libweb.rmeta
+bun run build
 ./target/debug/rust-js examples/counter.rs -- --extern web=target/libweb.rmeta
 ```
 
@@ -80,7 +94,7 @@ Tests are Rust's own `#[test]` functions ([ADR 0026](docs/decisions/0026-testing
 in happy-dom's DOM:
 
 ```bash
-bun install                                         # happy-dom, for DOM tests
+bun run setup                                       # happy-dom, for DOM tests
 ./target/debug/rust-js --test examples/todo.rs -o out/todo.js -- --extern web=target/libweb.rmeta
 bun test --preload ./test/happydom.ts ./out/todo.test.js
 ```
