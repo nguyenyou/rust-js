@@ -493,6 +493,8 @@ function runProgram(files: Map<string, string>, rootFile: string, test = false) 
 <script>
   // Errors later on, in an event handler say.
   addEventListener("error", (e) => ${report("error: String(e.message)")});
+  // And in async code, which rejects its promise instead (ADR 0029).
+  addEventListener("unhandledrejection", (e) => ${report("error: String(e.reason)")});
   // What a test file calls, as bun test provides it (ADR 0026).
   const registered = [];
   globalThis.test = (name, f) => registered.push({ name, f });

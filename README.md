@@ -28,6 +28,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
 - A closure is an arrow function; `Rc<Cell<T>>` is one shared `{ value }`; strings are JS strings.
+- `async fn` is an `async function` and `.await` is `await`: a future is a JS promise, which starts
+  as soon as it's made rather than when first polled.
 - Anything not supported yet is reported as a compiler error at the right span.
 
 ## Supported so far
@@ -37,11 +39,13 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, `usize`, `to_string()`;
-JS functions, methods and globals; calls between functions, across modules and files.
+JS functions, methods and globals, and imports from JS modules; `async`/`.await`;
+calls between functions, across modules and files.
 
 The DOM comes as the [`web`](web/README.md) crate: bindings generated from W3C's WebIDL
 ([ADR 0024](docs/decisions/0024-web-crate.md)). [examples/counter.rs](examples/counter.rs) is a
-counter written with it, and [examples/todo.rs](examples/todo.rs) a todo list. Both run in the
+counter written with it, [examples/todo.rs](examples/todo.rs) a todo list, and
+[examples/countdown.rs](examples/countdown.rs) a countdown with `async` code. All run in the
 playground's Result pane:
 
 ```bash

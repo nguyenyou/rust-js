@@ -108,7 +108,7 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     let mut line_shift = Vec::new();
     for (i, line) in generated.code.lines().enumerate() {
         // Only functions start at column 0, so this can't match nested code.
-        if i > 0 && (line.starts_with("function ") || line.starts_with("export function ")) {
+        if i > 0 && ["function ", "async function ", "export function ", "export async function "].iter().any(|p| line.starts_with(p)) {
             code.push('\n');
             shift += 1;
         }
@@ -170,7 +170,7 @@ impl<'a> Cx<'a> {
             FunctionType::FunctionDeclaration,
             Some(BindingIdentifier::new(span(f.name_span), self.name(&f.name), b)),
             false, // generator
-            false, // async
+            f.is_async,
             false, // declare
             None,  // type parameters
             None,  // this param
@@ -344,15 +344,17 @@ impl<'a> Cx<'a> {
             ExprKind::Cond(test, then, els) => {
                 Expression::new_conditional_expression(sp, self.expr(test), self.expr(then), self.expr(els), b)
             }
-            ExprKind::Arrow(params, body) => {
+            ExprKind::Arrow(params, body) | ExprKind::AsyncArrow(params, body) => {
+                let is_async = matches!(e.kind, ExprKind::AsyncArrow(..));
                 let params = ArenaBox::new_in(self.params(FormalParameterKind::ArrowFormalParameters, params), b);
                 // `() => x` when the body only returns a value.
                 let body = match body.as_slice() {
                     [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => ArrowFunctionBody::from(self.expr(value)),
                     _ => ArrowFunctionBody::new_function_body(SPAN, ArenaVec::new_in(b), self.stmts(body), b),
                 };
-                Expression::new_arrow_function_expression(sp, false, None, params, None, body, b)
+                Expression::new_arrow_function_expression(sp, is_async, None, params, None, body, b)
             }
+            ExprKind::Await(promise) => Expression::new_await_expression(sp, self.expr(promise), b),
             ExprKind::Call(callee, args) => {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));
                 Expression::new_call_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), false, b)

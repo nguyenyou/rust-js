@@ -54,6 +54,8 @@ pub struct Function {
     pub params: Vec<String>,
     pub body: Vec<Stmt>,
     pub export: bool,
+    /// `async function`: an `async fn` (ADR 0029).
+    pub is_async: bool,
     /// The whole `fn` item, and just its name.
     pub span: Span,
     pub name_span: Span,
@@ -120,6 +122,10 @@ pub enum ExprKind {
     New(Box<Expr>, Vec<Expr>),
     /// `(a, b) => { .. }`: a closure (ADR 0022).
     Arrow(Vec<String>, Vec<Stmt>),
+    /// `async (a) => { .. }`: an async closure or block (ADR 0029).
+    AsyncArrow(Vec<String>, Vec<Stmt>),
+    /// `await p`: `.await` (ADR 0029).
+    Await(Box<Expr>),
 }
 
 #[derive(Clone)]
@@ -226,6 +232,14 @@ impl Expr {
         Expr::new(ExprKind::Arrow(params, body))
     }
 
+    pub fn async_arrow(params: Vec<String>, body: Vec<Stmt>) -> Expr {
+        Expr::new(ExprKind::AsyncArrow(params, body))
+    }
+
+    pub fn await_(promise: Expr) -> Expr {
+        Expr::new(ExprKind::Await(Box::new(promise)))
+    }
+
     pub fn call(callee: Expr, args: Vec<Expr>) -> Expr {
         Expr::new(ExprKind::Call(Box::new(callee), args))
     }
@@ -264,7 +278,10 @@ impl Expr {
             | ExprKind::Str(_)
             | ExprKind::Undefined
             | ExprKind::Var(_)
-            | ExprKind::Arrow(..) => false,
+            | ExprKind::Arrow(..)
+            | ExprKind::AsyncArrow(..) => false,
+            // It lets other code run meanwhile.
+            ExprKind::Await(_) => true,
             ExprKind::Member(object, _) => object.has_effects(),
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
             ExprKind::Array(items) => items.iter().any(Expr::has_effects),

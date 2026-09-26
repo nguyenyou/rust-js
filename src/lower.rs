@@ -19,7 +19,7 @@ use std::sync::Arc;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, DefKind};
-use rustc_hir::{BindingMode, ByRef, HirId, LangItem, find_attr};
+use rustc_hir::{BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, CoroutineSource, HirId, LangItem, find_attr};
 use rustc_middle::middle::region;
 use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
@@ -29,7 +29,7 @@ use rustc_middle::thir::{
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
-use rustc_span::{BytePos, ErrorGuaranteed, SourceFile, Span, Symbol, sym};
+use rustc_span::{BytePos, DesugaringKind, ErrorGuaranteed, SourceFile, Span, Symbol, sym};
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 
@@ -802,7 +802,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
         };
         let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
-        self.stmt(body.expr, &dest, &mut out)?;
+        let is_async = self.lower_body(body.expr, &dest, &mut out)?;
 
         Ok(LoweredFn {
             function: js::Function {
@@ -810,6 +810,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 params,
                 body: out,
                 export: self.tcx.visibility(def_id).is_public(),
+                is_async,
                 span: self.js_span(self.tcx.def_span(def_id)),
                 name_span: self.tcx.def_ident_span(def_id).map_or(js::Span::NONE, |s| self.js_span(s)),
             },
@@ -828,7 +829,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some(pat) => match &pat.kind {
                     PatKind::Binding { name, var, mode, subpattern: None, .. } => {
                         self.check_by_value(*mode, pat.span)?;
-                        self.bind(*var, name.as_str(), mode.1 == Mutability::Mut)
+                        // `async fn f((a, b): ..)` takes `__arg0`, and takes it
+                        // apart in its body (ADR 0029): named as in a plain `fn`.
+                        let generated = name.as_str().strip_prefix("__arg").is_some_and(|n| n.parse::<u32>().is_ok());
+                        self.bind(*var, if generated { "param" } else { name.as_str() }, mode.1 == Mutability::Mut)
                     }
                     PatKind::Wild => self.fresh("_"),
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
@@ -884,7 +888,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             ExprKind::Match { .. } if let Some(for_loop) = self.as_for(e) => self.lower_for(for_loop, span, out),
-            ExprKind::Match { scrutinee, ref arms, .. } => self.lower_match(scrutinee, arms, dest, out),
+            ExprKind::Match { scrutinee, ref arms, .. } if self.as_await(e).is_none() => {
+                self.lower_match(scrutinee, arms, dest, out)
+            }
             ExprKind::Return { value } => {
                 match value {
                     Some(v) if !self.thir[v].ty.is_unit() => self.stmt(v, &Dest::Return, out)?,
@@ -995,6 +1001,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
+        // `async fn f(x)` moves `x` into its body with `let x = x;` (ADR 0029).
+        // In JS the body is the function's, so they're one variable.
+        if span.is_desugaring(DesugaringKind::Async)
+            && let PatKind::Binding { var, mode: BindingMode(ByRef::No, mutability), subpattern: None, .. } = pat.kind
+            && let Some(init) = init
+            && let ExprKind::UpvarRef { var_hir_id, .. } = self.thir[self.strip(init)].kind
+            && let Some(outer) = self.vars.get(&var_hir_id)
+        {
+            let alias = Var { place: outer.place.clone(), mutable: mutability == Mutability::Mut, depth: outer.depth };
+            self.vars.insert(var, alias);
+            return Ok(());
+        }
         let span = self.js_span(span);
         match &pat.kind {
             PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
@@ -1161,6 +1179,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => None,
         })?;
         Some(ForLoop { head, pat: some.0, body: some.1, scope: region_scope, hir_id })
+    }
+
+    /// Recognize `.await`'s desugaring, and return what's awaited (ADR 0029):
+    ///
+    /// ```text
+    /// match IntoFuture::into_future(e) {
+    ///     mut __awaitee => loop { match Future::poll(..) { Ready(r) => break r, Pending => {} } yield }
+    /// }
+    /// ```
+    fn as_await(&self, e: ExprId) -> Option<ExprId> {
+        let thir = self.thir;
+        let ExprKind::Match { scrutinee, ref arms, .. } = thir[strip(thir, e)].kind else { return None };
+        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else { return None };
+        let &ty::FnDef(into_future, _) = thir[strip(thir, fun)].ty.kind() else { return None };
+        let [arm] = &arms[..] else { return None };
+        let is_loop = matches!(thir[strip(thir, thir[*arm].body)].kind, ExprKind::Loop { .. })
+            || matches!(thir[thir[*arm].body].kind, ExprKind::Scope { value, .. } if matches!(thir[value].kind, ExprKind::Loop { .. }));
+        (self.tcx.is_lang_item(into_future, LangItem::IntoFutureIntoFuture) && is_loop).then(|| args[0])
     }
 
     /// `for x in &v` is `for (const x of v)`; `for i in a..b` is
@@ -1476,6 +1512,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.cast(v, self.thir[source].ty, ty, span)
             }
             ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
+            ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => Ok(Expr::await_(self.expr(awaited, out)?)),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
                 if self.is_simple(then) && self.is_simple(els) =>
             {
@@ -1541,7 +1578,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is `e` a Rust expression that JS can only write as statements?
     fn is_control_flow(&self, e: ExprId) -> bool {
-        matches!(
+        self.as_await(e).is_none()
+            && matches!(
             self.thir[self.strip(e)].kind,
             ExprKind::If { .. } | ExprKind::Match { .. } | ExprKind::Block { .. } | ExprKind::Loop { .. }
         )
@@ -1568,6 +1606,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::StaticRef { .. }
             | ExprKind::ZstLiteral { .. } => true,
             ExprKind::Field { lhs, .. } => self.is_simple(lhs),
+            ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => self.is_simple(awaited),
             // Its body's statements go inside the arrow; only snapshots come first.
             ExprKind::Closure(ref closure) => closure.upvars.iter().all(|&u| !self.needs_snapshot(u)),
             ExprKind::Tuple { ref fields } | ExprKind::Array { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
@@ -1806,7 +1845,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // Calling a closure, `f(a, b)`, is `Fn::call(&f, (a, b))`: in JS, `f(a, b)`.
         if let Some(fn_trait) = self.tcx.trait_of_assoc(def_id)
-            && self.tcx.fn_trait_kind_from_def_id(fn_trait).is_some()
+            && (self.tcx.fn_trait_kind_from_def_id(fn_trait).is_some()
+                || self.tcx.async_fn_trait_kind_from_def_id(fn_trait).is_some())
         {
             let [callee, ExprKind::Tuple { fields }] = [args[0], args[1]].map(|a| &self.thir[self.strip(a)].kind)
             else {
@@ -2115,12 +2155,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// one; it only holds references to them, which are the JS objects.
     fn is_js_object(&self, ty: Ty<'tcx>) -> bool {
         let ty::Adt(adt, args) = ty.kind() else { return false };
-        if !adt.is_struct() || adt.non_enum_variant().fields.len() != 1 {
+        if !adt.is_struct() {
             return false;
         }
-        let field = adt.non_enum_variant().fields.iter().next().expect("one field").ty(self.tcx, args);
-        matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
-            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))
+        // `PhantomData<JsObject>`, then only more markers, for a generic one
+        // like `Promise<T>`.
+        let mut fields = adt.non_enum_variant().fields.iter().map(|f| f.ty(self.tcx, args));
+        let first = fields.next();
+        first.is_some_and(|field| matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
+            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_)))))
+            && fields.all(|field| matches!(field.kind(), ty::Adt(marker, _) if marker.is_phantom_data()))
     }
 
     // ── Closures (ADR 0022) ─────────────────────────────────────────────
@@ -2161,11 +2205,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let loops = std::mem::take(&mut self.loops);
         let mut stmts = Vec::new();
+        // An `async` block takes no arguments, and runs as soon as it's
+        // made: an async arrow, called right away (ADR 0029).
+        let block = matches!(
+            self.tcx.coroutine_kind(closure.closure_id),
+            Some(CoroutineKind::Desugared(CoroutineDesugaring::Async, CoroutineSource::Block))
+        );
         // The first parameter is the closure itself, which JS doesn't need.
-        let params = self.lower_params(&body.thir.params.raw[1..], self.tcx.def_span(body.def_id), &mut stmts)?;
+        let params = if block {
+            Vec::new()
+        } else {
+            self.lower_params(&body.thir.params.raw[1..], self.tcx.def_span(body.def_id), &mut stmts)?
+        };
         let BodyTy::Fn(sig) = body.thir.body_type else { unreachable!("a closure body is a function") };
         let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
-        self.stmt(body.expr, &dest, &mut stmts)?;
+        let is_async = if block {
+            self.stmt(body.expr, &Dest::Return, &mut stmts)?;
+            true
+        } else {
+            self.lower_body(body.expr, &dest, &mut stmts)?
+        };
         self.thir = thir;
         self.loops = loops;
         for (path, previous) in shadowed {
@@ -2174,7 +2233,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => self.captures.remove(&path),
             };
         }
-        Ok(Expr::arrow(params, stmts))
+        Ok(match (block, is_async) {
+            (true, _) => Expr::call(Expr::async_arrow(params, stmts), Vec::new()),
+            (false, true) => Expr::async_arrow(params, stmts),
+            (false, false) => Expr::arrow(params, stmts),
+        })
+    }
+
+    /// Lower a function's or a closure's body. For an `async fn` or an
+    /// `async` closure, that's the body of the coroutine it returns: in JS,
+    /// an `async` function's body. Says whether it was async (ADR 0029).
+    fn lower_body(&mut self, e: ExprId, dest: &Dest, out: &mut Vec<Stmt>) -> R<bool> {
+        let coroutine = match self.thir[self.strip(e)].kind {
+            ExprKind::Closure(ref closure)
+                if matches!(
+                    self.tcx.coroutine_kind(closure.closure_id),
+                    Some(CoroutineKind::Desugared(CoroutineDesugaring::Async, CoroutineSource::Fn | CoroutineSource::Closure))
+                ) =>
+            {
+                closure.closure_id
+            }
+            _ => {
+                self.stmt(e, dest, out)?;
+                return Ok(false);
+            }
+        };
+        // Its captures are this function's parameters and variables, so no snapshots.
+        let body: &'a Body<'tcx> = self.closures[&coroutine];
+        let thir = std::mem::replace(&mut self.thir, &body.thir);
+        let lowered = self.stmt(body.expr, &Dest::Return, out);
+        self.thir = thir;
+        lowered.map(|()| true)
     }
 
     /// A place as a variable and a path of fields, like `p.x` as `(p, [0])`.
@@ -2546,7 +2635,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         match ty.kind() {
             // A JS value from an `extern` block, and closures: JS functions.
-            ty::Foreign(_) | ty::Closure(..) => return None,
+            ty::Foreign(_) | ty::Closure(..) | ty::CoroutineClosure(..) => return None,
+            // Futures are JS promises (ADR 0029): an `async` block, what an
+            // `async fn` returns, and `dyn Future`.
+            ty::Coroutine(..) => return None,
+            ty::Alias(ty::Opaque, alias)
+                if matches!(self.tcx.opaque_ty_origin(alias.def_id), hir::OpaqueTyOrigin::AsyncFn { .. }) =>
+            {
+                return None;
+            }
+            ty::Dynamic(traits, ..)
+                if traits.principal_def_id().is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Future)) =>
+            {
+                return None;
+            }
             ty::Adt(..) if self.is_js_object(ty) => return None,
             ty::Dynamic(traits, ..)
                 if traits.principal_def_id().is_some_and(|t| self.tcx.fn_trait_kind_from_def_id(t).is_some()) =>

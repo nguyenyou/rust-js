@@ -133,6 +133,11 @@ type Position = "param" | "result";
 /** The Rust type for a (non-union) WebIDL type, or why there isn't one. */
 function rustType(t: IdlType, at: Position): string | { skip: string } {
   if (t.union) return { skip: "union" };
+  // A promise a function returns is `.await`ed in Rust (ADR 0029).
+  if (t.generic === "Promise" && at === "result") {
+    const inner = rustType((t.idlType as IdlType[])[0], "result");
+    return typeof inner === "string" ? `Promise<${inner}>` : inner;
+  }
   if (t.generic) return { skip: t.generic };
   const name = t.idlType as string;
   const aliased = typedefs.get(name);
@@ -306,6 +311,27 @@ for (const [name, type] of GLOBALS) {
   line(`    pub safe static ${name}: &'static ${type};`);
 }
 line(`}`);
+line();
+line(`/// A JS [\`Promise\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)
+/// of a \`T\`. \`.await\` on one is JS's \`await\`; a rejected one throws, like a
+/// panic. See ADR 0029.
+pub struct Promise<T>(PhantomData<JsObject>, PhantomData<T>);
+
+impl<T> core::future::Future for Promise<T> {
+    type Output = T;
+
+    fn poll(self: core::pin::Pin<&mut Self>, _: &mut core::task::Context<'_>) -> core::task::Poll<T> {
+        unreachable!("rust-js compiles \`.await\` to JS's \`await\`")
+    }
+}
+
+unsafe extern "Rust" {
+    /// Run a future without waiting for it, as from an event handler:
+    /// \`spawn(Box::new(async move { .. }))\`. A JS promise is already
+    /// running, so in JS this is the promise itself, left unawaited.
+    #[link_name = "this"]
+    pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
+}`);
 
 let count = 0;
 for (const name of INTERFACES) {

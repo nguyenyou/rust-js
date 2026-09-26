@@ -26,6 +26,27 @@ unsafe extern "Rust" {
     pub safe static window: &'static Window;
 }
 
+/// A JS [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)
+/// of a `T`. `.await` on one is JS's `await`; a rejected one throws, like a
+/// panic. See ADR 0029.
+pub struct Promise<T>(PhantomData<JsObject>, PhantomData<T>);
+
+impl<T> core::future::Future for Promise<T> {
+    type Output = T;
+
+    fn poll(self: core::pin::Pin<&mut Self>, _: &mut core::task::Context<'_>) -> core::task::Poll<T> {
+        unreachable!("rust-js compiles `.await` to JS's `await`")
+    }
+}
+
+unsafe extern "Rust" {
+    /// Run a future without waiting for it, as from an event handler:
+    /// `spawn(Box::new(async move { .. }))`. A JS promise is already
+    /// running, so in JS this is the promise itself, left unawaited.
+    #[link_name = "this"]
+    pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
+}
+
 /// [`EventTarget`](https://developer.mozilla.org/docs/Web/API/EventTarget)
 pub struct EventTarget(PhantomData<JsObject>);
 
@@ -618,6 +639,21 @@ pub mod element {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/checkVisibility)
         #[link_name = "checkVisibility"]
         pub safe fn check_visibility(this: &Element) -> bool;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/scrollIntoView)
+        #[link_name = "scrollIntoView"]
+        pub safe fn scroll_into_view(this: &Element) -> Promise<()>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/scroll)
+        pub safe fn scroll(this: &Element) -> Promise<()>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/scrollTo)
+        #[link_name = "scrollTo"]
+        pub safe fn scroll_to(this: &Element) -> Promise<()>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/scrollBy)
+        #[link_name = "scrollBy"]
+        pub safe fn scroll_by(this: &Element) -> Promise<()>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Element/scrollTop)
         #[link_name = "get scrollTop"]
@@ -2294,6 +2330,9 @@ pub mod html_image_element {
         #[link_name = "set fetchPriority"]
         pub safe fn set_fetch_priority(this: &HtmlImageElement, value: &str);
 
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/decode)
+        pub safe fn decode(this: &HtmlImageElement) -> Promise<()>;
+
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/name)
         #[link_name = "get name"]
         pub safe fn name(this: &HtmlImageElement) -> String;
@@ -3692,6 +3731,17 @@ pub mod window {
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/pageYOffset)
         #[link_name = "get pageYOffset"]
         pub safe fn page_y_offset(this: &Window) -> f64;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/scroll)
+        pub safe fn scroll(this: &Window) -> Promise<()>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/scrollTo)
+        #[link_name = "scrollTo"]
+        pub safe fn scroll_to(this: &Window) -> Promise<()>;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/scrollBy)
+        #[link_name = "scrollBy"]
+        pub safe fn scroll_by(this: &Window) -> Promise<()>;
 
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/screenX)
         #[link_name = "get screenX"]

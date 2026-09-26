@@ -86,9 +86,10 @@ includes them. `document` and `window` are globals at the crate root.
 | `undefined` | – | `()` |
 
 A member is generated only if all its types are in this table. So far that
-leaves out `long long`, `float`, `any`, `object`, sequences, promises,
-dictionaries and most callbacks. As rust-js grows, rerunning the generator
-picks more up. Also:
+leaves out `long long`, `float`, `any`, `object`, sequences, promises
+as parameters, dictionaries and most callbacks. As rust-js grows, rerunning
+the generator picks more up: promise results came with ADR 0029, as
+`Promise<T>`. Also:
 
 - **Nullable:** a parameter takes the non-null type. A result is typed
   non-null, and its doc says it may be `null`, which isn't checked. When

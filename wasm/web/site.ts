@@ -54,6 +54,7 @@ export function examples(): Example[] {
   return [
     { name: "todo", title: "Todo list (DOM, Vec, RefCell)", root: "todo.rs", files: ["todo.rs"], dir: examplesDir },
     { name: "counter", title: "Counter (DOM, closures)", root: "counter.rs", files: ["counter.rs"], dir: examplesDir },
+    { name: "countdown", title: "Countdown (async, await)", root: "countdown.rs", files: ["countdown.rs"], dir: examplesDir },
     { name: "modules", title: "Modules (a crate across files)", root: "lib.rs", files: modulesFiles, dir: modulesDir },
     { name: "structs", title: "Structs and tuples", root: "structs.rs", files: ["structs.rs"], dir: examplesDir },
     { name: "closures", title: "Closures", root: "closures.rs", files: ["closures.rs"], dir: examplesDir },

@@ -29,6 +29,7 @@ let collections: Record<string, (...args: any[]) => unknown>;
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
 let imports: Record<string, Record<string, () => unknown>>;
+let asyncs: Record<string, (...args: any[]) => any>;
 
 beforeAll(async () => {
   run(["cargo", "build", "--quiet"]);
@@ -52,11 +53,15 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
+  asyncs = await import(join(target, "async.js"));
   // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
   const tests = (rs: string, name: string, flags: string[] = []) =>
     run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "rust-tests", name, `${name}.js`), ...flags]);
   tests("examples/counter.rs", "counter", withWeb);
   tests("examples/todo.rs", "todo", withWeb);
+  tests("examples/countdown.rs", "countdown", withWeb);
   tests("test/asserts.rs", "asserts");
   // For real browsers (ADR 0027): `--cfg browser` turns on tests that need one.
   const forBrowser = (rs: string, name: string, flags: string[] = []) =>
@@ -220,6 +225,39 @@ test("extern items from JS modules become import statements", async () => {
   expect(leaf).toMatch(/\nimport greet from "\.\.\/greet\.js";\n\nexport function hello/);
 });
 
+// ADR 0029: `async fn` is an `async function`, `.await` is `await`, and a
+// future is a JS promise.
+test("async code becomes async functions and await", async () => {
+  expect(await asyncs.sum(2, 3)).toBe(10);
+  expect(await asyncs.countdown(4)).toBe(4);
+  expect(await asyncs.swap([1, 2])).toEqual([2, 1]);
+  expect(await asyncs.blocks(5)).toBe(26);
+  expect(await asyncs.held()).toBe(5);
+  // A spawned task runs up to its first `.await` at once, the rest later.
+  const log = asyncs.spawned();
+  expect(log.value).toEqual([1, 2]);
+  await Bun.sleep(20);
+  expect(log.value).toEqual([1, 2, 3]);
+
+  const js = await Bun.file(join(target, "async.js")).text();
+  expect(js).toContain("export async function sum(a, b) {\n  return await double(a) + await double(b) >>> 0;\n}");
+  // Parameters are the body's variables: no `let x = x`.
+  expect(js).toContain("export async function countdown(n) {\n  let steps = 0;");
+  expect(js).toContain("export async function swap(param) {\n  const a = param[0];");
+  // An `async` block is an async arrow, called; an `async` closure, an async arrow.
+  expect(js).toContain("const block = (async () => await double(x) + 1 >>> 0)();");
+  expect(js).toContain("const add = async (y) => await setTimeout(0, y) + x >>> 0;");
+  // A future in a variable is the promise; `.await` on it is `await`.
+  expect(js).toContain("const first = setTimeout(5, 1);");
+  expect(js).toContain("return await first + await second >>> 0;");
+
+  const countdown = await Bun.file(join(target, "countdown.js")).text();
+  expect(countdown).toContain("return new Promise((resolve) => {\n    setTimeout(resolve, ms);\n  });");
+  expect(countdown).toContain("    await sleep(500);\n");
+  // `spawn(Box::new(async move { .. }))` is the promise, unawaited.
+  expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
+});
+
 // ADR 0020: structs are objects, tuples are arrays, and only some reads copy.
 test("structs and tuples are plain objects and arrays", async () => {
   const js = await Bun.file(join(target, "structs.js")).text();
@@ -252,9 +290,10 @@ function rustTests(files: string[]): { exit: number; output: string } {
   return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
 }
 
-test("the counter's and the todo app's own tests pass, in a DOM", () => {
-  const { exit, output } = rustTests(["target/rust-tests/counter/counter.test.js", "target/rust-tests/todo/todo.test.js"]);
-  expect([exit, output.match(/(\d+) pass/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual([0, "7", "0"]);
+test("the example apps' own tests pass, in a DOM", () => {
+  const apps = ["counter", "todo", "countdown"].map((app) => `target/rust-tests/${app}/${app}.test.js`);
+  const { exit, output } = rustTests(apps);
+  expect([exit, output.match(/(\d+) pass/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual([0, "8", "0"]);
 });
 
 test("a failing test fails the way Rust's would", () => {
