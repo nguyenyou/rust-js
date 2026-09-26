@@ -97,8 +97,29 @@ so the browser shows `App.rs`.
 
 **`examples/vite-react`** is `bun create vite --template react` (create-vite
 9.2.1), with `App.jsx` rewritten as `App.rs`. The only other changes are
-`rustJs()` in `vite.config.js`, a named import in `main.jsx`, and ignoring
-the generated `App.jsx`.
+`rustJs()` in `vite.config.js` and a named import in `main.jsx`.
+
+**The generated `App.jsx` is committed, and its source map isn't.** ReScript
+recommends committing its generated JS: the diff shows what each change did
+to the output, anyone can read or patch it without the compiler, and the
+code keeps working without it. For rust-js the last reason matters more,
+since compiling needs this repository's pinned nightly. So when there's no
+rust-js binary, the plugin builds from the committed file with a warning,
+and drops the comment naming its missing map. With rust-js it always
+compiles, so a stale file never hides an error. ReScript's docs also
+discourage compiling in a bundler's loader, which is why the plugin writes
+real files rather than serving `App.rs` as a module.
+
+The example also has what an app adds next, set up as their
+own guides do, with nothing specific to rust-js:
+
+- **React Compiler**, as create-vite's `react-compiler` template has it:
+  `babel({ presets: [reactCompilerPreset()] })` from plugin-react. It memoizes
+  the generated component like a hand-written one.
+- **Tailwind CSS**, as its Vite guide has it: `@tailwindcss/vite` and
+  `@import "tailwindcss"`. `.rs` is one of the file types Tailwind scans, so
+  it reads the classes in `App.rs`, which must be whole string literals as in
+  any template.
 
 ## Why
 

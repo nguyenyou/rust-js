@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync, chmodSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { createServer, build } from "vite";
-import react from "@vitejs/plugin-react";
+import { createLogger, createServer, build } from "vite";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
+import tailwindcss from "@tailwindcss/vite";
 import { chromium } from "@playwright/test";
 import rustJs from "../vite-plugin/index.js";
-import { buildCompiler, compiler, fixture } from "./support";
+import { buildCompiler, buildReact, compiler, fixture } from "./support";
 
 // Real Vite, real compiler, real React Fast Refresh. Isolated sources and
 // outputs: the example application and its development server are untouched.
@@ -105,3 +107,97 @@ pub fn App() -> Element { make("button", (), "Plain") }
   writeFileSync(app, "this is not Rust");
   await expect(build({ root: dir, configFile: false, plugins: plugins(), logLevel: "silent" })).rejects.toThrow();
 }, 120_000);
+
+// Tailwind reads class names in the Rust, and React Compiler memoizes the
+// component rust-js writes (ADR 0041). A save must still be a Fast Refresh:
+// Tailwind reloads the page when a file it scans changes, unless that file
+// is JS, and a `.rs` file isn't.
+test("Tailwind and React Compiler keep Fast Refresh's state", async () => {
+  buildReact();
+  const dir = fixture("vite-tailwind");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  // `target/` is gitignored, which Tailwind's own detection respects.
+  writeFileSync(join(dir, "src/index.css"), '@import "tailwindcss";\n@source "./App.rs";\n');
+  writeFileSync(join(dir, "src/main.jsx"), 'import "./index.css"; import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
+  const app = (classes: string) => `#![allow(non_snake_case)]
+use react::{Element, use_state};
+use react::html::button;
+pub fn App() -> Element {
+    let (count, set_count) = use_state(0);
+    button().class_name("${classes}").on_click(move |_| set_count.update(|n| n + 1)).children(("Count ", count))
+}
+`;
+  writeFileSync(join(dir, "src/App.rs"), app("font-bold"));
+  const plugins = [rustJs(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()];
+  const server = await createServer({ root: dir, configFile: false, plugins, logLevel: "silent", server: { port: 0 } });
+  let browser;
+  try {
+    await server.listen();
+    const url = server.resolvedUrls.local[0];
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(url);
+    const button = page.getByRole("button");
+    await button.filter({ hasText: "Count 0" }).waitFor();
+    expect(await button.evaluate(b => getComputedStyle(b).fontWeight)).toBe("700");
+    // React Compiler's memo cache, in the component rust-js wrote.
+    expect(await (await fetch(new URL("src/App.jsx", url))).text()).toMatch(/const \$ = _c\(\d+\);/);
+    await button.click();
+    await button.filter({ hasText: "Count 1" }).waitFor();
+    await page.evaluate(() => { (window as any).sameDocument = true; });
+
+    // A class that's new to Tailwind: its CSS arrives, and the state stays.
+    writeFileSync(join(dir, "src/App.rs"), app("font-bold underline"));
+    await page.locator("button.underline").waitFor();
+    await page.waitForFunction(() => getComputedStyle(document.querySelector("button")!).textDecorationLine === "underline");
+    expect(await button.textContent()).toBe("Count 1");
+    expect(await page.evaluate(() => (window as any).sameDocument)).toBe(true);
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+}, 60_000);
+
+// The generated JSX is committed, as ReScript recommends for its JS (ADR 0041),
+// and the source map isn't. So a checkout without rust-js still builds: the
+// plugin says so and uses the committed file, with or without its map.
+test("Without rust-js, a build uses the committed JSX", async () => {
+  buildReact();
+  const dir = fixture("vite-committed");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
+  writeFileSync(join(dir, "src/App.rs"), `#![allow(non_snake_case)]
+use react::Element;
+use react::html::p;
+pub fn App() -> Element { p().children("Committed") }
+`);
+  await build({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent" });
+  const committed = readFileSync(join(dir, "src/App.jsx"), "utf8");
+  unlinkSync(join(dir, "src/App.jsx.map"));
+
+  const warnings: string[] = [];
+  const logger = { ...createLogger("silent"), warn: (message: string) => { warnings.push(message); } };
+  const missing = join(dir, "no-rust-js");
+  await build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], customLogger: logger, logLevel: "warn" });
+  expect(readFileSync(join(dir, "src/App.jsx"), "utf8")).toBe(committed);
+  expect(readFileSync(join(dir, "dist/index.html"), "utf8")).toContain("/assets/");
+  expect(warnings.join("\n")).toContain(`no rust-js at ${missing}: using the committed src/App.jsx`);
+
+  // In dev too, and the map the file names but no one committed isn't an error.
+  warnings.length = 0;
+  const server = await createServer({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], customLogger: logger, logLevel: "warn", server: { port: 0 } });
+  try {
+    await server.listen();
+    expect((await server.transformRequest("/src/App.jsx"))?.code).toContain("Committed");
+    expect(warnings.join("\n")).toContain("using the committed src/App.jsx");
+    expect(warnings.join("\n")).not.toContain("source map");
+  } finally {
+    await server.close();
+  }
+
+  // Without the committed file, there's nothing to fall back on.
+  unlinkSync(join(dir, "src/App.jsx"));
+  await expect(build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], logLevel: "silent" })).rejects.toThrow("no rust-js at");
+}, 60_000);

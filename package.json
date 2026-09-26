@@ -27,13 +27,18 @@
     "test:vite": "bun test test/vite.test.ts"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
     "@happy-dom/global-registrator": "20.14.5",
     "@playwright/test": "1.63.0",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@tailwindcss/vite": "4.3.3",
     "@vitejs/plugin-react": "6.1.1",
     "@vitest/browser-playwright": "5.0.2",
+    "babel-plugin-react-compiler": "1.0.0",
     "playwright": "1.63.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
     "vite": "8.3.0",
     "vitest": "5.0.2"
   }

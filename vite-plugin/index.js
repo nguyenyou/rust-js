@@ -33,6 +33,9 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
   const manifests = new Map();
   const failures = new Map();
   const aliases = new Map();
+  const maps = new Set();
+  // Committed files used without rust-js, whose maps may not be committed.
+  const committed = new Set();
   const manifestPath = crate => join(target, "vite", createHash("sha256").update(resolve(root, crate)).digest("hex") + ".json");
 
   async function buildMetadata() {
@@ -58,8 +61,10 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
     failures.delete(crate);
     server?.watcher.add(result.sources);
     aliases.clear();
+    maps.clear();
     for (const current of manifests.values()) {
       for (const module of current.modules) {
+        if (module.map) maps.add(resolve(root, module.map));
         const file = resolve(root, module.file);
         const stem = file.slice(0, -extname(file).length);
         aliases.set(stem + ".js", file);
@@ -130,6 +135,17 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
       rustJs = resolve(root, rustJs);
     },
     async buildStart() {
+      // The generated JS is committed, as ReScript recommends (ADR 0041), so
+      // a checkout without rust-js still builds from it. With rust-js, the
+      // Rust is always compiled, and an error is never hidden by an old file.
+      if (!existsSync(rustJs)) {
+        const files = crates.map(crate => [".jsx", ".js"].map(ext => crate.replace(/\.rs$/, ext)).find(file => existsSync(resolve(root, file))));
+        if (files.every(Boolean)) {
+          for (const file of files) committed.add(resolve(root, file));
+          this.warn(`no rust-js at ${rustJs}: using the committed ${files.join(", ")}. Build rust-js (bun run build) to compile the Rust.`);
+          return;
+        }
+      }
       await schedule(crates);
       if (failures.size) {
         const message = [...failures.values()].join("\n");
@@ -138,9 +154,26 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
       }
       for (const manifest of manifests.values()) for (const file of manifest.sources) this.addWatchFile(file);
     },
+    // A committed file names its source map, which isn't committed: without
+    // it, drop the comment rather than have Vite report a missing file.
+    async load(id) {
+      const file = id.split("?")[0];
+      if (!committed.has(file) || existsSync(`${file}.map`)) return;
+      return (await readFile(file, "utf8")).replace(/\/\/# sourceMappingURL=\S+\s*$/, "");
+    },
     resolveId(source, importer) {
       if (!importer || !source.startsWith(".")) return;
       return aliases.get(resolve(dirname(importer.split("?")[0]), source));
+    },
+    // Neither a `.rs` file nor a source map written from one is a module: the
+    // JS compiled from them brings its own update. Pass on only what depends
+    // on a `.rs` file as a plain file, like a stylesheet holding its Tailwind
+    // classes, which then updates in place. Otherwise Tailwind reloads the
+    // page, as it does for a template file it scans.
+    hotUpdate({ file, modules }) {
+      if (maps.has(file)) return [];
+      if (!file.endsWith(".rs")) return;
+      return [...new Set(modules.flatMap(module => [...module.importers]))];
     },
     async handleHotUpdate() {
       // Native publication replaces files individually. Let Vite read the

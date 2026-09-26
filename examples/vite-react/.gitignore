@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Written by rust-js from src/App.rs
-/src/App.jsx
+# src/App.jsx is written by rust-js from src/App.rs, and committed, as
+# ReScript recommends for its JS. Its source map isn't.
 /src/App.jsx.map

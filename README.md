@@ -106,7 +106,8 @@ export function App() {
 
 [examples/vite-react](examples/vite-react/README.md) is create-vite's React template with `App.jsx`
 written in Rust. [vite-plugin-rust-js](vite-plugin/index.js) compiles it on every save, and Fast
-Refresh keeps the page's state: `bun run react-example`.
+Refresh keeps the page's state: `bun run react-example`. It uses React Compiler and Tailwind CSS
+(which reads its classes in the `.rs` file), each set up as its own guide does.
 
 ## Modules
 

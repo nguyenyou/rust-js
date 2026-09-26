@@ -5,7 +5,7 @@
 #![rust_js::import = "./App.css"]
 #![allow(non_snake_case)]
 
-use react::html::{a, button, code, div, h1, h2, img, li, p, section, svg, ul, r#use};
+use react::html::{a, button, code, div, h1, h2, img, li, p, section, span, svg, ul, r#use};
 use react::{Element, fragment, use_state};
 
 unsafe extern "Rust" {
@@ -35,7 +35,13 @@ pub fn App() -> Element {
                 .r#type("button")
                 .class_name("counter")
                 .on_click(move |_| set_count.update(|count| count + 1))
-                .children(("Count is ", count)),
+                .children((
+                    "Count is ",
+                    // Tailwind finds its classes in this file: whole string literals.
+                    span()
+                        .class_name(if count % 2 == 0 { "font-bold text-emerald-500" } else { "font-bold text-sky-500" })
+                        .children(count),
+                )),
         )),
         div().class_name("ticks"),
         section().id("next-steps").children((

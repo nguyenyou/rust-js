@@ -86,6 +86,18 @@ IDs use ordinary React Fast Refresh; a change to the output module set or suffix
 invalidates IDs and reloads the page. The plugin aliases `.js`/`.jsx` requests to
 the actual generated module so an entry import survives an extension transition.
 
+A `.rs` file and a generated source map are not modules: the generated JS
+brings their update. The plugin's `hotUpdate` passes on only what depends on a
+`.rs` file as a plain file, such as a stylesheet whose Tailwind classes it
+holds, which then updates in place, and drops a map's update. Otherwise
+`@tailwindcss/vite` reloads the page for any non-JS file it scans, and state
+is lost on every save. This requires `rustJs()` before `tailwindcss()`.
+
+Without a rust-js binary, and with every root's generated JS present (it's
+committed, ADR 0041), the plugin warns and uses those files. It removes the
+`sourceMappingURL` comment of one whose map is missing. With a binary, an
+error always stops the build.
+
 The plugin still uses the compiler and binding sources from this checkout.
 Packaging/distribution and the browser playground's worker/module loader are
 separate work.
