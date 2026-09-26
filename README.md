@@ -61,6 +61,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - `.clone()` is the value itself unless the two could be told apart: then `{ ...s, tags: s.tags.slice() }`,
   or a call of a hand-written `clone` ([ADR 0052](docs/decisions/0052-std-trait-impls.md)). `==` is `===`,
   or `$eq(a, b)` field by field, and a hand-written `eq` is called wherever it's inside ([ADR 0053](docs/decisions/0053-partial-eq.md)).
+- A `Display` impl's `fmt` returns the string it writes: `write!(f, "({}, {})", self.x, self.y)` is
+  `return "(" + String(point.x) + ", " + String(point.y) + ")"` ([ADR 0054](docs/decisions/0054-display.md)).
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
@@ -80,7 +82,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; inherent methods, local traits with defaults and supertraits,
 generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)),
-`Default`, `Clone`, `From` and `PartialEq` impls, hand-written and derived ([ADRs 0052](docs/decisions/0052-std-trait-impls.md), [0053](docs/decisions/0053-partial-eq.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+`Default`, `Clone`, `From`, `PartialEq` and `Display` impls ([ADRs 0052](docs/decisions/0052-std-trait-impls.md), [0053](docs/decisions/0053-partial-eq.md), [0054](docs/decisions/0054-display.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.

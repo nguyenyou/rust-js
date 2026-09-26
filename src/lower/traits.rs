@@ -2,12 +2,11 @@
 //! lazy dictionaries for impls, and `{ value, impl }` for trait objects.
 
 use super::bindings;
-use super::{Dest, FnCx, R, lower_first};
+use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, Mutability};
-use rustc_middle::thir::BodyTy;
 use rustc_middle::traits::ImplSource;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
@@ -20,6 +19,7 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_lang_item(id, LangItem::Copy)
         || tcx.is_lang_item(id, LangItem::Clone)
         || tcx.is_lang_item(id, LangItem::PartialEq)
+        || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
 
@@ -216,7 +216,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let default = self.tcx.is_diagnostic_item(Symbol::intern("Default"), tr.def_id);
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
         let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
-        if (default || clone || eq) && !self.has_user_impl(tr.def_id, ty) {
+        let display = tr.def_id == self.display_trait();
+        if (default || clone || eq || display) && !self.has_user_impl(tr.def_id, ty) {
+            if display {
+                let fmt = self.display_fn(ty, span)?;
+                return Ok(Expr::object(vec![Prop::Field("fmt".into(), fmt)]));
+            }
             if eq {
                 let eq = self.eq_fn(ty, span)?;
                 return Ok(Expr::object(vec![Prop::Field("eq".into(), eq)]));
@@ -480,13 +485,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 continue;
             }
             let callee = self.fn_ref(method);
+            // Without a `Formatter`, which isn't a JS parameter (ADR 0054).
             let count = self
                 .tcx
                 .fn_sig(method)
                 .instantiate_identity()
                 .skip_binder()
                 .inputs()
-                .len();
+                .len()
+                - usize::from(self.formatter_param(method).is_some());
             let args: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = args.iter().map(|name| Expr::var(name)).collect();
             // A default body has a Self dictionary. Build its thunk without
@@ -571,17 +578,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let vars = std::mem::take(&mut self.vars);
         let names = self.names.clone();
         let mut out = Vec::new();
-        let params = self.lower_params(&body.thir.params.raw, span, &mut out)?;
-        let BodyTy::Fn(sig) = body.thir.body_type else {
-            unreachable!("trait method body")
-        };
-        self.check_value_ty(sig.output(), span)?;
-        let dest = if sig.output().is_unit() {
-            Dest::Discard
-        } else {
-            Dest::Return
-        };
-        let is_async = self.lower_body(body.expr, &dest, &mut out)?;
+        let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut out)?;
         self.evidence = evidence;
         self.self_args = self_args;
         self.thir = thir;

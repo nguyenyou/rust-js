@@ -35,6 +35,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (def_id, generic_args) = self
             .resolve_into(def_id, generic_args)
             .unwrap_or((def_id, generic_args));
+        if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
+            return Ok(written);
+        }
         if self.krate.fns.contains_key(&def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
             let mut args = self.operands(args, out)?;
@@ -120,6 +123,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.extend(pending);
                 return Ok(call);
             }
+        }
+        // A `fmt::Result` is nothing in JS (ADR 0054), without `Result`'s methods.
+        if args
+            .first()
+            .is_some_and(|&a| self.is_fmt_result(self.thir[a].ty.peel_refs()))
+        {
+            return Err(self.unsupported(span, "methods of a `fmt::Result`"));
         }
         let Some(known) = self.std_fn(fun) else {
             // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
@@ -522,16 +532,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::FmtStr => arg(),
             Std::FmtDisplay => {
                 let ty = generic_args.types().next().expect("`new_display` has a type argument");
-                if self.is_string_like(ty) {
-                    arg()
-                } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
-                    Expr::call(Expr::var("String"), vec![arg()])
-                } else if Num::of(ty) == Some(Num::F64) {
-                    self.runtime.insert(Helper::DisplayF64);
-                    Expr::call(Expr::var("$displayF64"), vec![arg()])
-                } else {
-                    return Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")));
-                }
+                self.display_string(arg(), ty, span)?
             }
             Std::FmtDebug => {
                 self.runtime.insert(Helper::Debug);
@@ -551,16 +552,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (v, keep) = (arg(), arg());
                 Expr::call(Expr::var("$retain"), vec![v, keep])
             }
-            Std::ToString => {
-                let ty = generic_args.type_at(0);
-                if self.is_string_like(ty) {
-                    arg()
-                } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
-                    Expr::call(Expr::var("String"), vec![arg()])
-                } else {
-                    return Err(self.unsupported(span, &format!("`to_string` on `{ty}`")));
-                }
-            }
+            Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
         })
     }
 

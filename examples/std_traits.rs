@@ -2,7 +2,10 @@
 // `From`, `Clone` and `PartialEq`, hand-written and derived. A clone is a
 // copy only where it could be told apart from the value: something changes
 // one of them, or a hand-written `clone` makes something else. A
-// hand-written `eq` decides wherever it is.
+// hand-written `eq` decides wherever it is, and a `fmt` returns what it
+// writes.
+
+use std::fmt;
 
 #[derive(Clone, Default)]
 pub struct Settings {
@@ -244,4 +247,84 @@ impl PartialEq<f64> for Meters {
 pub fn compared() -> (bool, bool, bool) {
     let m = Meters::from(2.0);
     (m == 2.0, m != 3.0, m != 2.0)
+}
+
+/// `Display` (ADR 0054): a `fmt` returns the string it writes.
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+pub struct Route {
+    pub stops: Vec<Point>,
+    pub closed: bool,
+}
+
+impl fmt::Display for Route {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.stops.is_empty() {
+            return f.write_str("nowhere");
+        }
+        for (i, stop) in self.stops.iter().enumerate() {
+            if i > 0 {
+                f.write_str(" -> ")?;
+            }
+            stop.fmt(f)?;
+        }
+        if self.closed {
+            write_loop(f, self.stops.len())?;
+        }
+        Ok(())
+    }
+}
+
+/// A helper that writes to the same formatter.
+fn write_loop(f: &mut fmt::Formatter, stops: usize) -> fmt::Result {
+    write!(f, " (a loop of {stops})")
+}
+
+impl fmt::Display for Figure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Figure::Dot => write!(f, "a dot"),
+            Figure::Poly(points) => write!(f, "a polygon of {}", points.len()),
+        }
+    }
+}
+
+/// A generic impl: `T`'s `fmt` inside.
+pub struct Labeled<T> {
+    pub label: String,
+    pub value: T,
+}
+
+impl<T: fmt::Display> fmt::Display for Labeled<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.label, self.value)
+    }
+}
+
+pub fn shown<T: fmt::Display>(x: &T) -> String {
+    format!("<{x}>")
+}
+
+pub fn displays() -> (String, String, String, String, String, String) {
+    let p = Point { x: 1, y: -2 };
+    let route = Route { stops: vec![Point { x: 0, y: 0 }, Point { x: 3, y: 4 }], closed: true };
+    let empty = Route { stops: vec![], closed: false };
+    let labeled = Labeled { label: "at".to_string(), value: Point { x: 5, y: 6 } };
+    (
+        p.to_string(),
+        format!("{route} / {empty}"),
+        format!("{} and {}", Figure::Dot, Figure::Poly(vec![1, 2])),
+        labeled.to_string(),
+        shown(&labeled),
+        shown(&Labeled { label: "n".to_string(), value: 2.5 }),
+    )
 }

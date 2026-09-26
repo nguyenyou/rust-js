@@ -190,6 +190,7 @@ fn main() {
     case("std_traits.equalities", &[], std_traits::equalities);
     case("std_traits.generic_equalities", &[], std_traits::generic_equalities);
     case("std_traits.compared", &[], std_traits::compared);
+    case("std_traits.displays", &[], std_traits::displays);
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

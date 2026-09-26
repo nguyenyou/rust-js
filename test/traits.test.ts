@@ -178,6 +178,10 @@ for (const [name, source, diagnostic] of [
   ["Drop", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} }`, "user implementations"],
   // `Clone`, `Default` and `From` are supported (ADR 0052), but not all of them.
   ["clone_from", `#[derive(Clone)] pub struct P { pub v: Vec<u32> } pub fn f(a: &mut P, b: &P) { a.clone_from(b); }`, "calling \`std::clone::Clone::clone_from\`"],
+  // A `fmt` returns its string (ADR 0054): a `fmt::Error` has nowhere to go.
+  ["fmt::Error", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result { Err(fmt::Error) } }`, "a \`fmt::Error\`"],
+  ["fmt::Result methods", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { let _ = f.write_str("a").is_ok(); Ok(()) } }`, "methods of a \`fmt::Result\`"],
+  ["Formatter options", `use std::fmt; pub struct P; impl fmt::Display for P { fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { if f.alternate() { f.write_str("#") } else { Ok(()) } } }`, "alternate"],
   ["generic From", `pub fn f<T: From<u32>>() -> T { T::from(1) }`, "calling \`std::convert::From::from\`"],
   ["colliding methods", `#![rust_js::camel_case] pub trait T { fn first_name(&self); fn firstName(&self); }`, "dictionary names collide"],
   ["reserved method", `pub trait T { fn __proto__(&self); }`, "reserved"],

@@ -418,9 +418,16 @@ impl<'a> Cx<'a> {
                 Statement::new_variable_declaration(sp, kind, ArenaVec::from_iter_in([declarator], b), false, b)
             }
             StmtKind::Assign(target, value) => {
+                // `s = s + t` is `s += t`, as JS writes a string built up.
+                let (operator, value) = match &value.kind {
+                    ExprKind::Binary(Op::Add, lhs, rhs) if same_place(lhs, target) => {
+                        (AssignmentOperator::Addition, &**rhs)
+                    }
+                    _ => (AssignmentOperator::Assign, value),
+                };
                 let assign = Expression::new_assignment_expression(
                     sp,
-                    AssignmentOperator::Assign,
+                    operator,
                     self.assignment_target(target),
                     self.expr(value),
                     b,
@@ -839,4 +846,13 @@ fn binary_op(op: Op) -> Result<BinaryOperator, LogicalOperator> {
         Op::Div => BinaryOperator::Division,
         Op::Rem => BinaryOperator::Remainder,
     })
+}
+
+/// Are `a` and `b` the same variable or property path: `s`, `a.b`?
+fn same_place(a: &js::Expr, b: &js::Expr) -> bool {
+    match (&a.kind, &b.kind) {
+        (ExprKind::Var(a), ExprKind::Var(b)) => a == b,
+        (ExprKind::Member(a, x), ExprKind::Member(b, y)) => x == y && same_place(a, b),
+        _ => false,
+    }
 }

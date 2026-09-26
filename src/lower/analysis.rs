@@ -266,6 +266,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 loops: Vec::new(),
                 runtime: HashSet::new(),
                 jsx: false,
+                writer: None,
             };
             let result = match body {
                 Some(body) => cx.lower_fn(body),

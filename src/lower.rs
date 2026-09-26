@@ -36,6 +36,7 @@ use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 mod analysis;
 mod bindings;
 mod calls;
+mod display;
 mod jsx;
 mod representation;
 mod std_impls;
@@ -229,6 +230,9 @@ struct FnCx<'a, 'tcx> {
     runtime: HashSet<Helper>,
     /// Whether this function makes JSX.
     jsx: bool,
+    /// In a function that writes to a `Formatter` (ADR 0054): its variable,
+    /// and the JS string that stands for it.
+    writer: Option<(Option<LocalVarId>, String)>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -237,19 +241,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut out = Vec::new();
         let thir = self.thir;
         let evidence = self.evidence_params(def_id);
-        let mut params = self.lower_params(&thir.params.raw, self.tcx.def_span(def_id), &mut out)?;
+        let (mut params, is_async) = self.lower_signature(def_id, &thir.params.raw, body.expr, &mut out)?;
         params.extend(evidence);
-
-        let BodyTy::Fn(sig) = self.thir.body_type else {
-            return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
-        };
-        self.check_value_ty(sig.output(), self.tcx.def_span(def_id))?;
-        let dest = if sig.output().is_unit() {
-            Dest::Discard
-        } else {
-            Dest::Return
-        };
-        let is_async = self.lower_body(body.expr, &dest, &mut out)?;
 
         Ok(LoweredFn {
             function: js::Function {
@@ -269,6 +262,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             runtime: std::mem::take(&mut self.runtime),
             jsx: self.jsx,
         })
+    }
+
+    /// A function's parameters and body, in `out`, and whether it's `async`.
+    /// One that writes to a `Formatter` returns the string (ADR 0054).
+    fn lower_signature(
+        &mut self,
+        def_id: DefId,
+        params: &[thir::Param<'tcx>],
+        body: ExprId,
+        out: &mut Vec<Stmt>,
+    ) -> R<(Vec<js::Pattern>, bool)> {
+        let span = self.tcx.def_span(def_id);
+        if let Some(formatter) = self.formatter_param(def_id) {
+            return Ok((self.lower_writer(params, formatter, body, span, out)?, false));
+        }
+        let params = self.lower_params(params, span, out)?;
+        let BodyTy::Fn(sig) = self.thir.body_type else {
+            return Err(self.unsupported(span, "this kind of body"));
+        };
+        self.check_value_ty(sig.output(), span)?;
+        let dest = if sig.output().is_unit() {
+            Dest::Discard
+        } else {
+            Dest::Return
+        };
+        let is_async = self.lower_body(body, &dest, out)?;
+        Ok((params, is_async))
     }
 
     /// Name the parameters. One with a pattern (`(x, y): (i32, i32)`) is
@@ -469,6 +489,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 scrutinee, ref arms, ..
             } if self.as_await(e).is_none() && self.as_question(e).is_none() && !self.is_matches(arms) => {
                 self.lower_match(scrutinee, arms, dest, out)
+            }
+            // A function that writes to a `Formatter` returns what it wrote (ADR 0054).
+            ExprKind::Return { value } if let Some((_, name)) = self.writer.clone() => {
+                if let Some(v) = value {
+                    self.stmt(v, &Dest::Discard, out)?;
+                }
+                out.push(StmtKind::Return(Some(Expr::var(&name))).at(span));
+                Ok(())
             }
             ExprKind::Return { value } => {
                 match value {
@@ -1116,6 +1144,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn lower_match(&mut self, scrutinee: ExprId, arms: &[ArmId], dest: &Dest, out: &mut Vec<Stmt>) -> R<()> {
+        // A `fmt::Result` is nothing in JS (ADR 0054): there's no `Err` to match.
+        if self.is_fmt_result(self.thir[scrutinee].ty) {
+            return Err(self.unsupported(self.thir[scrutinee].span, "matching a `fmt::Result`"));
+        }
         // Evaluate the scrutinee once, unless it's a place that can be
         // tested where it is.
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
@@ -2183,6 +2215,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A struct literal: `{ x: 1, y: 2 }`, or `[1, 2]` for a tuple struct.
     fn adt(&mut self, adt: &thir::AdtExpr<'tcx>, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let variant = adt.adt_def.variant(adt.variant_index);
+        // A `fmt::Result` is always `Ok`, and nothing (ADR 0054).
+        if self.is_fmt_result(ty) {
+            return match variant.name.as_str() {
+                "Ok" => Ok(Expr::undefined()),
+                _ => Err(self.unsupported(span, "a `fmt::Error`")),
+            };
+        }
         // `Some(x)` is `x`, and `None` is `undefined` (ADR 0030).
         if let Some(inner) = self.option_of(ty) {
             // `Some(x)` of a `()`, or an `Option`, would be `None` (ADR 0030):
@@ -2496,6 +2535,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn question(&mut self, question: ExprId, tried: ExprId, base: Option<&str>, out: &mut Vec<Stmt>) -> R<Expr> {
         let span = self.thir[question].span;
         let ty = self.thir[tried].ty;
+        // A write never fails (ADR 0054).
+        if self.is_fmt_result(ty) {
+            self.stmt(tried, &Dest::Discard, out)?;
+            return Ok(Expr::undefined());
+        }
         let is_option = self.option_of(ty).is_some();
         if !is_option && !self.is_std_adt(ty, sym::Result) {
             return Err(self.unsupported(span, &format!("`?` on a `{ty}`")));

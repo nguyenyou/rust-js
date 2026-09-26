@@ -423,7 +423,7 @@ test("string methods are JS's, and format! is concatenation", async () => {
   expect(js).toContain('  const last = path.split("/").at(-1) ?? "";');
   expect(js).toContain('  return pieces.join(" > ");');
   // A string that grows gets a new one each time: JS strings don't change.
-  expect(js).toContain('    s = s + String(i);\n    s = s + ",";');
+  expect(js).toContain('    s += String(i);\n    s += ",";');
   // A `char` is a one-character string.
   expect(js).toContain('  const c = windows ? "\\\\" : "/";');
   // A string literal pattern is `===` on the JS string, without `!= null` in `Some`.
@@ -794,4 +794,20 @@ test("== calls a hand-written eq wherever it's inside, and generics take a dicti
   expect(js).toContain("{ eq: $eq }");
   // `!=` of a hand-written `PartialEq<f64>` negates its `eq`.
   expect(js).toContain("return [\n    metersPartialEqF64_eq(m, 2),\n    !metersPartialEqF64_eq(m, 3),");
+});
+
+// ADR 0054: a `fmt` returns the string it writes, and `{}` of a value calls it.
+test("a Display impl's fmt returns the string it writes", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  // One write: its string. One per way through: a `return` each.
+  expect(js).toContain('function pointDisplay_fmt(point) {\n  return "(" + String(point.x) + ", " + String(point.y) + ")";\n}');
+  expect(js).toContain('  if (figure === "Dot") {\n    return "a dot";\n  } else {\n    return "a polygon of " + String(figure._0.length);');
+  // More: a string built up, with nested `fmt`s and a helper that writes.
+  expect(js).toContain('    f += pointDisplay_fmt(item[1]);');
+  expect(js).toContain('    f += write_loop(route.stops.length);');
+  expect(js).toContain('function write_loop(stops) {\n  return " (a loop of " + String(stops) + ")";');
+  // `{}` of one, and generics given a dictionary.
+  expect(js).toContain("return labeled.label + \": \" + TDisplay.fmt(labeled.value);");
+  expect(js).toContain("export function shown(x, TDisplay) {\n  return \"<\" + TDisplay.fmt(x) + \">\";");
+  expect(js).toContain("{ fmt: $displayF64 }");
 });
