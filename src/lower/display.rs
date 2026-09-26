@@ -382,7 +382,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(self.applied(f, value))
             }
             ty::Array(item, _) | ty::Slice(item) => self.debug_items(value, *item, "[", "]", span),
-            ty::Adt(_, args) if std("Vec") => self.debug_items(value, args.type_at(0), "[", "]", span),
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.debug_items(value, args.type_at(0), "[", "]", span),
+            ty::Adt(_, args) if self.is_reverse(ty) => {
+                let shown = self.debug_string(Expr::index(value, Expr::int(0)), args.type_at(0), span)?;
+                Ok(join(vec![Expr::str("Reverse("), shown, Expr::str(")")]))
+            }
             ty::Adt(_, args) if self.shows_inside(ty) => {
                 self.debug_string(value, args.types().next().expect("what it holds"), span)
             }

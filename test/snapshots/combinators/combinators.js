@@ -253,17 +253,17 @@ export function report() {
   for (const n of [0, 4, 5, 8]) {
     const arg = options(n);
     const arg$1 = more_options(n);
-    out += `(${arg[0]}, ${arg[1]}, ${arg[2]}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg[3])}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg[4])}, ${arg[5]}) (${$debugStr(arg$1[0])}, ${$debugStr(arg$1[1])}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg$1[2])}, ${arg$1[3]}, ${arg$1[4]})\n`;
+    out += `(${arg[0]}, ${arg[1]}, ${arg[2]}, ${arg[3] == null ? "None" : `Some(${arg[3]})`}, ${arg[4] == null ? "None" : `Some(${arg[4]})`}, ${arg[5]}) (${$debugStr(arg$1[0])}, ${$debugStr(arg$1[1])}, ${arg$1[2] == null ? "None" : `Some(${arg$1[2]})`}, ${arg$1[3]}, ${arg$1[4]})\n`;
   }
   for (const c of ["1", "2", "x"]) {
     const arg$2 = results(c);
-    out += `(${$debugStr(arg$2[0])}, ${$debugStr(arg$2[1])}, ${arg$2[2]}, ${arg$2[3]}, ${((value) => (value == null ? "None" : `Some(${$debugStr(value)})`))(arg$2[4])}, ${arg$2[5]})\n`;
+    out += `(${$debugStr(arg$2[0])}, ${$debugStr(arg$2[1])}, ${arg$2[2]}, ${arg$2[3]}, ${arg$2[4] == null ? "None" : `Some(${$debugStr(arg$2[4])})`}, ${arg$2[5]})\n`;
   }
   for (const n$1 of [0, 5]) {
     const arg$3 = iters(n$1);
     const arg$4 = consumers(n$1);
     const arg$5 = vecs(n$1);
-    out += `([${arg$3[0].map((item) => String(item)).join(", ")}], [${arg$3[1].map((item) => String(item)).join(", ")}], [${arg$3[2].map((item) => `(${item[0]}, ${$debugStr(item[1], "'")})`).join(", ")}], [${arg$3[3].map((item) => String(item)).join(", ")}], [${arg$3[4].map((item) => String(item)).join(", ")}], [${arg$3[5].map((item) => String(item)).join(", ")}]) ${((tuple) => `(${((value) => (value == null ? "None" : `Some(${value})`))(tuple[0])}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[1])}, ${tuple[2]}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[3])}, ${((value) => (value == null ? "None" : `Some(${value})`))(tuple[4])}, ${((tuple) => `([${tuple[0].map((item) => String(item)).join(", ")}], [${tuple[1].map((item) => String(item)).join(", ")}])`)(tuple[5])})`)(arg$4)} (${arg$5[0]}, [${arg$5[1].map((item) => String(item)).join(", ")}], ${arg$5[2]}, [${arg$5[3].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[4].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[5].map((item) => String(item)).join(", ")}])\n`;
+    out += `([${arg$3[0].map((item) => String(item)).join(", ")}], [${arg$3[1].map((item) => String(item)).join(", ")}], [${arg$3[2].map((item) => `(${item[0]}, ${$debugStr(item[1], "'")})`).join(", ")}], [${arg$3[3].map((item) => String(item)).join(", ")}], [${arg$3[4].map((item) => String(item)).join(", ")}], [${arg$3[5].map((item) => String(item)).join(", ")}]) (${arg$4[0] == null ? "None" : `Some(${arg$4[0]})`}, ${arg$4[1] == null ? "None" : `Some(${arg$4[1]})`}, ${arg$4[2]}, ${arg$4[3] == null ? "None" : `Some(${arg$4[3]})`}, ${arg$4[4] == null ? "None" : `Some(${arg$4[4]})`}, ([${arg$4[5][0].map((item) => String(item)).join(", ")}], [${arg$4[5][1].map((item) => String(item)).join(", ")}])) (${arg$5[0]}, [${arg$5[1].map((item) => String(item)).join(", ")}], ${arg$5[2]}, [${arg$5[3].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[4].map((item) => `[${item.map((item) => String(item)).join(", ")}]`).join(", ")}], [${arg$5[5].map((item) => String(item)).join(", ")}])\n`;
   }
   return out;
 }

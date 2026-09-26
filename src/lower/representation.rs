@@ -38,6 +38,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "std::str::SplitWhitespace",
                     "std::str::Lines",
                     "std::array::IntoIter",
+                    "std::collections::vec_deque::Iter",
+                    "std::collections::vec_deque::IntoIter",
+                    "std::collections::binary_heap::Iter",
+                    "std::collections::binary_heap::IntoIter",
                 ]
                 .contains(&path.as_str())
                 || self.is_str_split(ty))
@@ -121,7 +125,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
         ty.is_box()
             || self.is_lang_adt(ty, LangItem::String)
-            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut", "Vec"]
+            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut"]
+                .into_iter()
+                .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || self.is_vec_like(ty)
+    }
+
+    /// A `Vec`, a `VecDeque` or a `BinaryHeap`: a JS array (ADR 0068). A
+    /// heap's array is in the order Rust's own heap keeps it.
+    pub(super) fn is_vec_like(&self, ty: Ty<'tcx>) -> bool {
+        self.is_std_adt(ty, sym::Vec)
+            || ["VecDeque", "BinaryHeap"]
                 .into_iter()
                 .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
     }
@@ -134,7 +148,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A slice or an array is a JS array: `&mut` to one, as `sort` takes, is it.
             || ty.is_slice()
             || ty.is_array()
-            || ["Vec", "Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || ["Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || self.is_vec_like(ty)
             || self.is_map(ty)
             // An enum with fields: those variants are objects (ADR 0033). A
             // fieldless one's string can't be changed through a `&mut` anyway,

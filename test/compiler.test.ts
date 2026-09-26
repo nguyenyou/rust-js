@@ -25,6 +25,7 @@ let text: Record<string, (...args: any[]) => unknown>;
 let calc: Record<string, (...args: any[]) => unknown>;
 let numbers: Record<string, (...args: any[]) => unknown>;
 let inventory: Record<string, (...args: any[]) => unknown>;
+let queues: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -72,6 +73,8 @@ beforeAll(async () => {
   numbers = await import(join(target, "numbers.js"));
   run([join(target, "debug", "rust-js"), "examples/inventory.rs", "-o", join(target, "inventory.js")]);
   inventory = await import(join(target, "inventory.js"));
+  run([join(target, "debug", "rust-js"), "examples/queues.rs", "-o", join(target, "queues.js")]);
+  queues = await import(join(target, "queues.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -172,6 +175,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "inventory") {
         return inventory[path[1]](...c.args);
+      }
+      if (path[0] === "queues") {
+        return queues[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);

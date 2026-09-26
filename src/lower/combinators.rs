@@ -68,7 +68,53 @@ pub(super) enum IterComb {
     Partition,
 }
 
+/// A `BinaryHeap`'s: a JS array kept in the order Rust's heap keeps it,
+/// by the same steps, so `{:?}` and `into_vec()` show what Rust's do.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum HeapOp {
+    Push,
+    Pop,
+    IntoSorted,
+    /// `BinaryHeap::from(v)`, and `collect()` into one.
+    From,
+}
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// One of `HeapOp`'s, with the items' `cmp` (ADR 0057).
+    pub(super) fn heap_call(&mut self, op: HeapOp, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let heap_ty = match op {
+            HeapOp::From => self.thir[args[0]].ty,
+            _ => self.thir[args[0]].ty.peel_refs(),
+        };
+        let item = self
+            .slice_item(heap_ty)
+            .ok_or_else(|| self.unsupported(span, "this heap"))?;
+        self.heap_of(item, span)?;
+        let compare = self.cmp_fn(item, false, span)?;
+        let mut values = self.operands(args, out)?;
+        values.push(compare);
+        let (helper, name) = match op {
+            HeapOp::Push => (Helper::HeapPush, "$heapPush"),
+            HeapOp::Pop => (Helper::HeapPop, "$heapPop"),
+            HeapOp::IntoSorted => (Helper::HeapSorted, "$heapSorted"),
+            HeapOp::From => (Helper::HeapFrom, "$heapFrom"),
+        };
+        self.runtime.extend([helper, Helper::SiftUp, Helper::SiftDown]);
+        Ok(Expr::call(Expr::var(name), values))
+    }
+
+    /// A heap of `item`s: `pop` gives `undefined` for `None`, so an item
+    /// that could look like it is an error, as for a map's values.
+    pub(super) fn heap_of(&self, item: Ty<'tcx>, span: Span) -> R<()> {
+        if self.can_be_nullish(item) {
+            return Err(self.unsupported(
+                span,
+                &format!("a heap of `{item}`, whose `pop` would look like `None` in JS"),
+            ));
+        }
+        Ok(())
+    }
+
     /// `vec![x; n]`: `new Array(n).fill(x)`, when copies of `x` can't be
     /// told apart (ADR 0052). Otherwise each item is its own, as Rust clones
     /// it: made again, `Array.from({ length: n }, () => new Array(m).fill(0))`,
@@ -394,7 +440,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty = ty.peel_refs();
         match ty.kind() {
             ty::Slice(item) | ty::Array(item, _) => Some(*item),
-            ty::Adt(_, args) if self.is_std_adt(ty, rustc_span::sym::Vec) => Some(args.type_at(0)),
+            ty::Adt(_, args) if self.is_vec_like(ty) => Some(args.type_at(0)),
             _ => None,
         }
     }

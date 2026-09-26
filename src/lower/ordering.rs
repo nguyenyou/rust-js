@@ -26,6 +26,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.tcx.require_lang_item(LangItem::PartialOrd, DUMMY_SP)
     }
 
+    /// `std::cmp::Reverse`, which has no diagnostic item of its own.
+    pub(super) fn is_reverse(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
+            && self.tcx.item_name(adt.did()).as_str() == "Reverse")
+    }
+
     /// Does JS's `<` order `ty` as Rust does? Numbers, strings, `char`s,
     /// `bool`s (`false < true`), and `Ordering`s, which are numbers.
     pub(super) fn is_primitive_ord(&self, ty: Ty<'tcx>) -> bool {
@@ -108,7 +114,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ))
             }
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.cmp_value(a, b, args.type_at(0), partial, span, out),
-            ty::Adt(_, args) if std("Vec") => self.cmp_items(a, b, args.type_at(0), partial, span),
+            // `Reverse(x)`: `x`s the other way round, as its impl has it.
+            ty::Adt(_, args) if self.is_reverse(ty) => {
+                let inside = |x: Expr| Expr::index(x, Expr::int(0));
+                self.cmp_value(inside(b), inside(a), args.type_at(0), partial, span, out)
+            }
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.cmp_items(a, b, args.type_at(0), partial, span),
             ty::Array(item, _) | ty::Slice(item) => self.cmp_items(a, b, *item, partial, span),
             // A fieldless enum: by the order its variants are declared in.
             ty::Adt(adt, _) if adt.is_enum() && adt.variants().iter().all(|v| v.fields.is_empty()) => {
@@ -121,6 +132,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(Expr::call(Expr::var("$cmpIn"), vec![Expr::array(names), a, b]))
             }
             ty::Adt(adt, _) if adt.is_enum() => Err(self.unsupported(span, &format!("comparing `{ty}`s"))),
+            // Another crate's struct orders as its impl says, which may not be
+            // field by field.
+            ty::Adt(adt, _) if !adt.did().is_local() => Err(self.unsupported(span, &format!("comparing `{ty}`s"))),
             _ => {
                 let parts: Vec<(Expr, Expr, Ty<'tcx>)> = match self.shape(ty) {
                     Shape::Object(fields) => fields

@@ -320,7 +320,7 @@ export function report() {
     const arg = chars(c);
     const arg$1 = ascii(c);
     const arg$2 = casts(c);
-    out += `${$debugStr(c, "'")} (${arg[0]}, ${arg[1]}, ${arg[2]}, ${arg[3]}, ${arg[4]}, ${arg[5]}, ${arg[6]}, ${arg[7]}) (${arg$1[0]}, ${arg$1[1]}, ${arg$1[2]}, ${arg$1[3]}, ${$debugStr(arg$1[4], "'")}, ${$debugStr(arg$1[5], "'")}, ${((value) => (value == null ? "None" : `Some(${value})`))(arg$1[6])}, ${arg$1[7]}) (${arg$2[0]}, ${arg$2[1]}, ${$debugStr(arg$2[2], "'")}, ${$debugStr(arg$2[3], "'")}, ${arg$2[4]})\n`;
+    out += `${$debugStr(c, "'")} (${arg[0]}, ${arg[1]}, ${arg[2]}, ${arg[3]}, ${arg[4]}, ${arg[5]}, ${arg[6]}, ${arg[7]}) (${arg$1[0]}, ${arg$1[1]}, ${arg$1[2]}, ${arg$1[3]}, ${$debugStr(arg$1[4], "'")}, ${$debugStr(arg$1[5], "'")}, ${arg$1[6] == null ? "None" : `Some(${arg$1[6]})`}, ${arg$1[7]}) (${arg$2[0]}, ${arg$2[1]}, ${$debugStr(arg$2[2], "'")}, ${$debugStr(arg$2[3], "'")}, ${arg$2[4]})\n`;
   }
   for (const s of [
     "42",

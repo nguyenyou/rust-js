@@ -1145,7 +1145,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let peeled = head_ty.peel_refs();
             let sequence = peeled.is_array()
                 || peeled.is_slice()
-                || self.is_std_adt(peeled, sym::Vec)
+                || self.is_vec_like(peeled)
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
                 || self.is_str_split(peeled)
                 || self.is_array_iter(peeled)

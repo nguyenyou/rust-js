@@ -107,6 +107,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0065 The JS is formatted as oxfmt formats it, and the source map follows](decisions/0065-format-with-oxfmt.md)
 - [0066 Text with values in it is a template literal](decisions/0066-template-literals.md)
 - [0067 Range patterns, `@`, `let ... else`, and a `&mut` into a map](decisions/0067-patterns.md)
+- [0068 `VecDeque` and `BinaryHeap` are arrays; a heap moves its items as Rust's does](decisions/0068-queues.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

@@ -1,6 +1,6 @@
 # 0057. `PartialOrd` and `Ord`: an `Ordering`, and the parts in turn
 
-Status: Accepted. Extends [0036](0036-iterators-and-sorting.md) and [0053](0053-partial-eq.md).
+Status: Accepted. `Reverse` compares the other way round, and another crate's struct is an error rather than field by field ([0068](0068-queues.md)). Extends [0036](0036-iterators-and-sorting.md) and [0053](0053-partial-eq.md).
 
 ## Context
 

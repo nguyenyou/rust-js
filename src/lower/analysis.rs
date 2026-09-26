@@ -864,7 +864,7 @@ fn changed_vecs<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[&Body<'tcx>]) -> HashSet<
                 arg,
             } = expr.kind
                 && let ty = body.thir[arg].ty
-                && matches!(ty.kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(sym::Vec, adt.did()))
+                && matches!(ty.kind(), ty::Adt(adt, _) if [sym::Vec, Symbol::intern("VecDeque"), Symbol::intern("BinaryHeap")].into_iter().any(|name| tcx.is_diagnostic_item(name, adt.did())))
             {
                 changed.insert(ty);
             }

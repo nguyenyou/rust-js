@@ -55,6 +55,7 @@ pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
         LangItem::MulAssign,
         LangItem::DivAssign,
         LangItem::RemAssign,
+        LangItem::Index,
     ]
     .into_iter()
     .any(|item| tcx.is_lang_item(id, item))

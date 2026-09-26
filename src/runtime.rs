@@ -40,6 +40,13 @@ pub enum Helper {
     TrailingZeros,
     CountOnes,
     BinarySearch,
+    RemoveOpt,
+    SiftUp,
+    SiftDown,
+    HeapPush,
+    HeapPop,
+    HeapSorted,
+    HeapFrom,
     ParseInt,
     ParseF64,
     ParseBool,
@@ -810,6 +817,131 @@ function $binarySearch(items, x) {
   }
   const found = items[base];
   return found === x ? { TAG: "Ok", _0: base } : { TAG: "Err", _0: base + (found < x ? 1 : 0) };
+}
+"#
+            }
+            // `d.remove(i)` of a `VecDeque`: the item, or `None` past the end.
+            Helper::RemoveOpt => {
+                r#"
+function $removeOpt(items, index) {
+  return index < items.length ? items.splice(index, 1)[0] : undefined;
+}
+"#
+            }
+            // A `BinaryHeap` (ADR 0068), step for step as Rust's: `sift_up`,
+            // `sift_down_range` and `sift_down_to_bottom` move a hole, and
+            // compare as `<=` and `>=` of the items' `cmp`.
+            Helper::SiftUp => {
+                r#"
+function $siftUp(heap, start, pos, cmp) {
+  const item = heap[pos];
+  while (pos > start) {
+    const parent = (pos - 1) >>> 1;
+    if (cmp(item, heap[parent]) <= 0) {
+      break;
+    }
+    heap[pos] = heap[parent];
+    pos = parent;
+  }
+  heap[pos] = item;
+  return pos;
+}
+"#
+            }
+            Helper::SiftDown => {
+                r#"
+function $siftDown(heap, pos, end, cmp) {
+  const item = heap[pos];
+  let child = 2 * pos + 1;
+  while (child <= end - 2) {
+    if (cmp(heap[child], heap[child + 1]) <= 0) {
+      child += 1;
+    }
+    if (cmp(item, heap[child]) >= 0) {
+      heap[pos] = item;
+      return pos;
+    }
+    heap[pos] = heap[child];
+    pos = child;
+    child = 2 * pos + 1;
+  }
+  if (child === end - 1 && cmp(item, heap[child]) < 0) {
+    heap[pos] = heap[child];
+    pos = child;
+  }
+  heap[pos] = item;
+  return pos;
+}
+"#
+            }
+            Helper::HeapPush => {
+                r#"
+function $heapPush(heap, item, cmp) {
+  heap.push(item);
+  $siftUp(heap, 0, heap.length - 1, cmp);
+}
+"#
+            }
+            // The last item goes to the top, which then sinks to the bottom
+            // and rises back: Rust's `sift_down_to_bottom`.
+            Helper::HeapPop => {
+                r#"
+function $heapPop(heap, cmp) {
+  if (heap.length === 0) {
+    return undefined;
+  }
+  let top = heap.pop();
+  if (heap.length > 0) {
+    [top, heap[0]] = [heap[0], top];
+    const end = heap.length;
+    const item = heap[0];
+    let pos = 0;
+    let child = 1;
+    while (child <= end - 2) {
+      if (cmp(heap[child], heap[child + 1]) <= 0) {
+        child += 1;
+      }
+      heap[pos] = heap[child];
+      pos = child;
+      child = 2 * pos + 1;
+    }
+    if (child === end - 1) {
+      heap[pos] = heap[child];
+      pos = child;
+    }
+    heap[pos] = item;
+    $siftUp(heap, 0, pos, cmp);
+  }
+  return top;
+}
+"#
+            }
+            // `into_sorted_vec` and `BinaryHeap::from` take what they're given,
+            // which may be a clone that was never made (ADR 0052): a copy, then.
+            Helper::HeapSorted => {
+                r#"
+function $heapSorted(items, cmp) {
+  const heap = items.slice();
+  let end = heap.length;
+  while (end > 1) {
+    end -= 1;
+    [heap[0], heap[end]] = [heap[end], heap[0]];
+    $siftDown(heap, 0, end, cmp);
+  }
+  return heap;
+}
+"#
+            }
+            Helper::HeapFrom => {
+                r#"
+function $heapFrom(items, cmp) {
+  const heap = items.slice();
+  let n = heap.length >>> 1;
+  while (n > 0) {
+    n -= 1;
+    $siftDown(heap, n, heap.length, cmp);
+  }
+  return heap;
 }
 "#
             }

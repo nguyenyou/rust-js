@@ -97,7 +97,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Arrays and cells are JS objects that change in place, and so
             // is a `Vec` something takes `&mut` of.
             ty::Array(..) => true,
-            ty::Adt(_, args) if std("Vec") => self.vec_changed(ty) || self.needs_clone_in(args.type_at(0), seen),
+            ty::Adt(_, args) if self.is_vec_like(ty) => {
+                self.vec_changed(ty) || self.needs_clone_in(args.type_at(0), seen)
+            }
             ty::Adt(..) if std("Cell") || std("RefCell") => true,
             // A map or a set changes in place (ADR 0059).
             ty::Adt(..) if self.is_map(ty) => true,
@@ -123,6 +125,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.is_lang_adt(ty, LangItem::Option)
             || self.is_std_adt(ty, sym::Result)
             || self.is_lang_adt(ty, LangItem::OrderingEnum)
+            // Its `PartialEq` and `Clone` are its field's; its order isn't
+            // (`cmp_value`).
+            || self.is_reverse(ty)
     }
 
     /// `Clone::clone` of the `ty` at `place`: the place itself when nothing
@@ -161,7 +166,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         match ty.kind() {
             ty::Array(item, _) => self.clone_items(place, *item, span),
-            ty::Adt(_, args) if std("Vec") => self.clone_items(place, args.type_at(0), span),
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.clone_items(place, args.type_at(0), span),
             ty::Adt(_, args) if ty.is_box() => self.clone_value(place, args.type_at(0), span, out),
             ty::Adt(_, args) if std("Cell") || std("RefCell") => {
                 let value = self.clone_value(Expr::member(place, "value"), args.type_at(0), span, out)?;
@@ -317,7 +322,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Char => Expr::str("\0"),
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),
             _ if self.is_lang_adt(ty, LangItem::String) => Expr::str(""),
-            _ if std("Vec") => Expr::array(Vec::new()),
+            _ if self.is_vec_like(ty) => Expr::array(Vec::new()),
             _ if self.is_map(ty) => Expr::new_(Expr::var(if self.is_set(ty) { "Set" } else { "Map" }), Vec::new()),
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
             ty::Adt(_, args) if std("Cell") || std("RefCell") => Expr::object(vec![Prop::Field(
@@ -456,7 +461,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         match ty.kind() {
             ty::Array(item, _) | ty::Slice(item) => self.eq_items(a, b, *item, span),
-            ty::Adt(_, args) if std("Vec") => self.eq_items(a, b, args.type_at(0), span),
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.eq_items(a, b, args.type_at(0), span),
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.eq_value(a, b, args.type_at(0), span, out),
             ty::Adt(_, args) if std("Cell") || std("RefCell") => self.eq_value(
                 Expr::member(a, "value"),

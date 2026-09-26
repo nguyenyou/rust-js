@@ -332,11 +332,7 @@ export function grouped(n) {
     zero.push(99);
   }
   let all = Array.from(copy);
-  all.sort((a, b) => {
-    const left = a[1];
-    const right = b[1];
-    return $cmp(a[0], b[0]) || $cmpItems(left, right, $cmp);
-  });
+  all.sort((a, b) => $cmp(a[0], b[0]) || $cmpItems(a[1], b[1], $cmp));
   return all;
 }
 

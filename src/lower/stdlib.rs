@@ -1,5 +1,6 @@
 //! Recognize supported standard-library operations and translate their behavior.
 
+use super::combinators::HeapOp;
 use super::combinators::{self, Comb, IterComb};
 use super::format_spec::{Radix, Spec};
 use super::maps::{MapOp, Part};
@@ -72,6 +73,10 @@ pub(super) enum Std {
     /// A `char` or `str` method, `parse`, or slicing by a range (ADR 0063).
     Text(TextOp),
     Number(NumOp),
+    /// A `BinaryHeap`'s own methods (ADR 0068).
+    Heap(HeapOp),
+    /// `VecDeque::remove(i)`: an `Option`, where `Vec`'s panics.
+    DequeRemove,
     /// `vec![x; n]`.
     FromElem,
     /// An `Option`, `Result` or `Vec` method (ADR 0062).
@@ -250,7 +255,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ty = self_ty?;
             let same = self.is_string_like(ty)
                 || self.is_js_object(ty)
-                || [sym::Rc, sym::Vec].into_iter().any(|name| self.is_std_adt(ty, name))
+                || self.is_std_adt(ty, sym::Rc)
+                || self.is_vec_like(ty)
                 || ["RefCellRef", "RefCellRefMut"]
                     .into_iter()
                     .any(|name| self.is_std_adt(ty, Symbol::intern(name)));
@@ -307,13 +313,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     matches!(range.kind(), ty::Adt(adt, _) if tcx.item_name(adt.did()).as_str() == *name
                         && tcx.crate_name(adt.did().krate) == sym::core)
                 })
-                && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_std_adt(ty.peel_refs(), sym::Vec))
+                && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_vec_like(ty.peel_refs()))
             {
                 return Some(Std::Text(TextOp::Slice));
             }
             // `v[i]` of a `Vec` is a slice's, checked the same way.
             if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
-                && self.is_std_adt(ty.peel_refs(), sym::Vec)
+                && self.is_vec_like(ty.peel_refs())
                 && args.types().nth(1).is_some_and(|i| i.is_usize())
             {
                 return Some(Std::Index);
@@ -369,7 +375,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
                 && tcx.item_name(def_id).as_str() == "into_iter"
-                && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_std_adt(ty.peel_refs(), sym::Vec))
+                && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_vec_like(ty.peel_refs()))
             {
                 return Some(Std::Same);
             }
@@ -385,8 +391,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
             }
             // `v.extend(items)` (ADR 0062).
-            if combinators::is_extend(tcx, trait_) && self.is_std_adt(ty.peel_refs(), sym::Vec) {
+            if combinators::is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
                 return Some(Std::Comb(Comb::Extend));
+            }
+            // `VecDeque::from(v)` is a copy of `v`, which may be a clone that
+            // was never made (ADR 0052); `BinaryHeap::from(v)` puts one in heap order.
+            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("VecDeque")) {
+                return Some(Std::ToVec);
+            }
+            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("BinaryHeap")) {
+                return Some(Std::Heap(HeapOp::From));
             }
             // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
             if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
@@ -425,6 +439,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (map, set) = (adt("HashMap") || adt("BTreeMap"), adt("HashSet") || adt("BTreeSet"));
         let entry = adt("HashMapEntry") || adt("BTreeEntry");
         let name = tcx.item_name(def_id);
+        let (deque, heap) = (adt("VecDeque"), adt("BinaryHeap"));
+        // Theirs first: `push` and `pop` keep a heap's order, and a deque's
+        // `remove` is an `Option` (ADR 0068).
+        let own = match name.as_str() {
+            "push" if heap => Some(Std::Heap(HeapOp::Push)),
+            "pop" if heap => Some(Std::Heap(HeapOp::Pop)),
+            "peek" if heap => Some(Std::First),
+            "into_sorted_vec" if heap => Some(Std::Heap(HeapOp::IntoSorted)),
+            "into_vec" if heap => Some(Std::Same),
+            "remove" if deque => Some(Std::DequeRemove),
+            "push_back" if deque => Some(Std::Push),
+            "pop_back" if deque => Some(Std::Method("pop")),
+            "push_front" if deque => Some(Std::Method("unshift")),
+            "pop_front" if deque => Some(Std::Method("shift")),
+            "front" if deque => Some(Std::First),
+            "back" if deque => Some(Std::SliceLast),
+            "make_contiguous" if deque => Some(Std::Same),
+            "iter" | "iter_mut" if deque || heap => Some(Std::Same),
+            "new" | "with_capacity" if deque || heap => Some(Std::VecNew),
+            "len" if deque || heap => Some(Std::Len),
+            "is_empty" if deque || heap => Some(Std::IsEmpty),
+            "clear" if deque || heap => Some(Std::Clear),
+            "retain" if deque => Some(Std::Retain),
+            _ => None,
+        };
+        if own.is_some() {
+            return own;
+        }
         if let Some(op) = text::classify(name.as_str(), owner.is_char(), owner.is_str()) {
             return Some(Std::Text(op));
         }
@@ -437,8 +479,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             name.as_str(),
             option,
             result,
-            adt("Vec"),
-            adt("Vec") || owner.is_slice(),
+            adt("Vec") || deque,
+            adt("Vec") || deque || owner.is_slice(),
         )
         .or_else(|| combinators::classify_bool(name.as_str(), owner.is_bool()))
         {
@@ -1079,7 +1121,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     },
                     _ => false,
                 };
-                if fresh { items } else { method(items, "slice", vec![]) }
+                let items = if fresh { items } else { method(items, "slice", vec![]) };
+                // Into a `BinaryHeap`: put in heap order, as `BinaryHeap::from` does.
+                match generic_args.types().nth(1) {
+                    Some(target) if self.is_std_adt(target, Symbol::intern("BinaryHeap")) => {
+                        let item = target.walk().nth(1).and_then(|a| a.as_type()).expect("a heap's item");
+                        self.heap_of(item, span)?;
+                        let compare = self.cmp_fn(item, false, span)?;
+                        self.runtime.extend([Helper::HeapFrom, Helper::SiftDown]);
+                        Expr::call(Expr::var("$heapFrom"), vec![items, compare])
+                    }
+                    _ => items,
+                }
             }
             Std::Position => {
                 self.runtime.insert(Helper::Position);

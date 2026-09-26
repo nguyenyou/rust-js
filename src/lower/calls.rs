@@ -234,6 +234,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ty = self.thir[args[0]].ty.peel_refs();
             return self.number_call(op, args, ty, span, out);
         }
+        if let Std::Heap(op) = known {
+            return self.heap_call(op, args, span, out);
+        }
+        if known == Std::DequeRemove {
+            let [items, at]: [Expr; 2] = self.operands(args, out)?.try_into().ok().expect("a deque and an index");
+            self.runtime.insert(Helper::RemoveOpt);
+            return Ok(Expr::call(Expr::var("$removeOpt"), vec![items, at]));
+        }
         if known == Std::FromElem {
             return self.vec_of_copies(args, span, out);
         }
@@ -398,7 +406,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::First => Expr::index(arg(), Expr::int(0)),
             Std::SliceLast => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
-            Std::ToVec => Expr::call(Expr::member(arg(), "slice"), vec![]),
+            // A copy, unless it's an array just written: `vec![3, 4].into()`.
+            Std::ToVec => match arg() {
+                items if matches!(items.kind, js::ExprKind::Array(_)) => items,
+                items => Expr::call(Expr::member(items, "slice"), vec![]),
+            },
             Std::SortBy => {
                 let (v, compare) = (arg(), arg());
                 Expr::call(Expr::member(v, "sort"), vec![compare])
@@ -620,7 +632,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Only in a `format_args!` it recognizes whole (ADR 0058).
             Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
-            Std::Map(_) | Std::Comb(_) | Std::IterComb(_) | Std::Text(_) | Std::Number(_) | Std::FromElem => {
+            Std::Map(_)
+            | Std::Comb(_)
+            | Std::IterComb(_)
+            | Std::Text(_)
+            | Std::Number(_)
+            | Std::FromElem
+            | Std::Heap(_)
+            | Std::DequeRemove => {
                 unreachable!("handled above")
             }
             // `Some(&x)` is `x`, and its clone is `x`'s.
