@@ -786,7 +786,7 @@ test("== calls a hand-written eq wherever it's inside, and generics take a dicti
   expect(js).toContain("export function same(a, b, TPartialEq) {\n  return TPartialEq.eq(a, b);");
   expect(js).toContain("    versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),");
   expect(js).toContain("    !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),");
-  expect(js).toContain('    a.TAG === "Bump" ? b.TAG === "Bump" && versionPartialEq_eq(a._0, b._0) : $eq(a, b),');
+  expect(js).toContain('    left.TAG === "Bump" ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0) : $eq(left, right),');
   // A fieldless variant is a string: only itself is equal to it.
   expect(js).toContain('    } === "Nothing",');
   // A `T: Eq` is given `T`'s `PartialEq`, and one that compares field by field is `$eq`.
@@ -839,4 +839,16 @@ test("format! writes its arguments in place, in the order Rust runs them", async
   // And a call in one doesn't make the call before it a `const`.
   const traits = await Bun.file(join(root, "test/snapshots/traits/traits.js")).text();
   expect(traits).toContain('label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self))');
+});
+
+// ADR 0057: an `Ordering` is -1, 0 or 1; derived, the fields in turn with `||`.
+test("PartialOrd and Ord compare with $cmp, a hand-written cmp, or the parts in turn", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  expect(js).toContain("all.sort((a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));");
+  expect(js).toContain("words.sort(wordOrd_cmp);");
+  expect(js).toContain("lists.sort((a, b) => $cmpItems(a, b, $cmp));");
+  // Generic: dictionaries, `{ cmp }` and `{ partial_cmp }`.
+  expect(js).toContain("export function in_order(a, b, TPartialOrd) {\n  return TPartialOrd.partial_cmp(a, b) <= 0;");
+  // `NaN` isn't ordered: `$thenCmp` stops at an `undefined`, which `||` wouldn't.
+  expect(js).toContain("$thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) < 0");
 });

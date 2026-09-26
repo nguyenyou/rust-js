@@ -95,6 +95,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0054 `Display`: a `fmt` returns the string it writes](decisions/0054-display.md)
 - [0055 The crate's own `Iterator` is a JS iterator](decisions/0055-iterator.md)
 - [0056 Indexing: `$index(v, i)` to read, `v[$at(v, i)] = x` to write](decisions/0056-indexing.md)
+- [0057 `PartialOrd` and `Ord`: an `Ordering`, and the parts in turn](decisions/0057-ordering.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

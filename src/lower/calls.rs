@@ -186,6 +186,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::SliceLast
                     | Std::ResultOk
                     | Std::ArrayMethod("find")
+                    | Std::Extreme(_)
             )
         {
             return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));

@@ -38,6 +38,7 @@ mod bindings;
 mod calls;
 mod display;
 mod jsx;
+mod ordering;
 mod representation;
 mod std_impls;
 mod stdlib;

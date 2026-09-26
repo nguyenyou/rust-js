@@ -375,10 +375,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.partial_eq_trait(),
                 self.args_of(self.partial_eq_trait(), ty),
             );
-            let dictionary = self
-                .evidence_for(tr)
-                .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
-            return Ok(Expr::call(Expr::member(dictionary, "eq"), vec![a, b]));
+            if let Some(dictionary) = self.evidence_for(tr) {
+                return Ok(Expr::call(Expr::member(dictionary, "eq"), vec![a, b]));
+            }
+            // A `T: Ord` or `T: PartialOrd` only: equal is `Equal` (ADR 0057).
+            let ord = ty::TraitRef::new(self.tcx, self.ord_trait(), [ty]);
+            let partial_ord = ty::TraitRef::new_from_args(
+                self.tcx,
+                self.partial_ord_trait(),
+                self.args_of(self.partial_ord_trait(), ty),
+            );
+            if self.evidence_for(ord).is_some() || self.evidence_for(partial_ord).is_some() {
+                let order = self.cmp_value(a, b, ty, self.evidence_for(ord).is_none(), span, out)?;
+                return Ok(Expr::bin(Op::Eq, order, Expr::int(0)));
+            }
+            return Err(self.unsupported(span, &format!("implementation evidence for `{tr}`")));
         }
         if self.has_user_impl(self.partial_eq_trait(), ty) {
             let eq = self.tcx.associated_item_def_ids(self.partial_eq_trait())[0];
@@ -409,8 +420,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$eq"), vec![a, b]));
         }
         // Each is read more than once below.
-        let a = if a.reads_same() { a } else { self.spill("a", a, out) };
-        let b = if b.reads_same() { b } else { self.spill("b", b, out) };
+        let a = if a.reads_same() { a } else { self.spill("left", a, out) };
+        let b = if b.reads_same() { b } else { self.spill("right", b, out) };
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         match ty.kind() {
             ty::Array(item, _) | ty::Slice(item) => self.eq_items(a, b, *item, span),

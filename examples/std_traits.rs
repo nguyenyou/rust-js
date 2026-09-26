@@ -3,8 +3,9 @@
 // copy only where it could be told apart from the value: something changes
 // one of them, or a hand-written `clone` makes something else. A
 // hand-written `eq` decides wherever it is, and a `fmt` returns what it
-// writes. An `Iterator` is a JS iterator.
+// writes. An `Iterator` is a JS iterator, and an `Ordering` is -1, 0 or 1.
 
+use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Clone, Default)]
@@ -406,5 +407,103 @@ pub fn generic_iterations() -> (usize, usize, Vec<u32>, Option<u32>) {
         Repeat { item: None::<u32>, times: 2 }.filter(|o| o.is_none()).count(),
         Repeat { item: 2, times: 3 }.collect(),
         Countdown { n: 5 }.enumerate().map(|(i, x)| i as u32 * x).max(),
+    )
+}
+
+/// `PartialOrd` and `Ord` (ADR 0057): an `Ordering` is -1, 0 or 1. Derived,
+/// the fields in turn: `$cmp(a.major, b.major) || $cmp(a.minor, b.minor)`.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Semver {
+    pub major: u32,
+    pub minor: u32,
+}
+
+/// `f64`s: `NaN` isn't ordered, so neither are two of these with one.
+#[derive(PartialEq, PartialOrd, Clone, Copy)]
+pub struct Spot {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// By the order the variants are declared in.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum Priority {
+    Low,
+    Mid,
+    High,
+}
+
+/// Hand-written: shorter first, then alphabetically.
+#[derive(PartialEq, Eq, Clone)]
+pub struct Word(pub String);
+
+impl PartialOrd for Word {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Word {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let by_length = self.0.chars().count().cmp(&other.0.chars().count());
+        if by_length != Ordering::Equal { by_length } else { self.0.cmp(&other.0) }
+    }
+}
+
+pub fn largest<T: Ord + Copy>(xs: &[T]) -> Option<T> {
+    xs.iter().copied().max()
+}
+
+pub fn in_order<T: PartialOrd>(a: &T, b: &T) -> bool {
+    a <= b
+}
+
+pub fn orderings() -> (bool, bool, bool, u32, u32, Vec<u32>) {
+    let a = Semver { major: 1, minor: 2 };
+    let b = Semver { major: 1, minor: 10 };
+    let mut all = vec![b, Semver { major: 0, minor: 9 }, a];
+    all.sort();
+    (
+        a < b,
+        a.max(b) == b,
+        a.cmp(&b) == Ordering::Less,
+        largest(&all).map(|v| v.minor).unwrap_or(0),
+        all.iter().min().map(|v| v.minor).unwrap_or(0),
+        all.iter().map(|v| v.minor).collect(),
+    )
+}
+
+pub fn partial_orderings() -> (bool, bool, bool, bool) {
+    let p = Spot { x: 1.0, y: f64::NAN };
+    let q = Spot { x: 1.0, y: 2.0 };
+    let r = Spot { x: 0.5, y: f64::NAN };
+    (p < q, p >= q, r < q, p.partial_cmp(&q).is_none())
+}
+
+pub fn more_orderings() -> (bool, bool, bool, Vec<u32>, bool, u32) {
+    let mut words = vec![
+        Word("pear".to_string()),
+        Word("fig".to_string()),
+        Word("apple".to_string()),
+        Word("kiwi".to_string()),
+    ];
+    words.sort();
+    let mut priorities = vec![Priority::High, Priority::Low, Priority::Mid];
+    priorities.sort();
+    let mut lists = vec![vec![2u32, 1], vec![1, 5, 0], vec![1, 5]];
+    lists.sort();
+    let mut sizes: Vec<u32> = words.iter().map(|w| w.0.chars().count() as u32).collect();
+    for list in &lists {
+        sizes.push(list.len() as u32);
+    }
+    let mut by_key = vec![Semver { major: 2, minor: 0 }, Semver { major: 1, minor: 5 }];
+    by_key.sort_by_key(|v| (v.minor, v.major));
+    (
+        Priority::Low < Priority::High,
+        priorities[0] == Priority::Low,
+        Some(3) > None,
+        sizes,
+        in_order(&"abc", &"abd"),
+        by_key[0].major,
     )
 }

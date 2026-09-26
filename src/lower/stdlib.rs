@@ -712,6 +712,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(Expr::call(Expr::var("$iterator"), list))
     }
 
+    /// What an iterator of type `iterator` yields: its `Item`.
+    pub(super) fn iterator_item(&self, iterator: ty::Ty<'tcx>) -> Option<ty::Ty<'tcx>> {
+        let trait_id = self.tcx.get_diagnostic_item(sym::Iterator)?;
+        let item = self
+            .tcx
+            .associated_item_def_ids(trait_id)
+            .iter()
+            .copied()
+            .find(|&id| self.tcx.item_name(id) == sym::Item)?;
+        let projection = ty::Ty::new_projection(self.tcx, item, [iterator]);
+        self.tcx.try_normalize_erasing_regions(self.typing_env, projection).ok()
+    }
+
     pub(super) fn iterator_call(
         &mut self,
         known: Std,
@@ -815,8 +828,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var("$position"), vec![items, next()])
             }
             Std::Extreme(max) => {
-                self.runtime.insert(if max { Helper::Max } else { Helper::Min });
-                Expr::call(Expr::var(if max { "$max" } else { "$min" }), vec![items])
+                let item = generic_args.types().next().and_then(|i| self.iterator_item(i));
+                match item {
+                    // Of what JS's `<` doesn't order: with its `cmp` (ADR 0057).
+                    Some(item) if !self.is_primitive_ord(item) => {
+                        let compare = self.cmp_fn(item, false, span)?;
+                        self.runtime.insert(if max { Helper::MaxBy } else { Helper::MinBy });
+                        let mut list = vec![items, compare];
+                        if self.boxed_payload(item) {
+                            self.runtime.insert(Helper::Some);
+                            list.push(Expr::bool(true));
+                        }
+                        Expr::call(Expr::var(if max { "$maxBy" } else { "$minBy" }), list)
+                    }
+                    _ => {
+                        self.runtime.insert(if max { Helper::Max } else { Helper::Min });
+                        Expr::call(Expr::var(if max { "$max" } else { "$min" }), vec![items])
+                    }
+                }
             }
             Std::Last => method(items, "at", vec![Expr::int(-1)]),
             Std::Cloned => {
@@ -844,11 +873,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 } else if self.is_string_like(elem) || elem.is_bool() {
                     method(items, "sort", vec![])
                 } else {
-                    return Err(self.unsupported(span, &format!("sorting `{elem}`s")));
+                    // By its `cmp`: JS's `sort` is stable too (ADR 0057).
+                    method(items, "sort", vec![self.cmp_fn(elem, false, span)?])
                 }
             }
             Std::SortByKey => {
-                self.runtime.insert(Helper::Cmp);
                 let key = next();
                 let key = if matches!(key.kind, js::ExprKind::Var(_)) {
                     key
@@ -856,14 +885,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     self.spill("key", key, out)
                 };
                 let js_span = self.js_span(span);
-                let compare = Expr::call(
-                    Expr::var("$cmp"),
-                    vec![Expr::call(key.clone(), vec![a]), Expr::call(key, vec![b])],
-                );
-                let f = Expr::arrow(
-                    vec!["a".into(), "b".into()],
-                    vec![StmtKind::Return(Some(compare)).at(js_span)],
-                );
+                // The keys' `cmp`, which is `$cmp` for what JS orders.
+                let key_ty = generic_args.types().nth(1).expect("`sort_by_key` names its key");
+                let mut body = Vec::new();
+                let compare = self.cmp_value(
+                    Expr::call(key.clone(), vec![a]),
+                    Expr::call(key, vec![b]),
+                    key_ty,
+                    false,
+                    span,
+                    &mut body,
+                )?;
+                // A key read more than once, like a tuple's, is a `const` first.
+                body.push(StmtKind::Return(Some(compare)).at(js_span));
+                let f = Expr::arrow(vec!["a".into(), "b".into()], body);
                 method(items, "sort", vec![f])
             }
             _ => unreachable!("not an iterator's method"),

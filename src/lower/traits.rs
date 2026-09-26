@@ -19,6 +19,8 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_lang_item(id, LangItem::Copy)
         || tcx.is_lang_item(id, LangItem::Clone)
         || tcx.is_lang_item(id, LangItem::PartialEq)
+        || tcx.is_lang_item(id, LangItem::PartialOrd)
+        || tcx.is_diagnostic_item(sym::Ord, id)
         || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
@@ -221,7 +223,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
         let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
         let display = tr.def_id == self.display_trait();
-        if (default || clone || eq || display) && !self.has_user_impl(tr.def_id, ty) {
+        let ord = tr.def_id == self.ord_trait();
+        let partial_ord = tr.def_id == self.partial_ord_trait();
+        if (default || clone || eq || display || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
+            if ord || partial_ord {
+                let (name, compare) = if ord {
+                    ("cmp", self.cmp_fn(ty, false, span)?)
+                } else {
+                    ("partial_cmp", self.cmp_fn(ty, true, span)?)
+                };
+                return Ok(Expr::object(vec![Prop::Field(name.into(), compare)]));
+            }
             if display {
                 let fmt = self.display_fn(ty, span)?;
                 return Ok(Expr::object(vec![Prop::Field("fmt".into(), fmt)]));
@@ -353,6 +365,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 "ne" => super::std_impls::negate(eq),
                 _ => eq,
             }));
+        }
+        // `a < b`, `a.cmp(&b)`, `a.max(b)` (ADR 0057). Of numbers, they're
+        // std's operators and `Math.max`, as before.
+        let ordering = tr.def_id == self.ord_trait() || tr.def_id == self.partial_ord_trait();
+        if let Some(call) = self.ordering_call(id, tr, values.clone(), span, out)? {
+            return Ok(Some(call));
+        }
+        if ordering && super::representation::Num::of(tr.self_ty().peel_refs()).is_some() {
+            return Ok(None);
         }
         // A std trait's dictionary has only its required methods.
         if operational(self.tcx, trait_id) && !trait_id.is_local() && self.tcx.defaultness(id).has_value() {

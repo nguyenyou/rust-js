@@ -11,6 +11,11 @@ function $traitImpl(cache, keys, make) {
   return cache.get(key);
 }
 
+function $index(items, index) {
+  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);
+  return items[index];
+}
+
 // Shortest round-trip decimal, using exact rational arithmetic.
 // Rust Display uses decimal notation, including for very small/large values.
 // Not JS's `String(x)`, though its digits are also the shortest: when two are
@@ -124,11 +129,58 @@ function $iterator(iterator, next, boxed = false) {
   });
 }
 
+function $cmp(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function $partialCmp(a, b) {
+  return a < b ? -1 : a > b ? 1 : a === b ? 0 : undefined;
+}
+
+function $cmpIn(names, a, b) {
+  return $cmp(names.indexOf(a), names.indexOf(b));
+}
+
+function $cmpItems(a, b, cmp) {
+  for (let i = 0; i < a.length && i < b.length; i++) {
+    const order = cmp(a[i], b[i]);
+    if (order !== 0) {
+      return order;
+    }
+  }
+  return $cmp(a.length, b.length);
+}
+
+function $thenCmp(...orders) {
+  for (const order of orders) {
+    if (order !== 0) {
+      return order;
+    }
+  }
+  return 0;
+}
+
+function $maxBy(items, cmp, boxed = false) {
+  if (items.length === 0) {
+    return undefined;
+  }
+  const max = items.reduce((max, x) => (cmp(x, max) >= 0 ? x : max));
+  return boxed ? $some(max) : max;
+}
+
+function $minBy(items, cmp, boxed = false) {
+  if (items.length === 0) {
+    return undefined;
+  }
+  const min = items.reduce((min, x) => (cmp(x, min) < 0 ? x : min));
+  return boxed ? $some(min) : min;
+}
+
 function $max(items) {
   return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
 }
 
-var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay;
+var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay, $wordPartialOrd, $wordOrd;
 
 export function fresh(TDefault) {
   return TDefault.default();
@@ -298,26 +350,26 @@ export function equalities() {
     version: version(1, "c"),
     notes: []
   };
-  const a = {
+  const left = {
     TAG: "Bump",
     _0: version(4, "a")
   };
-  const b = {
+  const right = {
     TAG: "Bump",
     _0: version(4, "b")
   };
-  const a$1 = version(5, "a");
-  const b$1 = version(5, "b");
+  const left$1 = version(5, "a");
+  const right$1 = version(5, "b");
   return [
     versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),
     !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),
     same(version(2, "a"), version(3, "a"), versionPartialEq()),
-    a.TAG === "Bump" ? b.TAG === "Bump" && versionPartialEq_eq(a._0, b._0) : $eq(a, b),
+    left.TAG === "Bump" ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0) : $eq(left, right),
     {
       TAG: "Note",
       _0: "n"
     } === "Nothing",
-    a$1 == null || b$1 == null ? a$1 == b$1 : versionPartialEq_eq(a$1, b$1)
+    left$1 == null || right$1 == null ? left$1 == right$1 : versionPartialEq_eq(left$1, right$1)
   ];
 }
 
@@ -436,6 +488,124 @@ export function generic_iterations() {
   ];
 }
 
+export function largest(xs, TOrd, TCopy) {
+  return $maxBy(xs.map((item) => TCopy.copy(item)), TOrd.cmp, true);
+}
+
+export function in_order(a, b, TPartialOrd) {
+  return TPartialOrd.partial_cmp(a, b) <= 0;
+}
+
+export function orderings() {
+  const a = {
+    major: 1,
+    minor: 2
+  };
+  const b = {
+    major: 1,
+    minor: 10
+  };
+  let all = [
+    b,
+    {
+      major: 0,
+      minor: 9
+    },
+    a
+  ];
+  all.sort((a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
+  const v = largest(all, { cmp: (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor) }, { copy: (value) => ({ ...value }) });
+  const v$1 = $minBy(all, (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
+  return [
+    ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) < 0,
+    $eq(($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) > 0 ? a : b, b),
+    ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) === -1,
+    (v != null ? v.minor : undefined) ?? 0,
+    (v$1 != null ? v$1.minor : undefined) ?? 0,
+    all.map((v) => v.minor)
+  ];
+}
+
+export function partial_orderings() {
+  const p = {
+    x: 1,
+    y: NaN
+  };
+  const q = {
+    x: 1,
+    y: 2
+  };
+  const r = {
+    x: .5,
+    y: NaN
+  };
+  return [
+    $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) < 0,
+    $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) >= 0,
+    $thenCmp($partialCmp(r.x, q.x), $partialCmp(r.y, q.y)) < 0,
+    $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) == null
+  ];
+}
+
+export function more_orderings() {
+  let words = [
+    ["pear"],
+    ["fig"],
+    ["apple"],
+    ["kiwi"]
+  ];
+  words.sort(wordOrd_cmp);
+  let priorities = [
+    "High",
+    "Low",
+    "Mid"
+  ];
+  priorities.sort((a, b) => $cmpIn([
+    "Low",
+    "Mid",
+    "High"
+  ], a, b));
+  let lists = [
+    [2, 1],
+    [
+      1,
+      5,
+      0
+    ],
+    [1, 5]
+  ];
+  lists.sort((a, b) => $cmpItems(a, b, $cmp));
+  let sizes = words.map((w) => Array.from(w[0]).length);
+  for (const list of lists) {
+    sizes.push(list.length);
+  }
+  let byKey = [{
+    major: 2,
+    minor: 0
+  }, {
+    major: 1,
+    minor: 5
+  }];
+  const key = (v) => [v.minor, v.major];
+  byKey.sort((a, b) => {
+    const left = key(a);
+    const right = key(b);
+    return $cmp(left[0], right[0]) || $cmp(left[1], right[1]);
+  });
+  return [
+    $cmpIn([
+      "Low",
+      "Mid",
+      "High"
+    ], "Low", "High") < 0,
+    $index(priorities, 0) === "Low",
+    (3 == null ? undefined == null ? 0 : -1 : undefined == null ? 1 : $cmp(3, undefined)) > 0,
+    sizes,
+    in_order("abc", "abd", { partial_cmp: $cmp }),
+    $index(byKey, 0).major
+  ];
+}
+
 function configDefault_default() {
   return {
     retries: 3,
@@ -532,6 +702,19 @@ function repeatIterator_next(repeat, TClone) {
   return $some(TClone.clone(repeat.item));
 }
 
+function wordPartialOrd_partial_cmp(word, other) {
+  return wordOrd_cmp(word, other);
+}
+
+function wordOrd_cmp(word, other) {
+  const byLength = $cmp(Array.from(word[0]).length, Array.from(other[0]).length);
+  if (byLength !== 0) {
+    return byLength;
+  } else {
+    return $cmp(word[0], other[0]);
+  }
+}
+
 export function configDefault() {
   if ($configDefault === undefined) {
     $configDefault = { default: configDefault_default };
@@ -593,5 +776,25 @@ export function labeledDisplay(TDisplay) {
     $labeledDisplay = new WeakMap();
   }
   return $traitImpl($labeledDisplay, [TDisplay], () => ({ fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay) }));
+}
+
+export function wordPartialOrd() {
+  if ($wordPartialOrd === undefined) {
+    $wordPartialOrd = {
+      PartialEq: () => ({ eq: $eq }),
+      partial_cmp: wordPartialOrd_partial_cmp
+    };
+  }
+  return $wordPartialOrd;
+}
+
+export function wordOrd() {
+  if ($wordOrd === undefined) {
+    $wordOrd = {
+      PartialOrd: () => wordPartialOrd(),
+      cmp: wordOrd_cmp
+    };
+  }
+  return $wordOrd;
 }
 //# sourceMappingURL=std_traits.js.map

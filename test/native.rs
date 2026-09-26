@@ -200,6 +200,9 @@ fn main() {
     case("std_traits.displays", &[], std_traits::displays);
     case("std_traits.iterations", &[], std_traits::iterations);
     case("std_traits.generic_iterations", &[], std_traits::generic_iterations);
+    case("std_traits.orderings", &[], std_traits::orderings);
+    case("std_traits.partial_orderings", &[], std_traits::partial_orderings);
+    case("std_traits.more_orderings", &[], std_traits::more_orderings);
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

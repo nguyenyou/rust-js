@@ -30,6 +30,12 @@ pub enum Helper {
     UnwrapOk,
     Range,
     Cmp,
+    PartialCmp,
+    CmpIn,
+    CmpItems,
+    ThenCmp,
+    MaxBy,
+    MinBy,
     Max,
     Min,
     Position,
@@ -145,6 +151,74 @@ function $range(start, end) {
                 r#"
 function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+"#
+            }
+            // `partial_cmp` of `f64`s: `None` if either is `NaN`.
+            Helper::PartialCmp => {
+                r#"
+function $partialCmp(a, b) {
+  return a < b ? -1 : a > b ? 1 : a === b ? 0 : undefined;
+}
+"#
+            }
+            // A fieldless enum's variants, in the order they're declared.
+            Helper::CmpIn => {
+                r#"
+function $cmpIn(names, a, b) {
+  return $cmp(names.indexOf(a), names.indexOf(b));
+}
+"#
+            }
+            // Item by item, then the shorter first, as Rust orders sequences.
+            Helper::CmpItems => {
+                r#"
+function $cmpItems(a, b, cmp) {
+  for (let i = 0; i < a.length && i < b.length; i++) {
+    const order = cmp(a[i], b[i]);
+    if (order !== 0) {
+      return order;
+    }
+  }
+  return $cmp(a.length, b.length);
+}
+"#
+            }
+            // The first that isn't `Equal`, unordered (`undefined`) included.
+            Helper::ThenCmp => {
+                r#"
+function $thenCmp(...orders) {
+  for (const order of orders) {
+    if (order !== 0) {
+      return order;
+    }
+  }
+  return 0;
+}
+"#
+            }
+            // An iterator's `max`: the last of the greatest, as Rust's is. A generic
+            // one's `Some` may be a box (ADR 0051).
+            Helper::MaxBy => {
+                r#"
+function $maxBy(items, cmp, boxed = false) {
+  if (items.length === 0) {
+    return undefined;
+  }
+  const max = items.reduce((max, x) => (cmp(x, max) >= 0 ? x : max));
+  return boxed ? $some(max) : max;
+}
+"#
+            }
+            // And `min`: the first of the least.
+            Helper::MinBy => {
+                r#"
+function $minBy(items, cmp, boxed = false) {
+  if (items.length === 0) {
+    return undefined;
+  }
+  const min = items.reduce((min, x) => (cmp(x, min) < 0 ? x : min));
+  return boxed ? $some(min) : min;
 }
 "#
             }
