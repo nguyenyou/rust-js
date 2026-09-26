@@ -21,7 +21,7 @@ rmSync(dist, { recursive: true, force: true });
 // The page's own Rust, compiled by rust-js before main.ts is bundled.
 const webCrate = join(dist, "web", "libweb.rmeta");
 buildWebCrate(webCrate);
-await compileRust(webCrate);
+await compileRust();
 
 const result = await Bun.build({
   entrypoints: [join(import.meta.dir, "index.html")],

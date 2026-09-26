@@ -118,6 +118,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
 - [0032 The playground is written in Rust, compiled by rust-js, a part at a time](decisions/0032-dogfooding-the-playground.md)
+- [0044 The playground on React, a slice at a time](decisions/0044-playground-on-react.md)
 
 ## Research
 

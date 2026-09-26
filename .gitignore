@@ -12,7 +12,8 @@
 /wasm/web/dist
 # The playground's own Rust, compiled by wasm/web/compile-rust.ts
 /wasm/web/rust/*.js
-/wasm/web/rust/*.js.map
+/wasm/web/rust/*.jsx
+/wasm/web/rust/*.map
 node_modules/
 /.vitest
 /test-results

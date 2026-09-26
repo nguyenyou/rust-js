@@ -20,7 +20,7 @@ const sysroot = sysrootFiles();
 const webCrate = join(import.meta.dir, "../target/web/libweb.rmeta");
 buildWebCrate(webCrate);
 // The page's own Rust, compiled by rust-js before the page is bundled.
-await compileRust(webCrate);
+await compileRust();
 const notFound = () => new Response("not found", { status: 404 });
 
 const server = Bun.serve({

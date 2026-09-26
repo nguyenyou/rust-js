@@ -7,7 +7,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { root, target, run, buildCompiler, buildWeb } from "./support";
+import { root, target, run, buildCompiler, buildReact, buildWeb } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -70,8 +70,11 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
   throws = await import(join(target, "throws.js"));
-  // The playground's own Rust (ADR 0032), as build.ts compiles it with rust-js.wasm.
-  run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"), ...withWeb]);
+  // The playground's own Rust (ADRs 0032, 0044), as build.ts compiles it with
+  // rust-js.wasm: with React.
+  buildReact();
+  run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"),
+    ...withWeb, "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
   asyncs = await import(join(target, "async.js"));
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);

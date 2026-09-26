@@ -1,7 +1,8 @@
 // What the playground page needs besides itself, shared by the dev server
 // (serve.ts) and the static build for GitHub Pages (build.ts).
 
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 
 export const wasmPath = join(import.meta.dir, "../target/wasm32-wasip1/release/rust-js.wasm");
@@ -39,6 +40,19 @@ export function buildWebCrate(out: string) {
   const script = join(import.meta.dir, "../../web/build.sh");
   const p = Bun.spawnSync([script, "--target", "wasm32-unknown-unknown", "-o", out], { stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`web/build.sh failed:\n${p.stderr.toString()}`);
+}
+
+/**
+ * Build the react crate's metadata for the page's own Rust (ADR 0044), for
+ * the React the page has installed, with the web crate's beside it:
+ * `<dir>/libreact.rmeta` and `<dir>/libweb.rmeta`.
+ */
+export function buildReactCrate(dir: string) {
+  mkdirSync(dir, { recursive: true });
+  const react = JSON.parse(readFileSync(createRequire(import.meta.path).resolve("react/package.json"), "utf8")).version;
+  const script = join(import.meta.dir, "../../react/build.sh");
+  const p = Bun.spawnSync([script, "-o", join(dir, "libreact.rmeta"), "--react", react, "--target", "wasm32-unknown-unknown"], { stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`react/build.sh failed:\n${p.stderr.toString()}`);
 }
 
 /** A crate the page can load: its files, relative to `dir`, and its root. */

@@ -1,6 +1,7 @@
-// The playground, in Rust (ADR 0032). When the site is built, rust-js
-// compiles it to lib.js beside it, running as WebAssembly, the same compiler
-// the page runs (see ../compile-rust.ts), and main.ts calls `start`.
+// The playground, in Rust (ADR 0032), rendered by React (ADR 0044). When
+// the site is built, rust-js compiles it to lib.jsx beside it, running as
+// WebAssembly, the same compiler the page runs (see ../compile-rust.ts), and
+// main.ts calls `start`.
 //
 // A Rust crate in (a few files), one JS file per module out (ADR 0019).
 // rust-js.wasm runs on an in-memory WASI filesystem:
@@ -14,10 +15,17 @@
 // keeps global state, and a failed compile ends in a trap.
 
 #![feature(extern_types)]
+#![allow(non_snake_case)]
+
+mod page;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::rc::Rc;
+
+use react::component;
+use react::dom::client::create_root;
+use react::dom::flush_sync;
 
 use web::{
     Element, Event, HtmlButtonElement, HtmlIFrameElement, HtmlSelectElement, JsError, JsObject, MediaQueryList, Promise,
@@ -570,8 +578,9 @@ thread_local! {
     static PROGRAM_RUNS: Cell<u32> = Cell::new(0);
     /// Whether the latest one reported back.
     static REPORTED: Cell<bool> = Cell::new(false);
-    /// The Result frame: a new one for each run.
-    static RESULT_FRAME: Cell<&'static HtmlIFrameElement> = Cell::new(frame_by_id("result"));
+    /// The Result frame: a new one for each run. Found on first use, since
+    /// React renders it after this module loads.
+    static RESULT_FRAME: Cell<Option<&'static HtmlIFrameElement>> = Cell::new(None);
 }
 
 // Some JS functions are declared more than once, typed for each use.
@@ -592,6 +601,13 @@ unsafe extern "Rust" {
     safe fn message_data(this: &Event) -> Option<Report>;
     #[link_name = "Object.is"]
     safe fn same_object(a: Option<&JsObject>, b: Option<&JsObject>) -> bool;
+}
+
+fn result_frame() -> &'static HtmlIFrameElement {
+    match RESULT_FRAME.get() {
+        Some(frame) => frame,
+        None => frame_by_id("result"),
+    }
 }
 
 fn frame_by_id(id: &str) -> &'static HtmlIFrameElement {
@@ -682,7 +698,7 @@ pub fn run_program(files: &JsMap, root_file: &str, test: bool) {
     let section = html_element::unchecked_from(document::get_element_by_id(document, "result-section").expect("the page has a #result-section"));
     if !runnable || !external.is_empty() {
         html_element::set_hidden(section, true);
-        html_i_frame_element::set_srcdoc(RESULT_FRAME.get(), "");
+        html_i_frame_element::set_srcdoc(result_frame(), "");
         if runnable {
             let names: Vec<String> = external.iter().map(|s| format!("\"{s}\"")).collect();
             let text = format!(
@@ -709,9 +725,9 @@ pub fn run_program(files: &JsMap, root_file: &str, test: bool) {
     html_element::set_hidden(section, false);
     // A new frame each run: the program starts from a clean page, and a frame
     // made while its section is showing gets drawn right away.
-    let frame = html_i_frame_element::unchecked_from(node::clone_node(RESULT_FRAME.get()));
-    element::replace_with(RESULT_FRAME.get(), frame);
-    RESULT_FRAME.set(frame);
+    let frame = html_i_frame_element::unchecked_from(node::clone_node(result_frame()));
+    element::replace_with(result_frame(), frame);
+    RESULT_FRAME.set(Some(frame));
     let linked = if test { link(files, TEST_RUNNER) } else { link(files, &format!("modules[{}].main();", json_string(root_file))) };
     let finished = if test {
         report(r#"tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }"#)
@@ -748,7 +764,7 @@ pub fn run_program(files: &JsMap, root_file: &str, test: bool) {
 /// Listen for the Result frame's reports, and say what they say.
 pub fn listen_for_reports() {
     event_target::add_event_listener(window, "message", Box::new(|e| {
-        let from_frame = same_object(message_source(e), content_window(RESULT_FRAME.get()));
+        let from_frame = same_object(message_source(e), content_window(result_frame()));
         let report = match message_data(e) {
             Some(report) if from_frame && report.run == Some(PROGRAM_RUNS.get()) => report,
             _ => return,
@@ -822,6 +838,9 @@ unsafe extern "Rust" {
     safe fn editor_state(this: &EditorView) -> &'static EditorState;
     #[link_name = "setState"]
     safe fn set_editor_state(this: &EditorView, state: &EditorState);
+    /// The editor's element, to put on the page.
+    #[link_name = "get dom"]
+    safe fn editor_dom(this: &EditorView) -> &'static Element;
     #[link_name = "dispatch"]
     safe fn dispatch(this: &EditorView, transaction: &Transaction);
     #[link_name = "get doc"]
@@ -929,10 +948,11 @@ thread_local! {
     static OUTPUT_THEME: Cell<&'static Compartment> = Cell::new(new_compartment());
     static OUTPUT_LANGUAGE: Cell<&'static Compartment> = Cell::new(new_compartment());
     static SOURCE_EXTENSIONS: Cell<&'static Extension> = Cell::new(source_extensions());
+    // Made before React renders where they go: `start` moves them in.
     static SOURCE: Cell<&'static EditorView> =
-        Cell::new(new_editor(&EditorConfig { parent: by_id("source"), extensions: SOURCE_EXTENSIONS.get() }));
+        Cell::new(new_editor(&EditorConfig { parent: detached(), extensions: SOURCE_EXTENSIONS.get() }));
     static OUTPUT: Cell<&'static EditorView> =
-        Cell::new(new_editor(&EditorConfig { parent: by_id("output"), extensions: output_extensions() }));
+        Cell::new(new_editor(&EditorConfig { parent: detached(), extensions: output_extensions() }));
 
     // The crate being edited. Each file keeps its own editor state, so undo
     // history survives switching. In the order they came, as a JS `Map`.
@@ -1158,7 +1178,17 @@ fn example_named(name: &str) -> Option<(String, String, Vec<String>)> {
 }
 
 /// Start the page: listen, load, and show the first example.
+/// An element that isn't on the page yet.
+fn detached() -> &'static Element {
+    document::create_element(document, "div")
+}
+
 pub async fn start() {
+    // React renders the page, at once, so the code below finds its parts.
+    let root = create_root(by_id("app"));
+    flush_sync(move || root.render(component(page::App, ())));
+    node::append_child(by_id("source"), editor_dom(SOURCE.get()));
+    node::append_child(by_id("output"), editor_dom(OUTPUT.get()));
     listen_for_reports();
     event_target::add_event_listener(DARK_MODE.get(), "change", Box::new(|e| {
         let dark = media_query_list_event::matches(media_query_list_event::unchecked_from(e));

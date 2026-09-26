@@ -26,7 +26,8 @@
     "test:compiler": "bun test test/compiler.test.ts test/diagnostics.test.ts test/emission.test.ts",
     "test:react": "bun test test/react.test.ts",
     "test:browser": "bun test test/browser.test.ts",
-    "test:vite": "bun test test/vite.test.ts"
+    "test:vite": "bun test test/vite.test.ts",
+    "test:playground": "bun test test/playground.test.ts"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

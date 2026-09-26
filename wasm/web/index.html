@@ -194,41 +194,8 @@
     </style>
   </head>
   <body>
-    <h1>rust-js playground</h1>
-    <p>rustc's front end and rust-js, as WebAssembly. No server compiles anything.</p>
-    <div class="toolbar">
-      <select id="example" aria-label="Example"></select>
-      <button id="compile" disabled>Compile</button>
-      <button id="test" disabled title="Compile with --test and run the #[test] functions">Test</button>
-      <kbd>⌘/Ctrl-Enter</kbd>
-      <span id="status" role="status">Loading…</span>
-    </div>
-    <div class="panes">
-      <section>
-        <h2>Rust</h2>
-        <div class="pane">
-          <nav class="explorer" aria-label="Rust files">
-            <ul id="source-files"></ul>
-            <button class="new-file" id="new-file">+ New file</button>
-          </nav>
-          <div class="editor" id="source"></div>
-        </div>
-      </section>
-      <section>
-        <h2>JavaScript</h2>
-        <div class="pane">
-          <nav class="explorer" aria-label="JavaScript files">
-            <ul id="output-files"></ul>
-          </nav>
-          <div class="editor" id="output"></div>
-        </div>
-      </section>
-    </div>
-    <section id="result-section" hidden>
-      <h2>Result <span class="hint">the root module's <code>main()</code>, or with Test its <code>#[test]</code>s, in a frame of their own</span></h2>
-      <iframe id="result" title="Result"></iframe>
-    </section>
-    <table id="stats"></table>
+    <!-- The page is React's, rendered from rust/page.rs (ADR 0044). -->
+    <div id="app"></div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
