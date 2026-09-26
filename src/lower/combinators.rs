@@ -35,6 +35,7 @@ pub(super) enum Comb {
     IsErrAnd,
     Contains,
     BinarySearch,
+    SplitOff,
     /// `b.then(|| x)` and `b.then_some(x)`: `b ? x : undefined`.
     Then,
     ThenSome,
@@ -53,6 +54,9 @@ pub(super) enum Comb {
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum IterComb {
     FilterMap,
+    /// `scan(init, |acc, x| ..)`: the state in a box, which the closure's
+    /// `&mut` parameter is (ADR 0074).
+    Scan,
     FlatMap,
     Flatten,
     Zip,
@@ -143,7 +147,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
         let receiver_ty = self.reveal(self.thir[args[0]].ty.peel_refs());
-        // What it gives, which `undefined` can't stand for if it's nullish.
+        // What it gives, which `undefined` can't stand for if it's nullish,
+        // unless it's a generic `T`'s, boxed where it looks like `None` (ADR 0051).
+        let mut boxed = false;
         if let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() {
             let output = self
                 .tcx
@@ -152,11 +158,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .skip_binder()
                 .output();
             let output = self.tcx.normalize_erasing_regions(self.typing_env, output);
-            if let Some(item) = self.option_of(output)
-                && self.can_be_nullish(item)
-            {
-                let what = format!("stepping through `{item}`s, which `None` would look like in JS");
-                return Err(self.unsupported(span, &what));
+            if let Some(item) = self.option_of(output) {
+                boxed = self.boxed_payload(item);
+                if self.can_be_nullish(item) && !boxed {
+                    let what = format!("stepping through `{item}`s, which `None` would look like in JS");
+                    return Err(self.unsupported(span, &what));
+                }
             }
         }
         let stepping = self.is_stepping(args[0]);
@@ -165,6 +172,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Expr::call(Expr::var(name), list)
         };
         Ok(match op {
+            StepOp::Next if (stepping || self.is_lazy_iter(receiver_ty)) && boxed => {
+                let it = self.expr(args[0], out)?;
+                self.runtime.insert(Helper::Some);
+                helper(self, Helper::NextSome, "$nextSome", vec![it])
+            }
             StepOp::Next if stepping || self.is_lazy_iter(receiver_ty) => {
                 let it = self.expr(args[0], out)?;
                 helper(self, Helper::Next, "$next", vec![it])
@@ -181,7 +193,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             StepOp::Next => {
                 let items = self.iter_value(args[0], out)?;
                 let items = self.iter_source(items, receiver_ty, span)?;
-                Expr::index(items, Expr::int(0))
+                if boxed {
+                    self.some_at(items, Expr::int(0))
+                } else {
+                    Expr::index(items, Expr::int(0))
+                }
             }
             StepOp::Peekable => {
                 if self.is_lazy_iter(receiver_ty) {
@@ -190,6 +206,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let items = self.iter_value(args[0], out)?;
                 let items = self.iter_source(items, receiver_ty, span)?;
                 helper(self, Helper::Iter, "$iter", vec![items])
+            }
+            StepOp::Peek if boxed => {
+                let it = self.expr(args[0], out)?;
+                let it = if it.reads_same() { it } else { self.spill("it", it, out) };
+                self.some_at(Expr::member(it.clone(), "items"), Expr::member(it, "at"))
             }
             StepOp::Peek => {
                 let it = self.expr(args[0], out)?;
@@ -551,6 +572,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `v.contains(&x)`: JS's `includes` for what `===` compares, and
             // `==` item by item for the rest (ADR 0053).
+            Comb::SplitOff => helper(self, Helper::SplitOff, "$splitOff", vec![subject, next()]),
             Comb::BinarySearch => {
                 let x = next();
                 let item = self
@@ -602,6 +624,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Comb::Windows => helper(self, Helper::Windows, "$windows", vec![subject, next()]),
             Comb::Chunks => helper(self, Helper::Chunks, "$chunks", vec![subject, next()]),
+            // Of strings, one string; of `Vec`s or arrays, one array.
+            Comb::Concat
+                if self
+                    .slice_item(subject_ty)
+                    .is_some_and(|item| self.is_string_like(item)) =>
+            {
+                Expr::call(Expr::member(subject, "join"), vec![Expr::str("")])
+            }
             Comb::Concat => Expr::call(Expr::member(subject, "flat"), Vec::new()),
         })
     }
@@ -698,6 +728,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 eager_only(self, "skip_while")?;
                 self.runtime.insert(Helper::SkipWhile);
                 Expr::call(Expr::var("$skipWhile"), vec![items, next()])
+            }
+            IterComb::Scan => {
+                let items = if lazy {
+                    method(items, "toArray", Vec::new())
+                } else {
+                    items
+                };
+                let (init, f) = (next(), next());
+                self.runtime.insert(Helper::Scan);
+                Expr::call(Expr::var("$scan"), vec![items, init, f])
             }
             IterComb::StepBy => {
                 let n = next();
@@ -811,6 +851,7 @@ pub(super) fn classify(name: &str, option: bool, result: bool, vec: bool, slice:
         "is_err_and" if result => Comb::IsErrAnd,
         "contains" if slice => Comb::Contains,
         "binary_search" if slice => Comb::BinarySearch,
+        "split_off" if vec => Comb::SplitOff,
         "insert" if vec => Comb::Insert,
         "remove" if vec => Comb::Remove,
         "swap" if slice => Comb::Swap,
@@ -843,6 +884,7 @@ pub(super) fn classify_iter(name: &str) -> Option<IterComb> {
         "take_while" => IterComb::TakeWhile,
         "skip_while" => IterComb::SkipWhile,
         "step_by" => IterComb::StepBy,
+        "scan" => IterComb::Scan,
         "max_by_key" => IterComb::MaxByKey(true),
         "min_by_key" => IterComb::MaxByKey(false),
         "max_by" => IterComb::MaxBy(true),

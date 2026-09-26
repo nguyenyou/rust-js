@@ -114,6 +114,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 digits
             }
+            // `{:e}`: the shortest digits, as JS's `toExponential()` has them,
+            // written as Rust writes them, `1.2345e3`. With a precision, Rust
+            // rounds a tie to even and JS away from zero: not yet.
+            Std::FmtExp(upper) => {
+                if num.is_none() {
+                    return Err(self.unsupported(span, &format!("`{{:e}}` of a `{ty}`")));
+                }
+                if precision.is_some() {
+                    return Err(self.unsupported(span, "`{:.2e}` and the like"));
+                }
+                self.runtime.insert(Helper::LowerExp);
+                let text = Expr::call(Expr::var("$lowerExp"), vec![value]);
+                if upper {
+                    Expr::call(Expr::member(text, "toUpperCase"), Vec::new())
+                } else {
+                    text
+                }
+            }
             // `{:.2}` of an `f64`: exact, and rounded as Rust rounds.
             _ if let Some(digits) = precision.clone()
                 && num == Some(Num::F64) =>

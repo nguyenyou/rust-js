@@ -66,6 +66,8 @@ pub(super) enum Std {
     FmtDebug,
     /// `Argument::new_lower_hex` and the like: `{:x}` (ADR 0058).
     FmtRadix(Radix),
+    /// `{:e}` (false) and `{:E}`: exponent notation.
+    FmtExp(bool),
     /// `Argument::from_usize`: a width or precision from an argument, `{:>w$}`.
     FmtUsize,
     /// A `HashMap` or `HashSet` method (ADR 0059).
@@ -116,6 +118,9 @@ pub(super) enum Std {
     SliceLast,
     /// `v.get(i)`: `v[i]`, which is `undefined` past the end.
     SliceGet,
+    /// `char::from_digit(n, radix)` and `char::from_u32(n)`: `None` when there's no such `char`.
+    FromDigit,
+    FromU32,
     /// `Result` (ADR 0035): `r.TAG === "Ok"` (true) or `"Err"` (false).
     IsOk(bool),
     /// `r.ok()`: the value, or `undefined`.
@@ -218,6 +223,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if diagnostic("box_assume_init_into_vec_unsafe") {
             return Some(Std::VecMacro);
+        }
+        // `char::from_digit`, `std::char::from_digit` and `from_u32`.
+        let char_fn = |name: &str| {
+            tcx.crate_name(def_id.krate) == sym::core
+                && tcx.item_name(def_id).as_str() == name
+                && tcx.def_path_str(def_id).contains("char")
+        };
+        if char_fn("from_digit") {
+            return Some(Std::FromDigit);
+        }
+        if char_fn("from_u32") {
+            return Some(Std::FromU32);
         }
         if diagnostic("vec_from_elem") {
             return Some(Std::FromElem);
@@ -472,6 +489,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "front" if deque => Some(Std::First),
             "back" if deque => Some(Std::SliceLast),
             "make_contiguous" if deque => Some(Std::Same),
+            "drain" if adt("Vec") || deque => Some(Std::Text(TextOp::Drain)),
             "iter" | "iter_mut" if deque || heap => Some(Std::Same),
             "new" | "with_capacity" if deque || heap => Some(Std::VecNew),
             "len" if deque || heap => Some(Std::Len),
@@ -528,6 +546,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "new_upper_hex" if argument => Std::FmtRadix(Radix::UpperHex),
             "new_binary" if argument => Std::FmtRadix(Radix::Binary),
             "new_octal" if argument => Std::FmtRadix(Radix::Octal),
+            "new_lower_exp" if argument => Std::FmtExp(false),
+            "new_upper_exp" if argument => Std::FmtExp(true),
             "from_usize" if argument => Std::FmtUsize,
             "new" if adt("Rc") => Std::Same,
             "new" if adt("Cell") || adt("RefCell") => Std::CellNew,
@@ -756,9 +776,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let ExprKind::Call { fun, ref args, .. } = thir[self.strip(f)].kind else {
                     return None;
                 };
-                let kind = self
-                    .std_fn(fun)
-                    .filter(|k| matches!(k, Std::FmtDisplay | Std::FmtDebug | Std::FmtRadix(_) | Std::FmtUsize))?;
+                let kind = self.std_fn(fun).filter(|k| {
+                    matches!(
+                        k,
+                        Std::FmtDisplay | Std::FmtDebug | Std::FmtRadix(_) | Std::FmtExp(_) | Std::FmtUsize
+                    )
+                })?;
                 let &ty::FnDef(_, generic_args) = thir[self.strip(fun)].ty.kind() else {
                     return None;
                 };
@@ -1156,6 +1179,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             "$lines",
                             "$slice",
                             "$rest",
+                            "$scan",
+                            "$drain",
+                            "$splitOff",
                         ]
                         .contains(&name.as_str()),
                         _ => false,

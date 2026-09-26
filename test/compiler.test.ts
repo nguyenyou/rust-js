@@ -29,6 +29,7 @@ let queues: Record<string, (...args: any[]) => unknown>;
 let report: Record<string, (...args: any[]) => unknown>;
 let lexer: Record<string, (...args: any[]) => unknown>;
 let values: Record<string, (...args: any[]) => unknown>;
+let versions: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -84,6 +85,8 @@ beforeAll(async () => {
   lexer = await import(join(target, "lexer.js"));
   run([join(target, "debug", "rust-js"), "examples/values.rs", "-o", join(target, "values.js")]);
   values = await import(join(target, "values.js"));
+  run([join(target, "debug", "rust-js"), "examples/versions.rs", "-o", join(target, "versions.js")]);
+  versions = await import(join(target, "versions.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -196,6 +199,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "values") {
         return values[path[1]](...c.args);
+      }
+      if (path[0] === "versions") {
+        return versions[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -1045,6 +1051,18 @@ test("values' JS: boxes for &mut to primitives, and recursive clones", async () 
   expect(js).toContain("const count$3 = { value: stats.hits };");
   expect(js).toContain("stats.hits = count$3.value;");
   expect(js).toContain("const cloneValue = (value) =>");
+});
+
+// ADR 0076: a struct's `..base` is worked out after its fields, and a few
+// std methods are Rust's own steps.
+test("versions' JS: struct update in Rust's order, scan, drain and total_cmp", async () => {
+  const js = await Bun.file(join(target, "versions.js")).text();
+  expect(js).toContain("{ major: 0, minor: 9, patch: 0 }");
+  expect(js).toContain("const patch = tick(order, 1);\n  const major = tick(order, 2);\n  const base = made(order);");
+  expect(js).toContain("const value = $nextSome(it);");
+  expect(js).toContain("fs.sort((a, b) => $totalCmp(a, b));");
+  expect(js).toContain("const tail = $splitOff(v, 5);");
+  expect(js).toContain("$lowerExp(1234.5)");
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

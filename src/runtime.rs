@@ -44,6 +44,14 @@ pub enum Helper {
     RemoveOpt,
     Iter,
     Next,
+    NextSome,
+    Scan,
+    LowerExp,
+    FromDigit,
+    FromU32,
+    TotalCmp,
+    Drain,
+    SplitOff,
     Peek,
     NextIf,
     Rest,
@@ -885,6 +893,75 @@ function $next(it) {
 }
 "#
             }
+            // Of a generic `T`'s: a `Some` that looks like `None` is boxed (ADR 0051).
+            Helper::NextSome => {
+                r#"
+function $nextSome(it) {
+  const step = it.next();
+  return step.done ? undefined : $some(step.value);
+}
+"#
+            }
+            // `a.total_cmp(&b)`: Rust's, which compares the bits as `i64`s,
+            // negative ones with all but the sign flipped.
+            Helper::TotalCmp => {
+                r#"
+function $totalCmp(a, b) {
+  const view = new DataView(new ArrayBuffer(16));
+  view.setFloat64(0, a);
+  view.setFloat64(8, b);
+  const ordered = (bits) => bits ^ BigInt.asIntN(64, BigInt.asUintN(64, bits >> 63n) >> 1n);
+  const x = ordered(view.getBigInt64(0));
+  const y = ordered(view.getBigInt64(8));
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+"#
+            }
+            // `char::from_digit(n, radix)`, as Rust's: `0`-`9`, then `a`-`z`.
+            Helper::FromDigit => {
+                r#"
+function $fromDigit(num, radix) {
+  if (radix > 36) throw new Error("from_digit: radix is too high (maximum 36)");
+  return num < radix ? String.fromCharCode(num < 10 ? 48 + num : 87 + num) : undefined;
+}
+"#
+            }
+            // `char::from_u32(n)`: a `char`, unless `n` is a surrogate or past U+10FFFF.
+            Helper::FromU32 => {
+                r#"
+function $fromU32(n) {
+  return n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff) ? undefined : String.fromCodePoint(n);
+}
+"#
+            }
+            // `{:e}` of a number: `1.2345e3`, where JS writes `1.2345e+3`.
+            Helper::LowerExp => {
+                r#"
+function $lowerExp(x) {
+  if (Number.isNaN(x)) return "NaN";
+  if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";
+  return x.toExponential().replace("e+", "e");
+}
+"#
+            }
+            // `scan(init, f)`: `f` changes the state through its box, and gives
+            // each item out, until it gives `None`.
+            Helper::Scan => {
+                r#"
+function $scan(items, init, f) {
+  const state = { value: init };
+  const out = [];
+  for (const item of items) {
+    const next = f(state, item);
+    if (next === undefined) {
+      break;
+    }
+    out.push(next);
+  }
+  return out;
+}
+"#
+            }
             Helper::Peek => {
                 r#"
 function $peek(it) {
@@ -1114,6 +1191,25 @@ function $slice(items, start, end = items.length) {
   if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
   if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
   return items.slice(start, end);
+}
+"#
+            }
+            // `v.drain(a..b)`: the items, out of `v`, with `$slice`'s panics.
+            Helper::Drain => {
+                r#"
+function $drain(items, start, end = items.length) {
+  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
+  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
+  return items.splice(start, end - start);
+}
+"#
+            }
+            // `v.split_off(at)`: the items from `at` on, out of `v`.
+            Helper::SplitOff => {
+                r#"
+function $splitOff(items, at) {
+  if (at > items.length) throw new Error(`\`at\` split index (is ${at}) should be <= len (is ${items.length})`);
+  return items.splice(at);
 }
 "#
             }

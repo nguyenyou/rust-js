@@ -113,6 +113,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0070 A std function taken as a value is an arrow](decisions/0070-function-values.md)
 - [0071 An iterator stepped through is a `$iter`, which knows where it is](decisions/0071-stepping-iterators.md)
 - [0074 A `&mut` to a string or a number is a box the caller copies back](decisions/0074-mut-boxes.md)
+- [0076 A struct's `..base` after its fields, and std's own steps for a few more methods](decisions/0076-std-odds.md)
 - [0068 `VecDeque` and `BinaryHeap` are arrays; a heap moves its items as Rust's does](decisions/0068-queues.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 

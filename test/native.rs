@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/versions.rs"]
+#[allow(dead_code)]
+mod versions;
+
 #[path = "../examples/values.rs"]
 #[allow(dead_code)]
 mod values;
@@ -242,6 +246,10 @@ fn main() {
     case("report.report", &[], report::report);
     case("lexer.report", &[], lexer::report);
     case("values.report", &[], values::report);
+    case("versions.report", &[], versions::report);
+    for i in [0, 1, 2] {
+        case("versions.panics", &[i as i64], || versions::panics(i));
+    }
     for i in [0, 1, 2, 3] {
         case("numbers.panics", &[i as i64], || numbers::panics(i));
     }

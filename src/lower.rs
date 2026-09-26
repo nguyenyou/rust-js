@@ -273,6 +273,8 @@ struct FnCx<'a, 'tcx> {
     /// The recursive types being cloned, and the function each one's clone
     /// is (`clone_value`), which a clone inside it calls.
     cloning: Vec<(Ty<'tcx>, String)>,
+    /// A struct's fields, worked out before its `..base` (`adt`).
+    spilled_fields: Option<Vec<Expr>>,
     /// The call being lowered is a statement of its own: its value isn't used,
     /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
     discarded: bool,
@@ -2704,7 +2706,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             AdtExprBase::None => None,
             AdtExprBase::Base(fru) => match self.place(fru.base) {
                 Some((place, _)) => Some(place),
-                None => return Err(self.unsupported(self.thir[fru.base].span, "`..` with this base")),
+                // `..Default::default()`: worked out once, after the fields,
+                // as Rust does, so any field with effects runs first.
+                None => {
+                    let exprs: Vec<ExprId> = adt.fields.iter().map(|f| f.expr).collect();
+                    let values = self.operands(&exprs, out)?;
+                    let mut spilled = Vec::new();
+                    for (field, value) in adt.fields.iter().zip(values) {
+                        let value = if value.has_effects() {
+                            self.spill(variant.fields[field.name].name.as_str(), value, out)
+                        } else {
+                            value
+                        };
+                        spilled.push(value);
+                    }
+                    self.spilled_fields = Some(spilled);
+                    let base = self.expr(fru.base, out)?;
+                    // An object of constants, as a derived `Default` is, is read
+                    // in place: its fields are those constants (`Expr::member`).
+                    let constants = matches!(&base.kind, js::ExprKind::Object(props)
+                        if props.iter().all(|p| matches!(p, Prop::Field(_, v) if v.is_constant())));
+                    Some(if base.reads_same() || constants {
+                        base
+                    } else {
+                        self.spill("base", base, out)
+                    })
+                }
             },
             AdtExprBase::DefaultFields(_) => return Err(self.unsupported(span, "default field values")),
         };
@@ -2713,7 +2740,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // them in declaration order, so every object of a type has the same
         // shape. If that reorders two calls, they go into `const`s first.
         let exprs: Vec<ExprId> = adt.fields.iter().map(|f| f.expr).collect();
-        let mut values = self.operands(&exprs, out)?;
+        let mut values = match self.spilled_fields.take() {
+            Some(values) => values,
+            None => self.operands(&exprs, out)?,
+        };
         let reordered = !adt.fields.is_sorted_by_key(|f| f.name);
         if reordered && values.iter().filter(|v| v.has_effects()).count() > 1 {
             for (field, value) in adt.fields.iter().zip(&mut values) {

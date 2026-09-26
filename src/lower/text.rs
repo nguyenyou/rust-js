@@ -31,6 +31,8 @@ pub(super) enum TextOp {
     Parse,
     /// `&v[a..b]` of a slice, an array or a `Vec`.
     Slice,
+    /// `v.drain(a..b)`: those items, taken out of `v`.
+    Drain,
 }
 
 /// Which `TextOp` a method of a `char` or a `str` is.
@@ -76,8 +78,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        if op == TextOp::Slice {
-            return self.slice_range(args, span, out);
+        if matches!(op, TextOp::Slice | TextOp::Drain) {
+            return self.slice_range(op, args, span, out);
         }
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
@@ -145,7 +147,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .ok_or_else(|| self.unsupported(span, "this `parse`"))?;
                 self.parse_as(arg(), target, span)?
             }
-            TextOp::Slice => unreachable!("handled above"),
+            TextOp::Slice | TextOp::Drain => unreachable!("handled above"),
         })
     }
 
@@ -185,7 +187,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `&v[a..b]`, `&v[a..]`, `&v[..b]`, `&v[..]`: a copy, which a shared
     /// slice can be, since nothing changes `v` while it's borrowed. Out of
     /// bounds, it panics, as Rust does.
-    fn slice_range(&mut self, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+    fn slice_range(&mut self, op: TextOp, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let range = self.strip(args[1]);
         let range_ty = self.thir[range].ty;
         let fields: Vec<(usize, ExprId)> = match self.thir[range].kind {
@@ -214,9 +216,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             None => Expr::int(0),
         };
         let end = end.map(|_| values.next().expect("an end"));
-        self.runtime.insert(Helper::SliceRange);
+        let (helper, name) = match op {
+            TextOp::Drain => (Helper::Drain, "$drain"),
+            _ => (Helper::SliceRange, "$slice"),
+        };
+        self.runtime.insert(helper);
         let mut list = vec![items, start];
         list.extend(end);
-        Ok(Expr::call(Expr::var("$slice"), list))
+        Ok(Expr::call(Expr::var(name), list))
     }
 }

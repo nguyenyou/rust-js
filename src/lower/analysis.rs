@@ -245,6 +245,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             iterators: HashSet::new(),
             boxes: HashSet::new(),
             cloning: Vec::new(),
+            spilled_fields: None,
             discarded: false,
             item: def_id,
         };

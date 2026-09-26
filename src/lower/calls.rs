@@ -1,6 +1,7 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
 use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
+use super::combinators::StepOp;
 use super::numbers::NumOp;
 use super::representation::Num;
 use super::stdlib::Std;
@@ -225,6 +226,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::ResultOk
                     | Std::ArrayMethod("find")
                     | Std::Extreme(_)
+                    | Std::Step(StepOp::Next | StepOp::Peek)
             )
         {
             return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));
@@ -418,6 +420,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.some_at(items, last)
             }
             Std::First => Expr::index(arg(), Expr::int(0)),
+            Std::FromDigit => {
+                self.runtime.insert(Helper::FromDigit);
+                Expr::call(Expr::var("$fromDigit"), vec![arg(), arg()])
+            }
+            Std::FromU32 => {
+                self.runtime.insert(Helper::FromU32);
+                Expr::call(Expr::var("$fromU32"), vec![arg()])
+            }
             Std::SliceGet => {
                 let items = arg();
                 Expr::index(items, arg())
@@ -653,7 +663,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.debug_string(arg(), ty, span)?
             }
             // Only in a `format_args!` it recognizes whole (ADR 0058).
-            Std::FmtRadix(_) | Std::FmtUsize => return Err(self.unsupported(span, "`{:x}` and the like here")),
+            Std::FmtRadix(_) | Std::FmtExp(_) | Std::FmtUsize => {
+                return Err(self.unsupported(span, "`{:x}` and the like here"));
+            }
             Std::Map(_)
             | Std::Comb(_)
             | Std::IterComb(_)
@@ -853,7 +865,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
-    fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
+    pub(super) fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
         self.runtime.extend([Helper::SomeAt, Helper::Some]);
         Expr::call(Expr::var("$someAt"), vec![items, index])
     }
