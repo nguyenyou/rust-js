@@ -545,6 +545,11 @@ pub enum Helper {
     Try,
     Settle,
     UnwrapOk,
+    Range,
+    Cmp,
+    Max,
+    Min,
+    Position,
 }
 
 impl Helper {
@@ -618,6 +623,42 @@ function $eq(a, b) {
 "#
             }
             // `assert_eq!` and `assert_ne!` failing, with Rust's message.
+            Helper::Range => {
+                r#"
+function $range(start, end) {
+  return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
+}
+"#
+            }
+            Helper::Cmp => {
+                r#"
+function $cmp(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+"#
+            }
+            Helper::Max => {
+                r#"
+function $max(items) {
+  return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
+}
+"#
+            }
+            Helper::Min => {
+                r#"
+function $min(items) {
+  return items.length === 0 ? undefined : items.reduce((min, x) => (x < min ? x : min));
+}
+"#
+            }
+            Helper::Position => {
+                r#"
+function $position(items, found) {
+  const i = items.findIndex(found);
+  return i < 0 ? undefined : i;
+}
+"#
+            }
             Helper::Try => {
                 r#"
 function $try(f) {
@@ -815,6 +856,55 @@ enum Std {
     UnwrapOk,
     /// `r.unwrap_or(d)`.
     ResultOr,
+    /// An iterator's adapter or consumer that is the array's method (ADR 0036):
+    /// `map`, `filter`, `any` (`some`), `all` (`every`), `find`, `for_each`.
+    ArrayMethod(&'static str),
+    Enumerate,
+    Rev,
+    Skip,
+    Take,
+    Fold,
+    Sum,
+    CollectString,
+    Position,
+    /// `max()` (true) or `min()` (false) of an iterator: an option.
+    Extreme(bool),
+    Chars,
+    ToVec,
+    Sort,
+    SortBy,
+    SortByKey,
+    /// `a.cmp(&b)`: -1, 0 or 1 (ADR 0036).
+    Cmp,
+    /// `a.max(b)` (true) or `a.min(b)` (false) of two numbers.
+    MaxOf(bool),
+    /// An operator on references to numbers, `x % 10` with `x: &i32`,
+    /// which rustc writes as a call of the operator's trait.
+    Operator(BinOp),
+    /// `Ordering::then`, `then_with`, `reverse`.
+    Then,
+    ThenWith,
+    Reverse,
+}
+
+impl Std {
+    /// Does it take an iterator, and so a range as an array?
+    fn takes_iterator(self) -> bool {
+        matches!(
+            self,
+            Std::ArrayMethod(_)
+                | Std::Enumerate
+                | Std::Rev
+                | Std::Skip
+                | Std::Take
+                | Std::Fold
+                | Std::Sum
+                | Std::CollectString
+                | Std::Position
+                | Std::Extreme(_)
+                | Std::Last
+        )
+    }
 }
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -976,7 +1066,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for param in params {
             let span = param.ty_span.unwrap_or(span);
             self.check_value_ty(param.ty, span)?;
-            let name = match param.pat.as_deref() {
+            // `|&x|`: a reference is the value (ADR 0023), so the parameter is `x`.
+            let mut inner = param.pat.as_deref();
+            while let Some(Pat { kind: PatKind::Deref { subpattern, .. }, .. }) = inner {
+                inner = Some(subpattern);
+            }
+            let binding = |p: &Pat<'tcx>| {
+                matches!(p.kind, PatKind::Binding { mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. })
+            };
+            let peeled = if inner.is_some_and(binding) { inner } else { param.pat.as_deref() };
+            let name = match peeled {
                 Some(pat) => match &pat.kind {
                     PatKind::Binding { name, var, mode, subpattern: None, .. } => {
                         self.check_by_value(*mode, pat.ty, pat.span)?;
@@ -1441,6 +1540,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || self.is_std_adt(peeled, sym::Vec)
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
                 || self.is_str_split(peeled)
+                || self.is_array_iter(peeled)
                 || matches!(self.thir[self.strip(f.head)].kind, ExprKind::Call { fun, .. } if self.std_fn(fun) == Some(Std::Same));
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
@@ -1665,6 +1765,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // An enum with one variant needs no test.
             PatKind::Variant { adt_def, variant_index, subpatterns, .. } => {
                 let variant = adt_def.variant(*variant_index);
+                if let Some(n) = ordering_value(self.tcx, adt_def.did(), variant.name) {
+                    return Ok(Some(Expr::bin(Op::Eq, subject.clone(), Expr::int(n))));
+                }
                 let name = Expr::str(variant.name.to_string());
                 let mut tests = Vec::new();
                 if adt_def.variants().len() > 1 {
@@ -2195,6 +2298,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             return self.expr(inner[1], out);
         }
+        if known.takes_iterator() || matches!(known, Std::Sort | Std::SortByKey) {
+            return self.iterator_call(known, args, generic_args, span, out);
+        }
         // `s.push_str(t)`: JS strings don't change, so `s` gets a new one.
         if known == Std::PushStr {
             let ExprKind::Borrow { arg: place, .. } = self.thir[self.strip(args[0])].kind else {
@@ -2264,7 +2370,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(helper);
                 Expr::call(Expr::var(name), vec![arg(), arg()])
             }
-            Std::Last => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
+            Std::Last | Std::ArrayMethod(_) | Std::Enumerate | Std::Rev | Std::Skip | Std::Take | Std::Fold | Std::Sum
+            | Std::CollectString | Std::Position | Std::Extreme(_) | Std::Sort | Std::SortByKey => {
+                unreachable!("handled above")
+            }
+            Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
+            Std::ToVec => Expr::call(Expr::member(arg(), "slice"), vec![]),
+            Std::SortBy => {
+                let (v, compare) = (arg(), arg());
+                Expr::call(Expr::member(v, "sort"), vec![compare])
+            }
+            Std::Cmp => {
+                self.runtime.insert(Helper::Cmp);
+                Expr::call(Expr::var("$cmp"), vec![arg(), arg()])
+            }
+            Std::MaxOf(max) => Expr::call(Expr::member(Expr::var("Math"), if max { "max" } else { "min" }), vec![arg(), arg()]),
+            // An `Ordering` is -1, 0 or 1: `Equal` is the one that's falsy.
+            Std::Operator(op) => {
+                let ty = generic_args.types().next().expect("an operator's trait has a type").peel_refs();
+                let (l, r) = (arg(), arg());
+                self.binary(op, l, r, None, ty, span)?
+            }
+            Std::Then => Expr::bin(Op::Or, arg(), arg()),
+            Std::ThenWith => {
+                let (first, next) = (arg(), arg());
+                // `then_with(|| a.cmp(b))` is `first || $cmp(a, b)`: the closure's body in place.
+                let then = match next.kind {
+                    js::ExprKind::Arrow(ref params, ref body) if params.is_empty() => match body.as_slice() {
+                        [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => value.clone(),
+                        _ => Expr::call(next.clone(), vec![]),
+                    },
+                    _ => Expr::call(next.clone(), vec![]),
+                };
+                Expr::bin(Op::Or, first, then)
+            }
+            Std::Reverse => Expr::unary(UnaryOp::Neg, arg()),
             Std::IsOk(ok) => Expr::bin(if ok { Op::Eq } else { Op::Ne }, Expr::member(arg(), "TAG"), Expr::str("Ok")),
             Std::UnwrapOk => {
                 self.runtime.extend([Helper::UnwrapOk, Helper::Debug]);
@@ -2412,11 +2552,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(trait_) = tcx.trait_of_assoc(def_id) {
             let ty = self_ty?;
+            if Num::of(ty.peel_refs()).is_some() {
+                let operators = [
+                    (LangItem::Add, BinOp::Add),
+                    (LangItem::Sub, BinOp::Sub),
+                    (LangItem::Mul, BinOp::Mul),
+                    (LangItem::Div, BinOp::Div),
+                    (LangItem::Rem, BinOp::Rem),
+                ];
+                if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                    return Some(Std::Operator(op));
+                }
+                if tcx.is_lang_item(trait_, LangItem::PartialOrd) {
+                    return Some(Std::Operator(match tcx.item_name(def_id).as_str() {
+                        "lt" => BinOp::Lt,
+                        "le" => BinOp::Le,
+                        "gt" => BinOp::Gt,
+                        "ge" => BinOp::Ge,
+                        _ => return None,
+                    }));
+                }
+            }
             if tcx.is_lang_item(trait_, LangItem::Add) {
                 return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
             }
             if tcx.is_lang_item(trait_, LangItem::PartialEq) {
-                let simple = self.is_string_like(ty) || matches!(ty.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
+                let simple = self.is_string_like(ty)
+                    || Num::of(ty.peel_refs()).is_some()
+                    || ty.peel_refs().is_bool()
+                    || matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt));
                 let eq = match tcx.item_name(def_id).as_str() {
                     "eq" => true,
                     "ne" => false,
@@ -2434,12 +2598,48 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 return self.is_structural_eq(trait_, ty).then_some(Std::StructEq(eq));
             }
-            // A `split` is an array of strings (ADR 0034).
-            if tcx.is_diagnostic_item(sym::Iterator, trait_) && self.is_str_split(ty) {
+            // An iterator is a JS array (ADR 0036), and a `split` one of strings
+            // (ADR 0034). Its adapters are the array's methods.
+            if tcx.is_diagnostic_item(sym::Iterator, trait_) {
+                let collects_string = || args.types().nth(1).is_some_and(|b| self.is_lang_adt(b, LangItem::String));
+                return Some(match tcx.item_name(def_id).as_str() {
+                    "map" => Std::ArrayMethod("map"),
+                    "filter" => Std::ArrayMethod("filter"),
+                    "any" => Std::ArrayMethod("some"),
+                    "all" => Std::ArrayMethod("every"),
+                    "find" => Std::ArrayMethod("find"),
+                    "for_each" => Std::ArrayMethod("forEach"),
+                    "enumerate" => Std::Enumerate,
+                    "rev" => Std::Rev,
+                    "skip" => Std::Skip,
+                    "take" => Std::Take,
+                    "fold" => Std::Fold,
+                    "sum" => Std::Sum,
+                    "position" => Std::Position,
+                    "max" => Std::Extreme(true),
+                    "min" => Std::Extreme(false),
+                    "last" => Std::Last,
+                    "count" => Std::Len,
+                    "copied" | "cloned" => Std::Same,
+                    "collect" if collects_string() => Std::CollectString,
+                    "collect" => Std::Same,
+                    _ => return None,
+                });
+            }
+            if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
+                && tcx.item_name(def_id).as_str() == "into_iter"
+                && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_std_adt(ty.peel_refs(), sym::Vec))
+            {
+                return Some(Std::Same);
+            }
+            // `cmp`, `max` and `min` of what JS's `<` orders the same way.
+            if tcx.is_diagnostic_item(sym::Ord, trait_) {
+                let peeled = ty.peel_refs();
+                let comparable = Num::of(peeled).is_some() || peeled.is_bool() || self.is_string_like(peeled);
                 return match tcx.item_name(def_id).as_str() {
-                    "collect" => Some(Std::Same),
-                    "last" => Some(Std::Last),
-                    "count" => Some(Std::Len),
+                    "cmp" if comparable => Some(Std::Cmp),
+                    "max" if Num::of(peeled).is_some() => Some(Std::MaxOf(true)),
+                    "min" if Num::of(peeled).is_some() => Some(Std::MaxOf(false)),
                     _ => None,
                 };
             }
@@ -2456,6 +2656,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let string = self.is_lang_adt(owner, LangItem::String);
         let option = self.is_lang_adt(owner, LangItem::Option);
         let result = self.is_std_adt(owner, sym::Result);
+        let ordering = self.is_lang_adt(owner, LangItem::OrderingEnum);
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
@@ -2504,6 +2705,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_some" if option => Std::IsSome,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
+            "then" if ordering => Std::Then,
+            "then_with" if ordering => Std::ThenWith,
+            "reverse" if ordering => Std::Reverse,
+            "chars" if owner.is_str() => Std::Chars,
+            "to_vec" if owner.is_slice() => Std::ToVec,
+            "sort" | "sort_unstable" if owner.is_slice() => Std::Sort,
+            "sort_by" | "sort_unstable_by" if owner.is_slice() => Std::SortBy,
+            "sort_by_key" | "sort_unstable_by_key" if owner.is_slice() => Std::SortByKey,
+            "reverse" if owner.is_slice() => Std::Method("reverse"),
             "is_ok" if result => Std::IsOk(true),
             "is_err" if result => Std::IsOk(false),
             "ok" if result => Std::ResultOk,
@@ -2584,6 +2794,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
     }
 
+    /// An iterator that's a JS array (ADR 0036): a slice's or a `Vec`'s, a
+    /// `split` or `chars` of a string, and the adapters on them.
+    fn is_array_iter(&self, ty: Ty<'tcx>) -> bool {
+        let ty::Adt(adt, _) = ty.kind() else { return false };
+        let path = self.tcx.def_path_str(adt.did());
+        let krate = self.tcx.crate_name(adt.did().krate);
+        (krate == sym::core || krate == sym::alloc)
+            && (path.contains("::iter::")
+                || ["std::slice::Iter", "std::vec::IntoIter", "std::str::Chars", "std::array::IntoIter"].contains(&path.as_str())
+                || self.is_str_split(ty))
+    }
+
     /// `str::split`'s iterator, which is a JS array of strings (ADR 0034).
     fn is_str_split(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
@@ -2632,6 +2854,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn is_object(&self, ty: Ty<'tcx>) -> bool {
         matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
             || self.is_js_object(ty)
+            // A slice or an array is a JS array: `&mut` to one, as `sort` takes, is it.
+            || ty.is_slice()
+            || ty.is_array()
             || ["Vec", "Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
     }
 
@@ -2687,8 +2912,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
 
         // Lower the body as if it were a function of its own, then come back.
+        // Its names are its own: once it's lowered, a sibling closure or later
+        // code may use them again (`v.some((x) => ..)`, `v.every((x) => ..)`).
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let loops = std::mem::take(&mut self.loops);
+        let names = self.names.clone();
         let mut stmts = Vec::new();
         // An `async` block takes no arguments, and runs as soon as it's
         // made: an async arrow, called right away (ADR 0029).
@@ -2712,6 +2940,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         self.thir = thir;
         self.loops = loops;
+        self.names = names;
         for (path, previous) in shadowed {
             match previous {
                 Some(var) => self.captures.insert(path, var),
@@ -2810,6 +3039,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A variant without fields is its name (ADR 0013). One with fields is an
         // object tagged with it, `{ TAG: "Circle", _0: r }` (ADR 0033), built
         // below like a struct.
+        if let Some(n) = ordering_value(self.tcx, adt.adt_def.did(), variant.name) {
+            return Ok(Expr::int(n));
+        }
         if adt.adt_def.is_enum() && variant.fields.is_empty() {
             return Ok(Expr::str(variant.name.to_string()));
         }
@@ -3144,6 +3376,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if ty.is_bool() || ty.is_unit() || ty.is_str() || ty.is_char() || Num::of(ty).is_some() || self.is_str_split(ty) {
             return None;
         }
+        if self.is_array_iter(ty) {
+            return None;
+        }
         match ty.kind() {
             // A JS value from an `extern` block, and closures: JS functions.
             ty::Foreign(_) | ty::Closure(..) | ty::CoroutineClosure(..) => return None,
@@ -3258,6 +3493,94 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ExprKind::NamedConst { def_id, args, .. } = self.thir[self.strip(e)].kind else { return None };
         let value = eval_const(self.tcx, self.typing_env, def_id, args, self.thir[e].span)?;
         const_js(self.tcx, value)?.as_int()
+    }
+
+    /// An iterator's method (ADR 0036). The iterator is a JS array: a range
+    /// becomes one, `$range(a, b)`, and the rest already are.
+    fn iterator_call(
+        &mut self,
+        known: Std,
+        args: &[ExprId],
+        generic_args: ty::GenericArgsRef<'tcx>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let receiver_ty = self.thir[args[0]].ty;
+        let items = match self.thir[self.strip(args[0])].kind {
+            ExprKind::Adt(ref range) if self.is_lang_adt(receiver_ty, LangItem::Range) => {
+                let bound = |i: usize| range.fields.iter().find(|f| f.name.as_usize() == i).map(|f| f.expr);
+                let (Some(start), Some(end)) = (bound(0), bound(1)) else { unreachable!("a range has a start and an end") };
+                self.runtime.insert(Helper::Range);
+                let bounds = self.operands(&[start, end], out)?;
+                Expr::call(Expr::var("$range"), bounds)
+            }
+            _ if self.is_lang_adt(receiver_ty, LangItem::Range) => return Err(self.unsupported(span, "a range in a variable, as an iterator")),
+            _ => self.expr(args[0], out)?,
+        };
+        let mut rest = self.operands(&args[1..], out)?.into_iter();
+        let mut next = || rest.next().expect("rustc checked the arguments");
+        let method = |items: Expr, name: &str, list: Vec<Expr>| Expr::call(Expr::member(items, name), list);
+        let (a, b) = (Expr::var("a"), Expr::var("b"));
+        Ok(match known {
+            Std::ArrayMethod(name) => method(items, name, vec![next()]),
+            Std::Enumerate => {
+                let pair = Expr::array(vec![Expr::var("i"), Expr::var("x")]);
+                let js_span = self.js_span(span);
+                method(items, "map", vec![Expr::arrow(vec!["x".into(), "i".into()], vec![StmtKind::Return(Some(pair)).at(js_span)])])
+            }
+            Std::Rev => method(items, "toReversed", vec![]),
+            Std::Skip => method(items, "slice", vec![next()]),
+            Std::Take => method(items, "slice", vec![Expr::int(0), next()]),
+            Std::Fold => {
+                let (init, f) = (next(), next());
+                method(items, "reduce", vec![f, init])
+            }
+            Std::Sum => {
+                let ty = generic_args.types().nth(1).expect("`sum` names what it sums to");
+                let num = self.num(ty, span)?;
+                let js_span = self.js_span(span);
+                let add = num.wrap(Expr::bin(Op::Add, a, b));
+                let f = Expr::arrow(vec!["a".into(), "b".into()], vec![StmtKind::Return(Some(add)).at(js_span)]);
+                method(items, "reduce", vec![f, Expr::int(0)])
+            }
+            Std::CollectString => method(items, "join", vec![Expr::str("")]),
+            Std::Position => {
+                self.runtime.insert(Helper::Position);
+                Expr::call(Expr::var("$position"), vec![items, next()])
+            }
+            Std::Extreme(max) => {
+                self.runtime.insert(if max { Helper::Max } else { Helper::Min });
+                Expr::call(Expr::var(if max { "$max" } else { "$min" }), vec![items])
+            }
+            Std::Last => method(items, "at", vec![Expr::int(-1)]),
+            // Sorting, in place (ADR 0036). JS's `sort()` compares as strings:
+            // right for strings and `bool`s, and numbers need `a - b`.
+            Std::Sort => {
+                let elem = match receiver_ty.peel_refs().kind() {
+                    ty::Slice(t) | ty::Array(t, _) => *t,
+                    _ => return Err(self.unsupported(span, "sorting this")),
+                };
+                if Num::of(elem).is_some() {
+                    let js_span = self.js_span(span);
+                    let f = Expr::arrow(vec!["a".into(), "b".into()], vec![StmtKind::Return(Some(Expr::bin(Op::Sub, a, b))).at(js_span)]);
+                    method(items, "sort", vec![f])
+                } else if self.is_string_like(elem) || elem.is_bool() {
+                    method(items, "sort", vec![])
+                } else {
+                    return Err(self.unsupported(span, &format!("sorting `{elem}`s")));
+                }
+            }
+            Std::SortByKey => {
+                self.runtime.insert(Helper::Cmp);
+                let key = next();
+                let key = if matches!(key.kind, js::ExprKind::Var(_)) { key } else { self.spill("key", key, out) };
+                let js_span = self.js_span(span);
+                let compare = Expr::call(Expr::var("$cmp"), vec![Expr::call(key.clone(), vec![a]), Expr::call(key, vec![b])]);
+                let f = Expr::arrow(vec!["a".into(), "b".into()], vec![StmtKind::Return(Some(compare)).at(js_span)]);
+                method(items, "sort", vec![f])
+            }
+            _ => unreachable!("not an iterator's method"),
+        })
     }
 
     /// A JS call that says, in Rust, that it may throw (ADR 0035): one
@@ -3421,6 +3744,9 @@ fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Option<Expr> {
                     None => Some(Expr::undefined()),
                 };
             }
+            if let Some(n) = ordering_value(tcx, adt.did(), variant.name) {
+                return Some(Expr::int(n));
+            }
             if fields.is_empty() {
                 return Some(Expr::str(variant.name.to_string()));
             }
@@ -3450,6 +3776,19 @@ fn variant_field(variant: &ty::VariantDef, i: usize) -> String {
         Some(CtorKind::Fn) => format!("_{i}"),
         _ => variant.fields.iter().nth(i).expect("a field of this variant").name.to_string(),
     }
+}
+
+/// An `Ordering` is -1, 0 or 1 (ADR 0036), its discriminant, which a JS
+/// comparator returns as it is.
+fn ordering_value(tcx: TyCtxt<'_>, enum_def: DefId, variant: Symbol) -> Option<i128> {
+    if !tcx.is_lang_item(enum_def, LangItem::OrderingEnum) {
+        return None;
+    }
+    Some(match variant.as_str() {
+        "Less" => -1,
+        "Equal" => 0,
+        _ => 1,
+    })
 }
 
 /// A `char` constant (ADR 0034).

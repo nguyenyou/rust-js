@@ -23,6 +23,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`. One with
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.
+- An iterator is a JS array, and its adapters the array's methods (`v.iter().map(f)` is `v.map(f)`);
+  sorting takes comparators, and `Ordering` is -1, 0 or 1.
 - A JS call whose binding returns a `Result` runs in a `try`: a throw is an `Err`. `?` returns
   an `Err` or a `None` early.
 - `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.
@@ -45,7 +47,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
-`RefCell`, `Vec`, `for` loops over sequences and ranges, `usize`, `to_string()`;
+`RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files.
 

@@ -86,6 +86,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0024 The `web` crate: DOM bindings generated from WebIDL](decisions/0024-web-crate.md)
 - [0025 `Vec`, `for` loops, `RefCell` and `&mut` to objects](decisions/0025-vec-loops-refcell-mut.md)
 - [0034 String methods are JS's; a `char` is a one-character string; `format!` is `+`](decisions/0034-strings-and-chars.md)
+- [0036 An iterator is a JS array; `Ordering` is -1, 0 or 1](decisions/0036-iterators-and-sorting.md)
 - [0028 Imports from JS modules: `#[link_name = "module#path"]`](decisions/0028-js-module-imports.md)
 - [0029 `async`/`.await` are JS's `async`/`await`; a future is a promise](decisions/0029-async-await.md)
 - [0030 `Option`: `Some(x)` is `x`, `None` is `undefined`](decisions/0030-option.md)

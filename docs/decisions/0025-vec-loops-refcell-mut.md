@@ -1,6 +1,6 @@
 # 0025. `Vec`, `for` loops, `RefCell` and `&mut` to objects
 
-Status: Accepted
+Status: Accepted. Extended by [0036](0036-iterators-and-sorting.md): iterator chains and sorting.
 
 ## Context
 

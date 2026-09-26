@@ -40,6 +40,10 @@ mod strings;
 #[allow(dead_code)]
 mod results;
 
+#[path = "../examples/iterators.rs"]
+#[allow(dead_code)]
+mod iterators;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -146,6 +150,36 @@ fn main() {
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
     }
+    for n in [0, 1, 5] {
+        case("iterators.squares", &[n], || iterators::squares(n as u32));
+    }
+    let lists: [&[i32]; 4] = [&[], &[3], &[5, -2, 3, 12, 0, 8], &[21, 11, 3, 31, 2, 42]];
+    for v in lists {
+        let arg = v.to_vec();
+        case_with("iterators.evens", &[&arg], || iterators::evens(v));
+        case_with("iterators.stats", &[&arg], || iterators::stats(v));
+        case_with("iterators.extremes", &[&arg], || iterators::extremes(v));
+        case_with("iterators.middle", &[&arg], || iterators::middle(v));
+        case_with("iterators.sorted", &[&arg], || iterators::sorted(v));
+        case_with("iterators.descending", &[&arg], || iterators::descending(v));
+        case_with("iterators.by_last_digit", &[&arg], || iterators::by_last_digit(v));
+    }
+    let word_lists: [&[&str]; 3] = [&[], &["pear", "", "fig"], &["b", "a", "", "cc", "b"]];
+    for words in word_lists {
+        let arg = words.to_vec();
+        case_with("iterators.indexed", &[&arg], || iterators::indexed(words));
+        case_with("iterators.non_empty", &[&arg], || iterators::non_empty(words));
+        case_with("iterators.shouted", &[&arg], || iterators::shouted(words));
+        case_with("iterators.sorted_words", &[&arg], || iterators::sorted_words(words));
+        case_with("iterators.by_length_then_name", &[&arg], || iterators::by_length_then_name(words));
+    }
+    for s in ["", "abc", "häh"] {
+        case_with("iterators.backwards", &[&s], || iterators::backwards(s));
+    }
+    for (a, b) in [(1, 2), (2, 2), (3, -1)] {
+        case("iterators.compare", &[a, b], || iterators::compare(a as i32, b as i32));
+    }
+    case("iterators.bigger", &[3, 9], || iterators::bigger(3, 9));
     for (a, b) in [('1', '2'), ('3', '0'), ('x', '1'), ('2', 'y')] {
         case_with("results.sum_digits", &[&a, &b], || results::sum_digits(a, b));
     }
@@ -308,6 +342,13 @@ impl<T: Json> Json for Vec<T> {
     fn json(&self) -> String {
         let items: Vec<String> = self.iter().map(|x| x.json()).collect();
         format!("[{}]", items.join(","))
+    }
+}
+
+impl<A: Json, B: Json, C: Json, D: Json, E: Json, F: Json> Json for (A, B, C, D, E, F) {
+    fn json(&self) -> String {
+        let parts = [self.0.json(), self.1.json(), self.2.json(), self.3.json(), self.4.json(), self.5.json()];
+        format!("[{}]", parts.join(","))
     }
 }
 

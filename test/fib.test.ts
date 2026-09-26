@@ -30,6 +30,7 @@ let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
 let results: Record<string, (...args: any[]) => unknown>;
+let iterators: Record<string, (...args: any[]) => unknown>;
 let throws: Record<string, (...args: any[]) => any>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
@@ -63,6 +64,8 @@ beforeAll(async () => {
   strings = await import(join(target, "strings.js"));
   run([join(target, "debug", "rust-js"), "examples/results.rs", "-o", join(target, "results.js")]);
   results = await import(join(target, "results.js"));
+  run([join(target, "debug", "rust-js"), "examples/iterators.rs", "-o", join(target, "iterators.js")]);
+  iterators = await import(join(target, "iterators.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -123,6 +126,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "iterators") {
+        return JSON.parse(JSON.stringify(iterators[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
       }
       if (path[0] === "results") {
         return JSON.parse(JSON.stringify(results[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
@@ -351,6 +357,25 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   expect(js).toContain("  const started = $try(() => wasi.start(instance));");
   expect(js).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
   expect(js).toContain("    if (item[1] instanceof Directory) {");
+});
+
+// ADR 0036: an iterator is a JS array, and `Ordering` a comparator's number.
+test("iterators are array methods, and sorting takes comparators", async () => {
+  const js = await Bun.file(join(target, "iterators.js")).text();
+  expect(js).toContain("  return $range(0, n).map((i) => Math.imul(i, i) >>> 0);");
+  // `|&&x|` is `x`: a reference is the value.
+  expect(js).toContain("  return v.filter((x) => x % 2 === 0);");
+  expect(js).toContain("  const sum = v.reduce((a, b) => a + b | 0, 0);");
+  expect(js).toContain("  const any_negative = v.some((x) => x < 0);");
+  expect(js).toContain("  return v.slice(1).slice(0, 2).toReversed();");
+  expect(js).toContain('  return words.map((w) => w.toUpperCase()).join("-");');
+  expect(js).toContain('  return Array.from(s).toReversed().join("");');
+  // Numbers sort by `a - b`: JS's own `sort()` would compare them as strings.
+  expect(js).toContain("  w.sort((a, b) => a - b);");
+  expect(js).toContain("  w.sort((a, b) => $cmp(key(a), key(b)));");
+  // `then_with` is `||`: `Equal` is 0.
+  expect(js).toContain("  w.sort((a, b) => $cmp(a.length === 0, b.length === 0) || $cmp(a, b));");
+  expect(js).toContain("  if (match === -1) {");
 });
 
 // ADR 0035: JS that throws, as a `Result`; and `?`.

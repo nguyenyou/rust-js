@@ -61,6 +61,7 @@ export function examples(): Example[] {
     { name: "enums", title: "Enums with fields", root: "enums.rs", files: ["enums.rs"], dir: examplesDir },
     { name: "strings", title: "Strings", root: "strings.rs", files: ["strings.rs"], dir: examplesDir },
     { name: "results", title: "Result and ?", root: "results.rs", files: ["results.rs"], dir: examplesDir },
+    { name: "iterators", title: "Iterators and sorting", root: "iterators.rs", files: ["iterators.rs"], dir: examplesDir },
     { name: "options", title: "Option", root: "options.rs", files: ["options.rs"], dir: examplesDir },
     { name: "consts", title: "const items", root: "consts.rs", files: ["consts.rs"], dir: examplesDir },
     { name: "closures", title: "Closures", root: "closures.rs", files: ["closures.rs"], dir: examplesDir },
