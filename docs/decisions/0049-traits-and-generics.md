@@ -114,8 +114,10 @@ function, preserving the Rust function's original argument list.
 `Copy` gets a compiler dictionary with a `copy(value)` operation. A generic
 read of a copied aggregate must not accidentally alias its input. The
 operation copies according to the concrete Rust representation; it does not
-call a user `Clone`. Generic mutation of an aggregate conservatively marks
-all instantiations of that aggregate as potentially needing copies.
+call a user `Clone`. A type mutated in a generic function keeps its
+parameters, so it covers exactly the types it could be: `Holder<T>` changed
+there means every `Holder<..>` may need copies, while a changed `Pair<u32>`
+is no reason to copy a `Pair<bool>`.
 
 Array and slice indexing used by generic functions checks bounds before
 reading, and applies the appropriate Copy operation to the result.

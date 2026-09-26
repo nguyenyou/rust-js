@@ -180,17 +180,39 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Param(_))
-            || self.krate.mutated.contains(&ty)
-            || self
-                .krate
-                .mutated
-                .iter()
-                .any(|other| matches!((ty.kind(), other.kind()), (ty::Adt(a, _), ty::Adt(b, _)) if a.did() == b.did()))
+            || self.krate.mutated.iter().any(|&mutated| self.instance_of(ty, mutated))
             || match self.shape(ty) {
                 Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
                 Shape::Array(tys) => tys.iter().any(|&t| self.contains_mutated(t)),
                 Shape::Other => false,
             }
+    }
+
+    /// Is `ty` one of the types `general` stands for? A type mutated in a
+    /// generic function has its parameters: `Holder<T>` stands for every
+    /// `Holder<..>`, but `Pair<u32>` only for itself, so a `Pair<bool>`
+    /// needn't be copied because a `Pair<u32>` is changed. Lifetimes don't
+    /// matter.
+    fn instance_of(&self, ty: Ty<'tcx>, general: Ty<'tcx>) -> bool {
+        match (ty.kind(), general.kind()) {
+            (_, ty::Param(_)) => true,
+            (ty::Adt(adt, args), ty::Adt(general_adt, general_args)) => {
+                adt.did() == general_adt.did()
+                    && args.iter().zip(general_args.iter()).all(|(arg, general)| {
+                        match (arg.as_type(), general.as_type()) {
+                            (Some(arg), Some(general)) => self.instance_of(arg, general),
+                            _ => true,
+                        }
+                    })
+            }
+            (ty::Ref(_, inner, _), ty::Ref(_, general, _))
+            | (ty::Slice(inner), ty::Slice(general))
+            | (ty::Array(inner, _), ty::Array(general, _)) => self.instance_of(*inner, *general),
+            (ty::Tuple(parts), ty::Tuple(general)) => {
+                parts.len() == general.len() && parts.iter().zip(general.iter()).all(|(p, g)| self.instance_of(p, g))
+            }
+            _ => self.tcx.erase_and_anonymize_regions(ty) == self.tcx.erase_and_anonymize_regions(general),
+        }
     }
 
     /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.

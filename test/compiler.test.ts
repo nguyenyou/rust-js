@@ -668,3 +668,53 @@ thread_local! {
   expect(module.sized()).toBe(8);
   expect(module.doubled(3)).toBe(6);
 });
+
+// ADR 0020: only a mutated type is copied, and that's decided per type: a
+// mutated `Pair<u32>` isn't a reason to copy a `Pair<bool>`. A generic
+// function that mutates `Holder<T>` may mutate any `Holder<..>`, though.
+test("copies are made for the mutated instantiations of a generic type only", async () => {
+  const { fixture, compiler } = await import("./support");
+  const { writeFileSync } = await import("node:fs");
+  const dir = fixture("copies");
+  writeFileSync(join(dir, "lib.rs"), `#[derive(Clone, Copy)]
+pub struct Pair<T: Copy> {
+    pub a: T,
+    pub b: T,
+}
+
+#[derive(Clone, Copy)]
+pub struct Holder<T: Copy> {
+    pub value: T,
+}
+
+pub fn bumped(p: Pair<u32>) -> (Pair<u32>, Pair<u32>) {
+    let mut q = p;
+    q.a += 1;
+    (p, q)
+}
+
+pub fn twice(p: Pair<bool>) -> (Pair<bool>, Pair<bool>) {
+    let q = p;
+    (p, q)
+}
+
+pub fn set<T: Copy>(holder: &mut Holder<T>, value: T) {
+    holder.value = value;
+}
+
+pub fn both(h: Holder<bool>) -> (Holder<bool>, Holder<bool>) {
+    let mut g = h;
+    set(&mut g, !h.value);
+    (h, g)
+}
+`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  const js = await Bun.file(join(dir, "lib.js")).text();
+  expect(js).toContain("export function bumped(p) {\n  let q = { ...p };");
+  expect(js).toContain("export function twice(p) {\n  const q = p;");
+  expect(js).toContain("export function both(h) {\n  let g = { ...h };");
+  const module = await import(join(dir, "lib.js"));
+  expect(module.bumped({ a: 1, b: 2 })).toEqual([{ a: 1, b: 2 }, { a: 2, b: 2 }]);
+  expect(module.twice({ a: true, b: false })).toEqual([{ a: true, b: false }, { a: true, b: false }]);
+  expect(module.both({ value: true })).toEqual([{ value: true }, { value: false }]);
+});
