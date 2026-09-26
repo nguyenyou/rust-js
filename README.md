@@ -29,7 +29,7 @@ Every task is a script in [package.json](package.json), and `bun run` lists them
 
 **Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
 and rust-js as WebAssembly, so nothing is compiled on a server (see [wasm/](wasm/README.md)).
-The page itself is written in Rust, with React, and compiled by rust-js: [wasm/web/rust/lib.rs](wasm/web/rust/lib.rs)
+The page itself is written in Rust, as React components, and compiled by rust-js: [wasm/web/rust/](wasm/web/rust/components.rs)
 ([ADRs 0032](docs/decisions/0032-dogfooding-the-playground.md) and [0044](docs/decisions/0044-playground-on-react.md)).
 
 JS is printed by [oxc](https://oxc.rs). The source map points back into the

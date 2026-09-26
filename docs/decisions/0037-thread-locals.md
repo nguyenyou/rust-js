@@ -59,6 +59,9 @@ export function bump() {
   | `KEY.with(f)` | `f(KEY)` |
   | `KEY.with_borrow(f)`, `KEY.with_borrow_mut(f)` | `f(KEY.value)` |
 
+  A closure that only returns is put in place, on the key or its value:
+  `START.with(|s| s.get())` is `START.value`, not `((s) => s.value)(START)`.
+
 ## Why
 
 - **It's how Rust programs for the web already keep state**, and rustc

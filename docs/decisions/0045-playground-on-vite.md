@@ -5,7 +5,7 @@ said Bun bundled the page.
 
 ## Context
 
-After slice 1 of ADR 0044, the playground was a React app bundled by Bun:
+Once React rendered it (ADR 0044), the playground was a React app bundled by Bun:
 `serve.ts` for development and `build.ts` for the static site. Each one
 compiled `rust/lib.rs` with `rust-js.wasm` first, then bundled `main.ts`.
 The Vite example (ADR 0041) is how the docs say to use rust-js with React. It
@@ -48,9 +48,8 @@ vite.config.ts
 - **Styled with Tailwind only, preflight included.** `styles.css` is
   `@import "tailwindcss"` and a theme: the page's two fonts and eight colors,
   given their dark values under `@variant dark`. Everything else is a
-  utility class. The markup in `page.rs` has most of them, and the elements
-  `lib.rs` still builds (file-tree rows, stats cells, the status's color)
-  get theirs where they're made. A file's delete button uses `group-hover`
+  utility class, on the components' elements (ADR 0044). The classes more
+  than one component uses are constants in `styles.rs`. A file's delete button uses `group-hover`
   on its row. CodeMirror's `.cm-editor` is sized from its parent, with
   `[&_.cm-editor]:h-full`. Preflight resets native buttons and selects, so
   those now have a look of their own, from the theme's colors.
@@ -64,7 +63,7 @@ vite.config.ts
 
 ## Why
 
-- **The same toolchain as users.** Fast Refresh on `page.rs` and React
+- **The same toolchain as users.** Fast Refresh on the components and React
   Compiler's output are now tested by the app we work on every day. Before,
   only the example tested them.
 - **One way to compile Rust in Vite.** The WASI compiler plugs into the

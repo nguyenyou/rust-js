@@ -1,4 +1,4 @@
-// Compile the playground's own Rust (./rust/lib.rs) to JS, beside it, with
+// Compile the playground's own Rust (./rust/lib.rs, and its components/) to JS, beside it, with
 // rust-js.wasm: the compiler the page runs, here under the same WASI shim.
 // vite.config.ts hands this to vite-plugin-rust-js, which calls it when Vite
 // starts and on every save (ADR 0045).
@@ -9,8 +9,8 @@
 //                        crate's it uses (ADR 0024)
 //   /out/manifest.json   what it read and wrote (ADR 0042)
 
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { ConsoleStdout, Directory, File, type Inode, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";
 
@@ -21,6 +21,32 @@ const cratesDir = join(import.meta.dir, "../../target/playground-crates");
 const virtual = "/wasm/web/rust";
 
 let cratesBuilt = false;
+
+/** The crate's `.rs` files under `dir`, its components/ too, as the shim's directories. */
+function sourcesIn(dir: string): Map<string, Inode> {
+  const entries = new Map<string, Inode>();
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) entries.set(entry.name, new Directory(sourcesIn(join(dir, entry.name))));
+    else if (entry.name.endsWith(".rs")) entries.set(entry.name, new File(readFileSync(join(dir, entry.name))));
+  }
+  return entries;
+}
+
+/** Every file under a shim directory, by its path from there. */
+function filesIn(dir: Directory, prefix = "", found = new Map<string, Uint8Array>()): Map<string, Uint8Array> {
+  for (const [name, entry] of dir.contents) {
+    if (entry instanceof Directory) filesIn(entry, `${prefix}${name}/`, found);
+    else if (entry instanceof File) found.set(`${prefix}${name}`, entry.data);
+  }
+  return found;
+}
+
+/** The files under `dir` on disk, by their paths from there. */
+function pathsIn(dir: string, prefix = ""): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? pathsIn(join(dir, entry.name), `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`],
+  );
+}
 
 /**
  * Compile ./rust/lib.rs, with the react and web crates. With `manifest`,
@@ -33,11 +59,7 @@ export async function compileRust(job: { manifest?: string } = {}) {
     cratesBuilt = true;
   }
   const crate = (name: string) => new File(readFileSync(join(cratesDir, name)), { readonly: true });
-  const sources = new Map<string, Inode>(
-    readdirSync(rustDir)
-      .filter((name) => name.endsWith(".rs"))
-      .map((name) => [name, new File(readFileSync(join(rustDir, name)))]),
-  );
+  const sources = sourcesIn(rustDir);
   const sysroot = new Map<string, Inode>(
     sysrootFiles().map((name) => [name, new File(readFileSync(join(sysrootDir, name)), { readonly: true })]),
   );
@@ -80,14 +102,13 @@ export async function compileRust(job: { manifest?: string } = {}) {
   // the same is left alone, so Vite doesn't update what didn't change; one an
   // earlier build wrote that this one didn't goes.
   const written = /\.jsx?(\.map)?$/;
-  const outputs = new Map<string, Uint8Array>();
-  for (const [name, entry] of crateDir.dir.contents) {
-    if (entry instanceof File && written.test(name)) outputs.set(name, entry.data);
-  }
-  for (const name of readdirSync(rustDir).filter((n) => written.test(n) && !outputs.has(n))) rmSync(join(rustDir, name));
+  const outputs = new Map([...filesIn(crateDir.dir)].filter(([path]) => written.test(path)));
+  for (const path of pathsIn(rustDir).filter((p) => written.test(p) && !outputs.has(p))) rmSync(join(rustDir, path));
   for (const [name, data] of outputs) {
     const path = join(rustDir, name);
-    if (!existsSync(path) || !Buffer.from(readFileSync(path)).equals(Buffer.from(data))) writeFileSync(path, data);
+    if (existsSync(path) && Buffer.from(readFileSync(path)).equals(Buffer.from(data))) continue;
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, data);
   }
 
   if (job.manifest) {
@@ -102,5 +123,5 @@ export async function compileRust(job: { manifest?: string } = {}) {
 // `bun compile-rust.ts` on its own.
 if (import.meta.main) {
   await compileRust();
-  console.log("wrote rust/lib.jsx");
+  console.log("wrote rust/**/*.jsx");
 }

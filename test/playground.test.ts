@@ -10,7 +10,7 @@ import { root, run } from "./support";
 
 const wasm = join(root, "wasm/target/wasm32-wasip1/release/rust-js.wasm");
 
-test.skipIf(!existsSync(wasm))("the playground loads, compiles and runs tests, rendered by React", async () => {
+test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and shows errors, as React components", async () => {
   run(["bun", "run", "site"]);
   const server = Bun.spawn(["bun", "wasm/web/preview.ts"], { cwd: root, env: { ...process.env, PORT: "0" }, stdout: "pipe" });
   const browser = await chromium.launch({ headless: true });
@@ -35,6 +35,18 @@ test.skipIf(!existsSync(wasm))("the playground loads, compiles and runs tests, r
     await page.locator("#source-files li", { hasText: "stats.rs" }).waitFor();
     await page.locator("#compile").click();
     await status.filter({ hasText: "Compiled: 5 JS files." }).waitFor({ timeout: 60_000 });
+    // Another output file, from the JavaScript side's FileTree.
+    await page.locator("#output-files button", { hasText: "stats.js" }).click();
+    await page.locator("#output-files button[aria-current=true]", { hasText: "stats.js" }).waitFor();
+    await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "from /in/stats.rs" }).waitFor();
+    // An unsaved edit, compiled with ⌘/Ctrl-Enter: rustc's errors, as text.
+    await page.locator(".cm-content[aria-label='Rust source']").click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type('pub fn main() { let x: i32 = "no"; }');
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await status.filter({ hasText: "Failed" }).waitFor({ timeout: 60_000 });
+    await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "mismatched types" }).waitFor();
+    expect(await page.locator("#output-files li").textContent()).toBe("(none)");
     expect(errors).toEqual([]);
   } finally {
     await browser.close();

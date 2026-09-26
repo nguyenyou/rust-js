@@ -243,11 +243,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::LocalWith => {
                 let (key, f) = (arg(), arg());
-                Expr::call(f, vec![key])
+                apply(f, vec![key])
             }
             Std::LocalBorrow => {
                 let (key, f) = (arg(), arg());
-                Expr::call(f, vec![Expr::member(key, "value")])
+                apply(f, vec![Expr::member(key, "value")])
             }
             Std::Then => Expr::bin(Op::Or, arg(), arg()),
             Std::ThenWith => {
@@ -471,4 +471,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         value
     }
+}
+
+/// `f(args)`, with a closure that only returns put in place, its parameters
+/// the arguments: `((s) => s.value)(START)` is `START.value`. Only for
+/// arguments that read the same however often they're read.
+fn apply(f: Expr, args: Vec<Expr>) -> Expr {
+    fn reads_same(e: &Expr) -> bool {
+        match &e.kind {
+            js::ExprKind::Var(_) => true,
+            js::ExprKind::Member(object, _) => reads_same(object),
+            _ => e.is_constant(),
+        }
+    }
+    if let js::ExprKind::Arrow(params, body) = &f.kind
+        && let [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] = body.as_slice()
+        && params.len() <= args.len()
+        && args.iter().all(reads_same)
+    {
+        let names: Option<Vec<&str>> = params
+            .iter()
+            .map(|p| match p {
+                js::Pattern::Name(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        let inlined = names.and_then(|names| {
+            value.substitute(&|name: &str| names.iter().position(|n| *n == name).map(|i| args[i].clone()))
+        });
+        if let Some(inlined) = inlined {
+            return inlined;
+        }
+    }
+    Expr::call(f, args)
 }

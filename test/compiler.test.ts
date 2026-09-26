@@ -4,7 +4,7 @@
 //                  └─rust-js───► fib.js ──► actual results ───┴─► must be equal
 
 import { beforeAll, expect, test } from "bun:test";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { root, target, run, buildCompiler, buildReact, buildWeb } from "./support";
@@ -73,6 +73,8 @@ beforeAll(async () => {
   // The playground's own Rust (ADRs 0032, 0044), as compile-rust.ts compiles it with
   // rust-js.wasm: with React.
   buildReact();
+  // Into an empty folder, so a file an older layout wrote can't pass for its output.
+  rmSync(join(target, "playground"), { recursive: true, force: true });
   run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"),
     ...withWeb, "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
@@ -283,34 +285,55 @@ test("async code becomes async functions and await", async () => {
   expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
 });
 
-// ADR 0032: the playground is written in Rust in part, compiled by rust-js.
-test("the playground is Rust, compiled to the JS main.ts starts", async () => {
-  const js = await Bun.file(join(target, "playground", "lib.js")).text();
-  expect(js).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["start", "load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve", "run_program", "set_status"]) {
-    expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
+// ADRs 0032 and 0044: the playground is Rust, React components one per file,
+// compiled by rust-js.
+test("the playground is Rust components, compiled to the JS main.ts starts", async () => {
+  const read = (path: string) => Bun.file(join(target, "playground", path)).text();
+  const lib = await read("lib.jsx");
+  expect(lib).toContain('import * as app from "./components/app.jsx";');
+  expect(lib).toContain("  root.render(<StrictMode>\n    <app.App />\n  </StrictMode>);");
+  // Each component's file exports it alone, which Fast Refresh needs.
+  const components = [
+    ["app", "App"], ["editor", "Editor"], ["example_picker", "ExamplePicker"], ["file_item", "FileItem"],
+    ["file_tree", "FileTree"], ["pane", "Pane"], ["result_frame", "ResultFrame"], ["stats_table", "StatsTable"],
+    ["status_line", "StatusLine"], ["toolbar", "Toolbar"],
+  ];
+  for (const [file, name] of components) {
+    const js = await read(`components/${file}.jsx`);
+    expect([...js.matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1])).toEqual([name]);
+  }
+  // A folder's entries are a FileTree inside it: the component is recursive.
+  expect(await read("components/file_tree.jsx")).toContain("<FileTree tree={param[1]._0} depth={depth + 1 >>> 0}");
+  // The editor's view is made in an effect, and destroyed in its cleanup.
+  expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");
+  // A hook, found by its name.
+  expect(await read("dark_mode.js")).toContain("export function useDarkMode() {\n  return useSyncExternalStore(");
+
+  const compiler = await read("compiler.js");
+  expect(compiler).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
+  for (const name of ["load", "load_example", "ms", "mb", "compile"]) {
+    expect(compiler).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
-  // (`start` is also the page's entry, so `load`'s own `start` is `start$1`.)
-  expect(js).toContain("  const module = load_compiler(start$1);\n  const sysroot = load_sysroot(start$1);");
-  expect(js).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
+  expect(compiler).toContain("  const module = load_compiler(start, stat);\n  const sysroot = load_sysroot(start, stat);");
+  expect(compiler).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
   // A `format!` value with effects is computed first, once.
-  expect(js).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
-  expect(js).toContain('  const response = await window.fetch("./sysroot/" + name);');
+  expect(compiler).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
+  expect(compiler).toContain('  const response = await window.fetch("./sysroot/" + name);');
   // A trapped compile is an `Err` (ADR 0035), and `instanceof` a binding.
-  expect(js).toContain("  const started = $try(() => wasi.start(instance));");
-  expect(js).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
-  expect(js).toContain("    if (item[1] instanceof Directory) {");
+  expect(compiler).toContain("  const started = $try(() => wasi.start(instance));");
+  expect(compiler).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
+  expect(compiler).toContain("    if (item[1] instanceof Directory) {");
   // The file tree: sorted with a comparator, a copy of the tree's entries.
-  expect(js).toContain("  let entries = tree.slice();\n  entries.sort((a, b) => {");
+  expect(await read("tree.js")).toContain("  let entries = tree.slice();\n  entries.sort((a, b) => {");
   // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
-  expect(js).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
-  expect(js).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
-  // CodeMirror, through imports (ADR 0028), and its key binding a Rust closure.
-  expect(js).toContain('import { EditorView, basicSetup } from "codemirror";');
-  expect(js).toContain("keymap.of([{");
-  // The Result frame's state is thread-locals (ADR 0037).
-  expect(js).toContain('const PROGRAM_RUNS = { value: 0 };\nconst REPORTED = { value: false };\nconst RESULT_FRAME = { value: frame_by_id("result") };');
+  const programs = await read("programs.js");
+  expect(programs).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
+  expect(programs).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
+  // CodeMirror, through imports (ADR 0028), its extensions made once (ADR 0037).
+  const codemirror = await read("codemirror.js");
+  expect(codemirror).toContain('import { EditorView, basicSetup } from "codemirror";');
+  expect(codemirror).toContain("const THEME = new Compartment();");
 });
 
 // ADR 0037: `thread_local!` is a variable of its module.
@@ -319,6 +342,9 @@ test("thread-locals are module variables", async () => {
   expect(js).toContain("const COUNT = { value: 0 };\nconst LOG = { value: [] };\nconst START = { value: Math.imul(10, 4) + 2 | 0 };");
   expect(js).toContain("  COUNT.value = COUNT.value + 1 >>> 0;\n  return COUNT.value;");
   expect(js).toContain("  })(LOG.value);");
+  // A closure that only returns is its body, on the key or its value, in place.
+  expect(js).toContain("  return START.value;");
+  expect(js).toContain("  return LOG.value.length;");
   // Nothing of std's storage.
   expect(js).not.toContain("__rust_std_internal");
 });

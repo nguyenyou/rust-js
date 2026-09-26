@@ -1,7 +1,7 @@
 # 0032. The playground is written in Rust, compiled by rust-js, a part at a time
 
 Status: Accepted, and done: the whole playground is Rust now. `main.ts` only
-calls its `start`. It is moving onto React, in [0044](0044-playground-on-react.md).
+calls its `start`. It is React components now, one per file: [0044](0044-playground-on-react.md).
 
 ## Context
 
