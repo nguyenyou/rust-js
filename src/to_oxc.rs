@@ -108,6 +108,9 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
         code.push('\n');
         code.push_str(helper.trim_start());
     }
+    if !module.caches.is_empty() {
+        code.push_str(&format!("\nvar {};\n", module.caches.join(", ")));
+    }
     code.push('\n');
 
     // oxc prints functions back to back; put a blank line between them.

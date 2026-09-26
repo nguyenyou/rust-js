@@ -85,6 +85,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0033 Enums with fields are ReScript's tagged objects](decisions/0033-enums-with-fields.md)
 - [0035 JS that throws is a `Result`; `?` returns early](decisions/0035-results-and-throwing-js.md)
 - [0020 Structs are objects, tuples are arrays](decisions/0020-structs-and-tuples.md)
+- [0049 Trait dictionaries, generics, and read-only trait objects](decisions/0049-traits-and-generics.md)
 - [0047 Methods are an object of functions named after their type](decisions/0047-methods.md)
 - [0014 `match` becomes an `if`/`else if` chain](decisions/0014-match-lowering.md)
 - [0048 Let chains: each part runs only once the ones before it held](decisions/0048-let-chains.md)
@@ -118,6 +119,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 
 - [0016 Only top-level functions, for now](decisions/0016-crate-shape.md) *(modules: superseded by 0019)*
 - [0017 Test against native Rust, not against expectations](decisions/0017-differential-testing.md)
+- [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
 - [0032 The playground is written in Rust, compiled by rust-js, a part at a time](decisions/0032-dogfooding-the-playground.md)

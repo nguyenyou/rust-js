@@ -18,6 +18,7 @@ Every task is a script in [package.json](package.json), and `bun run` lists them
 | `setup` | `bun install` for every package (one [workspace](https://bun.sh/docs/install/workspaces)), and Playwright's browsers |
 | `build` | `cargo build`, and the `web` and `react` crates' metadata in `target/` |
 | `test` | `bun test` |
+| `bless` | write the generated JS as its snapshot, in `test/snapshots/` ([ADR 0050](docs/decisions/0050-snapshots.md)) |
 | `generate` | regenerate the `web` crate from WebIDL ([web/](web/README.md)) |
 | `generate:react` | read each React release into `react/versions.json`, and regenerate `react/src/elements.rs` ([react/](react/README.md)) |
 | `react-example` | the [React + Vite example](examples/vite-react/README.md) at http://localhost:5173 |
@@ -54,6 +55,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
 - An `impl` block's methods are an object named after the type, as Rust's paths name them:
   `Counter::new(1)` is `Counter.new(1)`, and `counter.tick()` is `Counter.tick(counter)`.
+- Trait impls have lazy dictionary accessors: `circleShape()`. Concrete calls resolve directly;
+  generics receive dictionaries, and `dyn` values are `{ value, impl }`.
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
@@ -71,7 +74,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `i8`–`i32`, `u8`–`u32`, `f64`, `bool`, enums (with fields too), structs, tuples, `Option`, `const` items; `let`, `if`, `if let`, `while let`, let chains,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
-struct update syntax; methods (`impl` blocks, not yet traits); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+struct update syntax; inherent methods, local traits with defaults and supertraits,
+generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.
@@ -142,7 +146,10 @@ A test that needs one is marked `#[cfg_attr(not(browser), ignore)]`.
 Design decisions are recorded in [docs/](docs/README.md).
 
 The suites can also run independently: `bun run test:compiler`,
-`bun run test:react`, `bun run test:browser`, and `bun run test:vite`.
+`bun run test:react`, `bun run test:browser`, `bun run test:vite`, and
+`bun run test:snapshots`, which compares every example's generated JS with
+its snapshot in `test/snapshots/`. When a change to the output is intended,
+`bun run bless` writes the new JS, and `git diff` shows what changed.
 The Vite suite uses a real Chromium browser to check Fast Refresh, dependency
 rebuilds, error recovery and JS/JSX extension transitions.
 

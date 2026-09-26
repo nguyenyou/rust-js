@@ -59,6 +59,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `T` itself: `Some(())` and `None` would be the same value.
     pub(super) fn can_be_nullish(&self, ty: Ty<'tcx>) -> bool {
         ty.is_unit()
+            || matches!(ty.kind(), ty::Param(_) | ty::Alias(..))
             || self.option_of(ty).is_some()
             || matches!(ty.kind(), ty::Adt(adt, _) if adt.is_struct() && adt.non_enum_variant().fields.is_empty())
     }
@@ -178,7 +179,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
-        self.krate.mutated.contains(&ty)
+        matches!(ty.kind(), ty::Param(_)) || self.krate.mutated.contains(&ty)
+            || self.krate.mutated.iter().any(|other| matches!((ty.kind(), other.kind()), (ty::Adt(a, _), ty::Adt(b, _)) if a.did() == b.did()))
             || match self.shape(ty) {
                 Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
                 Shape::Array(tys) => tys.iter().any(|&t| self.contains_mutated(t)),
@@ -189,6 +191,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.
     /// A field that also contains mutated types is copied in turn.
     pub(super) fn copy(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
+        if matches!(ty.kind(), ty::Param(_))
+            && let Some((_, dictionary)) = self.evidence.iter().find(|(tr, _)| tr.self_ty() == ty && self.tcx.is_lang_item(tr.def_id, LangItem::Copy))
+        {
+            return Expr::call(Expr::member(dictionary.clone(), "copy"), vec![place]);
+        }
         match self.shape(ty) {
             Shape::Object(fields) => {
                 let mut props = vec![Prop::Spread(place.clone())];
@@ -245,8 +252,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return None;
         }
         match ty.kind() {
+            ty::Param(_) => return None,
+            ty::Dynamic(predicates, ..) if predicates.principal_def_id().is_some_and(|id| id.is_local() && self.readonly_dyn(id)) => return None,
             // A JS value from an `extern` block, and closures: JS functions.
-            ty::Foreign(_) | ty::Closure(..) | ty::CoroutineClosure(..) => return None,
+            ty::Foreign(_) | ty::Closure(..) | ty::CoroutineClosure(..) | ty::FnDef(..) | ty::FnPtr(..) => return None,
             // Futures are JS promises (ADR 0029): an `async` block, what an
             // `async fn` returns, and `dyn Future`.
             ty::Coroutine(..) => return None,

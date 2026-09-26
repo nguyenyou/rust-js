@@ -3,6 +3,11 @@
 /// Runtime helpers, emitted into the module only when used.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Helper {
+    TraitImpl,
+    Index,
+    DisplayF64,
+    F64Max,
+    F64Min,
     Div,
     Rem,
     Retain,
@@ -27,6 +32,22 @@ pub enum Helper {
 impl Helper {
     pub fn source(self) -> &'static str {
         match self {
+            Helper::Index => "\nfunction $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return items[index];\n}\n",
+            Helper::DisplayF64 => include_str!("runtime/display_f64.js"),
+            Helper::F64Max => "\nfunction $f64Max(a, b) {\n  return Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.max(a, b);\n}\n",
+            Helper::F64Min => "\nfunction $f64Min(a, b) {\n  return Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.min(a, b);\n}\n",
+            Helper::TraitImpl => r#"
+function $traitImpl(cache, keys, make) {
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    if (!cache.has(key)) cache.set(key, new WeakMap());
+    cache = cache.get(key);
+  }
+  const key = keys[keys.length - 1];
+  if (!cache.has(key)) cache.set(key, make());
+  return cache.get(key);
+}
+"#,
             Helper::Div => {
                 r#"
 function $div(a, b, min) {
@@ -224,4 +245,3 @@ function $rem(a, b, min) {
         }
     }
 }
-

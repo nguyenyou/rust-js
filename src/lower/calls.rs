@@ -21,11 +21,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let fun_span = self.js_span(self.thir[fun].span);
         let f = &self.thir[self.strip(fun)];
         let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, generic_args)) = (&f.kind, f.ty.kind()) else {
+            if matches!(f.ty.kind(), ty::FnDef(..) | ty::FnPtr(..)) {
+                let mut operands = vec![fun];
+                operands.extend_from_slice(args);
+                let mut values = self.operands(&operands, out)?;
+                let callee = values.remove(0);
+                return Ok(Expr::call(callee, values));
+            }
             return Err(self.unsupported(f.span, "calling this"));
         };
-        if self.krate.fns.contains_key(&def_id) {
+        if self.krate.fns.contains_key(&def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
-            let args = self.operands(args, out)?;
+            let mut args = self.operands(args, out)?;
+            args.extend(self.evidence_args(def_id, generic_args, span)?);
             return Ok(Expr::call(callee.or_at(fun_span), args));
         }
         if is_binding(self.tcx, def_id) {
@@ -92,6 +100,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut values = self.operands(&list, out)?;
             let callee = values.remove(0);
             return Ok(Expr::call(callee, values));
+        }
+        if self.tcx.trait_of_assoc(def_id).is_some_and(|id| super::traits::operational(self.tcx, id))
+            || (self.tcx.trait_of_assoc(def_id).is_some()
+                && ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, generic_args)?
+                    .is_some_and(|i| self.krate.fns.contains_key(&i.def_id())))
+        {
+            let mut pending = Vec::new();
+            let values = self.operands(args, &mut pending)?;
+            if let Some(call) = self.trait_call(def_id, generic_args, values, span)? {
+                out.extend(pending);
+                return Ok(call);
+            }
         }
         let Some(known) = self.std_fn(fun) else {
             // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
@@ -222,10 +242,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::Cmp);
                 Expr::call(Expr::var("$cmp"), vec![arg(), arg()])
             }
-            Std::MaxOf(max) => Expr::call(
-                Expr::member(Expr::var("Math"), if max { "max" } else { "min" }),
-                vec![arg(), arg()],
-            ),
+            Std::MaxOf(max) => {
+                let callee = if Num::of(self.thir[args[0]].ty.peel_refs()) == Some(Num::F64) {
+                    self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
+                    Expr::var(if max { "$f64Max" } else { "$f64Min" })
+                } else { Expr::member(Expr::var("Math"), if max { "max" } else { "min" }) };
+                Expr::call(callee, vec![arg(), arg()])
+            },
             // An `Ordering` is -1, 0 or 1: `Equal` is the one that's falsy.
             Std::Operator(op) => {
                 let ty = generic_args
@@ -392,6 +415,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     arg()
                 } else if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
                     Expr::call(Expr::var("String"), vec![arg()])
+                } else if Num::of(ty) == Some(Num::F64) {
+                    self.runtime.insert(Helper::DisplayF64);
+                    Expr::call(Expr::var("$displayF64"), vec![arg()])
                 } else {
                     return Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")));
                 }
@@ -439,6 +465,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `util.Counter.tick` (ADR 0047).
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
         let target = &self.krate.fns[&def_id];
+        if target.module != self.module {
+            self.krate.references.borrow_mut().insert((self.module, def_id));
+        }
         let module = (target.module != self.module).then(|| Expr::var(&self.aliases[&target.module]));
         let holder = match (module, &target.owner) {
             (Some(module), Some(owner)) => Some(Expr::member(module, owner.clone())),
@@ -453,7 +482,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn js_ref(&self, path: &str) -> Expr {
         match js_import(path) {
-            Some((export, rest)) => global(&format!("{}{rest}", self.krate.imports[&export])),
+            Some((export, rest)) => {
+                self.krate.package_uses.borrow_mut().insert((self.module, export.clone()));
+                global(&format!("{}{rest}", self.krate.imports[&export]))
+            }
             None => global(path),
         }
     }

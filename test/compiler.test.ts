@@ -630,3 +630,41 @@ pub fn tally_of_four() -> u32 {
   expect(module.firstSide()).toBe(3);
   expect((await import(join(dir, "shapes.js"))).tallyOfFour()).toBe(8);
 });
+
+// ADR 0019: a module is imported when anything of it is used, a `const` or
+// a `thread_local!` too; a module that isn't used takes no name from locals.
+test("imports follow what's used: functions, consts and thread-locals", async () => {
+  const { fixture, compiler } = await import("./support");
+  const { writeFileSync } = await import("node:fs");
+  const dir = fixture("imports");
+  writeFileSync(join(dir, "lib.rs"), `mod editor;
+mod helpers;
+mod util;
+
+pub fn sized() -> u32 {
+    util::SIZE + util::COUNT.get() + helpers::one()
+}
+
+pub fn doubled(editor: u32) -> u32 {
+    editor * 2
+}
+`);
+  writeFileSync(join(dir, "util.rs"), `use std::cell::Cell;
+
+pub const SIZE: u32 = 4;
+
+thread_local! {
+    pub static COUNT: Cell<u32> = Cell::new(3);
+}
+`);
+  writeFileSync(join(dir, "helpers.rs"), "pub fn one() -> u32 {\n    1\n}\n");
+  writeFileSync(join(dir, "editor.rs"), "pub fn open() -> u32 {\n    1\n}\n");
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  const lib = await Bun.file(join(dir, "lib.js")).text();
+  expect(lib).toContain('import * as util from "./util.js";');
+  expect(lib).not.toContain("editor.js");
+  expect(lib).toContain("export function doubled(editor) {");
+  const module = await import(join(dir, "lib.js"));
+  expect(module.sized()).toBe(8);
+  expect(module.doubled(3)).toBe(6);
+});

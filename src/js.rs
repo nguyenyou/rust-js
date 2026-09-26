@@ -37,6 +37,8 @@ pub struct Module {
     /// `const` items, with the values rustc computed (ADR 0031).
     pub consts: Vec<Const>,
     pub functions: Vec<Function>,
+    /// Lazy trait dictionary caches. `var` without an initializer is cycle-safe.
+    pub caches: Vec<String>,
 }
 
 /// A type's methods (ADR 0047), an object named after the type:

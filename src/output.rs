@@ -59,6 +59,7 @@ impl OutputPlan {
                 namespaces: module.namespaces,
                 consts: module.consts,
                 functions: module.functions,
+                caches: module.caches,
             };
 
             crate::prepare::module(&mut js_module);

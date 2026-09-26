@@ -14,6 +14,7 @@
 //! because Rust panics on those in every profile.
 
 use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use rustc_ast::{LitKind, Mutability};
@@ -39,6 +40,7 @@ mod calls;
 mod jsx;
 mod representation;
 mod stdlib;
+mod traits;
 
 pub use analysis::{collect_bodies, lower_crate};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
@@ -70,6 +72,7 @@ pub struct LoweredModule {
     pub namespaces: Vec<js::Namespace>,
     pub consts: Vec<js::Const>,
     pub functions: Vec<js::Function>,
+    pub caches: Vec<String>,
     /// Runtime helpers its functions use.
     pub runtime: Vec<Helper>,
     /// Whether it has JSX, so it's a `.jsx` file (ADR 0040).
@@ -183,18 +186,23 @@ struct Loop {
     dest: Dest,
 }
 
-/// Facts computed once for the crate; function lowering only reads these.
+/// Crate facts and dependencies recorded while lowering function bodies.
 struct CrateFacts<'a, 'tcx> {
     mutated: &'a HashSet<Ty<'tcx>>,
     closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
+    bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,
     imports: &'a HashMap<Export, String>,
+    trait_impls: &'a [DefId],
+    references: RefCell<HashSet<(LocalModDefId, DefId)>>,
+    package_uses: RefCell<HashSet<(LocalModDefId, Export)>>,
 }
 
 struct FnCx<'a, 'tcx> {
     krate: &'a CrateFacts<'a, 'tcx>,
     tcx: TyCtxt<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
+    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
     /// While lowering a closure: the places it captured into snapshots.
     captures: HashMap<(LocalVarId, Vec<usize>), Var>,
     /// The range, in rustc's global source map, of the `.rs` file this
@@ -222,11 +230,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let def_id = body.def_id.to_def_id();
         let mut out = Vec::new();
         let thir = self.thir;
-        let params = self.lower_params(&thir.params.raw, self.tcx.def_span(def_id), &mut out)?;
+        let evidence = self.evidence_params(def_id);
+        let mut params = self.lower_params(&thir.params.raw, self.tcx.def_span(def_id), &mut out)?;
+        params.extend(evidence);
 
         let BodyTy::Fn(sig) = self.thir.body_type else {
             return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
         };
+        self.check_value_ty(sig.output(), self.tcx.def_span(def_id))?;
         let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
         let is_async = self.lower_body(body.expr, &dest, &mut out)?;
 
@@ -235,7 +246,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 name: self.krate.fns[&def_id].name.clone(),
                 params,
                 body: out,
-                export: self.tcx.visibility(def_id).is_public(),
+                export: self.tcx.visibility(def_id).is_public()
+                    && (self.tcx.def_kind(def_id) != rustc_hir::def::DefKind::AssocFn || self.tcx.inherent_impl_of_assoc(def_id).is_some()),
                 is_async,
                 span: self.js_span(self.tcx.def_span(def_id)),
                 name_span: self.tcx.def_ident_span(def_id).map_or(js::Span::NONE, |s| self.js_span(s)),
@@ -1238,13 +1250,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
             }
             ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
+            ExprKind::Index { lhs, index } => {
+                let values = self.operands(&[lhs, index], out)?;
+                self.runtime.insert(Helper::Index);
+                Ok(self.copy_if_needed(Expr::call(Expr::var("$index"), values), ty))
+            }
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
-            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize | PointerCoercion::ReifyFnPointer(_), source, .. } => {
+            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize, source, .. } => {
+                let value = self.expr(source, out)?;
+                self.unsize_trait(self.thir[source].ty, ty, value, span)
+            }
+            ExprKind::PointerCoercion { cast: PointerCoercion::ReifyFnPointer(_), source, .. } => {
                 self.expr(source, out)
             }
             // A function as a value, `component(Card, props)`: its JS name.
-            ExprKind::ZstLiteral { .. } if let &ty::FnDef(def_id, _) = ty.kind() && self.krate.fns.contains_key(&def_id) => {
-                Ok(self.fn_ref(def_id))
+            ExprKind::ZstLiteral { .. } if let &ty::FnDef(def_id, args) = ty.kind() && self.krate.fns.contains_key(&def_id) => {
+                if self.tcx.trait_of_assoc(def_id).is_some() {
+                    let count = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder().inputs().len();
+                    let params: Vec<String> = (0..count).map(|i| self.fresh(&format!("arg{i}"))).collect();
+                    let values = params.iter().map(|name| Expr::var(name)).collect();
+                    let call = self.trait_call(def_id, args, values, span)?
+                        .ok_or_else(|| self.unsupported(span, "this trait function value"))?;
+                    return Ok(Expr::arrow(params.into_iter().map(Into::into).collect(), vec![StmtKind::Return(Some(call)).at(js_span)]));
+                }
+                let callee = self.fn_ref(def_id);
+                let evidence = self.evidence_args(def_id, args, span)?;
+                if evidence.is_empty() { Ok(callee) } else {
+                    let count = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder().inputs().len();
+                    let params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
+                    let values = params.iter().map(|name| Expr::var(name)).chain(evidence).collect();
+                    Ok(Expr::arrow(params.into_iter().map(Into::into).collect(), vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js_span)]))
+                }
+            }
+            ExprKind::ZstLiteral { .. } if let Some(Std::MaxOf(max)) = self.std_fn(e) => {
+                self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
+                Ok(Expr::var(if max { "$f64Max" } else { "$f64Min" }))
             }
             ExprKind::Closure(ref closure) => self.closure(closure, out),
             ExprKind::Tuple { ref fields } if fields.is_empty() => Ok(Expr::undefined()),
@@ -2015,12 +2055,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// copied where a use might change it: each use is a value of its own.
     /// Anyone else's, like `u32::MAX`, is its value, written in place.
     fn named_const(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        if let Some(target) = self.krate.fns.get(&def_id) {
-            let place = if target.module == self.module {
-                Expr::var(&target.name)
-            } else {
-                Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
-            };
+        if self.krate.fns.contains_key(&def_id) {
+            // `fn_ref` also records the use, which is what imports its module.
+            let place = self.fn_ref(def_id);
             return Ok(if self.contains_mutated(ty) { self.copy(place, ty) } else { place });
         }
         eval_const(self.tcx, self.typing_env, def_id, args, span)
@@ -2194,6 +2231,7 @@ fn js_ident(name: &str) -> String {
         "new", "null", "package", "private", "protected", "public", "return", "static", "super",
         "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with",
         "yield", "undefined", "NaN", "Infinity", "Math", "Error", "String",
+        "WeakMap", "DataView", "ArrayBuffer", "Number", "BigInt", "Object",
     ];
     if RESERVED.contains(&name) { format!("{name}$") } else { name.to_string() }
 }

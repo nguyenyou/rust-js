@@ -1,6 +1,8 @@
 # 0047. Methods are an object of functions named after their type
 
 Status: Accepted. Extends [0020](0020-structs-and-tuples.md).
+Trait-method rejection is superseded by [0049](0049-traits-and-generics.md)
+for its supported subset; inherent methods keep this representation.
 
 ## Context
 

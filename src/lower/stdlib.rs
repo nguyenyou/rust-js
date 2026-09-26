@@ -179,6 +179,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // arguments are a string already (ADR 0034).
         let krate = tcx.crate_name(def_id.krate);
         let name = tcx.item_name(def_id);
+        if krate == sym::core
+            && let Some(imp) = tcx.inherent_impl_of_assoc(def_id)
+            && Num::of(tcx.type_of(imp).instantiate_identity()) == Some(Num::F64)
+        {
+            match name.as_str() {
+                "max" => return Some(Std::MaxOf(true)),
+                "min" => return Some(Std::MaxOf(false)),
+                _ => {}
+            }
+        }
         if (krate == sym::alloc && name.as_str() == "format" && tcx.def_path_str(def_id).ends_with("fmt::format"))
             || (krate == sym::core && name.as_str() == "must_use")
         {
@@ -544,7 +554,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     vec!["a".into(), "b".into()],
                     vec![StmtKind::Return(Some(add)).at(js_span)],
                 );
-                method(items, "reduce", vec![f, Expr::int(0)])
+                // Rust's floating Sum starts at -0.0, preserving the sign of
+                // an empty sum and of a sequence containing only negative zero.
+                let zero = if num == Num::F64 { Expr::num(-0.0) } else { Expr::int(0) };
+                method(items, "reduce", vec![f, zero])
             }
             Std::CollectString => method(items, "join", vec![Expr::str("")]),
             // A new `Vec`: an adapter's result is a new array already, and the

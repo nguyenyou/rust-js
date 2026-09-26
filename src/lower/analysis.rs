@@ -1,6 +1,8 @@
 //! Collect crate facts and orchestrate lowering; no filesystem writes.
 
 use super::bindings;
+use super::traits;
+use std::cell::RefCell;
 use super::bindings::{Export, is_binding, js_import, js_path, module_binding};
 use super::{
     Body, CrateFacts, FnCx, FnInfo, Lowered, LoweredModule, TestFn, camel_case, const_js, eval_const, fresh_in,
@@ -33,7 +35,9 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
             DefKind::Fn => !is_binding(tcx, def_id.to_def_id()),
             // A method of an `impl Type` block (ADR 0047).
             DefKind::AssocFn => {
-                tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_some() && !is_binding(tcx, def_id.to_def_id())
+                tcx.hir_maybe_body_owned_by(def_id).is_some()
+                    && !tcx.is_automatically_derived(tcx.parent(def_id.to_def_id()))
+                    && !is_binding(tcx, def_id.to_def_id())
             }
             DefKind::Closure => true,
             _ => false,
@@ -46,10 +50,26 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .collect()
 }
 
+/// What one pass of lowering every body produces (see `lower_crate`).
+#[derive(Default)]
+struct Pass {
+    functions: HashMap<LocalModDefId, Vec<js::Function>>,
+    namespaces: HashMap<LocalModDefId, Vec<js::Namespace>>,
+    runtime: HashMap<LocalModDefId, HashSet<Helper>>,
+    jsx: HashSet<LocalModDefId>,
+    caches: HashMap<LocalModDefId, Vec<String>>,
+    /// `thread_local!`s' values, made from their lowered `init`s.
+    local_consts: HashMap<LocalModDefId, Vec<js::Const>>,
+    /// Which items each module uses from another, and which JS imports.
+    references: HashSet<(LocalModDefId, DefId)>,
+    package_uses: HashSet<(LocalModDefId, Export)>,
+    failed: bool,
+}
+
 /// Lower every function, grouped by module. Reports all unsupported
 /// features as rustc errors.
 pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Lowered> {
-    if !bindings::validate(tcx) {
+    if !bindings::validate(tcx) || !traits::validate(tcx) {
         return None;
     }
     // With `--test`, rustc adds a harness: a `const` per test, marked
@@ -100,8 +120,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn if is_binding(tcx, def_id.to_def_id()) => continue,
             DefKind::AssocFn if tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_some() => continue,
-            DefKind::AssocFn => "trait methods",
+            DefKind::AssocFn => continue,
             DefKind::AssocConst { .. } => "associated constants",
+            DefKind::AssocTy => "associated types",
+            DefKind::Impl { of_trait: true }
+                if !tcx.is_automatically_derived(def_id.to_def_id())
+                    && !traits::operational(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) => "user implementations of this standard or external trait",
             DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
             DefKind::Static { .. } => "statics",
             _ => continue,
@@ -113,6 +137,10 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     if failed {
         return None;
     }
+
+    let trait_impls: Vec<DefId> = tcx.hir_crate_items(()).definitions()
+        .filter(|&id| matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) && !tcx.is_automatically_derived(id.to_def_id()))
+        .map(|id| id.to_def_id()).collect();
 
     // Closures are lowered inside the function that creates them.
     let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) = all_bodies
@@ -202,7 +230,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // The modules that get a JS file: the root, then every module with a
     // function or a `const`, in the order the first one appears.
     let mut modules = vec![LocalModDefId::CRATE_DEF_ID];
-    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()) {
+    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()).chain(trait_impls.iter().map(|id| id.expect_local())) {
         let module = tcx.parent_module_from_def_id(def_id);
         if !modules.contains(&module) {
             modules.push(module);
@@ -217,10 +245,21 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     let mut owners: HashMap<(LocalModDefId, DefId), String> = HashMap::new();
     let mut methods: HashMap<(LocalModDefId, DefId), HashSet<String>> = HashMap::new();
     let mut fns: HashMap<DefId, FnInfo> = HashMap::new();
-    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()) {
+    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()).chain(trait_impls.iter().map(|id| id.expect_local())) {
         let module = tcx.parent_module_from_def_id(def_id);
         let names = taken.entry(module).or_default();
-        let js_name = bindings::fn_name(tcx, def_id.to_def_id());
+        let js_name = if trait_impls.contains(&def_id.to_def_id()) {
+            traits::impl_name(tcx, def_id.to_def_id())
+        } else if tcx.def_kind(def_id) == DefKind::AssocFn && tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_none() {
+            let parent = tcx.parent(def_id.to_def_id());
+            let prefix = if trait_impls.contains(&parent) { traits::impl_name(tcx, parent) }
+                else { super::lower_first(tcx.item_name(parent).as_str()) };
+            format!("{prefix}_{}", bindings::fn_name(tcx, def_id.to_def_id()))
+        } else { bindings::fn_name(tcx, def_id.to_def_id()) };
+        if trait_impls.contains(&def_id.to_def_id()) && names.contains(&js_name) {
+            tcx.dcx().span_err(tcx.def_span(def_id), format!("rust-js: generated trait implementation name `{js_name}` collides; put the implementations in separate modules"));
+            failed = true;
+        }
         let owner_type = tcx.inherent_impl_of_assoc(def_id.to_def_id()).and_then(|imp| {
             match tcx.type_of(imp).instantiate_identity().kind() {
                 ty::Adt(adt, _) => Some(adt.did()),
@@ -246,7 +285,6 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // Which modules each module calls into, and which functions are called
     // from another module: those must be exported, even if private in Rust
     // (a child module may call its parent's private functions).
-    let mut uses: HashMap<LocalModDefId, Vec<LocalModDefId>> = HashMap::new();
     let mut called_from_elsewhere: HashSet<DefId> = HashSet::new();
     for body in all_bodies {
         let from = tcx.parent_module_from_def_id(body.def_id);
@@ -261,10 +299,6 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 && target.module != from
             {
                 called_from_elsewhere.insert(*def_id);
-                let targets = uses.entry(from).or_default();
-                if !targets.contains(&target.module) {
-                    targets.push(target.module);
-                }
             }
         }
     }
@@ -294,20 +328,27 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     }
 
     // Import aliases: the module's last path segment (the crate name for the
-    // root), unique within the importing file.
+    // root), unique within the importing file. Only a module that's used gets
+    // one, so another module's name never renames a local. `uses(from, to)`
+    // says which are used; see the two passes below.
     let paths: HashMap<LocalModDefId, Vec<String>> = modules.iter().map(|&m| (m, module_path(tcx, m))).collect();
     let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
-    let mut aliases: HashMap<LocalModDefId, HashMap<LocalModDefId, String>> = HashMap::new();
-    for &module in &modules {
-        let mut targets = uses.remove(&module).unwrap_or_default();
-        targets.sort_by(|a, b| paths[a].cmp(&paths[b]));
-        let names = taken.entry(module).or_default();
-        let module_aliases = targets
-            .into_iter()
-            .map(|target| (target, fresh_in(names, paths[&target].last().unwrap_or(&crate_name))))
-            .collect();
-        aliases.insert(module, module_aliases);
-    }
+    let assign_aliases = |taken: &mut HashMap<LocalModDefId, HashSet<String>>,
+                          uses: &dyn Fn(LocalModDefId, LocalModDefId) -> bool|
+     -> HashMap<LocalModDefId, HashMap<LocalModDefId, String>> {
+        let mut aliases = HashMap::new();
+        for &module in &modules {
+            let mut targets: Vec<_> = modules.iter().copied().filter(|&m| m != module && uses(module, m)).collect();
+            targets.sort_by(|a, b| paths[a].cmp(&paths[b]));
+            let names = taken.entry(module).or_default();
+            let module_aliases = targets
+                .into_iter()
+                .map(|target| (target, fresh_in(names, paths[&target].last().unwrap_or(&crate_name))))
+                .collect();
+            aliases.insert(module, module_aliases);
+        }
+        aliases
+    };
 
     // The types whose JS objects get changed in place somewhere in the
     // crate: `a.b.c = ..` changes the object `a.b`, so it's `a.b`'s type.
@@ -350,107 +391,158 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         });
     }
 
-    let crate_facts = CrateFacts {
-        mutated: &mutated,
-        closures: &closures,
-        fns: &fns,
-        imports: &import_names,
-    };
-    let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
-    let mut namespaces: HashMap<LocalModDefId, Vec<js::Namespace>> = HashMap::new();
-    let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
-    let mut jsx: HashSet<LocalModDefId> = HashSet::new();
-    for body in &bodies {
-        let def_id = body.def_id.to_def_id();
-        let module = fns[&def_id].module;
-        let file = module_file(tcx, module);
-        let mut cx = FnCx {
-            tcx,
-            typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
-            krate: &crate_facts,
-            captures: HashMap::new(),
-            file_start: file.start_pos,
-            file_end: file.end_position(),
-            thir: &body.thir,
-            module,
-            aliases: &aliases[&module],
-            vars: HashMap::new(),
-            // Locals must never shadow a function or an import of this file.
-            names: taken[&module].clone(),
-            module_names: &taken[&module],
-            labels: HashSet::new(),
-            loops: Vec::new(),
-            runtime: HashSet::new(),
-            jsx: false,
+    let function_bodies = bodies.iter().map(|body| (body.def_id.to_def_id(), *body)).collect();
+    let empty_thir = rustc_middle::thir::Thir::new(rustc_middle::thir::BodyTy::Const(tcx.types.unit));
+    // Every function body, lowered with these aliases and reserved names.
+    let lower_all = |aliases: &HashMap<LocalModDefId, HashMap<LocalModDefId, String>>,
+                     taken: &HashMap<LocalModDefId, HashSet<String>>|
+     -> Pass {
+        let mut pass = Pass::default();
+        let crate_facts = CrateFacts {
+            mutated: &mutated,
+            closures: &closures,
+            bodies: &function_bodies,
+            fns: &fns,
+            imports: &import_names,
+            trait_impls: &trait_impls,
+            references: RefCell::new(HashSet::new()),
+            package_uses: RefCell::new(HashSet::new()),
         };
-        match cx.lower_fn(body) {
-            Ok(lowered) if let Some(&key) = thread_local_inits.get(&body.def_id) => {
-                // `const COUNT = { value: 0 };`: made when the module loads.
-                let function = lowered.function;
-                let value = match function.body.as_slice() {
-                    [
-                        js::Stmt {
-                            kind: StmtKind::Return(Some(value)),
-                            ..
+        for (def_id, body) in bodies.iter().filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none()).map(|b| (b.def_id.to_def_id(), Some(*b)))
+            .chain(trait_impls.iter().map(|id| (*id, None))) {
+
+            let module = fns[&def_id].module;
+            let file = module_file(tcx, module);
+            let mut cx = FnCx {
+                tcx,
+                typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
+                evidence: Vec::new(),
+                krate: &crate_facts,
+                captures: HashMap::new(),
+                file_start: file.start_pos,
+                file_end: file.end_position(),
+                thir: body.map_or(&empty_thir, |body| &body.thir),
+                module,
+                aliases: &aliases[&module],
+                vars: HashMap::new(),
+                // Locals must never shadow a function or an import of this file.
+                names: taken[&module].clone(),
+                module_names: &taken[&module],
+                labels: HashSet::new(),
+                loops: Vec::new(),
+                runtime: HashSet::new(),
+                jsx: false,
+            };
+            let result = match body {
+                Some(body) => cx.lower_fn(body),
+                None => {
+                    let cache = format!("${}", fns[&def_id].name);
+                    pass.caches.entry(module).or_default().push(cache.clone());
+                    cx.lower_dictionary(def_id, &cache).map(|function| super::LoweredFn {
+                        function, runtime: std::mem::take(&mut cx.runtime), jsx: cx.jsx,
+                    })
+                }
+            };
+            match result {
+                Ok(lowered) if let Some(&key) = thread_local_inits.get(&def_id.expect_local()) => {
+                    // `const COUNT = { value: 0 };`: made when the module loads.
+                    let function = lowered.function;
+                    let value = match function.body.as_slice() {
+                        [
+                            js::Stmt {
+                                kind: StmtKind::Return(Some(value)),
+                                ..
+                            },
+                        ] => value.clone(),
+                        _ => Expr::call(Expr::arrow(Vec::new(), function.body), Vec::new()),
+                    };
+                    let info = &fns[&key.to_def_id()];
+                    let file = module_file(tcx, info.module);
+                    let span = tcx.def_span(key).source_callsite();
+                    pass.local_consts.entry(info.module).or_default().push(js::Const {
+                        name: info.name.clone(),
+                        value,
+                        export: tcx.visibility(key).is_public() || called_from_elsewhere.contains(&key.to_def_id()),
+                        span: js::Span {
+                            lo: (span.lo() - file.start_pos).0,
+                            hi: (span.hi() - file.start_pos).0,
                         },
-                    ] => value.clone(),
-                    _ => Expr::call(Expr::arrow(Vec::new(), function.body), Vec::new()),
-                };
-                let info = &fns[&key.to_def_id()];
-                let file = module_file(tcx, info.module);
-                let span = tcx.def_span(key).source_callsite();
-                const_items.entry(info.module).or_default().push(js::Const {
-                    name: info.name.clone(),
-                    value,
-                    export: tcx.visibility(key).is_public() || called_from_elsewhere.contains(&key.to_def_id()),
-                    span: js::Span {
-                        lo: (span.lo() - file.start_pos).0,
-                        hi: (span.hi() - file.start_pos).0,
-                    },
-                });
-                runtime.entry(module).or_default().extend(lowered.runtime);
-                if lowered.jsx {
-                    jsx.insert(module);
-                }
-            }
-            Ok(mut lowered) => {
-                if lowered.jsx {
-                    jsx.insert(module);
-                }
-                lowered.function.export |= called_from_elsewhere.contains(&def_id);
-                match &fns[&def_id].owner {
-                    // Its type's object is exported if any of its methods is.
-                    Some(owner) => {
-                        let module_namespaces = namespaces.entry(module).or_default();
-                        let export = lowered.function.export;
-                        match module_namespaces.iter_mut().find(|n| n.name == *owner) {
-                            Some(namespace) => {
-                                namespace.export |= export;
-                                namespace.methods.push(lowered.function);
-                            }
-                            None => module_namespaces.push(js::Namespace {
-                                name: owner.clone(),
-                                methods: vec![lowered.function],
-                                export,
-                            }),
-                        }
+                    });
+                    pass.runtime.entry(module).or_default().extend(lowered.runtime);
+                    if lowered.jsx {
+                        pass.jsx.insert(module);
                     }
-                    None => functions.entry(module).or_default().push(lowered.function),
                 }
-                runtime.entry(module).or_default().extend(lowered.runtime);
+                Ok(mut lowered) => {
+                    if lowered.jsx {
+                        pass.jsx.insert(module);
+                    }
+                    lowered.function.export |= called_from_elsewhere.contains(&def_id);
+                    match &fns[&def_id].owner {
+                        // Its type's object is exported if any of its methods is.
+                        Some(owner) => {
+                            let module_namespaces = pass.namespaces.entry(module).or_default();
+                            let export = lowered.function.export;
+                            match module_namespaces.iter_mut().find(|n| n.name == *owner) {
+                                Some(namespace) => {
+                                    namespace.export |= export;
+                                    namespace.methods.push(lowered.function);
+                                }
+                                None => module_namespaces.push(js::Namespace {
+                                    name: owner.clone(),
+                                    methods: vec![lowered.function],
+                                    export,
+                                }),
+                            }
+                        }
+                        None => pass.functions.entry(module).or_default().push(lowered.function),
+                    }
+                    pass.runtime.entry(module).or_default().extend(lowered.runtime);
+                }
+                Err(_) => pass.failed = true,
             }
-            Err(_) => failed = true,
         }
-    }
+        pass.references = crate_facts.references.into_inner();
+        pass.package_uses = crate_facts.package_uses.into_inner();
+        pass
+    };
     if failed {
         return None;
     }
+    // Which modules a body uses is known once it's lowered: a trait call or a
+    // copied default method can reach a module its Rust doesn't name. So the
+    // first pass reserves every module's alias and records the uses, and the
+    // output is a second pass's, reserving only those (unless all are used).
+    let mut every_taken = taken.clone();
+    let every = assign_aliases(&mut every_taken, &|_, _| true);
+    let first = lower_all(&every, &every_taken);
+    if first.failed {
+        return None;
+    }
+    let used: HashSet<(LocalModDefId, LocalModDefId)> =
+        first.references.iter().map(|&(from, id)| (from, fns[&id].module)).collect();
+    let all_used = used.len() == modules.len() * (modules.len() - 1);
+    let aliases = assign_aliases(&mut taken, &|from, to| used.contains(&(from, to)));
+    let mut pass = if all_used { first } else { lower_all(&aliases, &taken) };
+    if pass.failed {
+        return None;
+    }
+    for (module, consts) in pass.local_consts.drain() {
+        const_items.entry(module).or_default().extend(consts);
+    }
 
+    for &(_, id) in pass.references.iter() {
+        let info = &fns[&id];
+        if let Some(owner) = &info.owner {
+            if let Some(ns) = pass.namespaces.get_mut(&info.module).and_then(|ns| ns.iter_mut().find(|ns| ns.name == *owner)) { ns.export = true; }
+        } else if let Some(f) = pass.functions.get_mut(&info.module).and_then(|fs| fs.iter_mut().find(|f| f.name == info.name)) { f.export = true; }
+    }
     let lowered = modules
         .into_iter()
         .map(|module| {
             let mut imports: Vec<(String, Vec<String>)> = aliases[&module]
                 .iter()
+                .filter(|(target, _)| pass.references.iter().any(|(from, id)| *from == module && fns[id].module == **target))
                 .map(|(target, alias)| (alias.clone(), paths[target].clone()))
                 .collect();
             imports.sort_by(|a, b| a.1.cmp(&b.1));
@@ -458,7 +550,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             let mut packages: BTreeMap<&str, js::Package> = BTreeMap::new();
             for export in imported
                 .iter()
-                .filter(|(_, users)| users.contains(&module))
+                .filter(|(export, users)| users.contains(&module) || pass.package_uses.contains(&(module, (*export).clone())))
                 .map(|(export, _)| export)
             {
                 let (from, name) = export;
@@ -493,18 +585,19 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                     });
                 }
             }
-            let mut helpers: Vec<Helper> = runtime.remove(&module).unwrap_or_default().into_iter().collect();
+            let mut helpers: Vec<Helper> = pass.runtime.remove(&module).unwrap_or_default().into_iter().collect();
             helpers.sort();
             LoweredModule {
                 path: paths[&module].clone(),
                 file: module_file(tcx, module),
                 packages,
                 imports,
-                namespaces: namespaces.remove(&module).unwrap_or_default(),
+                namespaces: pass.namespaces.remove(&module).unwrap_or_default(),
                 consts: const_items.remove(&module).unwrap_or_default(),
-                functions: functions.remove(&module).unwrap_or_default(),
+                functions: pass.functions.remove(&module).unwrap_or_default(),
+                caches: pass.caches.remove(&module).unwrap_or_default(),
                 runtime: helpers,
-                jsx: jsx.contains(&module),
+                jsx: pass.jsx.contains(&module),
             }
         })
         .collect();
