@@ -2,8 +2,8 @@
 
 rust-js compiles a crate's `#[test]` functions with `rust-js --test`, into a
 `.test.js` file that calls `test()` for each one (ADR 0026). `bun test` runs
-it in happy-dom; this folder runs the same file in **real browsers**:
-Chromium, Firefox and WebKit, through Playwright, on Bun. See
+it in happy-dom; this folder runs the same file in **Chromium**, through
+Playwright, on Bun. See
 [ADR 0027](../docs/decisions/0027-real-browser-tests.md).
 
 ```bash
@@ -21,7 +21,7 @@ RUST_JS_TESTS=out/counter.test.js bunx --bun vitest run -c browser/vitest.config
 
 | File | What it is |
 |---|---|
-| `playwright.config.ts` | Playwright Test: one project per engine |
+| `playwright.config.ts` | Playwright Test: Chromium |
 | `rust-tests.spec.ts` | Runs each Rust test in a fresh page |
 | `vitest.config.ts` | Vitest's browser mode, with the Playwright provider |
 

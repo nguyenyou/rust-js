@@ -10,7 +10,7 @@
     "examples/vite-react"
   ],
   "scripts": {
-    "setup": "bun install && bunx playwright install",
+    "setup": "bun install && bunx --bun playwright install chromium",
     "build": "cargo build && react/build.sh -o \"$PWD/target/libreact.rmeta\"",
     "test": "bun test",
     "generate": "bun web/generate.ts",

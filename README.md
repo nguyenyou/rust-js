@@ -132,7 +132,7 @@ bun test --preload ./test/happydom.ts ./out/todo.test.js
 
 `assert!`, `assert_eq!`, `panic!` and `#[should_panic]` fail with Rust's messages.
 
-The same tests run in real browsers (Chromium, Firefox, WebKit) with Playwright Test or Vitest's
+The same tests run in Chromium with Playwright Test or Vitest's
 browser mode, both on Bun ([browser/](browser/README.md), [ADR 0027](docs/decisions/0027-real-browser-tests.md)).
 A test that needs one is marked `#[cfg_attr(not(browser), ignore)]`.
 

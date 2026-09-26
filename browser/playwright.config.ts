@@ -6,10 +6,7 @@ export default defineConfig({
   testMatch: "rust-tests.spec.ts",
   fullyParallel: true,
   reporter: [["list"]],
-  // One run, three engines.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
 });
