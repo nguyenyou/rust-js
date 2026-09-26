@@ -49,14 +49,19 @@ fn sum(text: &str) -> Result<i32, std::num::ParseIntError> {
     }
     Ok(total)
 }
-pub fn words(text: &str) -> (Vec<String>, Vec<String>, String) {
+pub fn words(text: &str) -> (Vec<String>, Vec<String>, String, Vec<String>, bool) {
     let words = text.split_whitespace().map(|w| w.to_string()).collect();
     let lines = text.lines().map(|l| l.to_string()).collect();
     let total = match sum(text) {
         Ok(n) => format!("sum {n}"),
         Err(e) => format!("error: {e}"),
     };
-    (words, lines, total)
+    // A closure as the pattern.
+    let pieces = text
+        .split(|c: char| c.is_ascii_digit() || c == '\r')
+        .map(|p| p.to_string())
+        .collect();
+    (words, lines, total, pieces, text.contains(|c: char| c.is_uppercase()))
 }
 pub fn slices(v: &[u32]) -> (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, u32) {
     let a = [10u32, 20, 30];
@@ -70,25 +75,48 @@ pub fn slice_panics(start: usize, end: usize) -> Vec<u32> {
 pub fn escapes() -> String {
     format!(
         "{:?} {:?} {:?} {:?} {:?}",
-        "a\"b\\c\n\t\r\0\u{1b}\u{7f}é\u{3000}\u{a0}\u{200b}\u{2028}\u{e000}\u{301}x\u{10ffff}",
-        'a',
-        '\'',
-        '"',
-        "it's"
+        "a\"b\\c\n\t\r\0\u{1b}\u{7f}é\u{3000}\u{a0}\u{200b}\u{2028}\u{e000}\u{301}x\u{10ffff}", 'a', '\'', '"', "it's"
     )
 }
 pub fn report() -> String {
     let mut out = String::new();
-    for c in ['a', 'Z', '7', ' ', '\n', '\u{3000}', 'é', 'ß', '٣', 'Ⅻ', '!', '\u{feff}', '\u{7f}'] {
+    for c in [
+        'a', 'Z', '7', ' ', '\n', '\u{3000}', 'é', 'ß', '٣', 'Ⅻ', '!', '\u{feff}', '\u{7f}',
+    ] {
         out.push_str(&format!("{c:?} {:?} {:?} {:?}\n", chars(c), ascii(c), casts(c)));
     }
-    for s in ["42", "-1", "", "4x", "99999999999", "+7", "-128", "200", "1.5", "-inf", "NaN", "1e3", ".5", " 1"] {
+    for s in [
+        "42",
+        "-1",
+        "",
+        "4x",
+        "99999999999",
+        "+7",
+        "-128",
+        "200",
+        "1.5",
+        "-inf",
+        "NaN",
+        "1e3",
+        ".5",
+        " 1",
+    ] {
         out.push_str(&format!("{s:?} {}\n", parses(s)));
     }
     for s in ["true", "false", "True", "x", "é", "ab"] {
         out.push_str(&format!("{s:?} {}\n", parses(s)));
     }
-    for text in ["1 2\t3", "a\u{3000}b  c\u{feff}d", "x\r\ny\n\nz\n", "  ", "4\n-5\r\n"] {
+    for text in [
+        "1 2\t3",
+        "a\u{3000}b  c\u{feff}d",
+        "x\r\ny\n\nz\n",
+        "  ",
+        "4\n-5\r\n",
+        "foo\nBar\n\r\nbaz\r",
+        "",
+        "\n",
+        "\r",
+    ] {
         out.push_str(&format!("{:?}\n", words(text)));
     }
     out.push_str(&format!("{:?}\n{}\n", slices(&[1, 2, 3, 4]), escapes()));

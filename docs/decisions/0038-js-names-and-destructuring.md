@@ -34,7 +34,7 @@ crate can choose camelCase for those too, with `#![rust_js::camel_case]`
 ([0046](0046-camel-case-crates.md)).
 
 **A tuple or struct pattern of plain variables is JS destructuring**, in a
-`let` of a computed value and in a parameter:
+`let` of a computed value, a `for` and a parameter:
 
 | Rust | JS |
 |---|---|
@@ -43,6 +43,7 @@ crate can choose camelCase for those too, with `#![rust_js::camel_case]`
 | `let (_, only) = f();` | `const [, only] = f();` |
 | `fn Card(CardProps { title, children }: CardProps)` | `function Card({ title, children })` |
 | `fn swap((a, b): (i32, i32))` | `function swap([a, b])` |
+| `for (i, x) in v.iter().enumerate()` | `for (const [i, x] of v.entries())` |
 
 A pattern with anything else in it, or a part whose type needs its own copy
 (ADR 0020), is taken apart as before. So is a `let` of a place, which still

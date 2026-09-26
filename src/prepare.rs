@@ -136,9 +136,12 @@ impl Context {
                 }
             }
             StmtKind::ForOf {
-                name, iterable, body, ..
+                pattern,
+                iterable,
+                body,
+                ..
             } => {
-                self.names.insert(name.clone());
+                self.pattern(pattern);
                 self.reserve(iterable);
                 for s in body {
                     self.reserve_stmt(s);

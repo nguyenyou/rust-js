@@ -156,13 +156,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .tcx
                 .trait_of_assoc(def_id)
                 .is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Index));
-            if on_string && (indexing || self.tcx.item_name(def_id).as_str() == "len") {
+            let name = self.tcx.item_name(def_id);
+            let offsets = [
+                "len",
+                "find",
+                "rfind",
+                "char_indices",
+                "match_indices",
+                "rmatch_indices",
+            ];
+            if on_string && (indexing || offsets.contains(&name.as_str())) {
                 let what = if indexing {
-                    "indexing or slicing a string"
+                    "indexing or slicing a string".to_string()
                 } else {
-                    "`len()` of a string"
+                    format!("`{name}()` of a string")
                 };
-                let why = "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works";
+                let why = match name.as_str() {
+                    "len" => "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works",
+                    _ => "Rust counts its UTF-8 bytes, and JS its UTF-16 units",
+                };
                 return Err(self
                     .tcx
                     .dcx()

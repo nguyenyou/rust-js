@@ -185,6 +185,14 @@ export function more_options(n) {
 
 export function results(c) {
   const r = parse(c);
+  const arg = r.TAG === "Ok" ? {
+    TAG: "Ok",
+    _0: Math.imul(r._0, 10) >>> 0
+  } : r;
+  const arg$1 = r.TAG === "Err" ? {
+    TAG: "Err",
+    _0: Array.from(r._0).length
+  } : r;
   const then = (x) => {
     if (x > 1) {
       return {
@@ -200,14 +208,8 @@ export function results(c) {
   };
   const result = r.TAG === "Ok" ? then(r._0) : r;
   return [
-    ((result) => result.TAG === "Ok" ? "Ok(" + String(result._0) + ")" : "Err(" + $debugStr(result._0) + ")")(r.TAG === "Ok" ? {
-      TAG: "Ok",
-      _0: Math.imul(r._0, 10) >>> 0
-    } : r),
-    ((result) => result.TAG === "Ok" ? "Ok(" + String(result._0) + ")" : "Err(" + String(result._0) + ")")(r.TAG === "Err" ? {
-      TAG: "Err",
-      _0: Array.from(r._0).length
-    } : r),
+    arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")",
+    arg$1.TAG === "Ok" ? "Ok(" + String(arg$1._0) + ")" : "Err(" + String(arg$1._0) + ")",
     result.TAG === "Ok" ? result._0 : 0,
     r.TAG === "Ok" ? r._0 : Array.from(r._0).length,
     r.TAG === "Err" ? r._0 : undefined,
@@ -297,17 +299,23 @@ export function report() {
     5,
     8
   ]) {
-    out += ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(options(n)) + " " + ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[2]) + ", " + String(tuple[3]) + ", " + String(tuple[4]) + ")")(more_options(n)) + "\n";
+    const arg = options(n);
+    const arg$1 = more_options(n);
+    out += ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(arg) + " " + ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[2]) + ", " + String(tuple[3]) + ", " + String(tuple[4]) + ")")(arg$1) + "\n";
   }
   for (const c of [
     "1",
     "2",
     "x"
   ]) {
-    out += ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(results(c)) + "\n";
+    const arg$2 = results(c);
+    out += ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(arg$2) + "\n";
   }
   for (const n$1 of [0, 5]) {
-    out += ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "]") + ", " + ("[" + tuple[3].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(iters(n$1)) + " " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ")")(tuple[5]) + ")")(consumers(n$1)) + " " + ((tuple) => "(" + String(tuple[0]) + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + String(tuple[2]) + ", " + ("[" + tuple[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(vecs(n$1)) + "\n";
+    const arg$3 = iters(n$1);
+    const arg$4 = consumers(n$1);
+    const arg$5 = vecs(n$1);
+    out += ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "], [" + tuple[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "], [" + tuple[3].map((item) => String(item)).join(", ") + "], [" + tuple[4].map((item) => String(item)).join(", ") + "], [" + tuple[5].map((item) => String(item)).join(", ") + "])")(arg$3) + " " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "])")(tuple[5]) + ")")(arg$4) + " " + ((tuple) => "(" + String(tuple[0]) + ", [" + tuple[1].map((item) => String(item)).join(", ") + "], " + String(tuple[2]) + ", [" + tuple[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + tuple[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + tuple[5].map((item) => String(item)).join(", ") + "])")(arg$5) + "\n";
   }
   return out;
 }

@@ -96,11 +96,25 @@ function $toDigit(c, radix) {
 }
 
 function $lines(s) {
-  const lines = s.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
-  if (lines[lines.length - 1] === "") {
-    lines.pop();
+  const lines = s.split("\n");
+  const last = lines.pop();
+  const ended = lines.map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  if (last !== "") {
+    ended.push(last);
   }
-  return lines;
+  return ended;
+}
+
+function $splitBy(s, matches) {
+  const pieces = [""];
+  for (const c of s) {
+    if (matches(c)) {
+      pieces.push("");
+    } else {
+      pieces[pieces.length - 1] += c;
+    }
+  }
+  return pieces;
 }
 
 function $parseInt(s, min, max) {
@@ -221,10 +235,11 @@ export function parses(s) {
     TAG: "Ok",
     _0: s
   });
-  return (n.TAG === "Ok" ? "Ok(" + String(n._0) + ")" : "Err(" + $debugStr(n._0) + ")") + " " + ((result) => result.TAG === "Ok" ? "Ok(" + String(result._0) + ")" : "Err(" + $debugStr(result._0) + ")")(i.TAG === "Err" ? {
+  const arg = i.TAG === "Err" ? {
     TAG: "Err",
     _0: i._0
-  } : i) + " " + (f.TAG === "Ok" ? "Ok(" + $debugF64(f._0) + ")" : "Err(" + $debugStr(f._0) + ")") + " " + (b.TAG === "Ok" ? "Ok(" + String(b._0) + ")" : "Err(" + $debugStr(b._0) + ")") + " " + (c.TAG === "Ok" ? "Ok(" + $debugStr(c._0, "'") + ")" : "Err(" + $debugStr(c._0) + ")") + " " + $debugStr(owned);
+  } : i;
+  return (n.TAG === "Ok" ? "Ok(" + String(n._0) + ")" : "Err(" + $debugStr(n._0) + ")") + " " + (arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")") + " " + (f.TAG === "Ok" ? "Ok(" + $debugF64(f._0) + ")" : "Err(" + $debugStr(f._0) + ")") + " " + (b.TAG === "Ok" ? "Ok(" + String(b._0) + ")" : "Err(" + $debugStr(b._0) + ")") + " " + (c.TAG === "Ok" ? "Ok(" + $debugStr(c._0, "'") + ")" : "Err(" + $debugStr(c._0) + ")") + " " + $debugStr(owned);
 }
 
 function sum(text) {
@@ -252,10 +267,13 @@ export function words(text) {
   } else {
     total = "error: " + match._0;
   }
+  const pieces = $splitBy(text, (c) => /^[0-9]$/.test(c) || c === "\r").map((p) => p);
   return [
     words$1,
     lines,
-    total
+    total,
+    pieces,
+    Array.from(text).some((c) => /^\p{Uppercase}$/u.test(c))
   ];
 }
 
@@ -308,7 +326,7 @@ export function report() {
     const arg = chars(c);
     const arg$1 = ascii(c);
     const arg$2 = casts(c);
-    out += $debugStr(c, "'") + " " + ("(" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + String(arg[3]) + ", " + String(arg[4]) + ", " + String(arg[5]) + ", " + String(arg[6]) + ", " + String(arg[7]) + ")") + " " + ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + $debugStr(tuple[4], "'") + ", " + $debugStr(tuple[5], "'") + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[6]) + ", " + String(tuple[7]) + ")")(arg$1) + " " + ("(" + String(arg$2[0]) + ", " + String(arg$2[1]) + ", " + $debugStr(arg$2[2], "'") + ", " + $debugStr(arg$2[3], "'") + ", " + String(arg$2[4]) + ")") + "\n";
+    out += $debugStr(c, "'") + " (" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + String(arg[3]) + ", " + String(arg[4]) + ", " + String(arg[5]) + ", " + String(arg[6]) + ", " + String(arg[7]) + ") " + ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + $debugStr(tuple[4], "'") + ", " + $debugStr(tuple[5], "'") + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[6]) + ", " + String(tuple[7]) + ")")(arg$1) + " (" + String(arg$2[0]) + ", " + String(arg$2[1]) + ", " + $debugStr(arg$2[2], "'") + ", " + $debugStr(arg$2[3], "'") + ", " + String(arg$2[4]) + ")\n";
   }
   for (const s of [
     "42",
@@ -345,16 +363,22 @@ export function report() {
     "a　b  c﻿d",
     "x\r\ny\n\nz\n",
     "  ",
-    "4\n-5\r\n"
+    "4\n-5\r\n",
+    "foo\nBar\n\r\nbaz\r",
+    "",
+    "\n",
+    "\r"
   ]) {
-    out += ((tuple) => "(" + ("[" + tuple[0].map((item) => $debugStr(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => $debugStr(item)).join(", ") + "]") + ", " + $debugStr(tuple[2]) + ")")(words(text)) + "\n";
+    const arg$5 = words(text);
+    out += ((tuple) => "([" + tuple[0].map((item) => $debugStr(item)).join(", ") + "], [" + tuple[1].map((item) => $debugStr(item)).join(", ") + "], " + $debugStr(tuple[2]) + ", [" + tuple[3].map((item) => $debugStr(item)).join(", ") + "], " + String(tuple[4]) + ")")(arg$5) + "\n";
   }
-  out += ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[2].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[3].map((item) => String(item)).join(", ") + "]") + ", " + String(tuple[4]) + ")")(slices([
+  const arg$6 = slices([
     1,
     2,
     3,
     4
-  ])) + "\n" + escapes() + "\n";
+  ]);
+  out += ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "], [" + tuple[2].map((item) => String(item)).join(", ") + "], [" + tuple[3].map((item) => String(item)).join(", ") + "], " + String(tuple[4]) + ")")(arg$6) + "\n" + escapes() + "\n";
   return out;
 }
 //# sourceMappingURL=text.js.map

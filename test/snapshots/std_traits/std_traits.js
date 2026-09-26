@@ -654,6 +654,12 @@ export function debugs(n) {
     TAG: "Err",
     _0: "small"
   };
+  const arg = [
+    n,
+    "a",
+    "'"
+  ];
+  const arg$1 = [5];
   return [
     posDebug_fmt(p),
     dimsDebug_fmt([n, 2]) + " " + nothingDebug_fmt(undefined) + " " + glyphDebug_fmt("Dot"),
@@ -674,12 +680,8 @@ export function debugs(n) {
       f: "x"
     }),
     boxedDebug_fmt({ item: p }, posDebug()) + " " + boxedDebug_fmt({ item: "s" }, { fmt: (value) => value == null ? "None" : "Some(" + $debugStr(value) + ")" }),
-    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " " + ((tuple) => "(" + String(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + $debugStr(tuple[2], "'") + ")")([
-      n,
-      "a",
-      "'"
-    ]) + " " + ((tuple) => "(" + String(tuple[0]) + ",)")([5]),
-    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "]" + " " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") + " " + [
+    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " (" + String(arg[0]) + ", " + $debugStr(arg[1]) + ", " + $debugStr(arg[2], "'") + ") (" + String(arg$1[0]) + ",)",
+    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "] " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") + " " + [
       "Less",
       "Equal",
       "Greater"
@@ -775,11 +777,11 @@ function routeDisplay_fmt(route) {
     f += "nowhere";
     return f;
   }
-  for (const item of route.stops.map((x, i) => [i, x])) {
-    if (item[0] > 0) {
+  for (const [i, stop] of route.stops.entries()) {
+    if (i > 0) {
       f += " -> ";
     }
-    f += pointDisplay_fmt(item[1]);
+    f += pointDisplay_fmt(stop);
   }
   if (route.closed) {
     f += write_loop(route.stops.length);

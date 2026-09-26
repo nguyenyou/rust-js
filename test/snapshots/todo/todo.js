@@ -126,14 +126,14 @@ export function main() {
   });
   const footer = create("p");
   footer.append(view.left);
-  for (const item$1 of [
+  for (const [label, filter] of [
     ["All", "All"],
     ["Active", "Active"],
     ["Completed", "Completed"]
   ]) {
-    const b = text("button", item$1[0]);
+    const b = text("button", label);
     on(b, "click", state, view, (s) => {
-      s.filter = item$1[1];
+      s.filter = filter;
     });
     footer.append(b);
   }

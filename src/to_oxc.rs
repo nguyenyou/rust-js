@@ -466,15 +466,21 @@ impl<'a> Cx<'a> {
             }
             StmtKind::ForOf {
                 label,
-                name,
+                pattern,
+                mutable,
                 iterable,
                 body,
             } => {
-                let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
+                let id = self.pattern(pattern);
                 let declarator = VariableDeclarator::new(SPAN, id, None, None, false, b);
+                let kind = if *mutable {
+                    VariableDeclarationKind::Let
+                } else {
+                    VariableDeclarationKind::Const
+                };
                 let left = ForStatementLeft::new_variable_declaration(
                     SPAN,
-                    VariableDeclarationKind::Const,
+                    kind,
                     ArenaVec::from_iter_in([declarator], b),
                     false,
                     b,

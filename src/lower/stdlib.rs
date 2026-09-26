@@ -314,6 +314,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if tcx.is_lang_item(trait_, LangItem::Add) {
                 return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
             }
+            // `s += t` is `s.push_str(t)`.
+            if tcx.is_lang_item(trait_, LangItem::AddAssign) && self.is_lang_adt(ty.peel_refs(), LangItem::String) {
+                return Some(Std::PushStr);
+            }
             // A map's or a set's `into_iter()`: its entries, as an array (ADR 0059).
             // A `for` over one takes the `Map` itself.
             if tcx.is_diagnostic_item(sym::IntoIterator, trait_) && self.is_map(ty) {
@@ -469,6 +473,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "new" if string => Std::StringNew,
             "as_str" if string => Std::Same,
             "trim" if owner.is_str() => Std::Trim,
+            // A closure as the pattern (ADR 0063).
+            "split" | "contains" if owner.is_str() && self_ty.is_some_and(|p| matches!(p.kind(), ty::Closure(..))) => {
+                Std::Text(if name.as_str() == "split" {
+                    TextOp::SplitBy
+                } else {
+                    TextOp::ContainsBy
+                })
+            }
             // Methods taking a pattern: only a string or a `char` one.
             "starts_with" | "ends_with" | "contains" | "replace" | "split" | "strip_prefix" | "strip_suffix"
             | "split_once" | "rsplit_once"
@@ -767,20 +779,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// effects, since nothing then changes in between. Otherwise each goes
     /// in a `const` first, in the order Rust runs them, unless it's a place:
     /// borrowed until the end, a place can't be changed by the others. One
-    /// shown twice goes in a `const` too, unless it's a variable or a constant.
+    /// read twice goes in a `const` too, unless it's a variable or a
+    /// constant: shown twice, or shown by its parts, as `{:?}` of an
+    /// `Option` is. Those before it that have effects go first, to keep
+    /// Rust's order.
     pub(super) fn lower_format_args(&mut self, f: FormatArgs<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let in_order = self.in_order(&f, span);
         let shown = self.shown(&f, span).unwrap_or_default();
         let mut values = self.operands(&f.values, out)?;
         let effects = values.iter().any(Expr::has_effects);
+        let named: Vec<bool> = (0..values.len())
+            .map(|i| {
+                let twice = shown.iter().filter(|&&v| v == i).count() > 1;
+                let by_parts = f
+                    .slots
+                    .iter()
+                    .any(|&(v, kind, ty)| v == i && kind == Std::FmtDebug && self.debug_reads_parts(ty));
+                (twice || by_parts) && !values[i].reads_same()
+            })
+            .collect();
+        let last_named = named.iter().rposition(|&n| n);
         for (i, value) in values.iter_mut().enumerate() {
-            let twice = shown.iter().filter(|&&v| v == i).count() > 1;
+            let settled = value.is_constant() || self.is_place_expr(f.values[i]);
             let spill = if in_order {
-                false
+                named[i] || last_named.is_some_and(|last| i < last && value.has_effects() && !settled)
             } else if effects {
-                !value.is_constant() && !self.is_place_expr(f.values[i])
+                !settled
             } else {
-                twice && !value.reads_same()
+                named[i]
             };
             if spill {
                 let v = std::mem::replace(value, Expr::undefined());
@@ -808,10 +834,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             });
         }
-        Ok(parts
-            .into_iter()
-            .reduce(|a, b| Expr::bin(Op::Add, a, b))
-            .unwrap_or_else(|| Expr::str("")))
+        Ok(super::display::join(parts))
     }
 
     /// An iterator's method (ADR 0036). The iterator is a JS array: a range
@@ -1026,10 +1049,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             "concat",
                         ]
                         .contains(&name.as_str()),
-                        js::ExprKind::Var(name) => {
-                            ["$range", "$zip", "$takeWhile", "$skipWhile", "$windows", "$chunks"]
-                                .contains(&name.as_str())
-                        }
+                        js::ExprKind::Var(name) => [
+                            "$range",
+                            "$zip",
+                            "$takeWhile",
+                            "$skipWhile",
+                            "$windows",
+                            "$chunks",
+                            "$splitBy",
+                            "$lines",
+                            "$slice",
+                        ]
+                        .contains(&name.as_str()),
                         _ => false,
                     },
                     _ => false,

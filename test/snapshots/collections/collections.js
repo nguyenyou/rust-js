@@ -161,8 +161,8 @@ export function iterate(n) {
   for (const x$1 of v) {
     total = total + (Math.imul(x$1, 100) >>> 0) >>> 0;
   }
-  for (const item of [[1, 2], [3, 4]]) {
-    total = total + (Math.imul(item[0], item[1]) >>> 0) >>> 0;
+  for (const [k, w] of [[1, 2], [3, 4]]) {
+    total = total + (Math.imul(k, w) >>> 0) >>> 0;
   }
   return total;
 }
@@ -308,8 +308,8 @@ export function map_basics(n) {
   const removed = $remove(m, "b");
   const first = m.get("a");
   let total = 0;
-  for (const item of m) {
-    total = total + item[1] >>> 0;
+  for (const [, v] of m) {
+    total = total + v >>> 0;
   }
   m.set("a", $unwrap(m.get("a")) + 10 >>> 0);
   return [
@@ -370,8 +370,8 @@ export function sorted_maps(text) {
     counts.set(word, (counts.get(word) ?? 0) + 1 >>> 0);
   }
   let order = [];
-  for (const item of $sortedEntries(counts, $cmp)) {
-    order.push(item[0] + "=" + String(item[1]));
+  for (const [word$1, n] of $sortedEntries(counts, $cmp)) {
+    order.push(word$1 + "=" + String(n));
   }
   const set = new Set([
     30,
@@ -387,7 +387,7 @@ export function sorted_maps(text) {
   const tmp = $sortedEntries(counts, $cmp).slice();
   const tmp$1 = order;
   const arg = $sortedKeys(set, $cmp).toReversed();
-  const tmp$2 = "{" + Array.from($sortedKeys(set, $cmp)).map((item) => String(item)).join(", ") + "}" + " " + ("[" + arg.map((item) => String(item)).join(", ") + "]");
+  const tmp$2 = "{" + Array.from($sortedKeys(set, $cmp)).map((item) => String(item)).join(", ") + "} [" + arg.map((item) => String(item)).join(", ") + "]";
   const arg$1 = $unwrap(tiers.get("Bronze"), "key not found");
   return [
     tmp,
@@ -397,7 +397,7 @@ export function sorted_maps(text) {
       "Gold",
       "Bronze",
       "Silver"
-    ], a, b))).map(([key, value]) => tierDebug_fmt(key) + ": " + String(value)).join(", ") + "}" + " " + String(arg$1)
+    ], a, b))).map(([key, value]) => tierDebug_fmt(key) + ": " + String(value)).join(", ") + "} " + String(arg$1)
   ];
 }
 

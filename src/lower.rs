@@ -1116,8 +1116,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
 
         // The loop variable: the pattern's own name if it's a plain
-        // immutable binding, else a fresh one that the body takes apart.
+        // immutable binding, a JS pattern for a tuple's or a struct's parts,
+        // else a fresh one that the body takes apart.
         let mut body = Vec::new();
+        let mut mutable = false;
         let name = match &f.pat.kind {
             PatKind::Binding {
                 name,
@@ -1128,14 +1130,30 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ..
             } if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) => {
                 self.check_value_ty(*ty, f.pat.span)?;
-                self.bind(*var, name.as_str(), false)
+                js::Pattern::Name(self.bind(*var, name.as_str(), false))
+            }
+            _ if let Some((pattern, is_mut)) = self.js_pattern(f.pat) => {
+                mutable = is_mut;
+                pattern
             }
             _ => {
                 let name = self.fresh(if range { "i" } else { "item" });
                 self.destructure(f.pat, Expr::var(&name), true, &mut body)?;
-                name
+                js::Pattern::Name(name)
             }
         };
+        // `for (i, x) in v.iter().enumerate()` of an array: its `entries()`.
+        let iterable = iterable.map(|it| match it.kind {
+            js::ExprKind::Call(ref callee, ref args)
+                if matches!(args.as_slice(), [f] if is_enumerate_pair(f))
+                    && let js::ExprKind::Member(ref items, ref method) = callee.kind
+                    && method == "map"
+                    && !self.is_lazy_iter(head_ty) =>
+            {
+                Expr::call(Expr::member((**items).clone(), "entries"), vec![])
+            }
+            _ => it,
+        });
 
         self.loops.push(Loop {
             scope: f.scope,
@@ -1149,11 +1167,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             match (iterable, start_end) {
                 (Some(iterable), _) => StmtKind::ForOf {
                     label,
-                    name,
+                    pattern: name,
+                    mutable,
                     iterable,
                     body,
                 },
                 (None, Some((start, end))) => {
+                    let js::Pattern::Name(name) = name else {
+                        unreachable!("a range's item is a number, bound by name")
+                    };
                     // `1..=n` includes its end.
                     let op = if inclusive.is_some() { Op::Le } else { Op::Lt };
                     let test = Expr::bin(op, Expr::var(&name), end);
@@ -2824,7 +2846,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => None,
             };
             let (to, from_ty) = (returned.and_then(error), error(ty));
-            if to != from_ty {
+            // A `&str` error to a `String` one: the same JS string.
+            let same_string = to
+                .zip(from_ty)
+                .is_some_and(|(to, from_ty)| self.is_string_like(to) && self.is_string_like(from_ty));
+            if to != from_ty && !same_string {
                 let (Some(to), Some(from_ty)) = (to, from_ty) else {
                     return Err(self.unsupported(span, "this `?`"));
                 };
@@ -3078,4 +3104,27 @@ fn js_ident(name: &str) -> String {
     } else {
         name.to_string()
     }
+}
+
+/// `(x, i) => [i, x]`, what `enumerate()` maps with.
+fn is_enumerate_pair(f: &Expr) -> bool {
+    let js::ExprKind::Arrow(params, body) = &f.kind else {
+        return false;
+    };
+    let [js::Pattern::Name(x), js::Pattern::Name(i)] = params.as_slice() else {
+        return false;
+    };
+    let [
+        Stmt {
+            kind: StmtKind::Return(Some(pair)),
+            ..
+        },
+    ] = body.as_slice()
+    else {
+        return false;
+    };
+    let js::ExprKind::Array(items) = &pair.kind else {
+        return false;
+    };
+    matches!(items.as_slice(), [a, b] if matches!(&a.kind, js::ExprKind::Var(n) if n == i) && matches!(&b.kind, js::ExprKind::Var(n) if n == x))
 }

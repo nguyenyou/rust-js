@@ -50,8 +50,9 @@ for (let i = 0; i < n; i++) { .. }        // for i in 0..n
 - **Ranges:** the end is worked out once, as in Rust. If it could change
   (`0..n` with `n` changing inside the loop), it goes into a `const` first.
 - **Loop variables:** a `mut` one gets its own copy, since changing it
-  mustn't move the loop on. A pattern (`for (k, v) in pairs`) is taken apart
-  at the top of each iteration. Labels, `break` and `continue` work as in
+  mustn't move the loop on. A pattern (`for (k, v) in pairs`) is JS
+  destructuring, `for (const [k, v] of pairs)`, where ADR 0038 allows it,
+  and taken apart at the top of each iteration otherwise. Labels, `break` and `continue` work as in
   ADR 0015.
 
 **`RefCell<T>` is `{ value }`,** like `Cell` (ADR 0023). `borrow()` and

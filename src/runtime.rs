@@ -29,6 +29,7 @@ pub enum Helper {
     SortedEntries,
     ToDigit,
     Lines,
+    SplitBy,
     ParseInt,
     ParseF64,
     ParseBool,
@@ -668,11 +669,29 @@ function $toDigit(c, radix) {
             Helper::Lines => {
                 r#"
 function $lines(s) {
-  const lines = s.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
-  if (lines[lines.length - 1] === "") {
-    lines.pop();
+  const lines = s.split("\n");
+  const last = lines.pop();
+  const ended = lines.map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  if (last !== "") {
+    ended.push(last);
   }
-  return lines;
+  return ended;
+}
+"#
+            }
+            // `s.split(|c| ..)`: the pieces between the `char`s it's true of.
+            Helper::SplitBy => {
+                r#"
+function $splitBy(s, matches) {
+  const pieces = [""];
+  for (const c of s) {
+    if (matches(c)) {
+      pieces.push("");
+    } else {
+      pieces[pieces.length - 1] += c;
+    }
+  }
+  return pieces;
 }
 "#
             }

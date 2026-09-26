@@ -134,10 +134,12 @@ pub enum StmtKind {
         cond: Expr,
         body: Vec<Stmt>,
     },
-    /// `for (const name of iterable) { .. }`: a `for` over a sequence (ADR 0025).
+    /// `for (const name of iterable) { .. }`: a `for` over a sequence (ADR 0025),
+    /// and `for (const [i, x] of ..)` for a tuple's parts. `let` if one's `mut`.
     ForOf {
         label: Option<String>,
-        name: String,
+        pattern: Pattern,
+        mutable: bool,
         iterable: Expr,
         body: Vec<Stmt>,
     },

@@ -23,6 +23,9 @@ pub(super) enum TextOp {
     IsDigit,
     SplitWhitespace,
     Lines,
+    /// `s.split(|c| ..)` and `s.contains(|c| ..)`: a closure as the pattern.
+    SplitBy,
+    ContainsBy,
     Parse,
     /// `&v[a..b]` of a slice, an array or a `Vec`.
     Slice,
@@ -114,6 +117,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     ],
                 );
                 method(words, "filter", vec![word])
+            }
+            TextOp::SplitBy => {
+                self.runtime.insert(Helper::SplitBy);
+                Expr::call(Expr::var("$splitBy"), vec![arg(), arg()])
+            }
+            TextOp::ContainsBy => {
+                let chars = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]);
+                method(chars, "some", vec![arg()])
             }
             TextOp::Lines => {
                 self.runtime.insert(Helper::Lines);

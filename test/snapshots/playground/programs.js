@@ -74,10 +74,10 @@ export function prepare(files, rootFile, test, run) {
   const imports = new RegExp("^import .* from \"([^\"]+)\";$", "gm");
   let external = [];
   for (const item of sources) {
-    for (const item$1 of Array.from(item[1].matchAll(imports))) {
-      const target = resolve(item[0], item$1[1]);
-      if (!sources.some((param) => param[0] === target) && !external.includes(item$1[1])) {
-        external.push(item$1[1]);
+    for (const [, specifier] of Array.from(item[1].matchAll(imports))) {
+      const target = resolve(item[0], specifier);
+      if (!sources.some((param) => param[0] === target) && !external.includes(specifier)) {
+        external.push(specifier);
       }
     }
   }

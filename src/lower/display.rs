@@ -434,6 +434,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(join(vec![Expr::str(open), joined, Expr::str(close)]))
     }
 
+    /// Does `{:?}` of a `ty` read the value more than once? An `Option`, a
+    /// `Result` and a tuple are shown by their parts.
+    pub(super) fn debug_reads_parts(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        if self.is_dyn_debug(ty) || matches!(ty.kind(), ty::Param(_)) || self.has_user_impl(self.debug_trait(), ty) {
+            return false;
+        }
+        match ty.kind() {
+            ty::Tuple(tys) => !tys.is_empty(),
+            ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
+                self.debug_reads_parts(args.type_at(0))
+            }
+            _ => self.option_of(ty).is_some() || self.is_std_adt(ty, Symbol::intern("Result")),
+        }
+    }
+
     /// `f(value)`, with a function that only returns written in place when
     /// `value` is a variable: `value == null ? "None" : ..`.
     fn applied(&mut self, f: Expr, value: Expr) -> Expr {
@@ -488,10 +504,16 @@ fn as_returns(body: &[Stmt], name: &str) -> Option<Vec<Stmt>> {
     Some(vec![kind.at(stmt.span)])
 }
 
-/// `a + b + c`, with pieces that are constants joined first.
-fn join(parts: Vec<Expr>) -> Expr {
+/// `a + b + c`, with pieces that are constants joined first. A piece
+/// that's itself a string joined is taken apart: `"Some((" + a + ")"`,
+/// not `"Some(" + ("(" + a + ")") + ")"`.
+pub(super) fn join(parts: Vec<Expr>) -> Expr {
     let mut folded: Vec<Expr> = Vec::new();
+    let mut pieces = Vec::new();
     for part in parts {
+        pieces.extend(joined_pieces(part));
+    }
+    for part in pieces {
         match (folded.last_mut(), &part.kind) {
             (
                 Some(Expr {
@@ -507,6 +529,30 @@ fn join(parts: Vec<Expr>) -> Expr {
         .into_iter()
         .reduce(|a, b| Expr::bin(Op::Add, a, b))
         .unwrap_or_else(|| Expr::str(""))
+}
+
+/// The pieces of `"(" + a + ")"`, a join that starts with a string, so
+/// each `+` in it concatenates. Anything else is one piece.
+fn joined_pieces(e: Expr) -> Vec<Expr> {
+    let mut pieces = Vec::new();
+    let mut rest = e;
+    while let js::ExprKind::Binary(Op::Add, left, right) = rest.kind {
+        pieces.push(*right);
+        rest = *left;
+    }
+    let starts_with_string = matches!(rest.kind, js::ExprKind::Str(_));
+    pieces.push(rest);
+    pieces.reverse();
+    if starts_with_string || pieces.len() == 1 {
+        pieces
+    } else {
+        vec![
+            pieces
+                .into_iter()
+                .reduce(|a, b| Expr::bin(Op::Add, a, b))
+                .expect("a piece"),
+        ]
+    }
 }
 
 fn is_var(e: &Expr, name: &str) -> bool {

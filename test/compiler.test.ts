@@ -22,6 +22,7 @@ let genericOptions: Record<string, (...args: any[]) => unknown>;
 let stdTraits: Record<string, (...args: any[]) => unknown>;
 let combinators: Record<string, (...args: any[]) => unknown>;
 let text: Record<string, (...args: any[]) => unknown>;
+let calc: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -63,6 +64,8 @@ beforeAll(async () => {
   combinators = await import(join(target, "combinators.js"));
   run([join(target, "debug", "rust-js"), "examples/text.rs", "-o", join(target, "text.js")]);
   text = await import(join(target, "text.js"));
+  run([join(target, "debug", "rust-js"), "examples/calc.rs", "-o", join(target, "calc.js")]);
+  calc = await import(join(target, "calc.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -154,6 +157,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "text") {
         return text[path[1]](...c.args);
+      }
+      if (path[0] === "calc") {
+        return calc[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -356,7 +362,7 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   // A trapped compile is an `Err` (ADR 0035), and `instanceof` a binding.
   expect(compiler).toContain("  const started = $try(() => wasi.start(instance));");
   expect(compiler).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
-  expect(compiler).toContain("    if (item[1] instanceof Directory) {");
+  expect(compiler).toContain("    if (entry instanceof Directory) {");
   // The file tree: sorted with a comparator, a copy of the tree's entries.
   expect(await read("tree.js")).toContain("  let entries = tree.slice();\n  entries.sort((a, b) => {");
   // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
@@ -815,7 +821,7 @@ test("a Display impl's fmt returns the string it writes", async () => {
   expect(js).toContain('function pointDisplay_fmt(point) {\n  return "(" + String(point.x) + ", " + String(point.y) + ")";\n}');
   expect(js).toContain('  if (figure === "Dot") {\n    return "a dot";\n  } else {\n    return "a polygon of " + String(figure._0.length);');
   // More: a string built up, with nested `fmt`s and a helper that writes.
-  expect(js).toContain('    f += pointDisplay_fmt(item[1]);');
+  expect(js).toContain('    f += pointDisplay_fmt(stop);');
   expect(js).toContain('    f += write_loop(route.stops.length);');
   expect(js).toContain('function write_loop(stops) {\n  return " (a loop of " + String(stops) + ")";');
   // `{}` of one, and generics given a dictionary.
@@ -871,7 +877,7 @@ test("format options pad, round and change base as Rust does", async () => {
   // Numbers are ASCII: JS's own padding. Strings count `char`s: `$pad`.
   expect(js).toContain('"[" + String(n).padStart(6) + "] [" + String(n).padEnd(6) + "] [" + $pad(name, 9, "^") + "]');
   expect(js).toContain('$pad(name, 9, ">", "*")');
-  expect(js).toContain('("0x" + (n >>> 0).toString(16))');
+  expect(js).toContain('"] [0x" + (n >>> 0).toString(16) + "] ["');
   // `{:.1}` rounds a tie to even, exactly, and `{:?}` of an `f64` keeps its `.0`.
   expect(js).toContain('return $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x);');
 });
@@ -909,6 +915,18 @@ test("chars, parse and slices are plain JS with Rust's answers", async () => {
   expect(js).toContain("const n = $parseInt(s, 0, 4294967295);");
   expect(js).toContain('text.split(/\\p{White_Space}+/u).filter((word) => word !== "")');
   expect(js).toContain("$slice(v, 1, 3)");
+});
+
+// A program that reads text: loops take tuples apart as JS does, and a
+// value `{:?}` shows by its parts gets a name first.
+test("the calculator's JS is what a person would write", async () => {
+  const js = await Bun.file(join(target, "calc.js")).text();
+  expect(js).toContain("for (const [i, c] of Array.from(s).entries()) {");
+  expect(js).toContain('const arg$1 = first_dup("abcdbe");');
+  expect(js).toContain('"Some((" + String(arg$1[0]) + ", " + $debugStr(arg$1[1], "\'") + "))"');
+  expect(js).toContain('$splitBy(text, (c) => !/^[\\p{Alphabetic}\\p{N}]$/u.test(c))');
+  // `?` from a `&str` error to a `String` one: the same string, returned as it is.
+  expect(js).toContain('_0: "underflow"\n      };\n      if (result$1.TAG === "Err") {\n        return result$1;');
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

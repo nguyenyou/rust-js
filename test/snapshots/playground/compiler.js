@@ -105,10 +105,10 @@ function dir(name, entry) {
 
 function directoryOf(sources) {
   const top = new Map([]);
-  for (const item of Array.from(sources)) {
+  for (const [path, text] of Array.from(sources)) {
     let folder = top;
     let name;
-    const match = $rsplitOnce(item[0], "/");
+    const match = $rsplitOnce(path, "/");
     if (match != null) {
       for (const part of match[0].split("/")) {
         if (!folder.has(part)) {
@@ -118,21 +118,21 @@ function directoryOf(sources) {
       }
       name = match[1];
     } else {
-      name = item[0];
+      name = path;
     }
-    const bytes = new TextEncoder().encode(item[1]);
+    const bytes = new TextEncoder().encode(text);
     folder.set(name, new File(bytes));
   }
   return top;
 }
 
 function jsFilesIn(folder, prefix, found) {
-  for (const item of Array.from(folder.contents)) {
-    if (item[1] instanceof Directory) {
-      jsFilesIn(item[1], prefix + item[0] + "/", found);
-    } else if (item[1] instanceof File && item[0].endsWith(".js")) {
-      const text = new TextDecoder().decode(item[1].data);
-      found.push([prefix + item[0], text]);
+  for (const [name, entry] of Array.from(folder.contents)) {
+    if (entry instanceof Directory) {
+      jsFilesIn(entry, prefix + name + "/", found);
+    } else if (entry instanceof File && name.endsWith(".js")) {
+      const text = new TextDecoder().decode(entry.data);
+      found.push([prefix + name, text]);
     }
   }
 }
