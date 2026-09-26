@@ -2,6 +2,8 @@
 
 Status: Accepted. The DOM itself comes generated, in the `web` crate: see
 [0024](0024-web-crate.md), which also adds property and constructor forms.
+Generic bindings use the tool attribute rejected below, which rust-js now
+registers itself: see [0039](0039-generic-bindings.md).
 
 ## Context
 

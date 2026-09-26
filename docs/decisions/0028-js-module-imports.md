@@ -1,7 +1,9 @@
 # 0028. Imports from JS modules: `#[link_name = "module#path"]`
 
 Status: Accepted. Extends [0021](0021-js-interop.md) and the `#[link_name]`
-forms of [0024](0024-web-crate.md).
+forms of [0024](0024-web-crate.md). [0039](0039-generic-bindings.md) adds
+imports for their side effects, and names a default import after the `static`
+that holds it.
 
 ## Context
 

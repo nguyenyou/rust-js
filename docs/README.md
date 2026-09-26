@@ -92,6 +92,13 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0029 `async`/`.await` are JS's `async`/`await`; a future is a promise](decisions/0029-async-await.md)
 - [0030 `Option`: `Some(x)` is `x`, `None` is `undefined`](decisions/0030-option.md)
 - [0031 A `const` is the value rustc computed, under its own name](decisions/0031-consts.md)
+- [0038 Variables have JS's names and shapes: `const [count, setCount] = ..`](decisions/0038-js-names-and-destructuring.md)
+- [0039 Generic bindings: `#[rust_js::link_name]` on an ordinary function](decisions/0039-generic-bindings.md)
+
+**React**
+
+- [0040 JSX: bindings whose `link_name` is a tag, printed as JSX in a `.jsx` file](decisions/0040-jsx.md)
+- [0041 React: the `react` crate, and Vite with Fast Refresh](decisions/0041-react.md)
 
 **Scope and process**
 

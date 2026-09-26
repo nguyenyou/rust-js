@@ -29,6 +29,7 @@ mod js;
 mod lower;
 mod to_oxc;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -40,6 +41,8 @@ struct RustJs {
     input: PathBuf,
     output: PathBuf,
     test: bool,
+    /// The modules with JSX in them, which are `.jsx` files (ADR 0040).
+    jsx: HashSet<Vec<String>>,
 }
 
 impl Callbacks for RustJs {
@@ -65,7 +68,8 @@ impl Callbacks for RustJs {
 
 impl RustJs {
     /// Write one `.js` and `.js.map` per module (ADR 0019).
-    fn write(&self, modules: Vec<lower::LoweredModule>) -> Result<(), String> {
+    fn write(&mut self, modules: Vec<lower::LoweredModule>) -> Result<(), String> {
+        self.jsx = modules.iter().filter(|m| m.jsx).map(|m| m.path.clone()).collect();
         for module in modules {
             let js_path = self.js_path(&module.path);
             if !module.path.is_empty() && js_path == self.output {
@@ -161,14 +165,16 @@ impl RustJs {
     }
 
     /// Where a module's JS goes: the root to the output file, `a::b` to
-    /// `a/b.js` beside it, mirroring how Rust lays out `src/`.
+    /// `a/b.js` beside it, mirroring how Rust lays out `src/`. A module
+    /// with JSX is a `.jsx` file, as JSX tools expect (ADR 0040).
     fn js_path(&self, module: &[String]) -> PathBuf {
+        let jsx = self.jsx.contains(module);
         if module.is_empty() {
-            return self.output.clone();
+            return if jsx { self.output.with_extension("jsx") } else { self.output.clone() };
         }
         let mut path = parent_dir(&self.output).to_path_buf();
         path.extend(module);
-        path.set_extension("js");
+        path.set_extension(if jsx { "jsx" } else { "js" });
         path
     }
 
@@ -181,10 +187,7 @@ impl RustJs {
         let dir = |path: &[String]| path.len().saturating_sub(1);
         let (from_dir, to_dir) = (&from[..dir(from)], &to[..dir(to)]);
         let common = from_dir.iter().zip(to_dir).take_while(|(a, b)| a == b).count();
-        let file = match to.last() {
-            Some(name) => format!("{name}.js"),
-            None => self.output.file_name().unwrap_or_default().to_string_lossy().into_owned(),
-        };
+        let file = self.js_path(to).file_name().unwrap_or_default().to_string_lossy().into_owned();
         let mut specifier = if from_dir.len() == common { "./".to_string() } else { "../".repeat(from_dir.len() - common) };
         for segment in &to_dir[common..] {
             specifier.push_str(segment);
@@ -271,11 +274,15 @@ fn main() -> ExitCode {
         // `-- --cfg browser` turns it on. Declaring any cfg makes rustc check them
         // all, so `test` is declared too, as Cargo does.
         "--check-cfg=cfg(browser, test)".to_string(),
+        // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
+        // and `#![rust_js::import = "./App.css"]` inside a module.
+        "-Zcrate-attr=feature(register_tool, custom_inner_attributes)".to_string(),
+        "-Zcrate-attr=register_tool(rust_js)".to_string(),
     ];
     if test {
         rustc_args.push("--test".to_string());
     }
     rustc_args.extend(to_rustc.iter().cloned());
-    let mut callbacks = RustJs { input, output, test };
+    let mut callbacks = RustJs { input, output, test, jsx: HashSet::new() };
     rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))
 }

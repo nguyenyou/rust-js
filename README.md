@@ -6,7 +6,7 @@ replace the back end with one that prints JS from THIR.
 
 ```bash
 bun run setup                                # once: every package, and the browsers for real-browser tests
-bun run build                                # rust-js, and the web crate's metadata
+bun run build                                # rust-js, and the web and react crates' metadata
 ./target/debug/rust-js examples/fib.rs       # writes examples/fib.js + fib.js.map
 bun run test                                 # native vs. JS, source maps, Rust #[test]s in happy-dom and 3 browsers
 ```
@@ -16,9 +16,10 @@ Every task is a script in [package.json](package.json), and `bun run` lists them
 | Task | What it does |
 |---|---|
 | `setup` | `bun install` for every package (one [workspace](https://bun.sh/docs/install/workspaces)), and Playwright's browsers |
-| `build` | `cargo build`, and the `web` crate's metadata in `target/libweb.rmeta` |
+| `build` | `cargo build`, and the `web` and `react` crates' metadata in `target/` |
 | `test` | `bun test` |
 | `generate` | regenerate the `web` crate from WebIDL ([web/](web/README.md)) |
+| `react-example` | the [React + Vite example](examples/vite-react/README.md) at http://localhost:5173 |
 | `wasm` | build `rust-js.wasm`, with rustc's front end ([wasm/](wasm/README.md)) |
 | `dev` | the playground at http://localhost:4400 |
 | `site`, `preview` | the playground as static files in `wasm/web/dist`, and serving them as Pages does |
@@ -46,6 +47,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   an `Err` or a `None` early.
 - `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.
 - A `const` is the value rustc computed, declared once: `const SIZE = 4096;`.
+- Variables are camelCase and taken apart as JS does it: `let (count, set_count) = f();` is
+  `const [count, setCount] = f();`.
 - A struct is a plain object, `{ x: 1, y: 2 }`; a tuple or tuple struct is an array, `[1, 2]`.
   Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
@@ -56,6 +59,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   and `format!` is `+`. Byte counts (`len()`, slicing) are errors: JS counts UTF-16 units.
 - `async fn` is an `async function` and `.await` is `await`: a future is a JS promise, which starts
   as soon as it's made rather than when first polled.
+- React elements are JSX, in a `.jsx` file: `div().class_name("hero").children(title)` is
+  `<div className="hero">{title}</div>`.
 - Anything not supported yet is reported as a compiler error at the right span.
 
 ## Supported so far
@@ -65,8 +70,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
-JS functions, methods and globals, and imports from JS modules; `async`/`.await`;
-calls between functions, across modules and files.
+JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
+calls between functions, across modules and files, and functions as values; React components, as JSX.
 
 The DOM comes as the [`web`](web/README.md) crate: bindings generated from W3C's WebIDL
 ([ADR 0024](docs/decisions/0024-web-crate.md)). [examples/counter.rs](examples/counter.rs) is a
@@ -79,6 +84,31 @@ playground's Result pane:
 bun run build
 ./target/debug/rust-js examples/counter.rs -- --extern web=target/libweb.rmeta
 ```
+
+## React
+
+The [`react`](react/README.md) crate binds React, and a component compiles to the JSX you'd write
+by hand ([ADR 0041](docs/decisions/0041-react.md)):
+
+```rust
+pub fn App() -> Element {
+    let (count, set_count) = use_state(0);
+    button().on_click(move |_| set_count.update(|count| count + 1)).children(("Count is ", count))
+}
+```
+
+```jsx
+export function App() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount((count) => count + 1 | 0)}>Count is {count}</button>;
+}
+```
+
+[examples/vite-react](examples/vite-react/README.md) is create-vite's React template with `App.jsx`
+written in Rust. [vite-plugin-rust-js](vite-plugin/index.js) compiles it on every save, and Fast
+Refresh keeps the page's state: `bun run react-example`.
+
+## Modules
 
 A crate split across files becomes one JS file per module, with the imports
 and exports written for you (see [ADR 0019](docs/decisions/0019-one-js-file-per-module.md)):

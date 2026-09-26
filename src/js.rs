@@ -62,7 +62,7 @@ pub struct Package {
 
 pub struct Function {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,
     pub export: bool,
     /// `async function`: an `async fn` (ADR 0029).
@@ -70,6 +70,29 @@ pub struct Function {
     /// The whole `fn` item, and just its name.
     pub span: Span,
     pub name_span: Span,
+}
+
+/// What a parameter or declaration binds: a variable, or the parts of an
+/// array or object, `[count, setCount]` or `{ initial, label }`.
+#[derive(Clone)]
+pub enum Pattern {
+    Name(String),
+    /// `None` skips an element: `[, b]`.
+    Array(Vec<Option<String>>),
+    /// Each field, and the variable it goes in.
+    Object(Vec<(String, String)>),
+}
+
+impl From<String> for Pattern {
+    fn from(name: String) -> Pattern {
+        Pattern::Name(name)
+    }
+}
+
+impl From<&str> for Pattern {
+    fn from(name: &str) -> Pattern {
+        Pattern::Name(name.to_string())
+    }
 }
 
 #[derive(Clone)]
@@ -82,6 +105,8 @@ pub struct Stmt {
 pub enum StmtKind {
     Const(String, Expr),
     Let(String, Option<Expr>),
+    /// `const [a, b] = value;`, or `let` if one of them is reassigned.
+    Destructure { pattern: Pattern, value: Expr, mutable: bool },
     /// `target = value`, where `target` is a variable, `a.b` or `a[0]`.
     Assign(Expr, Expr),
     Expr(Expr),
@@ -134,11 +159,32 @@ pub enum ExprKind {
     /// `new Event(t)`: a JS constructor (ADR 0024).
     New(Box<Expr>, Vec<Expr>),
     /// `(a, b) => { .. }`: a closure (ADR 0022).
-    Arrow(Vec<String>, Vec<Stmt>),
+    Arrow(Vec<Pattern>, Vec<Stmt>),
     /// `async (a) => { .. }`: an async closure or block (ADR 0029).
-    AsyncArrow(Vec<String>, Vec<Stmt>),
+    AsyncArrow(Vec<Pattern>, Vec<Stmt>),
     /// `await p`: `.await` (ADR 0029).
     Await(Box<Expr>),
+    /// `<div className="hero">..</div>`, `<Counter initial={1} />` or `<>..</>` (ADR 0040).
+    Jsx(Box<Jsx>),
+}
+
+/// A JSX element (ADR 0040).
+#[derive(Clone)]
+pub struct Jsx {
+    pub tag: JsxTag,
+    /// Its attributes, `className="hero"`, or `{...props}`.
+    pub props: Vec<Prop>,
+    pub children: Vec<Expr>,
+}
+
+#[derive(Clone)]
+pub enum JsxTag {
+    /// `<>`.
+    Fragment,
+    /// A DOM element: `<div>`.
+    Intrinsic(String),
+    /// A component: `<Counter>`, `<StrictMode>`, `<stats.Chart>`.
+    Component(Expr),
 }
 
 #[derive(Clone)]
@@ -238,6 +284,16 @@ impl Expr {
     }
 
     pub fn unary(op: UnaryOp, arg: Expr) -> Expr {
+        // `!(a === b)` is `a !== b`, for every `a` and `b`.
+        if let (UnaryOp::Not, ExprKind::Binary(eq @ (Op::Eq | Op::Ne | Op::LooseEq | Op::LooseNe), a, b)) = (op, &arg.kind) {
+            let ne = match eq {
+                Op::Eq => Op::Ne,
+                Op::Ne => Op::Eq,
+                Op::LooseEq => Op::LooseNe,
+                _ => Op::LooseEq,
+            };
+            return Expr { kind: ExprKind::Binary(ne, a.clone(), b.clone()), span: arg.span };
+        }
         Expr::new(ExprKind::Unary(op, Box::new(arg)))
     }
 
@@ -253,16 +309,20 @@ impl Expr {
         Expr::new(ExprKind::New(Box::new(callee), args))
     }
 
-    pub fn arrow(params: Vec<String>, body: Vec<Stmt>) -> Expr {
+    pub fn arrow(params: Vec<Pattern>, body: Vec<Stmt>) -> Expr {
         Expr::new(ExprKind::Arrow(params, body))
     }
 
-    pub fn async_arrow(params: Vec<String>, body: Vec<Stmt>) -> Expr {
+    pub fn async_arrow(params: Vec<Pattern>, body: Vec<Stmt>) -> Expr {
         Expr::new(ExprKind::AsyncArrow(params, body))
     }
 
     pub fn await_(promise: Expr) -> Expr {
         Expr::new(ExprKind::Await(Box::new(promise)))
+    }
+
+    pub fn jsx(jsx: Jsx) -> Expr {
+        Expr::new(ExprKind::Jsx(Box::new(jsx)))
     }
 
     pub fn call(callee: Expr, args: Vec<Expr>) -> Expr {
@@ -295,6 +355,65 @@ impl Expr {
         )
     }
 
+    /// Does oxc print this on several lines: an array of 3 or more items, an
+    /// object of 2 or more fields, or a function with statements? JSX is laid
+    /// out by us (ADR 0040), so it doesn't count, but what's in it does.
+    pub fn prints_on_lines(&self) -> bool {
+        match &self.kind {
+            ExprKind::Array(items) => items.len() > 2 || items.iter().any(Expr::prints_on_lines),
+            ExprKind::Object(props) => {
+                props.len() > 1
+                    || props.iter().any(|p| match p {
+                        Prop::Field(_, value) | Prop::Spread(value) => value.prints_on_lines(),
+                    })
+            }
+            ExprKind::Arrow(_, body) | ExprKind::AsyncArrow(_, body) => match body.as_slice() {
+                [Stmt { kind: StmtKind::Return(Some(value)), .. }] => value.prints_on_lines(),
+                _ => true,
+            },
+            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.prints_on_lines(),
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.prints_on_lines() || b.prints_on_lines(),
+            ExprKind::Cond(a, b, c) => a.prints_on_lines() || b.prints_on_lines() || c.prints_on_lines(),
+            ExprKind::Call(f, args) | ExprKind::New(f, args) => f.prints_on_lines() || args.iter().any(Expr::prints_on_lines),
+            ExprKind::Jsx(jsx) => {
+                jsx.props.iter().any(|p| match p {
+                    Prop::Field(_, value) | Prop::Spread(value) => value.prints_on_lines(),
+                }) || jsx.children.iter().any(Expr::prints_on_lines)
+            }
+            ExprKind::Num(_)
+            | ExprKind::Bool(_)
+            | ExprKind::Str(_)
+            | ExprKind::Undefined
+            | ExprKind::Null
+            | ExprKind::Var(_) => false,
+        }
+    }
+
+    /// Is there JSX in this, like `items.map((t) => <li>..</li>)`?
+    pub fn contains_jsx(&self) -> bool {
+        match &self.kind {
+            ExprKind::Jsx(_) => true,
+            ExprKind::Array(items) => items.iter().any(Expr::contains_jsx),
+            ExprKind::Object(props) => props.iter().any(|p| match p {
+                Prop::Field(_, value) | Prop::Spread(value) => value.contains_jsx(),
+            }),
+            ExprKind::Arrow(_, body) | ExprKind::AsyncArrow(_, body) => body.iter().any(|s| match &s.kind {
+                StmtKind::Return(Some(value)) | StmtKind::Expr(value) => value.contains_jsx(),
+                _ => false,
+            }),
+            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.contains_jsx(),
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
+            ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
+            ExprKind::Call(f, args) | ExprKind::New(f, args) => f.contains_jsx() || args.iter().any(Expr::contains_jsx),
+            ExprKind::Num(_)
+            | ExprKind::Bool(_)
+            | ExprKind::Str(_)
+            | ExprKind::Undefined
+            | ExprKind::Null
+            | ExprKind::Var(_) => false,
+        }
+    }
+
     /// Could evaluating this do something observable (call a function, throw)?
     pub fn has_effects(&self) -> bool {
         match &self.kind {
@@ -318,6 +437,14 @@ impl Expr {
             ExprKind::Binary(_, a, b) => a.has_effects() || b.has_effects(),
             ExprKind::Cond(a, b, c) => a.has_effects() || b.has_effects() || c.has_effects(),
             ExprKind::Call(..) | ExprKind::New(..) => true,
+            // Making an element runs nothing: a component runs when React renders it.
+            ExprKind::Jsx(jsx) => {
+                matches!(&jsx.tag, JsxTag::Component(c) if c.has_effects())
+                    || jsx.props.iter().any(|p| match p {
+                        Prop::Field(_, value) | Prop::Spread(value) => value.has_effects(),
+                    })
+                    || jsx.children.iter().any(Expr::has_effects)
+            }
         }
     }
 }

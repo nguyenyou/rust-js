@@ -53,8 +53,9 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .definitions()
         .chain(items.nested_bodies())
         .filter(|&def_id| match tcx.def_kind(def_id) {
-            // A function declared in an `extern` block is JS's (ADR 0021).
-            DefKind::Fn => !tcx.is_foreign_item(def_id),
+            // A function declared in an `extern` block is JS's (ADR 0021),
+            // and so is one with `#[rust_js::link_name]` (ADR 0039).
+            DefKind::Fn => !is_binding(tcx, def_id.to_def_id()),
             DefKind::Closure => true,
             _ => false,
         })
@@ -82,6 +83,8 @@ pub struct LoweredModule {
     pub functions: Vec<js::Function>,
     /// Runtime helpers its functions use.
     pub runtime: Vec<Helper>,
+    /// Whether it has JSX, so it's a `.jsx` file (ADR 0040).
+    pub jsx: bool,
 }
 
 /// A `#[test]` function (ADR 0026).
@@ -153,6 +156,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             _ if in_thread_local(def_id).is_some() => continue,
             // `#[derive(Clone, Copy)]` and friends write impls we never call.
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
+            DefKind::AssocFn if is_binding(tcx, def_id.to_def_id()) => continue,
             DefKind::AssocFn => "methods",
             DefKind::AssocConst { .. } => "associated constants",
             DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
@@ -179,6 +183,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // modules that use each one.
     let mut globals: HashSet<String> = HashSet::new();
     let mut imported: BTreeMap<Export, HashSet<LocalModDefId>> = BTreeMap::new();
+    // What each import is bound to in Rust, to name a default import after.
+    let mut bound_to: HashMap<Export, HashSet<DefId>> = HashMap::new();
     for body in all_bodies {
         let module = tcx.parent_module_from_def_id(body.def_id);
         for expr in body.thir.exprs.iter() {
@@ -186,11 +192,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) | (ExprKind::StaticRef { def_id, .. }, _) => *def_id,
                 _ => continue,
             };
-            if !tcx.is_foreign_item(def_id) {
+            if !is_binding(tcx, def_id) {
                 continue;
             }
             match js_path(tcx, def_id).as_deref().map(|path| (path, js_import(path))) {
                 Some((_, Some((export, _)))) => {
+                    bound_to.entry(export.clone()).or_default().insert(def_id);
                     imported.entry(export).or_default().insert(module);
                 }
                 Some((path, None)) => {
@@ -201,7 +208,9 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         }
     }
     // Each import's name, the same in every file, and unique in the crate:
-    // after the export, or the module for a default or namespace import.
+    // after the export, or the module for a default or namespace import. A
+    // default import held by one `static` is named after it, as JS code names
+    // an asset: `static hero_img` is `import heroImg from "./hero.png"`.
     // Like globals, every module reserves them. Namespaces are named last,
     // so a module's default export gets its plain name.
     let mut reserved = globals;
@@ -210,7 +219,16 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .into_iter()
         .chain(namespaces)
         .map(|(from, export)| {
-            let base = if export == "default" || export == "*" { module_binding(from) } else { export.clone() };
+            let export_key = (from.clone(), export.clone());
+            let held_by = match bound_to[&export_key].iter().collect::<Vec<_>>().as_slice() {
+                [only] if matches!(tcx.def_kind(**only), DefKind::Static { .. }) => Some(camel_case(tcx.item_name(**only).as_str())),
+                _ => None,
+            };
+            let base = match (export.as_str(), held_by) {
+                ("default", Some(name)) => name,
+                ("default" | "*", _) => module_binding(from),
+                _ => export.clone(),
+            };
             ((from.clone(), export.clone()), fresh_in(&mut reserved, &base))
         })
         .collect();
@@ -361,6 +379,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
 
     let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
     let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
+    let mut jsx: HashSet<LocalModDefId> = HashSet::new();
     for body in &bodies {
         let def_id = body.def_id.to_def_id();
         let module = fns[&def_id].module;
@@ -381,9 +400,11 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             vars: HashMap::new(),
             // Locals must never shadow a function or an import of this file.
             names: taken[&module].clone(),
+            module_names: &taken[&module],
             labels: HashSet::new(),
             loops: Vec::new(),
             runtime: HashSet::new(),
+            jsx: false,
         };
         match cx.lower_fn(body) {
             Ok(lowered) if let Some(&key) = thread_local_inits.get(&body.def_id) => {
@@ -403,8 +424,14 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                     span: js::Span { lo: (span.lo() - file.start_pos).0, hi: (span.hi() - file.start_pos).0 },
                 });
                 runtime.entry(module).or_default().extend(lowered.runtime);
+                if lowered.jsx {
+                    jsx.insert(module);
+                }
             }
             Ok(mut lowered) => {
+                if lowered.jsx {
+                    jsx.insert(module);
+                }
                 lowered.function.export |= called_from_elsewhere.contains(&def_id);
                 functions.entry(module).or_default().push(lowered.function);
                 runtime.entry(module).or_default().extend(lowered.runtime);
@@ -441,16 +468,29 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                     _ => package.named.push((name.clone(), local)),
                 }
             }
+            let mut packages: Vec<js::Package> = packages.into_values().collect();
+            // `#![rust_js::import = "./App.css"]`: `import "./App.css";`, for
+            // what a module does when loaded, as a bundler's CSS does.
+            for attr in tcx.get_attrs_by_path(module.to_def_id(), &[Symbol::intern("rust_js"), sym::import]) {
+                let Some(from) = attr.value_str().map(|s| s.to_string()) else {
+                    tcx.dcx().span_err(attr.span(), "rust-js: write it `#![rust_js::import = \"./file.css\"]`");
+                    continue;
+                };
+                if !packages.iter().any(|p| p.from == from) {
+                    packages.push(js::Package { from, default: None, named: Vec::new(), namespace: None });
+                }
+            }
             let mut helpers: Vec<Helper> = runtime.remove(&module).unwrap_or_default().into_iter().collect();
             helpers.sort();
             LoweredModule {
                 path: paths[&module].clone(),
                 file: module_file(tcx, module),
-                packages: packages.into_values().collect(),
+                packages,
                 imports,
                 consts: const_items.remove(&module).unwrap_or_default(),
                 functions: functions.remove(&module).unwrap_or_default(),
                 runtime: helpers,
+                jsx: jsx.contains(&module),
             }
         })
         .collect();
@@ -461,17 +501,39 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
 /// its `#[link_name]`, or its Rust name. A dotted name (`console.log`) is
 /// a path from a global.
 fn js_name(tcx: TyCtxt<'_>, def_id: DefId) -> String {
+    if let Some(name) = tool_link_name(tcx, def_id) {
+        return name.to_string();
+    }
     match tcx.codegen_fn_attrs(def_id).symbol_name {
         Some(name) => name.to_string(),
         None => tcx.item_name(def_id).to_string(),
     }
 }
 
+/// A binding written as an ordinary function, which can be generic, as an
+/// `extern` one can't (ADR 0039): `#[rust_js::link_name = "react#useState"]`.
+/// Its body is never compiled.
+fn tool_link_name(tcx: TyCtxt<'_>, def_id: DefId) -> Option<Symbol> {
+    if !matches!(tcx.def_kind(def_id), DefKind::Fn | DefKind::AssocFn) {
+        return None;
+    }
+    tcx.get_attrs_by_path(def_id, &[Symbol::intern("rust_js"), sym::link_name]).next()?.value_str()
+}
+
+/// Is this function or static JS's: in an `extern` block, or a
+/// `#[rust_js::link_name]` function?
+fn is_binding(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
+    tcx.is_foreign_item(def_id) || tool_link_name(tcx, def_id).is_some()
+}
+
 /// A JS function whose first parameter is named `this` is a method:
-/// `f(x, a)` calls `x.f(a)`.
+/// `f(x, a)` calls `x.f(a)`. So is a Rust method's `self`.
 fn is_method(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
-    tcx.def_kind(def_id) == DefKind::Fn
-        && matches!(tcx.fn_arg_idents(def_id).first(), Some(Some(ident)) if ident.name.as_str() == "this")
+    match tcx.def_kind(def_id) {
+        DefKind::Fn => matches!(tcx.fn_arg_idents(def_id).first(), Some(Some(ident)) if ident.name.as_str() == "this"),
+        DefKind::AssocFn => tcx.associated_item(def_id).is_method(),
+        _ => false,
+    }
 }
 
 /// How a call to a JS function is written, from its `#[link_name]` (ADR 0024).
@@ -486,14 +548,31 @@ enum JsForm {
     New(String),
     /// `this` itself: an unchecked cast.
     This,
+    /// `this(..)`: `this` is a JS function, like React's `setCount`.
+    CallThis,
+    /// A JSX element (ADR 0040): `<div>`, `<>`, an imported component like
+    /// `<react#StrictMode>`, or `<*>` for the component given first.
+    Jsx(String),
+    /// `prop className`: a JSX attribute of `this`, the element being built.
+    /// Just `prop`: the attribute's name comes first, as a string literal.
+    Prop(Option<String>),
     /// `this instanceof Class`: a checked one, as a `bool`.
     InstanceOf(String),
 }
 
 fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
     let name = js_name(tcx, def_id);
-    if name == "this" {
-        return JsForm::This;
+    match name.as_str() {
+        "this" => return JsForm::This,
+        "this()" => return JsForm::CallThis,
+        "prop" => return JsForm::Prop(None),
+        _ => {}
+    }
+    if let Some(tag) = name.strip_prefix('<').and_then(|t| t.strip_suffix('>')) {
+        return JsForm::Jsx(tag.to_string());
+    }
+    if let Some(prop) = name.strip_prefix("prop ") {
+        return JsForm::Prop(Some(prop.to_string()));
     }
     let forms: [(&str, fn(String) -> JsForm); 4] =
         [("get ", JsForm::Get), ("set ", JsForm::Set), ("new ", JsForm::New), ("instanceof ", JsForm::InstanceOf)];
@@ -511,10 +590,12 @@ fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
 fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
     match tcx.def_kind(def_id) {
         DefKind::Static { .. } => Some(js_name(tcx, def_id)),
-        DefKind::Fn => match js_form(tcx, def_id) {
+        DefKind::Fn | DefKind::AssocFn => match js_form(tcx, def_id) {
             JsForm::Call(name) | JsForm::New(name) if !is_method(tcx, def_id) => Some(name),
             // A class to test against is a global or an import like any other.
             JsForm::InstanceOf(class) => Some(class),
+            // So is a component: `<react#StrictMode>`.
+            JsForm::Jsx(tag) if tag.contains('#') => Some(tag),
             _ => None,
         },
         _ => None,
@@ -572,6 +653,7 @@ fn module_file(tcx: TyCtxt<'_>, module: LocalModDefId) -> Arc<SourceFile> {
 pub struct LoweredFn {
     pub function: js::Function,
     pub runtime: HashSet<Helper>,
+    pub jsx: bool,
 }
 
 /// Runtime helpers, emitted into the module only when used.
@@ -1083,9 +1165,13 @@ struct FnCx<'a, 'tcx> {
     vars: HashMap<LocalVarId, Var>,
     /// JS names already taken in this function.
     names: HashSet<String>,
+    /// Those taken by the module: its functions, imports and globals.
+    module_names: &'a HashSet<String>,
     labels: HashSet<String>,
     loops: Vec<Loop>,
     runtime: HashSet<Helper>,
+    /// Whether this function makes JSX.
+    jsx: bool,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -1112,12 +1198,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 name_span: self.tcx.def_ident_span(def_id).map_or(js::Span::NONE, |s| self.js_span(s)),
             },
             runtime: std::mem::take(&mut self.runtime),
+            jsx: self.jsx,
         })
     }
 
     /// Name the parameters. One with a pattern (`(x, y): (i32, i32)`) is
     /// taken whole, then taken apart at the start of the body in `out`.
-    fn lower_params(&mut self, params: &[thir::Param<'tcx>], span: Span, out: &mut Vec<Stmt>) -> R<Vec<String>> {
+    fn lower_params(&mut self, params: &[thir::Param<'tcx>], span: Span, out: &mut Vec<Stmt>) -> R<Vec<js::Pattern>> {
         let mut names = Vec::new();
         for param in params {
             let span = param.ty_span.unwrap_or(span);
@@ -1131,6 +1218,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 matches!(p.kind, PatKind::Binding { mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. })
             };
             let peeled = if inner.is_some_and(binding) { inner } else { param.pat.as_deref() };
+            // `Props { initial, label }: Props` is `{ initial, label }`, as a
+            // React component takes its props.
+            if let Some(pat) = peeled
+                && let Some((pattern, _)) = self.js_pattern(pat)
+            {
+                names.push(pattern);
+                continue;
+            }
             let name = match peeled {
                 Some(pat) => match &pat.kind {
                     PatKind::Binding { name, var, mode, subpattern: None, .. } => {
@@ -1150,9 +1245,51 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 },
                 None => self.fresh("_"),
             };
-            names.push(name);
+            names.push(name.into());
         }
         Ok(names)
+    }
+
+    /// A tuple or struct pattern of plain variables and `_`s, as JS
+    /// destructuring: `[count, setCount]`, `{ initial, label }`. Binds the
+    /// variables, and says whether one is `mut`. `None`, binding nothing, if a
+    /// part is anything else, or needs a copy of its own (ADR 0020).
+    fn js_pattern(&mut self, pat: &Pat<'tcx>) -> Option<(js::Pattern, bool)> {
+        let PatKind::Leaf { subpatterns } = &pat.kind else { return None };
+        let parts: Vec<_> = subpatterns
+            .iter()
+            .map(|field| match field.pattern.kind {
+                PatKind::Wild => Some((field.field.as_usize(), None)),
+                PatKind::Binding { name, var, mode: BindingMode(ByRef::No, mutability), subpattern: None, ty, .. }
+                    if self.unsupported_part(ty).is_none() && !(self.contains_mutated(ty) && self.is_copy(ty)) =>
+                {
+                    Some((field.field.as_usize(), Some((name, var, mutability == Mutability::Mut))))
+                }
+                _ => None,
+            })
+            .collect::<Option<_>>()?;
+        let mutable = parts.iter().any(|(_, part)| part.is_some_and(|(_, _, m)| m));
+        let pattern = match self.shape(pat.ty) {
+            Shape::Array(tys) => {
+                let mut items = vec![None; tys.len()];
+                for (i, part) in parts {
+                    items[i] = part.map(|(name, var, m)| self.bind(var, name.as_str(), m));
+                }
+                // `[a, b, , ]` is `[a, b]`.
+                while items.last().is_some_and(Option::is_none) {
+                    items.pop();
+                }
+                js::Pattern::Array(items)
+            }
+            Shape::Object(fields) => js::Pattern::Object(
+                parts
+                    .into_iter()
+                    .filter_map(|(i, part)| part.map(|(name, var, m)| (fields[i].0.clone(), self.bind(var, name.as_str(), m))))
+                    .collect(),
+            ),
+            Shape::Other => return None,
+        };
+        Some((pattern, mutable))
     }
 
     // ── Statement mode ──────────────────────────────────────────────────
@@ -1388,6 +1525,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let Some(init) = init else {
                     return Err(self.unsupported(pat.span, "this `let` pattern without a value"));
                 };
+                // `let (count, set_count) = use_state(0);` is
+                // `const [count, setCount] = useState(0);`. A place is taken
+                // apart where it is, below.
+                if self.place(init).is_none() && !self.is_control_flow(init) {
+                    let value = self.expr(init, out)?;
+                    if let Some((pattern, mutable)) = self.js_pattern(pat) {
+                        out.push(StmtKind::Destructure { pattern, value, mutable }.at(span));
+                        return Ok(());
+                    }
+                    let subject = self.spill("tmp", value, out);
+                    return self.destructure(pat, subject, true, out);
+                }
                 let (subject, stable) = self.subject(init, "tmp", out)?;
                 self.destructure(pat, subject, stable, out)
             }
@@ -1929,7 +2078,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
-            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize, source, .. } => self.expr(source, out),
+            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize | PointerCoercion::ReifyFnPointer(_), source, .. } => {
+                self.expr(source, out)
+            }
+            // A function as a value, `component(Card, props)`: its JS name.
+            ExprKind::ZstLiteral { .. } if let &ty::FnDef(def_id, _) = ty.kind() && self.fns.contains_key(&def_id) => {
+                Ok(self.fn_ref(def_id))
+            }
             ExprKind::Closure(ref closure) => self.closure(closure, out),
             ExprKind::Tuple { ref fields } if fields.is_empty() => Ok(Expr::undefined()),
             ExprKind::Tuple { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
@@ -2290,17 +2445,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, generic_args)) = (&f.kind, f.ty.kind()) else {
             return Err(self.unsupported(f.span, "calling this"));
         };
-        if let Some(target) = self.fns.get(&def_id) {
-            let callee = if target.module == self.module {
-                Expr::var(&target.name)
-            } else {
-                Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
-            };
+        if self.fns.contains_key(&def_id) {
+            let callee = self.fn_ref(def_id);
             let args = self.operands(args, out)?;
             return Ok(Expr::call(callee.or_at(fun_span), args));
         }
-        if self.tcx.is_foreign_item(def_id) {
-            let mut args = self.operands(args, out)?;
+        if is_binding(self.tcx, def_id) {
+            match js_form(self.tcx, def_id) {
+                JsForm::Jsx(tag) => return self.jsx(&tag, args, span, out),
+                JsForm::Prop(name) => return self.jsx_prop(name.as_deref(), args, span, out),
+                _ => {}
+            }
+            let mut values = self.operands(args, out)?;
+            // `()` given to JS is what a tuple is, an array (ADR 0020):
+            // `use_effect(f, ())` is `useEffect(f, [])`.
+            for (value, &arg) in values.iter_mut().zip(args) {
+                if matches!(self.thir[self.strip(arg)].kind, ExprKind::Tuple { ref fields } if fields.is_empty()) {
+                    *value = Expr::array(Vec::new());
+                }
+            }
+            let mut args = values;
             let this = is_method(self.tcx, def_id).then(|| args.remove(0));
             let value = match (js_form(self.tcx, def_id), this) {
                 // A method or a property is on `this`: it can't be an import.
@@ -2314,6 +2478,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Expr::undefined()
                 }
                 (JsForm::This, Some(this)) if args.is_empty() => this,
+                (JsForm::CallThis, Some(this)) => Expr::call(this, args),
                 (JsForm::InstanceOf(class), Some(this)) if args.is_empty() => Expr::bin(Op::InstanceOf, this, self.js_ref(&class)),
                 _ => {
                     let what = format!("the `#[link_name]` of `{}` with this signature", self.tcx.def_path_str(def_id));
@@ -3003,9 +3168,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Lower the body as if it were a function of its own, then come back.
         // Its names are its own: once it's lowered, a sibling closure or later
         // code may use them again (`v.some((x) => ..)`, `v.every((x) => ..)`).
+        // Like a JS arrow's, they may reuse an outer name, `(count) => count + 1`,
+        // unless the closure uses what that name holds: a capture.
+        let mut inner = self.module_names.clone();
+        let mut known = true;
+        for &upvar in closure.upvars.iter() {
+            match self.place(upvar) {
+                Some((place, _)) => inner.extend(root_var(&place).map(str::to_string)),
+                None => known = false,
+            }
+        }
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let loops = std::mem::take(&mut self.loops);
-        let names = self.names.clone();
+        let names = if known { std::mem::replace(&mut self.names, inner) } else { self.names.clone() };
         let mut stmts = Vec::new();
         // An `async` block takes no arguments, and runs as soon as it's
         // made: an async arrow, called right away (ADR 0029).
@@ -3017,7 +3192,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let params = if block {
             Vec::new()
         } else {
-            self.lower_params(&body.thir.params.raw[1..], self.tcx.def_span(body.def_id), &mut stmts)?
+            // JS ignores extra arguments, so `|_| ..` is `() => ..`.
+            let mut params = &body.thir.params.raw[1..];
+            while let [rest @ .., last] = params
+                && last.pat.as_deref().is_some_and(|p| matches!(p.kind, PatKind::Wild))
+            {
+                params = rest;
+            }
+            self.lower_params(params, self.tcx.def_span(body.def_id), &mut stmts)?
         };
         let BodyTy::Fn(sig) = body.thir.body_type else { unreachable!("a closure body is a function") };
         let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
@@ -3111,6 +3293,147 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Field { lhs, .. } | ExprKind::Deref { arg: lhs } => self.root_var(lhs),
             _ => None,
         }
+    }
+
+    // ── JSX (ADR 0040) ──────────────────────────────────────────────────
+
+    /// A JSX element, from a binding whose `link_name` is its tag: `<div>`
+    /// takes nothing, `<>` and an imported component (`<react#StrictMode>`)
+    /// take their children, and `<*>` takes a component and its props.
+    fn jsx(&mut self, tag: &str, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        self.jsx = true;
+        let (tag, props, children) = match (tag, args) {
+            ("*", &[component, props]) => {
+                let tag = self.expr(component, out)?;
+                // JSX reads a lowercase name as a DOM element's, and Fast
+                // Refresh only keeps the state of a capitalized component.
+                if let js::ExprKind::Var(name) = &tag.kind
+                    && !name.starts_with(|c: char| c.is_ascii_uppercase())
+                {
+                    let message = format!("rust-js: a React component's name starts with an uppercase letter, not `{name}`");
+                    return Err(self.tcx.dcx().span_err(self.thir[component].span, message));
+                }
+                let (props, children) = self.jsx_props(props, out)?;
+                (js::JsxTag::Component(tag), props, children)
+            }
+            (tag, [] | [_]) if tag != "*" => {
+                let children = match args {
+                    &[children] => self.jsx_children(children, out)?,
+                    _ => Vec::new(),
+                };
+                let tag = match tag {
+                    "" => js::JsxTag::Fragment,
+                    t if t.contains('#') => js::JsxTag::Component(self.js_ref(t)),
+                    t => js::JsxTag::Intrinsic(t.to_string()),
+                };
+                (tag, Vec::new(), children)
+            }
+            _ => return Err(self.unsupported(span, "this JSX binding's signature")),
+        };
+        Ok(Expr::jsx(js::Jsx { tag, props, children }))
+    }
+
+    /// A component's props as attributes: a struct's fields, with its
+    /// `children` as the element's; `()` for none; anything else spread,
+    /// `{...props}`.
+    fn jsx_props(&mut self, props: ExprId, out: &mut Vec<Stmt>) -> R<(Vec<Prop>, Vec<Expr>)> {
+        let ty = self.thir[props].ty;
+        let value = self.expr(props, out)?;
+        let fields = match value.kind {
+            js::ExprKind::Undefined => return Ok((Vec::new(), Vec::new())),
+            js::ExprKind::Object(fields) => fields,
+            _ => return Ok((vec![Prop::Spread(value)], Vec::new())),
+        };
+        let mut attrs = Vec::new();
+        let mut children = Vec::new();
+        for field in fields {
+            match field {
+                Prop::Field(name, value) if name == "children" => {
+                    let Shape::Object(types) = self.shape(ty) else { unreachable!("a struct's fields") };
+                    let child_ty = types.into_iter().find(|(n, _)| *n == name).expect("the field").1;
+                    children = self.spread_children(value, child_ty, out);
+                }
+                other => attrs.push(other),
+            }
+        }
+        Ok((attrs, children))
+    }
+
+    fn jsx_children(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
+        let value = self.expr(e, out)?;
+        Ok(self.spread_children(value, self.thir[e].ty, out))
+    }
+
+    /// A tuple of children is several, `("Count is ", count)`: `Count is {count}`.
+    /// Anything else is one: a `Vec` is `{items}`, which React renders item by item.
+    fn spread_children(&mut self, value: Expr, ty: Ty<'tcx>, out: &mut Vec<Stmt>) -> Vec<Expr> {
+        let ty::Tuple(tys) = *ty.kind() else { return vec![value] };
+        let parts = match value.kind {
+            js::ExprKind::Array(items) => items,
+            _ if tys.is_empty() => Vec::new(),
+            _ => {
+                let tuple = if value.has_effects() { self.spill("children", value, out) } else { value };
+                (0..tys.len()).map(|i| Expr::index(tuple.clone(), Expr::int(i as i128))).collect()
+            }
+        };
+        parts.into_iter().zip(tys.iter()).flat_map(|(part, t)| self.spread_children(part, t, out)).collect()
+    }
+
+    /// `element.class_name("hero")`, a binding like `#[rust_js::link_name =
+    /// "prop className"]`: the attribute, on the element being built.
+    fn jsx_prop(&mut self, name: Option<&str>, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let (name, value) = match (name, args) {
+            (Some(name), &[_, value]) => (name.to_string(), value),
+            (None, &[_, name, value]) => match self.thir[self.strip_refs(name)].kind {
+                ExprKind::Literal { lit, neg: false } if let LitKind::Str(s, _) = lit.node => (s.to_string(), value),
+                _ => {
+                    let message = "rust-js: an attribute's name is a string literal";
+                    return Err(self.tcx.dcx().span_err(self.thir[name].span, message));
+                }
+            },
+            _ => return Err(self.unsupported(span, "this JSX attribute binding's signature")),
+        };
+        let mut element = self.expr(args[0], out)?;
+        if !matches!(element.kind, js::ExprKind::Jsx(_)) {
+            let message = "rust-js makes JSX from one expression: set an element's props in the chain that makes it";
+            return Err(self.tcx.dcx().span_err(self.thir[args[0]].span, message));
+        }
+        // oxc indents what it puts on several lines by where the statement is,
+        // not by where it is in the JSX, so such a value goes in a `const`
+        // first, as React code often has it: `const onClick = () => { .. };`.
+        // Only when that can't change the order anything runs in.
+        let hoist = |value: &Expr, element_runs_code: bool| value.prints_on_lines() && (!value.has_effects() || !element_runs_code);
+        if name == "children" {
+            let children = self.jsx_children(value, out)?;
+            for child in children {
+                let child = if !matches!(child.kind, js::ExprKind::Jsx(_)) && hoist(&child, element.has_effects()) {
+                    // `const items = todos.map((t) => ..);`
+                    let is_map = matches!(&child.kind, js::ExprKind::Call(f, _) if matches!(&f.kind, js::ExprKind::Member(_, m) if m == "map"));
+                    self.spill(if is_map { "items" } else { "children" }, child, out)
+                } else {
+                    child
+                };
+                let js::ExprKind::Jsx(jsx) = &mut element.kind else { unreachable!("checked above") };
+                jsx.children.push(child);
+            }
+        } else {
+            let mut value = self.expr(value, out)?;
+            // React ignores what a handler returns, so one call is
+            // `onClick={() => setCount(1)}`.
+            let handler = name.strip_prefix("on").is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_uppercase()));
+            if handler
+                && let js::ExprKind::Arrow(_, body) = &mut value.kind
+                && let [js::Stmt { kind: StmtKind::Expr(e), span }] = body.as_slice()
+            {
+                *body = vec![StmtKind::Return(Some(e.clone())).at(*span)];
+            }
+            if hoist(&value, element.has_effects()) && name.chars().all(|c| c.is_ascii_alphanumeric()) {
+                value = self.spill(&name, value, out);
+            }
+            let js::ExprKind::Jsx(jsx) = &mut element.kind else { unreachable!("checked above") };
+            jsx.props.push(Prop::Field(name, value));
+        }
+        Ok(element)
     }
 
     // ── Structs and tuples (ADR 0020) ───────────────────────────────────
@@ -3437,7 +3760,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn bind(&mut self, var: LocalVarId, name: &str, mutable: bool) -> String {
-        let name = self.fresh(name);
+        let name = self.fresh(&camel_case(name));
         self.vars.insert(var, Var { place: Expr::var(&name), mutable, depth: self.loops.len() });
         name
     }
@@ -3557,6 +3880,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A JS global or a path from one (`console.log`), or from an import
     /// (`node:path#posix.join` is `posix.join`, ADR 0028).
+    /// One of our functions: `f`, or `alias.f` in another module.
+    fn fn_ref(&self, def_id: DefId) -> Expr {
+        let target = &self.fns[&def_id];
+        if target.module == self.module {
+            Expr::var(&target.name)
+        } else {
+            Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
+        }
+    }
+
     fn js_ref(&self, path: &str) -> Expr {
         match js_import(path) {
             Some((export, rest)) => global(&format!("{}{rest}", self.imports[&export])),
@@ -3776,6 +4109,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 }
 
+/// The variable a place starts from: `p` for `p.x[0]`.
+fn root_var(place: &Expr) -> Option<&str> {
+    match &place.kind {
+        js::ExprKind::Var(name) => Some(name),
+        js::ExprKind::Member(object, _) | js::ExprKind::Index(object, _) => root_var(object),
+        _ => None,
+    }
+}
+
 /// A JS global, like `document`, or a path from one, like `console.log`.
 fn global(name: &str) -> Expr {
     let mut parts = name.split('.');
@@ -3944,6 +4286,28 @@ fn fresh_in(taken: &mut HashSet<String>, base: &str) -> String {
         return base;
     }
     (1..).map(|k| format!("{base}${k}")).find(|name| taken.insert(name.clone())).unwrap()
+}
+
+/// A Rust variable's name as JS code writes it (ADR 0038): `set_count` is
+/// `setCount`. Leading and trailing underscores stay (`_unused`, `type_`),
+/// and so does a name with no lowercase letter, like a constant's.
+fn camel_case(name: &str) -> String {
+    let core = name.trim_matches('_');
+    if !core.contains('_') || !core.contains(|c: char| c.is_ascii_lowercase()) {
+        return name.to_string();
+    }
+    let lead = &name[..name.len() - name.trim_start_matches('_').len()];
+    let trail = &name[name.trim_end_matches('_').len()..];
+    let mut out = lead.to_string();
+    for (i, word) in core.split('_').filter(|w| !w.is_empty()).enumerate() {
+        let mut chars = word.chars();
+        if i > 0 && let Some(first) = chars.next() {
+            out.push(first.to_ascii_uppercase());
+        }
+        out.extend(chars);
+    }
+    out.push_str(trail);
+    out
 }
 
 /// Rust names that mean something else in JS get a `$` suffix.

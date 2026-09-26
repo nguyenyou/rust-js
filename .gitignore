@@ -9,12 +9,11 @@
 /wasm/target
 /wasm/sysroot
 /wasm/out
-/wasm/web/node_modules
 /wasm/web/dist
 # The playground's own Rust, compiled by wasm/web/compile-rust.ts
 /wasm/web/rust/*.js
 /wasm/web/rust/*.js.map
-/node_modules
+node_modules/
 /.vitest
 /test-results
 /playwright-report

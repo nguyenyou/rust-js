@@ -393,7 +393,7 @@ test("iterators are array methods, and sorting takes comparators", async () => {
   // `|&&x|` is `x`: a reference is the value.
   expect(js).toContain("  return v.filter((x) => x % 2 === 0);");
   expect(js).toContain("  const sum = v.reduce((a, b) => a + b | 0, 0);");
-  expect(js).toContain("  const any_negative = v.some((x) => x < 0);");
+  expect(js).toContain("  const anyNegative = v.some((x) => x < 0);");
   expect(js).toContain("  return v.slice(1).slice(0, 2).toReversed();");
   expect(js).toContain('  return words.map((w) => w.toUpperCase()).join("-");');
   expect(js).toContain('  return Array.from(s).toReversed().join("");');
@@ -509,12 +509,13 @@ test("structs and tuples are plain objects and arrays", async () => {
   expect(js).toContain("let s = r;");
   // Returning a variable hands it over.
   expect(js).toContain("return p;");
-  // The tuple `(u32, u32)` is never changed in place, so it's never copied.
-  expect(js).toContain("const tmp = divmod(a, b);");
+  // The tuple `(u32, u32)` is never changed in place, so it is taken apart as it is.
+  expect(js).toContain("const [q, r] = divmod(a, b);");
   // Fields are listed in declaration order, but the calls run in the order written.
   expect(js).toMatch(/const y = \$div\(100, a, -2147483648\) \| 0;\s+const x = \$rem/);
-  // `match (a, b)` tests the variables directly, without building an array.
-  expect(js).toContain("if (param[0] === 0 && param[1] === 0)");
+  // A tuple parameter is taken apart where it is, and `match (a, b)` tests its
+  // parts directly, without building an array.
+  expect(js).toContain("export function classify([a, b]) {\n  if (a === 0 && b === 0) {");
 });
 
 // ADR 0026: `#[test]` functions, in Rust, compiled by `rust-js --test` and
@@ -586,7 +587,7 @@ test("the counter's JS is plain DOM code", async () => {
   expect(js).toContain('const b = document.createElement("button");');
   expect(js).toContain("b.textContent = label;");
   expect(js).toContain("const count = { value: 0 };");
-  expect(js).toContain('b.addEventListener("click", (_) => {');
+  expect(js).toContain('b.addEventListener("click", () => {');
   expect(js).toContain("count$1.value = count$1.value + by | 0;");
   expect(js).toContain("output.textContent = String(count$1.value);");
   expect(js).toContain("app.append(output);");
@@ -616,3 +617,33 @@ test("the web crate's bindings become plain JS", async () => {
   // "é" is two bytes in UTF-8.
   expect(round_trip("héllo")).toEqual([6, "héllo"]);
 });
+
+// ADR 0041: React components, written in Rust with the react crate, are the
+// JSX you'd write by hand (ADR 0040), and React runs them.
+test("React components are hand-written JSX, and React runs them", () => {
+  run(["react/build.sh", "-o", join(target, "libreact.rmeta")]);
+  const out = join(target, "react-test");
+  run([join(target, "debug", "rust-js"), "test/components.rs", "-o", join(out, "components.js"),
+    "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
+  // A module with JSX is a `.jsx` file.
+  const js = require("node:fs").readFileSync(join(out, "components.jsx"), "utf8");
+  expect(js).toContain('import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";');
+  // Props taken apart, as a component takes them; `children` as JSX children.
+  expect(js).toContain("export function Card({ title, children }) {\n  return <div className=\"card\">\n    <h2>{title}</h2>\n    {children}\n  </div>;\n}");
+  expect(js).toContain('const [draft, setDraft] = useState("");');
+  expect(js).toContain("const left = useMemo(() => todos.filter((t) => !t.done).length, [todos]);");
+  // A handler of one call stays in the JSX; one with statements is named first.
+  expect(js).toContain("onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />");
+  expect(js).toContain("const onKeyDown = (e) => {");
+  // A list, with its keys.
+  expect(js).toContain('return <li key={t.id} className={t.done ? "done" : ""} onClick={onClick}>{t.text}</li>;');
+  expect(js).toContain("<ul>{items}</ul>");
+  // `()` as an effect's dependencies is `[]`, and its cleanup is a function it returns.
+  expect(js).toContain("useEffect(() => {\n    setTicks((t) => t + 10 | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
+  // Components by name, as JSX tags.
+  expect(js).toContain("<Todos />\n    <Clock />");
+  copyFileSync(join(root, "test", "react_app.jsx"), join(out, "react_app.test.jsx"));
+  const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", join(out, "react_app.test.jsx")], { cwd: root, stderr: "pipe" });
+  const output = p.stdout.toString() + p.stderr.toString();
+  expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "2"]);
+}, 60_000);

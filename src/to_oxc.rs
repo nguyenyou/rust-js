@@ -17,13 +17,16 @@
 //! each node from `program.source_text` and the node's span. We hand it the
 //! *Rust* file as `source_text`, and spans that are byte offsets into it.
 
+use std::cell::Cell;
 use std::path::PathBuf;
 
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
-    Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
+    Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern, BindingProperty,
     Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter, FormalParameterKind,
-    FormalParameters, FunctionBody, FunctionType, IdentifierName, SimpleAssignmentTarget, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
+    FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem, JSXAttributeName, JSXAttributeValue,
+    JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier, JSXMemberExpressionObject,
+    JSXOpeningElement, JSXOpeningFragment, SimpleAssignmentTarget, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
     PropertyKind, Statement, VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
@@ -33,7 +36,7 @@ use oxc_span::{SPAN, SourceType, Span};
 use oxc_syntax::number::NumberBase;
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator};
 
-use crate::js::{self, ExprKind, Module, Op, Prop, StmtKind, UnaryOp};
+use crate::js::{self, ExprKind, JsxTag, Module, Op, Prop, StmtKind, UnaryOp};
 
 pub struct Output {
     pub code: String,
@@ -47,7 +50,7 @@ pub struct Output {
 /// and `js_file_name` is the output's file name, for `sourceMappingURL`.
 pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name: &str) -> Output {
     let allocator = Allocator::default();
-    let cx = Cx { b: AstBuilder::new(&allocator), allocator: &allocator };
+    let cx = Cx { b: AstBuilder::new(&allocator), allocator: &allocator, depth: Cell::new(0), inline: Cell::new(false) };
     let b = &cx.b;
 
     let consts = module.consts.iter().map(|c| cx.constant(c));
@@ -88,6 +91,9 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
             }
             if let Some(namespace) = &package.namespace {
                 code.push_str(&format!("import * as {namespace} from {:?};\n", package.from));
+            }
+            if clause.is_empty() && package.namespace.is_none() {
+                code.push_str(&format!("import {:?};\n", package.from));
             }
         }
     }
@@ -150,14 +156,19 @@ fn shift_lines(map: &SourceMap<'_>, line_shift: &[u32], js_file_name: &str) -> S
 struct Cx<'a> {
     b: AstBuilder<'a>,
     allocator: &'a Allocator,
+    /// How many levels oxc indents what's being converted: one per block,
+    /// and per array of 3 or more items or object of 2 or more fields, which
+    /// oxc puts on several lines. JSX laid out on several lines indents to match.
+    depth: Cell<u32>,
+    /// Inside JSX that's on one line, where everything stays on it.
+    inline: Cell<bool>,
 }
 
 impl<'a> Cx<'a> {
-    fn params(&self, kind: FormalParameterKind, names: &[String]) -> FormalParameters<'a> {
+    fn params(&self, kind: FormalParameterKind, patterns: &[js::Pattern]) -> FormalParameters<'a> {
         let b = &self.b;
-        let params = names.iter().map(|name| {
-            let pattern = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
-            FormalParameter::new(SPAN, ArenaVec::new_in(b), pattern, None, None, false, None, false, false, b)
+        let params = patterns.iter().map(|pattern| {
+            FormalParameter::new(SPAN, ArenaVec::new_in(b), self.pattern(pattern), None, None, false, None, false, false, b)
         });
         FormalParameters::new(SPAN, kind, ArenaVec::from_iter_in(params, b), None, b)
     }
@@ -193,7 +204,16 @@ impl<'a> Cx<'a> {
     }
 
     fn stmts(&self, stmts: &[js::Stmt]) -> ArenaVec<'a, Statement<'a>> {
-        ArenaVec::from_iter_in(stmts.iter().map(|s| self.stmt(s)), &self.b)
+        self.nested(true, || ArenaVec::from_iter_in(stmts.iter().map(|s| self.stmt(s)), &self.b))
+    }
+
+    /// Run `f` one level deeper, if `deeper`.
+    fn nested<T>(&self, deeper: bool, f: impl FnOnce() -> T) -> T {
+        let depth = self.depth.get();
+        self.depth.set(depth + u32::from(deeper));
+        let result = f();
+        self.depth.set(depth);
+        result
     }
 
     fn block(&self, stmts: &[js::Stmt]) -> Statement<'a> {
@@ -206,6 +226,11 @@ impl<'a> Cx<'a> {
         match &s.kind {
             StmtKind::Const(name, init) => self.declare(sp, VariableDeclarationKind::Const, name, Some(init)),
             StmtKind::Let(name, init) => self.declare(sp, VariableDeclarationKind::Let, name, init.as_ref()),
+            StmtKind::Destructure { pattern, value, mutable } => {
+                let kind = if *mutable { VariableDeclarationKind::Let } else { VariableDeclarationKind::Const };
+                let declarator = VariableDeclarator::new(sp, self.pattern(pattern), None, Some(self.expr(value)), false, b);
+                Statement::new_variable_declaration(sp, kind, ArenaVec::from_iter_in([declarator], b), false, b)
+            }
             StmtKind::Assign(target, value) => {
                 let assign = Expression::new_assignment_expression(
                     sp,
@@ -270,6 +295,26 @@ impl<'a> Cx<'a> {
         }
     }
 
+    fn pattern(&self, pattern: &js::Pattern) -> BindingPattern<'a> {
+        let b = &self.b;
+        let name = |name: &str| BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
+        match pattern {
+            js::Pattern::Name(n) => name(n),
+            js::Pattern::Array(items) => {
+                let items = items.iter().map(|item| item.as_deref().map(name));
+                BindingPattern::new_array_pattern(SPAN, ArenaVec::from_iter_in(items, b), None, b)
+            }
+            js::Pattern::Object(fields) => {
+                let fields = fields.iter().map(|(field, var)| {
+                    let key = PropertyKey::new_static_identifier(SPAN, self.name(field), b);
+                    // `{ x }` for `{ x: x }`.
+                    BindingProperty::new(SPAN, key, name(var), field == var, false, b)
+                });
+                BindingPattern::new_object_pattern(SPAN, ArenaVec::from_iter_in(fields, b), None, b)
+            }
+        }
+    }
+
     fn assignment_target(&self, e: &js::Expr) -> AssignmentTarget<'a> {
         let b = &self.b;
         let sp = span(e.span);
@@ -329,14 +374,15 @@ impl<'a> Cx<'a> {
             ExprKind::Index(object, index) => {
                 Expression::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)
             }
-            ExprKind::Array(items) => {
+            ExprKind::Array(items) => self.nested(items.len() > 2, || {
                 let items = items.iter().map(|item| ArrayExpressionElement::from(self.expr(item)));
                 Expression::new_array_expression(sp, ArenaVec::from_iter_in(items, b), b)
-            }
-            ExprKind::Object(props) => {
+            }),
+            ExprKind::Object(props) => self.nested(props.len() > 1, || {
                 let props = props.iter().map(|prop| self.property(prop));
                 Expression::new_object_expression(sp, ArenaVec::from_iter_in(props, b), b)
-            }
+            }),
+            ExprKind::Jsx(jsx) => self.jsx(sp, jsx),
             ExprKind::Unary(op, arg) => {
                 let op = match op {
                     UnaryOp::Neg => UnaryOperator::UnaryNegation,
@@ -375,6 +421,111 @@ impl<'a> Cx<'a> {
                 Expression::new_new_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), b)
             }
         }
+    }
+
+    /// A JSX element (ADR 0040), laid out as by hand: children that are all
+    /// elements or expressions go on their own lines, one level deeper. With
+    /// text among them they stay on one line, where JSX keeps every space.
+    fn jsx(&self, sp: Span, jsx: &js::Jsx) -> Expression<'a> {
+        let b = &self.b;
+        let has_text = jsx.children.iter().any(|c| matches!(c.kind, ExprKind::Str(_)));
+        let lines = !has_text && !self.inline.get() && jsx.children.iter().any(js::Expr::contains_jsx);
+        let depth = self.depth.get();
+        let mut children = ArenaVec::new_in(b);
+        let inline = self.inline.replace(self.inline.get() || has_text);
+        self.nested(lines, || {
+            for child in &jsx.children {
+                if lines {
+                    children.push(self.jsx_newline(depth + 1));
+                }
+                children.push(self.jsx_child(child));
+            }
+        });
+        self.inline.set(inline);
+        if lines {
+            children.push(self.jsx_newline(depth));
+        }
+        if let JsxTag::Fragment = jsx.tag {
+            let (open, close) = (JSXOpeningFragment::new(SPAN, b), JSXClosingFragment::new(SPAN, b));
+            return Expression::new_jsx_fragment(sp, open, children, close, b);
+        }
+        let attrs = jsx.props.iter().filter_map(|prop| self.jsx_attribute(prop));
+        let opening = JSXOpeningElement::boxed(SPAN, self.jsx_name(&jsx.tag), None, ArenaVec::from_iter_in(attrs, b), b);
+        // `<img />` has nothing to close.
+        let closing = (!children.is_empty()).then(|| JSXClosingElement::boxed(SPAN, self.jsx_name(&jsx.tag), b));
+        Expression::new_jsx_element(sp, opening, children, closing, b)
+    }
+
+    /// `div`, `Counter`, or `stats.Chart` from another module.
+    fn jsx_name(&self, tag: &JsxTag) -> JSXElementName<'a> {
+        let b = &self.b;
+        let component = match tag {
+            JsxTag::Intrinsic(tag) => return JSXElementName::new_identifier(SPAN, self.name(tag), b),
+            JsxTag::Component(component) => component,
+            JsxTag::Fragment => unreachable!("a fragment has no name"),
+        };
+        match &component.kind {
+            ExprKind::Var(name) => JSXElementName::new_identifier_reference(SPAN, self.name(name), b),
+            ExprKind::Member(object, property) => {
+                let property = JSXIdentifier::new(SPAN, self.name(property), b);
+                JSXElementName::new_member_expression(SPAN, self.jsx_object(object), property, b)
+            }
+            _ => unreachable!("lowering only makes components of names and paths"),
+        }
+    }
+
+    fn jsx_object(&self, object: &js::Expr) -> JSXMemberExpressionObject<'a> {
+        let b = &self.b;
+        match &object.kind {
+            ExprKind::Var(name) => JSXMemberExpressionObject::new_identifier_reference(SPAN, self.name(name), b),
+            ExprKind::Member(inner, property) => {
+                let property = JSXIdentifier::new(SPAN, self.name(property), b);
+                JSXMemberExpressionObject::new_member_expression(SPAN, self.jsx_object(inner), property, b)
+            }
+            _ => unreachable!("lowering only makes components of names and paths"),
+        }
+    }
+
+    /// `className="hero"`, `disabled` for `true`, `onClick={f}` or `{...props}`.
+    /// An attribute that's `undefined` (a `None`) is left out, as React would.
+    fn jsx_attribute(&self, prop: &Prop) -> Option<JSXAttributeItem<'a>> {
+        let b = &self.b;
+        let (name, value) = match prop {
+            Prop::Spread(value) => return Some(JSXAttributeItem::new_spread_attribute(SPAN, self.expr(value), b)),
+            Prop::Field(name, value) => (name, value),
+        };
+        let sp = span(value.span);
+        let value = match &value.kind {
+            ExprKind::Undefined => return None,
+            ExprKind::Bool(true) => None,
+            ExprKind::Str(s) if jsx_text_safe(s) && !s.contains('"') => {
+                Some(JSXAttributeValue::new_string_literal(sp, self.name(s), None, b))
+            }
+            _ => Some(JSXAttributeValue::new_expression_container(sp, JSXExpression::from(self.expr(value)), b)),
+        };
+        let name = JSXAttributeName::new_identifier(SPAN, self.name(name), b);
+        Some(JSXAttributeItem::new_attribute(SPAN, name, value, b))
+    }
+
+    /// Text as text, `Count is `; anything else in braces, `{count}`.
+    fn jsx_child(&self, child: &js::Expr) -> JSXChild<'a> {
+        let b = &self.b;
+        let sp = span(child.span);
+        match &child.kind {
+            ExprKind::Str(s) if jsx_text_safe(s) && !s.is_empty() => JSXChild::new_text(sp, self.name(s), None, b),
+            ExprKind::Jsx(jsx) => match self.jsx(sp, jsx) {
+                Expression::JSXElement(e) => JSXChild::Element(e),
+                Expression::JSXFragment(f) => JSXChild::Fragment(f),
+                _ => unreachable!("JSX converts to JSX"),
+            },
+            _ => JSXChild::new_expression_container(sp, JSXExpression::from(self.expr(child)), b),
+        }
+    }
+
+    /// A line break and indentation between children, which JSX ignores.
+    fn jsx_newline(&self, depth: u32) -> JSXChild<'a> {
+        let text = format!("\n{}", "  ".repeat(depth as usize));
+        JSXChild::new_text(SPAN, self.name(&text), None, &self.b)
     }
 
     fn property(&self, prop: &Prop) -> ObjectPropertyKind<'a> {
@@ -424,6 +575,12 @@ impl<'a> Cx<'a> {
     fn label(&self, name: &str) -> LabelIdentifier<'a> {
         LabelIdentifier::new(SPAN, self.name(name), &self.b)
     }
+}
+
+/// Can `s` be JSX text as it is? Braces and angle brackets start JSX, `&` an
+/// entity, and JSX drops whitespace at the start or end of a line.
+fn jsx_text_safe(s: &str) -> bool {
+    !s.contains(['{', '}', '<', '>', '&', '\n', '\r'])
 }
 
 fn span(s: js::Span) -> Span {

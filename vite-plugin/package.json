@@ -1,0 +1,10 @@
+{
+  "name": "vite-plugin-rust-js",
+  "private": true,
+  "type": "module",
+  "description": "Compile Rust with rust-js in a Vite project, on start and on save. See docs/decisions/0041-react.md.",
+  "exports": "./index.js",
+  "peerDependencies": {
+    "vite": ">=8"
+  }
+}
