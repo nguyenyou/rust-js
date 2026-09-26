@@ -20,11 +20,12 @@ use std::sync::Arc;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir as hir;
 use rustc_hir::def::CtorKind;
-use rustc_hir::{BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, CoroutineSource, HirId, LangItem};
+use rustc_hir::{BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, CoroutineSource, HirId, LangItem, RangeEnd};
 use rustc_middle::middle::region;
 use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
-    self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind, Thir,
+    self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind,
+    PatRangeBoundary, Thir,
 };
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty, TyCtxt};
@@ -244,6 +245,10 @@ struct FnCx<'a, 'tcx> {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
     writer: Option<(Option<LocalVarId>, String)>,
+    /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
+    /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
+    /// in (ADR 0059). While it lives, nothing else can change that entry.
+    slots: HashMap<LocalVarId, (Expr, Expr)>,
     /// The call being lowered is a statement of its own: its value isn't used,
     /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
     discarded: bool,
@@ -548,6 +553,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Rust evaluates the right side of an assignment first. The target
             // is a variable or its fields, which reading can't change.
             // A value in a map: `m.set(k, v)` (ADR 0059).
+            ExprKind::Assign { lhs, rhs } if self.slots_write(lhs) => {
+                let value = self.expr(rhs, out)?;
+                self.slot_write(lhs, &|_, _| Ok(value.clone()), expr.span, out)
+                    .map(|_| ())
+            }
+            ExprKind::AssignOp { op, lhs, rhs } if self.slots_write(lhs) => {
+                let rhs_js = self.expr(rhs, out)?;
+                let ty = self.thir[lhs].ty;
+                let span = expr.span;
+                let write =
+                    |this: &mut Self, current| this.binary(assign_op(op), current, rhs_js.clone(), None, ty, span);
+                self.slot_write(lhs, &write, span, out).map(|_| ())
+            }
             ExprKind::Assign { lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
                 let value = self.expr(rhs, out)?;
                 self.map_slot_write(slot, &|_, _| Ok(value.clone()), expr.span, out)
@@ -649,8 +667,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     span,
                     ..
                 } => {
-                    if else_block.is_some() {
-                        return Err(self.unsupported(*span, "`let ... else`"));
+                    // `let Some(x) = e else { return .. };`: the test, the
+                    // `else` that leaves when it fails, then the bindings.
+                    if let Some(else_block) = *else_block {
+                        let init = initializer.ok_or_else(|| self.unsupported(*span, "`let ... else`"))?;
+                        let mut bindings = Vec::new();
+                        let test = self.if_let(init, pattern, &mut bindings, out)?;
+                        let mut failed = Vec::new();
+                        self.block(else_block, &Dest::Discard, &mut failed)?;
+                        let js_span = self.js_span(*span);
+                        out.push(StmtKind::If(std_impls::negate(test), failed, None).at(js_span));
+                        out.extend(bindings);
+                        continue;
                     }
                     self.lower_let(pattern, *initializer, *span, out)?;
                 }
@@ -660,6 +688,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn lower_let(&mut self, pat: &Pat<'tcx>, init: Option<ExprId>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
+        // `let f = { let c = ..; move |n| .. };`: the block's statements
+        // first, then `const f = ..` of its value. Every local has a JS name
+        // of its own, so none of them can clash where they now are.
+        if let Some(init) = init
+            && let ExprKind::Block { block } = self.thir[self.strip(init)].kind
+            && let thir::Block {
+                targeted_by_break: false,
+                expr: Some(value),
+                safety_mode: thir::BlockSafety::Safe,
+                span: block_span,
+                ..
+            } = self.thir[block]
+            && !block_span.from_expansion()
+        {
+            self.block_stmts(block, out)?;
+            return self.lower_let(pat, Some(value), span, out);
+        }
         // `async fn f(x)` moves `x` into its body with `let x = x;` (ADR 0029).
         // In JS the body is the function's, so they're one variable.
         // `format_args!` holds its values in `super let args = (&a, &b);`, then
@@ -1405,6 +1450,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// keeps the value in a `const` named like the variable, which is then
     /// just that `const`: `const el = find(); if (el != null) { .. }`.
     fn if_let(&mut self, scrutinee: ExprId, pat: &Pat<'tcx>, then_out: &mut Vec<Stmt>, out: &mut Vec<Stmt>) -> R<Expr> {
+        if let Some(test) = self.slot_binding(scrutinee, pat, out)? {
+            return Ok(test);
+        }
         let base = match &pat.kind {
             PatKind::Variant { subpatterns, .. } if subpatterns.len() == 1 => match &subpatterns[0].pattern.kind {
                 PatKind::Binding { name, .. } => name.to_string(),
@@ -1417,6 +1465,90 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let test = self.pattern_test(pat, &subject, &mut bindings)?;
         self.bind_all(bindings, stable, self.js_span(pat.span), then_out);
         Ok(test.unwrap_or_else(|| Expr::bool(true)))
+    }
+
+    /// `if let Some(n) = m.get_mut(&k)` of a map whose values are primitives:
+    /// `let n = m.get(k)`, which a write through `n` puts back (`slot_write`).
+    fn slot_binding(&mut self, scrutinee: ExprId, pat: &Pat<'tcx>, out: &mut Vec<Stmt>) -> R<Option<Expr>> {
+        let ExprKind::Call { fun, ref args, .. } = self.thir[self.strip(scrutinee)].kind else {
+            return Ok(None);
+        };
+        let PatKind::Variant { subpatterns, .. } = &pat.kind else {
+            return Ok(None);
+        };
+        let [field] = subpatterns.as_slice() else {
+            return Ok(None);
+        };
+        let PatKind::Binding {
+            name,
+            var,
+            mode: BindingMode(ByRef::No, Mutability::Not),
+            subpattern: None,
+            ty,
+            ..
+        } = &field.pattern.kind
+        else {
+            return Ok(None);
+        };
+        let &ty::FnDef(get, _) = self.thir[self.strip(fun)].ty.kind() else {
+            return Ok(None);
+        };
+        let slot = self.std_fn(fun) == Some(Std::Map(maps::MapOp::Get))
+            && self.tcx.item_name(get).as_str() == "get_mut"
+            && matches!(ty.kind(), ty::Ref(_, value, Mutability::Mut) if self.is_primitive_key(*value));
+        if !slot {
+            return Ok(None);
+        }
+        let args = args.clone();
+        let [map, key]: [Expr; 2] = self.operands(&args, out)?.try_into().ok().expect("a map and a key");
+        let map = if map.reads_same() {
+            map
+        } else {
+            self.spill("map", map, out)
+        };
+        let key = if key.reads_same() {
+            key
+        } else {
+            self.spill("key", key, out)
+        };
+        let name = self.bind(*var, name.as_str(), true);
+        let there = Expr::call(Expr::member(map.clone(), "get"), vec![key.clone()]);
+        out.push(StmtKind::Let(name.clone(), Some(there)).at(self.js_span(pat.span)));
+        self.slots.insert(*var, (map, key));
+        Ok(Some(Expr::bin(Op::LooseNe, Expr::var(&name), Expr::null())))
+    }
+
+    /// Is `lhs` `*n`, with `n` a `&mut` from `slot_binding`?
+    fn slots_write(&self, lhs: ExprId) -> bool {
+        matches!(self.thir[self.strip(lhs)].kind, ExprKind::Deref { arg }
+            if matches!(self.thir[self.strip(arg)].kind, ExprKind::VarRef { id } if self.slots.contains_key(&id)))
+    }
+
+    /// `*n = v` or `*n += v` through a `&mut` from `slot_binding`: the copy,
+    /// and the map's entry, written. `None` if `lhs` isn't one.
+    fn slot_write(
+        &mut self,
+        lhs: ExprId,
+        value: &dyn Fn(&mut Self, Expr) -> R<Expr>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Option<()>> {
+        let ExprKind::Deref { arg } = self.thir[self.strip(lhs)].kind else {
+            return Ok(None);
+        };
+        let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind else {
+            return Ok(None);
+        };
+        let Some((map, key)) = self.slots.get(&id).cloned() else {
+            return Ok(None);
+        };
+        let place = self.vars[&id].place.clone();
+        let written = value(self, place.clone())?;
+        let js_span = self.js_span(span);
+        out.push(StmtKind::Assign(place.clone(), written).at(js_span));
+        let set = Expr::call(Expr::member(map, "set"), vec![key, place]);
+        out.push(StmtKind::Expr(set).at(js_span));
+        Ok(Some(()))
     }
 
     /// The shape `as_matches` takes: `pat => true, _ => false`.
@@ -1468,7 +1600,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 name,
                 var,
                 mode,
-                subpattern: None,
+                subpattern,
                 ty,
                 ..
             } => {
@@ -1486,11 +1618,46 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     place: subject.clone(),
                     ty: *ty,
                 });
-                Ok(None)
+                // `x @ 1..=9`: bound, and tested by what's after the `@`.
+                match subpattern {
+                    Some(inner) => self.pattern_test(inner, subject, bindings),
+                    None => Ok(None),
+                }
             }
             PatKind::Constant { value } => {
                 let value = self.const_value(*value, pat.span)?;
                 Ok(Some(Expr::bin(Op::Eq, subject.clone(), value)))
+            }
+            // `1..=9`, `i32::MIN..0`, `'a'..='z'`: between its bounds, as `<`
+            // compares numbers, and `char`s by their UTF-16 units (ADR 0034).
+            PatKind::Range(range) => {
+                let bound = |boundary: &PatRangeBoundary<'tcx>| match *boundary {
+                    PatRangeBoundary::Finite(valtree) => {
+                        let value = ty::Value { ty: range.ty, valtree };
+                        const_js(self.tcx, value)
+                            .map(Some)
+                            .ok_or_else(|| self.unsupported(pat.span, "this range"))
+                    }
+                    PatRangeBoundary::NegInfinity | PatRangeBoundary::PosInfinity => Ok(None),
+                };
+                let (mut lo, mut hi) = (bound(&range.lo)?, bound(&range.hi)?);
+                let below = if range.end == RangeEnd::Included {
+                    Op::Le
+                } else {
+                    Op::Lt
+                };
+                // A bound at the type's own end always holds: `n >= 0` of a `u32`.
+                if let Some(num) = Num::of(range.ty).filter(|&n| n != Num::F64) {
+                    let (min, max) = num.range();
+                    lo = lo.filter(|lo| lo.as_int() != Some(min));
+                    hi = hi.filter(|hi| !(range.end == RangeEnd::Included && hi.as_int() == Some(max)));
+                }
+                let tests: Vec<Expr> = lo
+                    .map(|lo| Expr::bin(Op::Ge, subject.clone(), lo))
+                    .into_iter()
+                    .chain(hi.map(|hi| Expr::bin(below, subject.clone(), hi)))
+                    .collect();
+                Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
             }
             // `Some(p)`: not `null` or `undefined`, and the value itself matches `p`.
             // A constant needs no `!= null`: `o === 0` already says it. So does
@@ -1520,7 +1687,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     value = subpattern;
                 }
                 Ok(Some(match inner {
-                    Some(test) if matches!(value.kind, PatKind::Constant { .. }) => test,
+                    // `undefined >= 1` is false too.
+                    Some(test) if matches!(value.kind, PatKind::Constant { .. } | PatKind::Range(_)) => test,
                     Some(test) => Expr::bin(Op::And, present, test),
                     None => present,
                 }))

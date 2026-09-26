@@ -35,6 +35,9 @@ pub(super) enum Comb {
     IsErrAnd,
     Contains,
     BinarySearch,
+    /// `b.then(|| x)` and `b.then_some(x)`: `b ? x : undefined`.
+    Then,
+    ThenSome,
     Extend,
     Insert,
     Remove,
@@ -175,6 +178,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "this method of an `Option` of a generic type"));
         }
         let mut values = self.operands(args, out)?;
+        if let Comb::Then | Comb::ThenSome = comb {
+            let some = generic_args.type_at(0);
+            if self.can_be_nullish(some) {
+                let what = format!("`then` to a `{some}`, whose `Some` would be `None` in JS");
+                return Err(self.unsupported(span, &what));
+            }
+            let (test, value) = (values.remove(0), values.remove(0));
+            let value = if comb == Comb::Then {
+                self.call_with(value, Vec::new(), "value", out)
+            } else if value.has_effects() {
+                // Rust works it out either way.
+                self.spill("value", value, out)
+            } else {
+                value
+            };
+            return Ok(Expr::cond(test, value, Expr::undefined()));
+        }
         // `map_err(|e| e.to_string())` of a parse error, whose message is
         // already a string: the same `Result`. Only one just made, so no
         // other variable is left sharing it.
@@ -216,6 +236,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Expr::call(Expr::var(name), list)
         };
         Ok(match comb {
+            Comb::Then | Comb::ThenSome => unreachable!("handled above"),
             Comb::UnwrapOrElse => {
                 let f = next();
                 let fallback = self.call_with(f, Vec::new(), "fallback", out);
@@ -583,6 +604,15 @@ pub(super) fn classify(name: &str, option: bool, result: bool, vec: bool, slice:
         "concat" if slice => Comb::Concat,
         _ => return None,
     })
+}
+
+/// Which `Comb` a method of a `bool` is.
+pub(super) fn classify_bool(name: &str, boolean: bool) -> Option<Comb> {
+    match name {
+        "then" if boolean => Some(Comb::Then),
+        "then_some" if boolean => Some(Comb::ThenSome),
+        _ => None,
+    }
 }
 
 /// Which `IterComb` an `Iterator` method is.

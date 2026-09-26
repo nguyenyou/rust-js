@@ -574,6 +574,8 @@ pub(super) fn negate(eq: Expr) -> Expr {
     match eq.kind {
         js::ExprKind::Binary(Op::Eq, a, b) => Expr::bin(Op::Ne, *a, *b),
         js::ExprKind::Binary(Op::LooseEq, a, b) => Expr::bin(Op::LooseNe, *a, *b),
+        js::ExprKind::Binary(Op::Ne, a, b) => Expr::bin(Op::Eq, *a, *b),
+        js::ExprKind::Binary(Op::LooseNe, a, b) => Expr::bin(Op::LooseEq, *a, *b),
         _ => Expr::unary(UnaryOp::Not, eq),
     }
 }

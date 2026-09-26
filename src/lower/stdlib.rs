@@ -439,7 +439,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             result,
             adt("Vec"),
             adt("Vec") || owner.is_slice(),
-        ) {
+        )
+        .or_else(|| combinators::classify_bool(name.as_str(), owner.is_bool()))
+        {
             return Some(Std::Comb(comb));
         }
         Some(match tcx.item_name(def_id).as_str() {

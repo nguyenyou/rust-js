@@ -24,6 +24,7 @@ let combinators: Record<string, (...args: any[]) => unknown>;
 let text: Record<string, (...args: any[]) => unknown>;
 let calc: Record<string, (...args: any[]) => unknown>;
 let numbers: Record<string, (...args: any[]) => unknown>;
+let inventory: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -69,6 +70,8 @@ beforeAll(async () => {
   calc = await import(join(target, "calc.js"));
   run([join(target, "debug", "rust-js"), "examples/numbers.rs", "-o", join(target, "numbers.js")]);
   numbers = await import(join(target, "numbers.js"));
+  run([join(target, "debug", "rust-js"), "examples/inventory.rs", "-o", join(target, "inventory.js")]);
+  inventory = await import(join(target, "inventory.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -166,6 +169,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "numbers") {
         return numbers[path[1]](...c.args);
+      }
+      if (path[0] === "inventory") {
+        return inventory[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -951,6 +957,20 @@ test("numbers are Math's, operators call their impl, and vec![x; n] fills", asyn
   // Numbers as JS writes them, and constants shown as their text.
   expect(js).toContain("$displayF64(2.220446049250313e-16)");
   expect(js).not.toContain("((tuple) =>");
+});
+
+// ADR 0067: `let ... else`, range patterns and `@`, and a `&mut` to a
+// map's number, which a write puts back.
+test("the store's JS: let-else, ranges, and writes through a map's value", async () => {
+  const js = await Bun.file(join(target, "inventory.js")).text();
+  expect(js).toContain("let have = store.stock.get(e.item);\n      if (have == null) {\n        return { TAG: \"Err\", _0: `unknown item ${e.item}` };\n      }");
+  expect(js).toContain("have = (have - e.qty) >>> 0;\n      store.stock.set(e.item, have);");
+  expect(js).toContain("} else if (x >= 1 && x < 10) {\n      return `few ${x}`;\n    } else if ((x >= 10 && x <= 99) || x >= 200) {");
+  // A bound at the type's own end always holds, so it isn't tested.
+  expect(js).toContain("if (n <= -1) {");
+  expect(js).toContain("? `revenue ${$toFixed(store.revenue, 2)} under ${$toFixed(revenue[0], 2)}`\n    : undefined;");
+  // A block's statements go before the `const` of its value.
+  expect(js).toContain("  const c = counter;\n  const bump = (n) => {");
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

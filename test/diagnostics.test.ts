@@ -21,6 +21,8 @@ for (const [name, source, message] of [
   ["byte offsets of a string", 'pub fn f(s: &str) -> Option<usize> { s.find(\'o\') }', "`find()` of a string"],
   ["binary_search of floats", 'pub fn f(v: &[f64]) -> bool { v.binary_search_by(|x| x.total_cmp(&1.0)).is_ok() }', "does not support"],
   ["an operator in generic code", 'pub fn f<T: std::ops::Add<Output = T>>(a: T, b: T) -> T { a + b }', "does not support"],
+  ["then to a nullish type", 'pub fn f(b: bool) -> bool { b.then(|| ()).is_some() }', "values of type `std::option::Option<()>`"],
+  ["a reference count", 'pub fn f(r: &std::rc::Rc<u32>) -> usize { std::rc::Rc::strong_count(r) }', "does not support"],
   ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],
   ["invalid JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "JSX binding"],

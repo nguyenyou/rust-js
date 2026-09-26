@@ -38,6 +38,10 @@ string (ADR 0013). Any other key is a compile error.
   `insert` whether the value was new. As statements they're plain
   `m.set(k, v)` and `s.add(x)`. When the value is used they're `$insert`,
   `$remove` and `$add`, which return it.
+- **A `&mut` to a value that's a primitive,** from `if let Some(n) =
+  m.get_mut(&k)` or `let ... else`, is a copy, `let n = m.get(k)`, and a
+  write through it puts it back: `n = n + 1 >>> 0; m.set(k, n)`. While the
+  `&mut` lives, nothing else can change that entry (ADR 0067).
 - **A value in the map is written through `set`:**
   `*m.get_mut(&k).unwrap() += 1` is `m.set(k, $unwrap(m.get(k)) + 1)`. A
   value that's an object, like a `Vec`, is changed in place as any

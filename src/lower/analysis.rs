@@ -276,6 +276,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 runtime: HashSet::new(),
                 jsx: false,
                 writer: None,
+                slots: HashMap::new(),
                 discarded: false,
                 item: def_id,
             };

@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/inventory.rs"]
+#[allow(dead_code)]
+mod inventory;
+
 #[path = "../examples/numbers.rs"]
 #[allow(dead_code)]
 mod numbers;
@@ -216,6 +220,7 @@ fn main() {
     case("text.report", &[], text::report);
     case("calc.report", &[], calc::report);
     case("numbers.report", &[], numbers::report);
+    case("inventory.report", &[], inventory::report);
     for i in [0, 1, 2, 3] {
         case("numbers.panics", &[i as i64], || numbers::panics(i));
     }

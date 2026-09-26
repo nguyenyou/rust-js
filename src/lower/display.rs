@@ -224,9 +224,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// a hand-written `fmt`'s string, or `TDisplay.fmt(x)` in generic code.
     pub(super) fn display_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let ty = ty.peel_refs();
-        // `Box` and `Rc` show what they hold.
+        // `Box`, `Rc` and a `RefCell`'s `borrow()` show what they hold, as
+        // they are it in JS.
         let ty = match ty.kind() {
-            ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => args.type_at(0).peel_refs(),
+            ty::Adt(_, args) if self.shows_inside(ty) => args.types().next().expect("what it holds").peel_refs(),
             _ => ty,
         };
         if self.is_string_like(ty) || self.is_parse_error(ty) {
@@ -382,7 +383,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ty::Array(item, _) | ty::Slice(item) => self.debug_items(value, *item, "[", "]", span),
             ty::Adt(_, args) if std("Vec") => self.debug_items(value, args.type_at(0), "[", "]", span),
-            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.debug_string(value, args.type_at(0), span),
+            ty::Adt(_, args) if self.shows_inside(ty) => {
+                self.debug_string(value, args.types().next().expect("what it holds"), span)
+            }
             ty::Adt(_, args) if std("Cell") || std("RefCell") => {
                 let name = if std("Cell") {
                     "Cell { value: "
@@ -451,6 +454,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             vec![Expr::str(", ")],
         );
         Ok(join(vec![Expr::str(open), joined, Expr::str(close)]))
+    }
+
+    /// `Box<T>`, `Rc<T>`, `Ref<T>` and `RefMut<T>`: shown as their `T`,
+    /// which is the value they are in JS (ADR 0023).
+    fn shows_inside(&self, ty: Ty<'tcx>) -> bool {
+        ty.is_box()
+            || ["Rc", "RefCellRef", "RefCellRefMut"]
+                .iter()
+                .any(|n| self.is_std_adt(ty, Symbol::intern(n)))
     }
 
     /// Does `{:?}` of a `ty` read the value more than once? An `Option`, a

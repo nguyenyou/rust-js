@@ -62,7 +62,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         !ty.is_unit() && Num::of(ty) != Some(Num::F64) && self.is_primitive_key(ty)
     }
 
-    fn is_primitive_key(&self, ty: Ty<'tcx>) -> bool {
+    pub(super) fn is_primitive_key(&self, ty: Ty<'tcx>) -> bool {
         self.is_string_like(ty)
             || Num::of(ty).is_some()
             || ty.is_bool()
