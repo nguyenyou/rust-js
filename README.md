@@ -38,7 +38,9 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 
 ## Semantics
 
-- Integers wrap on overflow, like Rust's release profile (`overflow-checks = off`).
+- Integers wrap on overflow, like Rust's release profile (`overflow-checks = off`). Numbers' methods are
+  `Math`'s where JS agrees (`x.sqrt()` is `Math.sqrt(x)`), and a helper with Rust's answer where it doesn't
+  (`$round(x)`), and `a + b` on the crate's own type calls its `Add` impl ([ADR 0064](docs/decisions/0064-numbers.md)).
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`. One with
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.

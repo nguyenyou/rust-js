@@ -568,7 +568,7 @@ export function partial_orderings() {
     y: 2
   };
   const r = {
-    x: .5,
+    x: 0.5,
     y: NaN
   };
   return [

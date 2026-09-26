@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/numbers.rs"]
+#[allow(dead_code)]
+mod numbers;
+
 #[path = "../examples/calc.rs"]
 #[allow(dead_code)]
 mod calc;
@@ -211,6 +215,10 @@ fn main() {
     // Every `char` question, `parse` and slice, as `{:?}` shows them.
     case("text.report", &[], text::report);
     case("calc.report", &[], calc::report);
+    case("numbers.report", &[], numbers::report);
+    for i in [0, 1, 2, 3] {
+        case("numbers.panics", &[i as i64], || numbers::panics(i));
+    }
     for (start, end) in [(0, 2), (2, 1), (1, 5)] {
         case("text.slice_panics", &[start as i64, end as i64], || text::slice_panics(start, end));
     }

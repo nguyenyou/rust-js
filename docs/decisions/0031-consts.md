@@ -88,5 +88,6 @@ export function moved(dx) {
 - The JS shows the computed value, not how it was written.
 - Only what a value tree holds can be a `const`: no `String` (a heap
   pointer), no function pointers, no `dyn`. Those are an error that says so.
-- Not yet: associated constants (`impl Foo { const N: u32 = 3; }`),
-  `static`s, and `const` blocks.
+- A type's own associated constants (`impl Foo { const N: u32 = 3; }`)
+  are their value where they're used (ADR 0064).
+- Not yet: a trait's associated constants, `static`s, and `const` blocks.

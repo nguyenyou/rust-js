@@ -326,7 +326,7 @@ export function report() {
     const arg = chars(c);
     const arg$1 = ascii(c);
     const arg$2 = casts(c);
-    out += $debugStr(c, "'") + " (" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + String(arg[3]) + ", " + String(arg[4]) + ", " + String(arg[5]) + ", " + String(arg[6]) + ", " + String(arg[7]) + ") " + ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + $debugStr(tuple[4], "'") + ", " + $debugStr(tuple[5], "'") + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[6]) + ", " + String(tuple[7]) + ")")(arg$1) + " (" + String(arg$2[0]) + ", " + String(arg$2[1]) + ", " + $debugStr(arg$2[2], "'") + ", " + $debugStr(arg$2[3], "'") + ", " + String(arg$2[4]) + ")\n";
+    out += $debugStr(c, "'") + " (" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + String(arg[3]) + ", " + String(arg[4]) + ", " + String(arg[5]) + ", " + String(arg[6]) + ", " + String(arg[7]) + ") (" + String(arg$1[0]) + ", " + String(arg$1[1]) + ", " + String(arg$1[2]) + ", " + String(arg$1[3]) + ", " + $debugStr(arg$1[4], "'") + ", " + $debugStr(arg$1[5], "'") + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg$1[6]) + ", " + String(arg$1[7]) + ") (" + String(arg$2[0]) + ", " + String(arg$2[1]) + ", " + $debugStr(arg$2[2], "'") + ", " + $debugStr(arg$2[3], "'") + ", " + String(arg$2[4]) + ")\n";
   }
   for (const s of [
     "42",
@@ -370,7 +370,7 @@ export function report() {
     "\r"
   ]) {
     const arg$5 = words(text);
-    out += ((tuple) => "([" + tuple[0].map((item) => $debugStr(item)).join(", ") + "], [" + tuple[1].map((item) => $debugStr(item)).join(", ") + "], " + $debugStr(tuple[2]) + ", [" + tuple[3].map((item) => $debugStr(item)).join(", ") + "], " + String(tuple[4]) + ")")(arg$5) + "\n";
+    out += "([" + arg$5[0].map((item) => $debugStr(item)).join(", ") + "], [" + arg$5[1].map((item) => $debugStr(item)).join(", ") + "], " + $debugStr(arg$5[2]) + ", [" + arg$5[3].map((item) => $debugStr(item)).join(", ") + "], " + String(arg$5[4]) + ")\n";
   }
   const arg$6 = slices([
     1,
@@ -378,7 +378,7 @@ export function report() {
     3,
     4
   ]);
-  out += ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "], [" + tuple[2].map((item) => String(item)).join(", ") + "], [" + tuple[3].map((item) => String(item)).join(", ") + "], " + String(tuple[4]) + ")")(arg$6) + "\n" + escapes() + "\n";
+  out += "([" + arg$6[0].map((item) => String(item)).join(", ") + "], [" + arg$6[1].map((item) => String(item)).join(", ") + "], [" + arg$6[2].map((item) => String(item)).join(", ") + "], [" + arg$6[3].map((item) => String(item)).join(", ") + "], " + String(arg$6[4]) + ")\n" + escapes() + "\n";
   return out;
 }
 //# sourceMappingURL=text.js.map

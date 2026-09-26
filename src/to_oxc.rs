@@ -590,11 +590,11 @@ impl<'a> Cx<'a> {
             ExprKind::Var(name) => Expression::new_identifier(sp, self.name(name), b),
             ExprKind::Member(object, property) => {
                 // `5.toString()` would read `5.` as a number: `(5).toString()`.
-                // An integer is printed as its digits (`number`), so oxc can't
+                // A number is printed as its digits (`number`), so oxc can't
                 // tell it needs them.
                 let object = match object.kind {
-                    ExprKind::Num(n) if n.fract() == 0.0 && (0.0..9_007_199_254_740_992.0).contains(&n) => {
-                        Expression::new_identifier(sp, self.name(&format!("({})", n as u64)), b)
+                    ExprKind::Num(n) if n.is_finite() && n >= 0.0 && !js_number(n).contains(['.', 'e']) => {
+                        Expression::new_identifier(sp, self.name(&format!("({})", js_number(n))), b)
                     }
                     _ => self.expr(object),
                 };
@@ -815,11 +815,12 @@ impl<'a> Cx<'a> {
     /// negative one gets a real unary minus, so oxc still handles spacing and
     /// parentheses. Anything else (`0.1`) is already shortest.
     fn number(&self, sp: Span, n: f64) -> Expression<'a> {
-        const EXACT: f64 = 9_007_199_254_740_992.0; // 2^53: every integer below is exact
-        if n.fract() != 0.0 || n.abs() >= EXACT || (n == 0.0 && n.is_sign_negative()) {
+        if !n.is_finite() || (n == 0.0 && n.is_sign_negative()) {
             return Expression::new_numeric_literal(sp, n, None, NumberBase::Decimal, &self.b);
         }
-        let digits = Expression::new_identifier(sp, self.name(&format!("{}", n.abs() as u64)), &self.b);
+        // oxc would print the shortest text, `.25`: the digits are JS's own,
+        // `0.25`, as `String(n)` writes them.
+        let digits = Expression::new_identifier(sp, self.name(&js_number(n.abs())), &self.b);
         if n < 0.0 {
             Expression::new_unary_expression(sp, UnaryOperator::UnaryNegation, digits, &self.b)
         } else {
@@ -873,6 +874,7 @@ fn binary_op(op: Op) -> Result<BinaryOperator, LogicalOperator> {
         Op::Mul => BinaryOperator::Multiplication,
         Op::Div => BinaryOperator::Division,
         Op::Rem => BinaryOperator::Remainder,
+        Op::Pow => BinaryOperator::Exponential,
     })
 }
 
@@ -881,6 +883,43 @@ fn same_place(a: &js::Expr, b: &js::Expr) -> bool {
     match (&a.kind, &b.kind) {
         (ExprKind::Var(a), ExprKind::Var(b)) => a == b,
         (ExprKind::Member(a, x), ExprKind::Member(b, y)) => x == y && same_place(a, b),
+        // `$index(v, i).hits`: an item, checked the same each time (ADR 0056).
+        (ExprKind::Call(f, xs), ExprKind::Call(g, ys)) => {
+            matches!((&f.kind, &g.kind), (ExprKind::Var(f), ExprKind::Var(g)) if f == "$index" && g == "$index")
+                && xs.len() == ys.len()
+                && xs.iter().zip(ys).all(|(x, y)| {
+                    same_place(x, y) || matches!((&x.kind, &y.kind), (ExprKind::Num(x), ExprKind::Num(y)) if x == y)
+                })
+        }
         _ => false,
+    }
+}
+
+/// A positive finite number as JS's `Number.prototype.toString` writes it:
+/// its shortest digits, with an exponent only past 1e21 or below 1e-6.
+fn js_number(n: f64) -> String {
+    // `{:e}` has the shortest digits that read back as `n`: `2.5e-1`.
+    let text = format!("{n:e}");
+    let (mantissa, exponent) = text.split_once('e').expect("`{:e}` has an exponent");
+    let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();
+    let digits = digits.trim_end_matches('0');
+    let digits = if digits.is_empty() { "0" } else { digits };
+    let k = digits.len() as i32;
+    // Where the point goes: after `point` digits.
+    let point = exponent.parse::<i32>().expect("an integer exponent") + 1;
+    if k <= point && point <= 21 {
+        format!("{digits}{}", "0".repeat((point - k) as usize))
+    } else if 0 < point && point <= 21 {
+        format!("{}.{}", &digits[..point as usize], &digits[point as usize..])
+    } else if -6 < point && point <= 0 {
+        format!("0.{}{digits}", "0".repeat((-point) as usize))
+    } else {
+        let sign = if point - 1 < 0 { "-" } else { "+" };
+        let rest = if k > 1 {
+            format!(".{}", &digits[1..])
+        } else {
+            String::new()
+        };
+        format!("{}{rest}e{sign}{}", &digits[..1], (point - 1).abs())
     }
 }

@@ -35,6 +35,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         ))
     }
 
+    /// Is the crate's impl of `trait_id` for `ty` a `#[derive]`d one?
+    pub(super) fn is_derived_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
+        let tr = ty::TraitRef::new_from_args(self.tcx, trait_id, self.args_of(trait_id, ty));
+        let tr = self.tcx.erase_and_anonymize_regions(tr);
+        matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
+            Ok(ImplSource::UserDefined(imp)) if self.krate.trait_impls.contains(&imp.impl_def_id)
+                && self.tcx.is_automatically_derived(imp.impl_def_id))
+    }
+
     /// Is `tr` a hand-written impl from this crate?
     pub(super) fn is_user_impl(&self, tr: ty::TraitRef<'tcx>) -> bool {
         let tr = self.tcx.erase_and_anonymize_regions(tr);

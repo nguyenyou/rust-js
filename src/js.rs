@@ -97,6 +97,17 @@ pub enum Pattern {
     Object(Vec<(String, String)>),
 }
 
+impl Pattern {
+    /// The variables it binds.
+    pub fn names(&self) -> Vec<&str> {
+        match self {
+            Pattern::Name(name) => vec![name.as_str()],
+            Pattern::Array(items) => items.iter().flatten().map(String::as_str).collect(),
+            Pattern::Object(fields) => fields.iter().map(|(_, name)| name.as_str()).collect(),
+        }
+    }
+}
+
 impl From<String> for Pattern {
     fn from(name: String) -> Pattern {
         Pattern::Name(name)
@@ -270,6 +281,8 @@ pub enum Op {
     Mul,
     Div,
     Rem,
+    /// `a ** b`: `f64`'s `powf` (ADR 0064).
+    Pow,
 }
 
 impl Expr {
@@ -312,7 +325,19 @@ impl Expr {
     }
 
     pub fn member(object: Expr, property: impl Into<String>) -> Expr {
-        Expr::new(ExprKind::Member(Box::new(object), property.into()))
+        let property = property.into();
+        // `{ x: 0, y: 0 }.y`, a constant's field (`V::ZERO.y`), is `0`.
+        if let ExprKind::Object(props) = &object.kind
+            && props
+                .iter()
+                .all(|p| matches!(p, Prop::Field(_, value) if value.is_constant()))
+            && let Some(Prop::Field(_, value)) = props
+                .iter()
+                .find(|p| matches!(p, Prop::Field(name, _) if *name == property))
+        {
+            return value.clone();
+        }
+        Expr::new(ExprKind::Member(Box::new(object), property))
     }
 
     pub fn index(object: Expr, index: Expr) -> Expr {
@@ -434,14 +459,31 @@ impl Expr {
     /// a closure's parameter by its argument, to put its body in place.
     /// `None` if there's a closure inside, whose own names could shadow them.
     pub fn substitute(&self, with: &dyn Fn(&str) -> Option<Expr>) -> Option<Expr> {
-        let all = |items: &[Expr]| items.iter().map(|e| e.substitute(with)).collect::<Option<Vec<_>>>();
-        let one = |e: &Expr| e.substitute(with).map(Box::new);
+        self.replace(with, false)
+    }
+
+    /// `substitute`, going into the closures inside that only return, as
+    /// `map`'s callbacks do, if none of their parameters is a name replaced
+    /// or one the replacements read. Only for callbacks that run at once: in
+    /// one that runs later, a variable would be read later.
+    pub fn substitute_in_callbacks(&self, with: &dyn Fn(&str) -> Option<Expr>) -> Option<Expr> {
+        self.replace(with, true)
+    }
+
+    fn replace(&self, with: &dyn Fn(&str) -> Option<Expr>, callbacks: bool) -> Option<Expr> {
+        let all = |items: &[Expr]| {
+            items
+                .iter()
+                .map(|e| e.replace(with, callbacks))
+                .collect::<Option<Vec<_>>>()
+        };
+        let one = |e: &Expr| e.replace(with, callbacks).map(Box::new);
         let props = |props: &[Prop]| {
             props
                 .iter()
                 .map(|p| match p {
-                    Prop::Field(name, value) => Some(Prop::Field(name.clone(), value.substitute(with)?)),
-                    Prop::Spread(value) => Some(Prop::Spread(value.substitute(with)?)),
+                    Prop::Field(name, value) => Some(Prop::Field(name.clone(), value.replace(with, callbacks)?)),
+                    Prop::Spread(value) => Some(Prop::Spread(value.replace(with, callbacks)?)),
                 })
                 .collect::<Option<Vec<_>>>()
         };
@@ -450,6 +492,32 @@ impl Expr {
                 Some(e) => return Some(e.or_at(self.span)),
                 None => ExprKind::Var(name.clone()),
             },
+            ExprKind::Arrow(params, body) if callbacks => {
+                let [
+                    Stmt {
+                        kind: StmtKind::Return(Some(value)),
+                        span,
+                    },
+                ] = body.as_slice()
+                else {
+                    return None;
+                };
+                let names: Vec<&str> = params.iter().flat_map(Pattern::names).collect();
+                if names.iter().any(|n| with(n).is_some()) {
+                    return None;
+                }
+                let clash = std::cell::Cell::new(false);
+                let inner = |n: &str| {
+                    let replaced = with(n)?;
+                    clash.set(clash.get() || replaced.mentions(&names));
+                    Some(replaced)
+                };
+                let value = value.replace(&inner, true)?;
+                if clash.get() {
+                    return None;
+                }
+                ExprKind::Arrow(params.clone(), vec![StmtKind::Return(Some(value)).at(*span)])
+            }
             ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => return None,
             ExprKind::Member(a, field) => ExprKind::Member(one(a)?, field.clone()),
             ExprKind::Index(a, b) => ExprKind::Index(one(a)?, one(b)?),
@@ -463,7 +531,7 @@ impl Expr {
             ExprKind::Await(a) => ExprKind::Await(one(a)?),
             ExprKind::Jsx(jsx) => ExprKind::Jsx(Box::new(Jsx {
                 tag: match &jsx.tag {
-                    JsxTag::Component(c) => JsxTag::Component(c.substitute(with)?),
+                    JsxTag::Component(c) => JsxTag::Component(c.replace(with, callbacks)?),
                     tag => tag.clone(),
                 },
                 props: props(&jsx.props)?,
@@ -477,6 +545,16 @@ impl Expr {
             | ExprKind::Regex(_) => self.kind.clone(),
         };
         Some(Expr { kind, span: self.span })
+    }
+
+    /// Could this read one of `names`? Only a path of them, `a.b`, or a
+    /// constant is known not to.
+    fn mentions(&self, names: &[&str]) -> bool {
+        match &self.kind {
+            ExprKind::Var(n) => names.contains(&n.as_str()),
+            ExprKind::Member(object, _) => object.mentions(names),
+            _ => !self.is_constant(),
+        }
     }
 
     /// Is this `(x) => x`?

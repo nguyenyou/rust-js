@@ -41,6 +41,7 @@ mod display;
 mod format_spec;
 mod jsx;
 mod maps;
+mod numbers;
 mod ordering;
 mod representation;
 mod std_impls;
@@ -399,9 +400,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let PatKind::Leaf { subpatterns } = &pat.kind else {
             return None;
         };
+        // `(i, &x)`: a reference is the value (ADR 0023), so that part is `x`.
         let parts: Vec<_> = subpatterns
             .iter()
-            .map(|field| match field.pattern.kind {
+            .map(|field| match without_refs(&field.pattern).kind {
                 PatKind::Wild => Some((field.field.as_usize(), None)),
                 PatKind::Binding {
                     name,
@@ -1120,7 +1122,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // else a fresh one that the body takes apart.
         let mut body = Vec::new();
         let mut mutable = false;
-        let name = match &f.pat.kind {
+        // `for &x in &v`: a reference is the value (ADR 0023).
+        let pat = without_refs(f.pat);
+        let name = match &pat.kind {
             PatKind::Binding {
                 name,
                 var,
@@ -1132,7 +1136,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.check_value_ty(*ty, f.pat.span)?;
                 js::Pattern::Name(self.bind(*var, name.as_str(), false))
             }
-            _ if let Some((pattern, is_mut)) = self.js_pattern(f.pat) => {
+            _ if let Some((pattern, is_mut)) = self.js_pattern(pat) => {
                 mutable = is_mut;
                 pattern
             }
@@ -3127,4 +3131,12 @@ fn is_enumerate_pair(f: &Expr) -> bool {
         return false;
     };
     matches!(items.as_slice(), [a, b] if matches!(&a.kind, js::ExprKind::Var(n) if n == i) && matches!(&b.kind, js::ExprKind::Var(n) if n == x))
+}
+
+/// `&x` is `x`: a reference is the value (ADR 0023).
+fn without_refs<'p, 'tcx>(mut pat: &'p Pat<'tcx>) -> &'p Pat<'tcx> {
+    while let PatKind::Deref { subpattern, .. } = &pat.kind {
+        pat = subpattern;
+    }
+    pat
 }

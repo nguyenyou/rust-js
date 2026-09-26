@@ -102,6 +102,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0061 `impl Iterator` is the type it hides; a generic iterator is any JS iterable](decisions/0061-generic-iterators.md)
 - [0062 Combinators and adapters: the closure's body in place](decisions/0062-combinators.md)
 - [0063 `char`'s questions are Unicode regular expressions; `parse` is a `Result` of Rust's message](decisions/0063-text.md)
+- [0064 Numbers' methods are `Math`'s, where JS agrees; operators call their impl](decisions/0064-numbers.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

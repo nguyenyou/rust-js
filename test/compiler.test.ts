@@ -23,6 +23,7 @@ let stdTraits: Record<string, (...args: any[]) => unknown>;
 let combinators: Record<string, (...args: any[]) => unknown>;
 let text: Record<string, (...args: any[]) => unknown>;
 let calc: Record<string, (...args: any[]) => unknown>;
+let numbers: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -66,6 +67,8 @@ beforeAll(async () => {
   text = await import(join(target, "text.js"));
   run([join(target, "debug", "rust-js"), "examples/calc.rs", "-o", join(target, "calc.js")]);
   calc = await import(join(target, "calc.js"));
+  run([join(target, "debug", "rust-js"), "examples/numbers.rs", "-o", join(target, "numbers.js")]);
+  numbers = await import(join(target, "numbers.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -160,6 +163,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "calc") {
         return calc[path[1]](...c.args);
+      }
+      if (path[0] === "numbers") {
+        return numbers[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -468,7 +474,7 @@ test("enums with fields are tagged objects, as in ReScript", async () => {
 // ADR 0031: a `const` is the value rustc computed, under its own name.
 test("constants are the values rustc computed, by name", async () => {
   const js = await Bun.file(join(target, "consts.js")).text();
-  expect(js).toContain("export const SIZE = 4096;\nconst GREETING = \"hello\";\nconst RATIO = .25;\nconst ON = true;");
+  expect(js).toContain("export const SIZE = 4096;\nconst GREETING = \"hello\";\nconst RATIO = 0.25;\nconst ON = true;");
   expect(js).toContain('const NOTHING = undefined;\nconst LEVEL = "High";');
   // A `const` inside a function goes beside it.
   expect(js).toContain("const STEP = 3;");
@@ -927,6 +933,24 @@ test("the calculator's JS is what a person would write", async () => {
   expect(js).toContain('$splitBy(text, (c) => !/^[\\p{Alphabetic}\\p{N}]$/u.test(c))');
   // `?` from a `&str` error to a `String` one: the same string, returned as it is.
   expect(js).toContain('_0: "underflow"\n      };\n      if (result$1.TAG === "Err") {\n        return result$1;');
+});
+
+// ADR 0064: a number's methods are `Math`'s where JS agrees with Rust, and
+// a helper where it doesn't; an operator is its impl's function.
+test("numbers are Math's, operators call their impl, and vec![x; n] fills", async () => {
+  const js = await Bun.file(join(target, "numbers.js")).text();
+  expect(js).toContain("return Math.sqrt(vec2.x * vec2.x + vec2.y * vec2.y);");
+  expect(js).toContain("vec2Add_add(");
+  expect(js).toContain("$displayF64(Math.floor(x)) + \" \" + $displayF64(Math.ceil(x)) + \" \" + $displayF64($round(x))");
+  expect(js).toContain("$checked(b - 10, 0, 4294967295)");
+  expect(js).toContain("String(Math.max(b - 100, 0))");
+  // Each row made again; a struct cloned, since one is changed later.
+  expect(js).toContain("Array.from({ length: n }, () => new Array(n).fill(0))");
+  expect(js).toContain("Array.from({ length: 3 }, () => ({ ...cell }))");
+  expect(js).toContain("for (const [j$1, v] of row.entries()) {");
+  // Numbers as JS writes them, and constants shown as their text.
+  expect(js).toContain("$displayF64(2.220446049250313e-16)");
+  expect(js).not.toContain("((tuple) =>");
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

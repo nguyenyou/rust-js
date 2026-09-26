@@ -2,7 +2,7 @@
 //! string it writes. Its formatter is a local string, each write is `f += s`,
 //! and `fmt::Result`, which is always `Ok`, is nothing at all.
 
-use super::representation::Num;
+use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
@@ -233,7 +233,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(value);
         }
         if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
-            return Ok(Expr::call(Expr::var("String"), vec![value]));
+            return Ok(shown_number(value));
         }
         if Num::of(ty) == Some(Num::F64) {
             self.runtime.insert(Helper::DisplayF64);
@@ -291,7 +291,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$debugF64"), vec![value]));
         }
         if num.is_some() || ty.is_bool() {
-            return Ok(Expr::call(Expr::var("String"), vec![value]));
+            return Ok(shown_number(value));
         }
         if ty.is_unit() {
             return Ok(Expr::str("()"));
@@ -319,6 +319,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .evidence_for(tr)
                 .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
             return Ok(Expr::call(Expr::member(dictionary, "fmt"), vec![value]));
+        }
+        // A fieldless enum is its variant's name (ADR 0013), which is what a
+        // derived `Debug` shows.
+        if let ty::Adt(adt, _) = ty.kind()
+            && representation::is_fieldless_enum(*adt)
+            && self.is_derived_impl(debug, ty)
+        {
+            return Ok(value);
         }
         // The crate's own, hand-written or derived.
         if self.has_user_impl(debug, ty) {
@@ -462,7 +470,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 },
             ] = body.as_slice()
             && value.reads_same()
-            && let Some(inlined) = result.substitute(&|n: &str| (n == name).then(|| value.clone()))
+            && let Some(inlined) = result.substitute_in_callbacks(&|n: &str| (n == name).then(|| value.clone()))
         {
             return inlined;
         }
@@ -557,4 +565,12 @@ fn joined_pieces(e: Expr) -> Vec<Expr> {
 
 fn is_var(e: &Expr, name: &str) -> bool {
     matches!(&e.kind, js::ExprKind::Var(n) if n == name)
+}
+
+/// `String(n)`, or the text itself for a constant: `"4096"`.
+fn shown_number(value: Expr) -> Expr {
+    match value.as_int() {
+        Some(n) => Expr::str(n.to_string()),
+        None => Expr::call(Expr::var("String"), vec![value]),
+    }
 }

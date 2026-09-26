@@ -532,11 +532,22 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
             // Methods, trait impls' included (ADRs 0047, 0049). Derives like
             // `#[derive(Clone)]` write impls that are never called.
             DefKind::AssocFn => continue,
+            // A type's own `const`, as `Vec2::ZERO`: its value where it's used,
+            // as rustc computed it (ADR 0031). A trait's are still errors.
+            DefKind::AssocConst { .. }
+                if tcx
+                    .opt_local_parent(def_id)
+                    .is_some_and(|p| matches!(tcx.def_kind(p), DefKind::Impl { of_trait: false })) =>
+            {
+                continue;
+            }
             DefKind::AssocConst { .. } => "associated constants",
-            // An `Iterator`'s `Item` (ADR 0055): rustc works out what it is.
+            // An `Iterator`'s `Item` (ADR 0055) and an operator's `Output`
+            // (ADR 0064): rustc works out what they are.
             DefKind::AssocTy
                 if tcx.trait_impl_of_assoc(def_id.to_def_id()).is_some_and(|imp| {
-                    tcx.is_diagnostic_item(sym::Iterator, tcx.impl_trait_ref(imp).instantiate_identity().def_id)
+                    let tr = tcx.impl_trait_ref(imp).instantiate_identity().def_id;
+                    tcx.is_diagnostic_item(sym::Iterator, tr) || traits::is_operator(tcx, tr)
                 }) =>
             {
                 continue;

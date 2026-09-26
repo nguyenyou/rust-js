@@ -3,10 +3,10 @@
 //! written in place, as `Option::map`'s is: `o ?? f()` is `o ?? 0` for
 //! `unwrap_or_else(|| 0)`.
 
-use super::{FnCx, R, representation::Num};
+use super::{FnCx, R, Std, representation::Num};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
 use crate::runtime::Helper;
-use rustc_middle::thir::{ExprId, ExprKind};
+use rustc_middle::thir::{AdtExprBase, ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::{Span, Symbol};
 
@@ -34,6 +34,7 @@ pub(super) enum Comb {
     IsOkAnd,
     IsErrAnd,
     Contains,
+    BinarySearch,
     Extend,
     Insert,
     Remove,
@@ -65,6 +66,67 @@ pub(super) enum IterComb {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// `vec![x; n]`: `new Array(n).fill(x)`, when copies of `x` can't be
+    /// told apart (ADR 0052). Otherwise each item is its own, as Rust clones
+    /// it: made again, `Array.from({ length: n }, () => new Array(m).fill(0))`,
+    /// if that makes the same value and does nothing else, or cloned.
+    pub(super) fn vec_of_copies(&mut self, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let item_ty = self.thir[args[0]].ty;
+        let rebuilt = self.rebuilt(args[0]);
+        let [item, n]: [Expr; 2] = self.operands(args, out)?.try_into().ok().expect("an item and a count");
+        if !self.needs_clone(item_ty) {
+            let array = Expr::new_(Expr::var("Array"), vec![n]);
+            return Ok(Expr::call(Expr::member(array, "fill"), vec![item]));
+        }
+        let body = if rebuilt {
+            vec![StmtKind::Return(Some(item)).at(js::Span::NONE)]
+        } else {
+            let item = if item.reads_same() {
+                item
+            } else {
+                self.spill("item", item, out)
+            };
+            let mut body = Vec::new();
+            let copy = self.clone_value(item, item_ty, span, &mut body)?;
+            body.push(StmtKind::Return(Some(copy)).at(js::Span::NONE));
+            body
+        };
+        let length = Expr::object(vec![Prop::Field("length".into(), n)]);
+        let from = Expr::member(Expr::var("Array"), "from");
+        Ok(Expr::call(from, vec![length, Expr::arrow(Vec::new(), body)]))
+    }
+
+    /// Does evaluating `e` again make a value that's the same as a clone of
+    /// it, and do nothing else? `vec![0; m]`, `Vec::new()`, or a tuple,
+    /// array or struct of such parts and of values that need no copy.
+    fn rebuilt(&self, e: ExprId) -> bool {
+        let e = self.strip(e);
+        let part = |p: ExprId| self.rebuilt(p) || (!self.needs_clone(self.thir[p].ty) && self.pure(p));
+        match self.thir[e].kind {
+            ExprKind::Call { fun, ref args, .. } => match self.std_fn(fun) {
+                Some(Std::FromElem) => part(args[0]) && self.pure(args[1]),
+                Some(Std::VecNew | Std::StringNew) => true,
+                _ => false,
+            },
+            ExprKind::Tuple { ref fields } | ExprKind::Array { ref fields } => fields.iter().all(|&f| part(f)),
+            ExprKind::Adt(ref adt) => matches!(adt.base, AdtExprBase::None) && adt.fields.iter().all(|f| part(f.expr)),
+            _ => false,
+        }
+    }
+
+    /// A value read without doing anything: a literal, a variable, a constant.
+    fn pure(&self, e: ExprId) -> bool {
+        matches!(
+            self.thir[self.strip(e)].kind,
+            ExprKind::Literal { .. }
+                | ExprKind::NonHirLiteral { .. }
+                | ExprKind::ZstLiteral { .. }
+                | ExprKind::NamedConst { .. }
+                | ExprKind::VarRef { .. }
+                | ExprKind::UpvarRef { .. }
+        )
+    }
+
     /// `f(args)`, with a closure that only returns written in place. One of
     /// statements gets a name first: `const f = (x) => { .. }; f(o)`.
     fn call_with(&mut self, f: Expr, args: Vec<Expr>, name: &str, out: &mut Vec<Stmt>) -> Expr {
@@ -251,6 +313,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `v.contains(&x)`: JS's `includes` for what `===` compares, and
             // `==` item by item for the rest (ADR 0053).
+            Comb::BinarySearch => {
+                let x = next();
+                let item = self
+                    .slice_item(subject_ty)
+                    .ok_or_else(|| self.unsupported(span, "`binary_search` of this"))?;
+                // What `<` orders as `Ord` does: integers, `char`s, strings.
+                let ordered = (Num::of(item).is_some_and(|n| n != Num::F64))
+                    || item.is_char()
+                    || item.is_bool()
+                    || self.is_string_like(item);
+                if !ordered {
+                    return Err(self.unsupported(span, &format!("`binary_search` of `{item}`s")));
+                }
+                helper(self, Helper::BinarySearch, "$binarySearch", vec![subject, x])
+            }
             Comb::Contains => {
                 let x = next();
                 let item = self
@@ -495,6 +572,7 @@ pub(super) fn classify(name: &str, option: bool, result: bool, vec: bool, slice:
         "is_ok_and" if result => Comb::IsOkAnd,
         "is_err_and" if result => Comb::IsErrAnd,
         "contains" if slice => Comb::Contains,
+        "binary_search" if slice => Comb::BinarySearch,
         "insert" if vec => Comb::Insert,
         "remove" if vec => Comb::Remove,
         "swap" if slice => Comb::Swap,

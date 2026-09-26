@@ -207,7 +207,7 @@ export function changed_in_place(r) {
   grow(circle$1);
   const value = circle$1;
   if (value.TAG === "Circle") {
-    value.r += .5;
+    value.r += 0.5;
   }
   let dot = "Dot";
   grow(dot);

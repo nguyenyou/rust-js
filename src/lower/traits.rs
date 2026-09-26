@@ -29,12 +29,35 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
 /// A trait the crate may implement. `From` has no dictionaries: its impls
 /// are only called where the types are known (ADR 0052). `Eq` has no
 /// methods: a `T: Eq` bound is its `PartialEq` (ADR 0053). An `Iterator` is a
-/// JS iterator, and has no dictionaries either (ADR 0055).
+/// JS iterator, and has no dictionaries either (ADR 0055). An operator's
+/// impl is called where `a + b` is, with the types known (ADR 0064).
 pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
     operational(tcx, id)
         || tcx.is_diagnostic_item(sym::From, id)
         || tcx.is_diagnostic_item(sym::Eq, id)
         || tcx.is_diagnostic_item(sym::Iterator, id)
+        || is_operator(tcx, id)
+}
+
+/// `Add`, `Neg`, `AddAssign` and the like: what `a + b`, `-a` and
+/// `a += b` call on a type of the crate's own.
+pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    [
+        LangItem::Add,
+        LangItem::Sub,
+        LangItem::Mul,
+        LangItem::Div,
+        LangItem::Rem,
+        LangItem::Neg,
+        LangItem::Not,
+        LangItem::AddAssign,
+        LangItem::SubAssign,
+        LangItem::MulAssign,
+        LangItem::DivAssign,
+        LangItem::RemAssign,
+    ]
+    .into_iter()
+    .any(|item| tcx.is_lang_item(id, item))
 }
 
 pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {

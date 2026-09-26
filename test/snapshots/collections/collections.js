@@ -397,21 +397,7 @@ export function sorted_maps(text) {
       "Gold",
       "Bronze",
       "Silver"
-    ], a, b))).map(([key, value]) => tierDebug_fmt(key) + ": " + String(value)).join(", ") + "} " + String(arg$1)
+    ], a, b))).map(([key, value]) => key + ": " + String(value)).join(", ") + "} " + String(arg$1)
   ];
-}
-
-function tierDebug_fmt(tier) {
-  let f = "";
-  let tmp;
-  if (tier === "Gold") {
-    tmp = "Gold";
-  } else if (tier === "Bronze") {
-    tmp = "Bronze";
-  } else {
-    tmp = "Silver";
-  }
-  f += tmp;
-  return f;
 }
 //# sourceMappingURL=collections.js.map

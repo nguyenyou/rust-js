@@ -30,6 +30,16 @@ pub enum Helper {
     ToDigit,
     Lines,
     SplitBy,
+    Pow,
+    Powi,
+    Round,
+    Checked,
+    CheckedDiv,
+    RemEuclid,
+    DivEuclid,
+    TrailingZeros,
+    CountOnes,
+    BinarySearch,
     ParseInt,
     ParseF64,
     ParseBool,
@@ -680,6 +690,129 @@ function $lines(s) {
 "#
             }
             // `s.split(|c| ..)`: the pieces between the `char`s it's true of.
+            // `x.pow(e)`: multiplied as `Math.imul` does, so what's past 2^32
+            // wraps as Rust's does, where `x ** e` would lose the low bits.
+            Helper::Pow => {
+                r#"
+function $pow(base, exp) {
+  let result = 1;
+  while (exp > 0) {
+    if (exp & 1) {
+      result = Math.imul(result, base);
+    }
+    base = Math.imul(base, base);
+    exp >>>= 1;
+  }
+  return result;
+}
+"#
+            }
+            // `x.powi(n)`: the multiplications Rust's own `__powidf2` does, in
+            // its order, so the result rounds the same.
+            Helper::Powi => {
+                r#"
+function $powi(x, n) {
+  const reciprocal = n < 0;
+  let result = 1;
+  while (true) {
+    if (n & 1) {
+      result *= x;
+    }
+    n = (n / 2) | 0;
+    if (n === 0) {
+      break;
+    }
+    x *= x;
+  }
+  return reciprocal ? 1 / result : result;
+}
+"#
+            }
+            // `x.round()`: a half away from zero, where `Math.round` goes up.
+            Helper::Round => {
+                r#"
+function $round(x) {
+  return Math.sign(x) * Math.round(Math.abs(x));
+}
+"#
+            }
+            // `a.checked_add(b)`: the exact result, or `None` out of range. An
+            // integer is never -0, which `0 * -5` is in JS: `+ 0` makes it 0.
+            Helper::Checked => {
+                r#"
+function $checked(value, lo, hi) {
+  return value >= lo && value <= hi ? value + 0 : undefined;
+}
+"#
+            }
+            Helper::CheckedDiv => {
+                r#"
+function $checkedDiv(a, b, min) {
+  return b === 0 || (a === min && b === -1) ? undefined : Math.trunc(a / b) + 0;
+}
+"#
+            }
+            // `a.rem_euclid(b)`: never negative. `$rem` panics as `%` does,
+            // and `+ 0` makes its -0 (`-4 % 2`) the integer 0.
+            Helper::RemEuclid => {
+                r#"
+function $remEuclid(a, b, min) {
+  const r = $rem(a, b, min) + 0;
+  return r < 0 ? (b < 0 ? r - b : r + b) : r;
+}
+"#
+            }
+            Helper::DivEuclid => {
+                r#"
+function $divEuclid(a, b, min) {
+  const q = Math.trunc($div(a, b, min)) + 0;
+  return a % b < 0 ? (b > 0 ? q - 1 : q + 1) : q;
+}
+"#
+            }
+            Helper::TrailingZeros => {
+                r#"
+function $trailingZeros(x, bits) {
+  return x === 0 ? bits : 31 - Math.clz32(x & -x);
+}
+"#
+            }
+            Helper::CountOnes => {
+                r#"
+function $countOnes(x) {
+  let ones = 0;
+  x >>>= 0;
+  while (x !== 0) {
+    ones += x & 1;
+    x >>>= 1;
+  }
+  return ones;
+}
+"#
+            }
+            // `v.binary_search(&x)`: Rust's search, step for step, so that
+            // among equal items it finds the one Rust does.
+            Helper::BinarySearch => {
+                r#"
+function $binarySearch(items, x) {
+  let size = items.length;
+  if (size === 0) {
+    return { TAG: "Err", _0: 0 };
+  }
+  let base = 0;
+  while (size > 1) {
+    const half = size >>> 1;
+    const mid = base + half;
+    if (!(items[mid] > x)) {
+      base = mid;
+    }
+    size -= half;
+  }
+  const found = items[base];
+  return found === x ? { TAG: "Ok", _0: base } : { TAG: "Err", _0: base + (found < x ? 1 : 0) };
+}
+"#
+            }
             Helper::SplitBy => {
                 r#"
 function $splitBy(s, matches) {

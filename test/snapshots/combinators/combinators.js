@@ -301,7 +301,7 @@ export function report() {
   ]) {
     const arg = options(n);
     const arg$1 = more_options(n);
-    out += ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(arg) + " " + ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[2]) + ", " + String(tuple[3]) + ", " + String(tuple[4]) + ")")(arg$1) + "\n";
+    out += "(" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg[4]) + ", " + String(arg[5]) + ") (" + $debugStr(arg$1[0]) + ", " + $debugStr(arg$1[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg$1[2]) + ", " + String(arg$1[3]) + ", " + String(arg$1[4]) + ")\n";
   }
   for (const c of [
     "1",
@@ -309,13 +309,13 @@ export function report() {
     "x"
   ]) {
     const arg$2 = results(c);
-    out += ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(arg$2) + "\n";
+    out += "(" + $debugStr(arg$2[0]) + ", " + $debugStr(arg$2[1]) + ", " + String(arg$2[2]) + ", " + String(arg$2[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(arg$2[4]) + ", " + String(arg$2[5]) + ")\n";
   }
   for (const n$1 of [0, 5]) {
     const arg$3 = iters(n$1);
     const arg$4 = consumers(n$1);
     const arg$5 = vecs(n$1);
-    out += ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "], [" + tuple[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "], [" + tuple[3].map((item) => String(item)).join(", ") + "], [" + tuple[4].map((item) => String(item)).join(", ") + "], [" + tuple[5].map((item) => String(item)).join(", ") + "])")(arg$3) + " " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "])")(tuple[5]) + ")")(arg$4) + " " + ((tuple) => "(" + String(tuple[0]) + ", [" + tuple[1].map((item) => String(item)).join(", ") + "], " + String(tuple[2]) + ", [" + tuple[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + tuple[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + tuple[5].map((item) => String(item)).join(", ") + "])")(arg$5) + "\n";
+    out += "([" + arg$3[0].map((item) => String(item)).join(", ") + "], [" + arg$3[1].map((item) => String(item)).join(", ") + "], [" + arg$3[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "], [" + arg$3[3].map((item) => String(item)).join(", ") + "], [" + arg$3[4].map((item) => String(item)).join(", ") + "], [" + arg$3[5].map((item) => String(item)).join(", ") + "]) " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "])")(tuple[5]) + ")")(arg$4) + " (" + String(arg$5[0]) + ", [" + arg$5[1].map((item) => String(item)).join(", ") + "], " + String(arg$5[2]) + ", [" + arg$5[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + arg$5[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + arg$5[5].map((item) => String(item)).join(", ") + "])\n";
   }
   return out;
 }

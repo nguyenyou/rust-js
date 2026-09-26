@@ -2,7 +2,7 @@
 
 export const SIZE = 4096;
 const GREETING = "hello";
-const RATIO = .25;
+const RATIO = 0.25;
 const ON = true;
 const ORIGIN = {
   x: 0,

@@ -3,6 +3,7 @@
 use super::combinators::{self, Comb, IterComb};
 use super::format_spec::{Radix, Spec};
 use super::maps::{MapOp, Part};
+use super::numbers::{self, NumOp};
 use super::representation::Num;
 use super::text::{self, TextOp};
 use super::{FnCx, R};
@@ -70,6 +71,9 @@ pub(super) enum Std {
     Map(MapOp),
     /// A `char` or `str` method, `parse`, or slicing by a range (ADR 0063).
     Text(TextOp),
+    Number(NumOp),
+    /// `vec![x; n]`.
+    FromElem,
     /// An `Option`, `Result` or `Vec` method (ADR 0062).
     Comb(Comb),
     /// An iterator adapter or consumer (ADR 0062).
@@ -203,6 +207,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if diagnostic("box_assume_init_into_vec_unsafe") {
             return Some(Std::VecMacro);
+        }
+        if diagnostic("vec_from_elem") {
+            return Some(Std::FromElem);
         }
         if diagnostic("to_string_method") {
             return Some(Std::ToString);
@@ -420,6 +427,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let name = tcx.item_name(def_id);
         if let Some(op) = text::classify(name.as_str(), owner.is_char(), owner.is_str()) {
             return Some(Std::Text(op));
+        }
+        if let Some(num) = Num::of(owner)
+            && let Some(op) = numbers::classify(name.as_str(), num)
+        {
+            return Some(Std::Number(op));
         }
         if let Some(comb) = combinators::classify(
             name.as_str(),
