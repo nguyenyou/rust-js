@@ -58,9 +58,21 @@ name + ": " + String(n) + " item" + (n === 1 ? "" : "s")
 ```
 
 `format_args!` keeps its values in two `let`s of its own, a tuple and then an
-array, and rust-js writes their parts in place. A value with effects is
-computed first, in a `const`, so it runs once and in order:
-`const arg = t.toFixed(0); return arg + " ms";`.
+array. rust-js recognizes the whole block, as it does `?`, and writes each
+value where the template shows it: `return t.toFixed(0) + " ms";`. The
+values are operands like any others, so a call in one doesn't put the calls
+before it in `const`s. Some values still go in a `const` first, which is
+then used in the string:
+
+- **A value the template shows twice**, unless it's a variable or a
+  constant, so that it runs once.
+- **Values shown in another order than they're written,** when one of them
+  has effects: `format!("{1} {0}", tick(&c), tick(&c))`. Each value that
+  isn't a place goes in a `const`, in the order Rust runs them.
+
+  Rust puts named arguments like `{name}` after the others, but reordering
+  values that have no effects changes nothing. A place is safe too: every
+  value is borrowed until the string is made, so none can change another.
 
 **Byte counts are an error**: `len()` of a string, and indexing or slicing
 one by a range, say that JS counts differently. `is_empty()` works.

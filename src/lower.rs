@@ -1509,6 +1509,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Use { source }
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.expr(source, out),
+            ExprKind::Block { .. } if let Some(f) = self.as_format_args(e) => self.lower_format_args(f, span, out),
             ExprKind::Block { block } if !self.thir[block].targeted_by_break => {
                 self.block_stmts(block, out)?;
                 match self.thir[block].expr {
@@ -1804,6 +1805,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 else_opt: Some(els),
                 ..
             } => self.is_simple(cond) && self.is_simple(then) && self.is_simple(els),
+            // `format_args!`, whose arguments are written in place if they can be.
+            // Out of order, its arguments may need `const`s (`lower_format_args`).
+            ExprKind::Block { .. } if let Some(f) = self.as_format_args(e) => {
+                self.in_order(&f, self.thir[e].span) && f.values.iter().all(|&v| self.is_simple(v))
+            }
             ExprKind::Block { block } => {
                 let block = &self.thir[block];
                 !block.targeted_by_break && block.stmts.is_empty() && block.expr.is_none_or(|t| self.is_simple(t))

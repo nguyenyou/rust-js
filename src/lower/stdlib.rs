@@ -5,10 +5,11 @@ use super::{FnCx, R};
 use crate::js;
 use crate::js::{Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
+use rustc_ast::LitKind;
 use rustc_hir::LangItem;
 use rustc_middle::mir::{BinOp, UnOp};
-use rustc_middle::thir::{ExprId, ExprKind};
-use rustc_middle::ty;
+use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
+use rustc_middle::ty::{self, Ty};
 use rustc_span::{ErrorGuaranteed, Span, Symbol, sym};
 
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
@@ -147,6 +148,22 @@ impl Std {
                 | Std::Cloned
         )
     }
+}
+
+/// A piece of a `format_args!` template.
+pub(super) enum Piece {
+    Text(String),
+    /// A placeholder: which of the arguments goes there.
+    Argument(usize),
+}
+
+/// A `format_args!`, taken apart (`as_format_args`).
+pub(super) struct FormatArgs<'tcx> {
+    template: Vec<u8>,
+    /// What's formatted, in the order it's written.
+    pub(super) values: Vec<ExprId>,
+    /// Each placeholder's argument: which value, how, and its type.
+    slots: Vec<(usize, Std, Ty<'tcx>)>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -388,9 +405,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A `format_args!` template, decoded (its encoding is documented in
     /// core's `fmt::Arguments`): literal pieces prefixed by their length, and
-    /// a byte with the top two bits set for each placeholder. `items` holds
-    /// the arguments, already made into strings.
-    pub(super) fn format(&self, template: &[u8], items: Expr, span: Span) -> R<Expr> {
+    /// a byte with the top two bits set for each placeholder, which names an
+    /// argument by its place in the array of them.
+    fn decode_template(&self, template: &[u8], span: Span) -> R<Vec<Piece>> {
         let bad = |what: &str| self.unsupported(span, what);
         let byte = |i: usize| template.get(i).copied().ok_or_else(|| bad("this format string"));
         let u16_at = |i: usize| Ok::<usize, ErrorGuaranteed>(u16::from_le_bytes([byte(i)?, byte(i + 1)?]) as usize);
@@ -398,21 +415,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let bytes = template
                 .get(from..from + len)
                 .ok_or_else(|| bad("this format string"))?;
-            Ok::<Expr, ErrorGuaranteed>(Expr::str(String::from_utf8_lossy(bytes)))
+            Ok::<Piece, ErrorGuaranteed>(Piece::Text(String::from_utf8_lossy(bytes).into_owned()))
         };
-        let (mut parts, mut i, mut next) = (Vec::new(), 0, 0);
+        let (mut pieces, mut i, mut next) = (Vec::new(), 0, 0);
         loop {
             let b = byte(i)?;
             i += 1;
             match b {
                 0 => break,
                 1..=0x7f => {
-                    parts.push(piece(i, b as usize)?);
+                    pieces.push(piece(i, b as usize)?);
                     i += b as usize;
                 }
                 0x80 => {
                     let len = u16_at(i)?;
-                    parts.push(piece(i + 2, len)?);
+                    pieces.push(piece(i + 2, len)?);
                     i += 2 + len;
                 }
                 _ if b & 0xc0 == 0xc0 => {
@@ -428,20 +445,201 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         next
                     };
                     next = index + 1;
-                    // The values are usually written out, `[a, String(b)]`, with no
-                    // effects beyond the ones `format_args!` put in `const`s.
-                    parts.push(match &items.kind {
-                        js::ExprKind::Array(values) => values[index].clone(),
-                        _ => Expr::index(items.clone(), Expr::int(index as i128)),
-                    });
+                    pieces.push(Piece::Argument(index));
                 }
                 _ => return Err(bad("this format string")),
             }
         }
-        Ok(parts
+        Ok(pieces)
+    }
+
+    /// The string a template makes: its pieces, with `items` (the arguments,
+    /// already strings) in place, joined by `+`.
+    pub(super) fn format(&self, template: &[u8], items: Expr, span: Span) -> R<Expr> {
+        let parts = self
+            .decode_template(template, span)?
             .into_iter()
+            .map(|piece| match piece {
+                Piece::Text(text) => Expr::str(text),
+                Piece::Argument(index) => match &items.kind {
+                    js::ExprKind::Array(values) => values[index].clone(),
+                    _ => Expr::index(items.clone(), Expr::int(index as i128)),
+                },
+            });
+        Ok(parts
             .reduce(|a, b| Expr::bin(Op::Add, a, b))
             .unwrap_or_else(|| Expr::str("")))
+    }
+
+    /// `format_args!("{} and {:?}", a, b)` as rustc writes it: a block of
+    /// `super let args = (&a, &b);`, `super let args = [new_display(args.0),
+    /// new_debug(args.1)];`, then `format_arguments::new(template, &args)`.
+    /// Recognized whole, like `?`, so its arguments can be written in place.
+    pub(super) fn as_format_args(&self, e: ExprId) -> Option<FormatArgs<'tcx>> {
+        let thir = self.thir;
+        let ExprKind::Block { block } = thir[self.strip(e)].kind else {
+            return None;
+        };
+        let block = &thir[block];
+        let ([values, arguments], Some(tail)) = (&*block.stmts, block.expr) else {
+            return None;
+        };
+        let init = |stmt: thir::StmtId| match thir[stmt].kind {
+            thir::StmtKind::Let {
+                initializer: Some(init),
+                ref pattern,
+                ..
+            } => match pattern.kind {
+                PatKind::Binding { var, .. } => Some((var, self.strip(init))),
+                _ => None,
+            },
+            _ => None,
+        };
+        let (tuple, values) = init(*values)?;
+        let ExprKind::Tuple { ref fields } = thir[values].kind else {
+            return None;
+        };
+        let values = fields
+            .iter()
+            .map(|&f| match thir[self.strip(f)].kind {
+                ExprKind::Borrow { arg, .. } => Some(arg),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let (array, arguments) = init(*arguments)?;
+        let ExprKind::Array { ref fields } = thir[arguments].kind else {
+            return None;
+        };
+        // Each is `new_display(args.0)` or `new_debug(args.0)`.
+        let slots = fields
+            .iter()
+            .map(|&f| {
+                let ExprKind::Call { fun, ref args, .. } = thir[self.strip(f)].kind else {
+                    return None;
+                };
+                let kind = self
+                    .std_fn(fun)
+                    .filter(|k| matches!(k, Std::FmtDisplay | Std::FmtDebug))?;
+                let &ty::FnDef(_, generic_args) = thir[self.strip(fun)].ty.kind() else {
+                    return None;
+                };
+                let mut arg = self.strip(*args.first()?);
+                while let ExprKind::Borrow { arg: inner, .. } | ExprKind::Deref { arg: inner } = thir[arg].kind {
+                    arg = self.strip(inner);
+                }
+                let ExprKind::Field { lhs, name, .. } = thir[arg].kind else {
+                    return None;
+                };
+                matches!(thir[self.strip(lhs)].kind, ExprKind::VarRef { id } if id == tuple)
+                    .then(|| generic_args.types().next().map(|ty| (name.as_usize(), kind, ty)))
+                    .flatten()
+            })
+            .collect::<Option<Vec<_>>>()?;
+        // `unsafe { format_arguments::new(template, &args) }`.
+        let mut tail = self.strip(tail);
+        while let ExprKind::Block { block } = thir[tail].kind {
+            tail = self.strip(thir[block].expr?);
+        }
+        let ExprKind::Call { fun, ref args, .. } = thir[tail].kind else {
+            return None;
+        };
+        if self.std_fn(fun) != Some(Std::FmtNew) {
+            return None;
+        }
+        // `&args`, made a slice.
+        let mut list = self.strip(args[1]);
+        while let ExprKind::Borrow { arg, .. }
+        | ExprKind::Deref { arg }
+        | ExprKind::PointerCoercion { source: arg, .. } = thir[list].kind
+        {
+            list = self.strip(arg);
+        }
+        if !matches!(thir[list].kind, ExprKind::VarRef { id } if id == array) {
+            return None;
+        }
+        let ExprKind::Literal { lit, .. } = thir[self.strip_refs(args[0])].kind else {
+            return None;
+        };
+        let LitKind::ByteStr(ref bytes, _) = lit.node else {
+            return None;
+        };
+        Some(FormatArgs {
+            template: bytes.as_byte_str().to_vec(),
+            values,
+            slots,
+        })
+    }
+
+    /// A variable, a field of one, or a `const`: a place, not a value made.
+    fn is_place_expr(&self, e: ExprId) -> bool {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::VarRef { .. } | ExprKind::UpvarRef { .. } | ExprKind::NamedConst { .. } => true,
+            ExprKind::Literal { .. } | ExprKind::NonHirLiteral { .. } => true,
+            ExprKind::Field { lhs, .. } | ExprKind::Deref { arg: lhs } | ExprKind::Borrow { arg: lhs, .. } => {
+                self.is_place_expr(lhs)
+            }
+            _ => false,
+        }
+    }
+
+    /// Which value each placeholder shows, in the template's order. `None`
+    /// if it can't be read, which `format` then reports.
+    fn shown(&self, f: &FormatArgs<'tcx>, span: Span) -> Option<Vec<usize>> {
+        let pieces = self.decode_template(&f.template, span).ok()?;
+        pieces
+            .into_iter()
+            .filter_map(|piece| match piece {
+                Piece::Argument(slot) => Some(f.slots.get(slot).map(|&(value, _, _)| value)),
+                Piece::Text(_) => None,
+            })
+            .collect()
+    }
+
+    /// Does the template show each value once, in the order they're written?
+    /// Then each can be written in its place, and runs when Rust runs it.
+    pub(super) fn in_order(&self, f: &FormatArgs<'tcx>, span: Span) -> bool {
+        self.shown(f, span)
+            .is_some_and(|shown| shown.into_iter().eq(0..f.values.len()))
+    }
+
+    /// The string `format_args!` makes, its arguments in their places:
+    /// `"<" + g(2) + ">"`. Shown in another order (`{1} {0}`, or named ones
+    /// after the rest), they can still be written in place if none has
+    /// effects, since nothing then changes in between. Otherwise each goes
+    /// in a `const` first, in the order Rust runs them, unless it's a place:
+    /// borrowed until the end, a place can't be changed by the others. One
+    /// shown twice goes in a `const` too, unless it's a variable or a constant.
+    pub(super) fn lower_format_args(&mut self, f: FormatArgs<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let in_order = self.in_order(&f, span);
+        let shown = self.shown(&f, span).unwrap_or_default();
+        let mut values = self.operands(&f.values, out)?;
+        let effects = values.iter().any(Expr::has_effects);
+        for (i, value) in values.iter_mut().enumerate() {
+            let twice = shown.iter().filter(|&&v| v == i).count() > 1;
+            let spill = if in_order {
+                false
+            } else if effects {
+                !value.is_constant() && !self.is_place_expr(f.values[i])
+            } else {
+                twice && !value.reads_same()
+            };
+            if spill {
+                let v = std::mem::replace(value, Expr::undefined());
+                *value = self.spill("arg", v, out);
+            }
+        }
+        let mut items = Vec::new();
+        for (value, kind, ty) in f.slots {
+            let value = values[value].clone();
+            items.push(match kind {
+                Std::FmtDisplay => self.display_string(value, ty, span)?,
+                _ => {
+                    self.runtime.insert(Helper::Debug);
+                    Expr::call(Expr::var("$debug"), vec![value])
+                }
+            });
+        }
+        self.format(&f.template, Expr::array(items), span)
     }
 
     /// An iterator's method (ADR 0036). The iterator is a JS array: a range

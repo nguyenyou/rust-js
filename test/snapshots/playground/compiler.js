@@ -20,13 +20,11 @@ function $try(f) {
 }
 
 export function ms(t) {
-  const arg = t.toFixed(0);
-  return arg + " ms";
+  return t.toFixed(0) + " ms";
 }
 
 export function mb(n) {
-  const arg = (n / 1048576).toFixed(1);
-  return arg + " MB";
+  return (n / 1048576).toFixed(1) + " MB";
 }
 
 export async function load(stat) {
@@ -64,10 +62,7 @@ async function loadSysroot(start, stat) {
     size = size + entry[1].data.length >>> 0;
     entries.push(entry);
   }
-  const tmp = stat;
-  const arg = ms(performance.now() - start);
-  const arg$1 = mb(size);
-  tmp("download sysroot", arg + " (" + String(entries.length) + " files, " + arg$1 + ")");
+  stat("download sysroot", ms(performance.now() - start) + " (" + String(entries.length) + " files, " + mb(size) + ")");
   return new Map(entries);
 }
 
@@ -79,10 +74,7 @@ async function loadSysrootFile(name) {
 
 async function loadWebCrate(start, stat) {
   const bytes = await (await window.fetch("./web/libweb.rmeta")).arrayBuffer();
-  const tmp = stat;
-  const arg = ms(performance.now() - start);
-  const arg$1 = mb(bytes.byteLength);
-  tmp("download web crate", arg + " (" + arg$1 + ")");
+  stat("download web crate", ms(performance.now() - start) + " (" + mb(bytes.byteLength) + ")");
   return new File(new Uint8Array(bytes), { readonly: true });
 }
 
@@ -137,8 +129,7 @@ function directoryOf(sources) {
 function jsFilesIn(folder, prefix, found) {
   for (const item of Array.from(folder.contents)) {
     if (item[1] instanceof Directory) {
-      const tmp = item[1];
-      jsFilesIn(tmp, prefix + item[0] + "/", found);
+      jsFilesIn(item[1], prefix + item[0] + "/", found);
     } else if (item[1] instanceof File && item[0].endsWith(".js")) {
       const text = new TextDecoder().decode(item[1].data);
       found.push([prefix + item[0], text]);
@@ -209,8 +200,7 @@ export async function compile(loaded, sources, rootFile, test) {
   if (started.TAG === "Ok") {
     exit = String(started._0);
   } else {
-    const arg$2 = started._0 instanceof Error ? started._0.message : String(started._0);
-    exit = "trap (" + arg$2 + ")";
+    exit = "trap (" + (started._0 instanceof Error ? started._0.message : String(started._0)) + ")";
   }
   let files = [];
   if (ok) {

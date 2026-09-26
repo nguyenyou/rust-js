@@ -338,8 +338,8 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   // The downloads all start before any is awaited.
   expect(compiler).toContain("  const module = loadCompiler(start, stat);\n  const sysroot = loadSysroot(start, stat);");
   expect(compiler).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
-  // A `format!` value with effects is computed first, once.
-  expect(compiler).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
+  // A `format!` value shown once, in order, is written in place.
+  expect(compiler).toContain('  return t.toFixed(0) + " ms";');
   expect(compiler).toContain('  const response = await window.fetch("./sysroot/" + name);');
   // A trapped compile is an `Err` (ADR 0035), and `instanceof` a binding.
   expect(compiler).toContain("  const started = $try(() => wasi.start(instance));");
@@ -823,4 +823,20 @@ test("an Iterator impl is a JS iterator, lazy until something wants all of it", 
   expect(js).toContain("$iterator({ n: 4 }, countdownIterator_next).toArray().length");
   // A generic `next` may box a `Some` that looks like `None`: unboxed as it comes out.
   expect(js).toContain("(iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true)");
+});
+
+// `format_args!` is recognized whole, so its arguments are written in place,
+// with `const`s only where the order Rust runs them in would change.
+test("format! writes its arguments in place, in the order Rust runs them", async () => {
+  const js = await Bun.file(join(target, "strings.js")).text();
+  // Named arguments come after the others in Rust, but none has effects.
+  expect(js).toContain('return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");');
+  // Shown out of order, with effects: in `const`s first, in Rust's order.
+  expect(js).toContain(
+    "  const arg = tick(c);\n  const arg$1 = tick(c);\n  const arg$2 = c.value;\n" +
+      '  return String(arg$1) + " " + String(arg) + " " + String(arg) + " " + String(arg$2);',
+  );
+  // And a call in one doesn't make the call before it a `const`.
+  const traits = await Bun.file(join(root, "test/snapshots/traits/traits.js")).text();
+  expect(traits).toContain('label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self))');
 });

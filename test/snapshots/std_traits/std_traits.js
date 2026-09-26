@@ -378,11 +378,9 @@ export function displays() {
       y: 6
     }
   };
-  const tmp = pointDisplay_fmt(p);
-  const tmp$1 = routeDisplay_fmt(route) + " / " + routeDisplay_fmt(empty);
   return [
-    tmp,
-    tmp$1,
+    pointDisplay_fmt(p),
+    routeDisplay_fmt(route) + " / " + routeDisplay_fmt(empty),
     figureDisplay_fmt("Dot") + " and " + figureDisplay_fmt({
       TAG: "Poly",
       _0: [1, 2]

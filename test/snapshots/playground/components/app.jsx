@@ -38,12 +38,7 @@ function appended(rows, label, value) {
 
 function testsSummary(passed, failed, ignored) {
   const total = passed + failed >>> 0;
-  let ignoredText;
-  if (ignored > 0) {
-    ignoredText = ", " + String(ignored) + " ignored";
-  } else {
-    ignoredText = "";
-  }
+  const ignoredText = ignored > 0 ? ", " + String(ignored) + " ignored" : "";
   if (total === 0) {
     return say("No tests.", "Good");
   } else {
@@ -169,10 +164,7 @@ export function App() {
         setStatus(say("Failed: exit " + r.exit + ".", "Bad"));
       }
       const result = r.ok ? "ok" : "error";
-      const arg = compiler.ms(r.instantiate);
-      const arg$1 = compiler.ms(r.run);
-      const arg$2 = compiler.mb(r.memory);
-      const times = "instantiate " + arg + ", run " + arg$1 + ", memory " + arg$2 + ", " + result;
+      const times = "instantiate " + compiler.ms(r.instantiate) + ", run " + compiler.ms(r.run) + ", memory " + compiler.mb(r.memory) + ", " + result;
       const label = "compile #" + String(n);
       setStats((rows) => appended(rows, label, times));
       window.lastResult = r;

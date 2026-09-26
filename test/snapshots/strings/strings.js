@@ -145,4 +145,17 @@ export function tagged(s) {
   }
   return [n, top != null && (top === "a" || top === "src")];
 }
+
+function tick(c) {
+  c.value = c.value + 1 >>> 0;
+  return c.value;
+}
+
+export function format_order(start) {
+  const c = { value: start };
+  const arg = tick(c);
+  const arg$1 = tick(c);
+  const arg$2 = c.value;
+  return String(arg$1) + " " + String(arg) + " " + String(arg) + " " + String(arg$2);
+}
 //# sourceMappingURL=strings.js.map

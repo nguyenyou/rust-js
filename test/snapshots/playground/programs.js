@@ -28,8 +28,7 @@ export function link(files, start) {
   const files$1 = Array.from(files);
   let parts = ["const modules = {};"];
   for (const item of files$1) {
-    const arg = JSON.stringify(item[0]);
-    parts.push("modules[" + arg + "] = {};");
+    parts.push("modules[" + JSON.stringify(item[0]) + "] = {};");
   }
   let ordered = files$1.slice();
   const key = (param) => param[0].endsWith(".test.js");
@@ -51,8 +50,8 @@ export function link(files, start) {
     });
     const body$2 = body$1.replace(sourceMap, "");
     const names$1 = exported.value.join(", ");
-    const arg$1 = JSON.stringify(item$1[0]);
-    parts.push("(function (exports) {\n" + body$2 + "\nObject.assign(exports, { " + names$1 + " });\n})(modules[" + arg$1 + "]);");
+    const arg = JSON.stringify(item$1[0]);
+    parts.push("(function (exports) {\n" + body$2 + "\nObject.assign(exports, { " + names$1 + " });\n})(modules[" + arg + "]);");
   }
   parts.push(start);
   return parts.join("\n").replaceAll("<\/script", "<\\/script");
@@ -89,20 +88,14 @@ export function prepare(files, rootFile, test, run) {
     };
   }
   const report = (message) => "parent.postMessage({ run: " + String(run) + ", " + message + " }, \"*\")";
-  let linked;
-  if (test) {
-    linked = link(files, TEST_RUNNER);
-  } else {
-    const arg = JSON.stringify(rootFile);
-    linked = link(files, "modules[" + arg + "].main();");
-  }
+  const linked = test ? link(files, TEST_RUNNER) : link(files, "modules[" + JSON.stringify(rootFile) + "].main();");
   const finished = test ? report("tested: { passed: count(\"pass\"), failed: count(\"fail\"), ignored: count(\"skip\") }") : report("ran: true");
-  const arg$1 = report("error: String(e.message)");
-  const arg$2 = report("error: String(e.reason)");
-  const arg$3 = report("error: String(e)");
+  const arg = report("error: String(e.message)");
+  const arg$1 = report("error: String(e.reason)");
+  const arg$2 = report("error: String(e)");
   return {
     TAG: "Page",
-    _0: FRAME_HEAD + "\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener(\"error\", (e) => " + arg$1 + ");\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener(\"unhandledrejection\", (e) => " + arg$2 + ");\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script>\n  try {\n" + linked + "\n    " + finished + ";\n  } catch (e) {\n    " + arg$3 + ";\n  }\n<\/script>"
+    _0: FRAME_HEAD + "\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener(\"error\", (e) => " + arg + ");\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener(\"unhandledrejection\", (e) => " + arg$1 + ");\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script>\n  try {\n" + linked + "\n    " + finished + ";\n  } catch (e) {\n    " + arg$2 + ";\n  }\n<\/script>"
   };
 }
 

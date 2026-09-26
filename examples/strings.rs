@@ -108,3 +108,15 @@ pub fn tagged(s: &str) -> (u32, bool) {
     };
     (n, matches!(top, Some("a" | "src")))
 }
+
+fn tick(c: &std::cell::Cell<u32>) -> u32 {
+    c.set(c.get() + 1);
+    c.get()
+}
+
+/// `format!`'s arguments run in the order they're written, whatever order
+/// the template shows them in, and each runs once.
+pub fn format_order(start: u32) -> String {
+    let c = std::cell::Cell::new(start);
+    format!("{1} {0} {0} {2}", tick(&c), tick(&c), c.get())
+}

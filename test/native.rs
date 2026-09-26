@@ -248,6 +248,7 @@ fn main() {
     for n in [0, 1, 3] {
         case_with("strings.labeled", &[&"box", &(n as i64)], || strings::labeled("box", n));
         case("strings.built", &[n as i64], || strings::built(n));
+        case("strings.format_order", &[n as i64], || strings::format_order(n));
         case_with("strings.repeated", &[&"ab", &(n as i64)], || strings::repeated("ab", n));
     }
     for s in ["", "abc", "ab/c", "/a//b/", "  Mixed Case  ", "src/geometry.rs", "stats.rs", "äbc/Ö"] {

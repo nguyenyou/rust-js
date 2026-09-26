@@ -104,8 +104,7 @@ export function Places() {
     flushSync(() => {
       setFlushed(1);
     });
-    const arg = globalThis.flushedText();
-    globalThis.log("flushed " + arg);
+    globalThis.log("flushed " + globalThis.flushedText());
   };
   return <>
     <Activity mode={hidden ? "hidden" : "visible"}>
