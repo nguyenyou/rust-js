@@ -60,6 +60,24 @@ test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and s
     await page.locator("#output-files button", { hasText: "stats.js" }).click();
     await page.locator("#output-files button[aria-current=true]", { hasText: "stats.js" }).waitFor();
     await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "from /in/stats.rs" }).waitFor();
+    // Named imports and aliases run in the preview, including cycles and
+    // two identical modules whose thread-local state must stay independent.
+    await page.locator(".cm-content[aria-label='Rust source']").click();
+    await page.keyboard.press("ControlOrMeta+a");
+    const counter = `use std::cell::Cell;
+thread_local! { static N: Cell<u32> = Cell::new(0); }
+pub fn next() -> u32 { N.set(N.get() + 1); N.get() }`;
+    await page.keyboard.insertText(`
+mod a { ${counter} }
+mod b { ${counter} }
+mod left { pub fn step(n: u32) -> u32 { if n == 0 { 1 } else { super::right::step(n - 1) } } }
+mod right { pub fn step(n: u32) -> u32 { if n == 0 { 2 } else { super::left::step(n - 1) } } }
+#[test] fn cycle() { assert_eq!(left::step(4), 1); assert_eq!(right::step(4), 2); }
+#[test] fn aliases() { let step = 40; assert_eq!(left::step(0) + right::step(0) + step, 43); }
+#[test] fn independent() { assert_eq!(a::next(), 1); assert_eq!(a::next(), 2); assert_eq!(b::next(), 1); }
+`);
+    await page.locator("#test").click();
+    await status.filter({ hasText: "Tests: 3 passed, 0 failed." }).waitFor({ timeout: 60_000 });
     // React metadata and the same JSX parser are available inside WASM.
     await page.locator(".cm-content[aria-label='Rust source']").click();
     await page.keyboard.press("ControlOrMeta+a");

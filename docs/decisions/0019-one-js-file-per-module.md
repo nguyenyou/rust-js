@@ -4,6 +4,9 @@ Status: Accepted. Supersedes the "functions inside modules" limit of
 [0016](0016-crate-shape.md) and the single output file of
 [0005](0005-input-and-output.md).
 
+The namespace-import choice below is superseded by
+[0073](0073-named-module-imports.md); the file layout stays the same.
+
 ## Context
 
 Real programs are split across files. How does ReScript do it? Checked in

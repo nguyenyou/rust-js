@@ -1,16 +1,13 @@
 // Running the compiled program. If the root module exports `main`, it runs
 // in a frame with a `<div id="app">` to render into; with Test, the crate's
-// tests run there instead. The modules are linked into one plain `<script>`
-// (see `link`), which every browser runs the same way, and the page reports
+// tests run there instead. An import map links the generated ES modules
+// (see `link`), preserving live bindings and cycles, and the page reports
 // back what happened, so the status line always says.
 //
 // The frame isn't sandboxed. Chrome runs a sandboxed frame in a process of
 // its own, and some setups then don't draw it until something else changes
 // the layout: the program ran, but the frame stayed blank. The program is
 // the one in the editor, so it may share this page's origin.
-
-use std::cell::RefCell;
-use std::rc::Rc;
 
 use web::{JsObject, RegExp, reg_exp};
 
@@ -21,6 +18,8 @@ use crate::compiler::{JsMap, text_entries};
 unsafe extern "Rust" {
     #[link_name = "JSON.stringify"]
     safe fn json_string(text: &str) -> String;
+    #[link_name = "encodeURIComponent"]
+    safe fn encode_uri_component(text: &str) -> String;
     /// `text.replace(pattern, (match, a, b) => ..)`: a closure for each match.
     #[link_name = "replace"]
     safe fn replace_matches(this: &str, pattern: &RegExp, with: Box<dyn Fn(String, String, String) -> String>) -> String;
@@ -88,48 +87,31 @@ pub fn resolve(from: &str, specifier: &str) -> String {
     parts.join("/")
 }
 
-/// rust-js's modules (ADR 0019) as one classic script. Each module becomes a
-/// function that fills in its exports object, and `import * as util from
-/// "./util.js"` becomes that module's exports object. The objects all exist
-/// before any module runs, so cycles work: functions are only called later.
-pub fn link(files: &JsMap, start: &str) -> String {
-    let files = text_entries(files);
-    let mut parts = vec!["const modules = {};".to_string()];
-    for (path, _) in &files {
-        parts.push(format!("modules[{}] = {{}};", json_string(path)));
-    }
-    // A test file reads the tests' functions as it registers them, so it goes
-    // after the modules that define them.
-    let mut ordered: Vec<&(String, String)> = files.iter().collect();
-    ordered.sort_by_key(|(path, _)| path.ends_with(".test.js"));
-    let imports = reg_exp::new(r#"^import \* as (\S+) from "([^"]+)";$"#, "gm");
-    // What a module exports: its functions, async ones, and constants (ADRs 0019, 0029, 0031).
-    let exports = reg_exp::new(r"^export (async function|function|const) (\w+)", "gm");
+/// Link generated ES modules through an import map. Virtual specifiers avoid
+/// embedding URLs recursively, so cycles work. The browser owns module
+/// evaluation, named imports and live bindings; no identifier rewriting.
+pub fn link(files: &JsMap) -> String {
+    let imports = reg_exp::new(r#"^import ([^;]+?) from "([^"]+)";$"#, "gm");
     let source_map = reg_exp::new(r"^//# sourceMappingURL=.*$", "m");
-    for (path, code) in ordered {
+    let mut entries = Vec::new();
+    for (path, code) in text_entries(files) {
         let from = path.clone();
         let body = replace_matches(
-            code,
+            &code,
             imports,
-            Box::new(move |_, alias, specifier| format!("const {alias} = modules[{}];", json_string(&resolve(&from, &specifier)))),
-        );
-        let exported = Rc::new(RefCell::new(Vec::new()));
-        let names = exported.clone();
-        let body = replace_matches(
-            &body,
-            exports,
-            Box::new(move |_, declared, name| {
-                names.borrow_mut().push(name.clone());
-                format!("{declared} {name}")
+            Box::new(move |_, names, specifier| {
+                let target = json_string(&format!("rust-js:{}", resolve(&from, &specifier)));
+                format!("import {names} from {target};")
             }),
         );
         let body = replace_pattern(&body, source_map, "");
-        let names = exported.borrow().join(", ");
-        parts.push(format!("(function (exports) {{\n{body}\nObject.assign(exports, {{ {names} }});\n}})(modules[{}]);", json_string(path)));
+        let specifier = json_string(&format!("rust-js:{path}"));
+        // Identical module bodies must still have separate state.
+        let url = json_string(&format!("data:text/javascript,{}#{}", encode_uri_component(&body), encode_uri_component(&path)));
+        entries.push(format!("{specifier}: {url}"));
     }
-    parts.push(start.to_string());
-    // A `</script>` in a string would end the script early; `<\/script>` is the same string.
-    parts.join("\n").replace("</script", "<\\/script")
+    let entries = entries.join(",");
+    format!(r#"<script type="importmap">{{"imports":{{{entries}}}}}</script>"#)
 }
 
 /// A small `bun test` look-alike for the Result frame: `test` and `test.skip`
@@ -195,7 +177,7 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
     }
     // Imports from JS modules (ADR 0028) name packages or files the page
     // doesn't have. A bundler would bring them in; the playground has none.
-    let imports = reg_exp::new(r#"^import .* from "([^"]+)";$"#, "gm");
+    let imports = reg_exp::new(r#"^import (?:[^;]+? from )?"([^"]+)";$"#, "gm");
     let mut external: Vec<String> = Vec::new();
     for (path, code) in &sources {
         for (_, specifier) in matches_of(match_all(code, imports)) {
@@ -209,7 +191,13 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
         return Prepared::Blocked(external);
     }
     let report = |message: &str| format!("parent.postMessage({{ run: {run}, {message} }}, \"*\")");
-    let linked = if test { link(files, TEST_RUNNER) } else { link(files, &format!("modules[{}].main();", json_string(root_file))) };
+    let linked = link(files);
+    let entry = json_string(&format!("rust-js:{}", if test { &tests } else { root_file }));
+    let start = if test {
+        format!("await import({entry});\n{TEST_RUNNER}")
+    } else {
+        format!("const root = await import({entry});\nawait root.main();")
+    };
     let finished = if test {
         report(r#"tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }"#)
     } else {
@@ -217,6 +205,7 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
     };
     Prepared::Page(format!(
         r#"{FRAME_HEAD}
+{linked}
 <script>
   // Errors later on, in an event handler say.
   addEventListener("error", (e) => {});
@@ -227,9 +216,9 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
   globalThis.test = (name, f) => registered.push({{ name, f }});
   test.skip = (name) => registered.push({{ name }});
 </script>
-<script>
+<script type="module">
   try {{
-{linked}
+{start}
     {finished};
   }} catch (e) {{
     {};

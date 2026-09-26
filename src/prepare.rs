@@ -53,7 +53,12 @@ pub fn module(module: &mut js::Module) {
         .map(|f| f.name.clone())
         .chain(module.consts.iter().map(|c| c.name.clone()))
         .chain(module.namespaces.iter().map(|n| n.name.clone()))
-        .chain(module.imports.iter().map(|i| i.alias.clone()))
+        .chain(
+            module
+                .imports
+                .iter()
+                .flat_map(|i| i.named.iter().map(|(_, local)| local.clone())),
+        )
         .collect();
     for package in &module.packages {
         names.extend(package.default.iter().chain(&package.namespace).cloned());

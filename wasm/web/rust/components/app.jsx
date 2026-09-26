@@ -2,17 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import * as codemirror from "../codemirror.js";
-import * as compiler from "../compiler.js";
-import * as editor from "./editor.jsx";
-import * as file_tree from "./file_tree.jsx";
-import * as pane from "./pane.jsx";
-import * as result_frame from "./result_frame.jsx";
-import * as stats_table from "./stats_table.jsx";
-import * as toolbar from "./toolbar.jsx";
-import * as programs from "../programs.js";
-import * as projects from "../projects.js";
-import * as tree from "../tree.js";
+import { outputState, sourceState } from "../codemirror.js";
+import { compile, load, loadExample, mb, ms } from "../compiler.js";
+import { Editor } from "./editor.jsx";
+import { FileTree } from "./file_tree.jsx";
+import { Pane } from "./pane.jsx";
+import { ResultFrame } from "./result_frame.jsx";
+import { StatsTable } from "./stats_table.jsx";
+import { Toolbar } from "./toolbar.jsx";
+import { prepare } from "../programs.js";
+import { Project, jsName } from "../projects.js";
+import { buildTree } from "../tree.js";
 
 function $stripSuffix(s, suffix) {
   return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
@@ -49,7 +49,7 @@ export function App() {
   const [stats, setStats] = useState([]);
   const [status, setStatus] = useState(say("Loading…", "Plain"));
   const [example, setExample] = useState("");
-  const [project, setProject] = useState(projects.Project.empty());
+  const [project, setProject] = useState(Project.empty());
   const [output, setOutput] = useState("Nothing");
   const [program, setProgram] = useState(undefined);
   const [compiling, startTransition] = useTransition();
@@ -66,7 +66,7 @@ export function App() {
     };
     const done = cancelled;
     (async () => {
-      const loaded = await compiler.load(stat);
+      const loaded = await load(stat);
       let first;
       const match = loaded.examples[0];
       if (match != null) {
@@ -75,10 +75,10 @@ export function App() {
         first = undefined;
       }
       if (first != null && !done.value) {
-        const texts = await compiler.loadExample(first[0], first[2]);
+        const texts = await loadExample(first[0], first[2]);
         if (!done.value) {
           setExample(first[0]);
-          setProject(projects.Project.of(first[1], texts));
+          setProject(Project.of(first[1], texts));
           setLoaded(loaded);
           setStatus(say("Ready.", "Plain"));
         }
@@ -95,7 +95,7 @@ export function App() {
   const run = (files, rootJs, test) => {
     const n = (runs.current + 1) >>> 0;
     runs.current = n;
-    const match = programs.prepare(files, rootJs, test, n);
+    const match = prepare(files, rootJs, test, n);
     if (match === "Nothing") {
       setProgram(undefined);
     } else if (match === "Jsx") {
@@ -123,9 +123,9 @@ export function App() {
     if (compiling) {
       return;
     }
-    const sources = projects.Project.sources(project, live());
+    const sources = Project.sources(project, live());
     const root = project.root;
-    const rootJs = projects.jsName(project.root);
+    const rootJs = jsName(project.root);
     let shown;
     if (output.TAG === "Files") {
       shown = output.shown;
@@ -135,7 +135,7 @@ export function App() {
     setStatus(say(test ? "Compiling the tests…" : "Compiling…", "Plain"));
     startTransition(() =>
       (async () => {
-        const r = await compiler.compile(loaded$1, sources, root, test);
+        const r = await compile(loaded$1, sources, root, test);
         const n = (compiles.current + 1) | 0;
         compiles.current = n;
         if (r.ok) {
@@ -153,7 +153,7 @@ export function App() {
           setStatus(say(`Failed: exit ${r.exit}.`, "Bad"));
         }
         const result = r.ok ? "ok" : "error";
-        const times = `instantiate ${compiler.ms(r.instantiate)}, run ${compiler.ms(r.run)}, memory ${compiler.mb(r.memory)}, ${result}`;
+        const times = `instantiate ${ms(r.instantiate)}, run ${ms(r.run)}, memory ${mb(r.memory)}, ${result}`;
         const label = `compile #${n}`;
         setStats((rows) => appended(rows, label, times));
         window.lastResult = r;
@@ -184,8 +184,8 @@ export function App() {
       const [root, files] = [chosen.root, chosen.files.slice()];
       setExample(name);
       (async () => {
-        const texts = await compiler.loadExample(name, files);
-        setProject(projects.Project.of(root, texts));
+        const texts = await loadExample(name, files);
+        setProject(Project.of(root, texts));
         setOutput("Nothing");
         setProgram(undefined);
         setStatus(say("Ready.", "Plain"));
@@ -193,11 +193,11 @@ export function App() {
     }
   };
   const openFile = (path) => {
-    setProject(projects.Project.opening(project, path, live()));
+    setProject(Project.opening(project, path, live()));
   };
   const deleteFile = (path) => {
     if (window.confirm(`Delete ${path}?`)) {
-      setProject(projects.Project.removing(project, path));
+      setProject(Project.removing(project, path));
     }
   };
   const newFile = () => {
@@ -218,11 +218,11 @@ export function App() {
       setStatus(say(text, "Bad"));
       return;
     }
-    if (projects.Project.has(project, path)) {
+    if (Project.has(project, path)) {
       setStatus(say(`${path} already exists.`, "Bad"));
       return;
     }
-    setProject(projects.Project.adding(project, path, live()));
+    setProject(Project.adding(project, path, live()));
     let file;
     const match$1 = $rsplitOnce(path, "/");
     if (match$1 != null) {
@@ -240,9 +240,9 @@ export function App() {
       setOutput({ TAG: "Files", files, shown: path });
     }
   };
-  const blank = useMemo(() => codemirror.sourceState(""), []);
+  const blank = useMemo(() => sourceState(""), []);
   let current;
-  const match = projects.Project.currentState(project);
+  const match = Project.currentState(project);
   if (match != null) {
     current = match;
   } else {
@@ -250,7 +250,7 @@ export function App() {
   }
   const shownState = useMemo(() => {
     if (output === "Nothing") {
-      return codemirror.outputState("", true);
+      return outputState("", true);
     } else if (output.TAG === "Files") {
       let text;
       const match = output.files.find((param) => param[0] === output.shown);
@@ -259,12 +259,12 @@ export function App() {
       } else {
         text = "";
       }
-      return codemirror.outputState(text, true);
+      return outputState(text, true);
     } else {
-      return codemirror.outputState(output._0, false);
+      return outputState(output._0, false);
     }
   }, [output]);
-  const sourceTree = useMemo(() => tree.buildTree(projects.Project.paths(project)), [project]);
+  const sourceTree = useMemo(() => buildTree(Project.paths(project)), [project]);
   let tmp;
   if (output.TAG === "Files") {
     tmp = [output.files.map((param) => param[0]), output.shown];
@@ -272,7 +272,7 @@ export function App() {
     tmp = [[], ""];
   }
   const tmp$1 = tmp;
-  const outputTree = useMemo(() => tree.buildTree(tmp$1[0]), [output]);
+  const outputTree = useMemo(() => buildTree(tmp$1[0]), [output]);
   let tmp$2;
   if (loaded != null) {
     tmp$2 = loaded.examples;
@@ -287,7 +287,7 @@ export function App() {
       <p className="mb-3 text-muted">
         rustc's front end and rust-js, as WebAssembly. No server compiles anything.
       </p>
-      <toolbar.Toolbar
+      <Toolbar
         examples={examples}
         example={example}
         onExample={onExample}
@@ -296,13 +296,13 @@ export function App() {
         status={status}
       />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-3">
-        <pane.Pane
+        <Pane
           title="Rust"
           label="Rust files"
           explorer={
             <>
               <ul id="source-files">
-                <file_tree.FileTree
+                <FileTree
                   tree={sourceTree}
                   depth={0}
                   first={project.root}
@@ -320,9 +320,9 @@ export function App() {
               </button>
             </>
           }
-          editor={<editor.Editor state={current} view={source} onSubmit={() => submit(false)} />}
+          editor={<Editor state={current} view={source} onSubmit={() => submit(false)} />}
         />
-        <pane.Pane
+        <Pane
           title="JavaScript"
           label="JavaScript files"
           explorer={
@@ -330,21 +330,21 @@ export function App() {
               {outputTree.length === 0 ? (
                 <li className="flex items-center px-2 py-0.5 text-muted">(none)</li>
               ) : (
-                <file_tree.FileTree
+                <FileTree
                   tree={outputTree}
                   depth={0}
-                  first={projects.jsName(project.root)}
+                  first={jsName(project.root)}
                   selected={tmp$1[1]}
                   onOpen={openOutput}
                 />
               )}
             </ul>
           }
-          editor={<editor.Editor state={shownState} />}
+          editor={<Editor state={shownState} />}
         />
       </div>
-      <result_frame.ResultFrame program={program} onOutcome={onOutcome} />
-      <stats_table.StatsTable rows={stats} />
+      <ResultFrame program={program} onOutcome={onOutcome} />
+      <StatsTable rows={stats} />
     </>
   );
 }

@@ -246,7 +246,7 @@ pub fn App() -> Element {
     await server.listen();
     const theme = readFileSync(join(dir, "src/theme.js"), "utf8");
     expect(theme).toContain('export const THEME = createContext("light");');
-    expect(readFileSync(join(dir, "src/App.jsx"), "utf8")).toContain('<theme$1.THEME value="dark">');
+    expect(readFileSync(join(dir, "src/App.jsx"), "utf8")).toContain('<THEME value="dark">');
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     await page.goto(server.resolvedUrls.local[0]);

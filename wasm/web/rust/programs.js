@@ -4,10 +4,6 @@ function $stripSuffix(s, suffix) {
   return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
 }
 
-function $cmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 const TEST_RUNNER =
   '\n    const results = registered.map(({ name, f }) => {\n      if (!f) return { name, outcome: "skip" };\n      try {\n        f();\n        return { name, outcome: "pass" };\n      } catch (e) {\n        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };\n      }\n    });\n    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {\n      const line = document.createElement("div");\n      line.className = outcome;\n      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");\n      if (message) {\n        const why = document.createElement("pre");\n        why.textContent = message;\n        line.append(why);\n      }\n      return line;\n    }));\n    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;';
 const FRAME_HEAD =
@@ -26,39 +22,25 @@ export function resolve(from, specifier) {
   return parts.join("/");
 }
 
-export function link(files, start) {
-  const files$1 = Array.from(files);
-  let parts = ["const modules = {};"];
-  for (const item of files$1) {
-    parts.push(`modules[${JSON.stringify(item[0])}] = {};`);
-  }
-  let ordered = files$1.slice();
-  const key = (param) => param[0].endsWith(".test.js");
-  ordered.sort((a, b) => $cmp(key(a), key(b)));
-  const imports = new RegExp('^import \\* as (\\S+) from "([^"]+)";$', "gm");
-  const exports = new RegExp("^export (async function|function|const) (\\w+)", "gm");
+export function link(files) {
+  const imports = new RegExp('^import ([^;]+?) from "([^"]+)";$', "gm");
   const sourceMap = new RegExp("^//# sourceMappingURL=.*$", "m");
-  for (const item$1 of ordered) {
-    const from = item$1[0];
-    const body = item$1[1].replace(imports, (_, alias, specifier) => {
-      const arg = JSON.stringify(resolve(from, specifier));
-      return `const ${alias} = modules[${arg}];`;
+  let entries = [];
+  for (const [path, code] of Array.from(files)) {
+    const from = path;
+    const body = code.replace(imports, (_, names, specifier) => {
+      const target = JSON.stringify(`rust-js:${resolve(from, specifier)}`);
+      return `import ${names} from ${target};`;
     });
-    const exported = { value: [] };
-    const names = exported;
-    const body$1 = body.replace(exports, (_, declared, name) => {
-      names.value.push(name);
-      return `${declared} ${name}`;
-    });
-    const body$2 = body$1.replace(sourceMap, "");
-    const names$1 = exported.value.join(", ");
-    const arg = JSON.stringify(item$1[0]);
-    parts.push(
-      `(function (exports) {\n${body$2}\nObject.assign(exports, { ${names$1} });\n})(modules[${arg}]);`,
+    const body$1 = body.replace(sourceMap, "");
+    const specifier = JSON.stringify(`rust-js:${path}`);
+    const url = JSON.stringify(
+      `data:text/javascript,${encodeURIComponent(body$1)}#${encodeURIComponent(path)}`,
     );
+    entries.push(`${specifier}: ${url}`);
   }
-  parts.push(start);
-  return parts.join("\n").replaceAll("<\/script", "<\\/script");
+  const entries$1 = entries.join(",");
+  return `<script type="importmap">{"imports":{${entries$1}}}<\/script>`;
 }
 
 export function prepare(files, rootFile, test, run) {
@@ -81,7 +63,7 @@ export function prepare(files, rootFile, test, run) {
   if (sources.some((param) => param[0].endsWith(".jsx"))) {
     return "Jsx";
   }
-  const imports = new RegExp('^import .* from "([^"]+)";$', "gm");
+  const imports = new RegExp('^import (?:[^;]+? from )?"([^"]+)";$', "gm");
   let external = [];
   for (const item of sources) {
     for (const [, specifier] of Array.from(item[1].matchAll(imports))) {
@@ -95,9 +77,11 @@ export function prepare(files, rootFile, test, run) {
     return { TAG: "Blocked", _0: external };
   }
   const report = (message) => `parent.postMessage({ run: ${run}, ${message} }, "*")`;
-  const linked = test
-    ? link(files, TEST_RUNNER)
-    : link(files, `modules[${JSON.stringify(rootFile)}].main();`);
+  const linked = link(files);
+  const entry = JSON.stringify(`rust-js:${test ? tests : rootFile}`);
+  const start = test
+    ? `await import(${entry});\n${TEST_RUNNER}`
+    : `const root = await import(${entry});\nawait root.main();`;
   const finished = test
     ? report('tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }')
     : report("ran: true");
@@ -106,7 +90,7 @@ export function prepare(files, rootFile, test, run) {
   const arg$2 = report("error: String(e)");
   return {
     TAG: "Page",
-    _0: `${FRAME_HEAD}\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener("error", (e) => ${arg});\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener("unhandledrejection", (e) => ${arg$1});\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script>\n  try {\n${linked}\n    ${finished};\n  } catch (e) {\n    ${arg$2};\n  }\n<\/script>`,
+    _0: `${FRAME_HEAD}\n${linked}\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener("error", (e) => ${arg});\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener("unhandledrejection", (e) => ${arg$1});\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script type="module">\n  try {\n${start}\n    ${finished};\n  } catch (e) {\n    ${arg$2};\n  }\n<\/script>`,
   };
 }
 

@@ -16,7 +16,7 @@ use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
-use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
+use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -164,7 +164,6 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     let tests = collect_tests(tcx, &markers, &bodies, &fns, &mut called_from_elsewhere);
 
     let paths: HashMap<LocalModDefId, Vec<String>> = modules.iter().map(|&m| (m, module_path(tcx, m))).collect();
-    let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
 
     let mutated = mutated_types(all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
@@ -387,9 +386,13 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             f.export = true;
         }
     }
-    let mut targets: HashMap<LocalModDefId, HashSet<LocalModDefId>> = HashMap::new();
+    let mut targets: HashMap<LocalModDefId, HashSet<(LocalModDefId, String)>> = HashMap::new();
     for &(from, id) in &pass.references {
-        targets.entry(from).or_default().insert(fns[&id].module);
+        let info = &fns[&id];
+        targets
+            .entry(from)
+            .or_default()
+            .insert((info.module, info.owner.as_ref().unwrap_or(&info.name).clone()));
     }
     let lowered = modules
         .into_iter()
@@ -450,16 +453,10 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 jsx: pass.jsx.contains(&module),
             };
             let mut imports: Vec<_> = targets.remove(&module).unwrap_or_default().into_iter().collect();
-            imports.sort_by(|a, b| paths[a].cmp(&paths[b]));
+            imports.sort_by(|(a, an), (b, bn)| (&paths[a], an).cmp(&(&paths[b], bn)));
             let candidates: Vec<_> = imports
                 .into_iter()
-                .map(|target| {
-                    (
-                        link::symbol(target),
-                        paths[&target].last().unwrap_or(&crate_name).clone(),
-                        paths[&target].clone(),
-                    )
-                })
+                .map(|(target, export)| (link::symbol(target, &export), export, paths[&target].clone()))
                 .collect();
             link::resolve(&mut lowered, &candidates, taken[&module].clone());
             lowered

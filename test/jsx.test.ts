@@ -57,6 +57,9 @@ pub(crate) fn Card(p: Props) -> Element {
 `;
   const { dir, args } = compile(source, { "ui/card.rs": card });
   run(args);
+  const code = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(code).toContain('import { Card } from "./card.jsx";');
+  expect(code).toContain('<Card title="Numbers">');
   const result = await import(join(dir, "lib.jsx"));
   expect(renderToStaticMarkup(result.App())).toBe('<section><h1>Numbers</h1><ul class="list"><li>0</li><li>1</li><li>2</li></ul></section><p data-state="ready">done</p>');
   expect(renderToStaticMarkup(result.Spread())).toBe('<section><h1>Spread</h1><span>child</span></section>');
@@ -64,6 +67,47 @@ pub(crate) fn Card(p: Props) -> Element {
   const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   expect(manifest.sources).toContain(join(dir, "ui/card.rs"));
   expect(manifest.sources.some((s: string) => s.includes("jsx expansion"))).toBe(false);
+});
+
+test("named component imports avoid local functions, nested parameters and duplicate exports", async () => {
+  const source = `#![allow(non_snake_case)]
+use react::Element;
+mod first;
+mod second;
+pub fn Card() -> Element { jsx! { <b>{"local"}</b> } }
+pub fn View() -> Element {
+    let render = |Card: i32| jsx! {
+        <>
+            <first::Card />
+            <second::Card />
+            <span>{Card}</span>
+        </>
+    };
+    render(9)
+}
+`;
+  const { dir, args } = compile(source, {
+    "first.rs": 'use react::Element; pub fn Card() -> Element { jsx! { <b>{"first"}</b> } }',
+    "second.rs": 'use react::Element; pub fn Card() -> Element { jsx! { <b>{"second"}</b> } }',
+  });
+  run(args);
+  const output = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(output).toContain('import { Card as Card$2 } from "./first.jsx";');
+  expect(output).toContain('import { Card as Card$3 } from "./second.jsx";');
+  expect(output).toContain("<Card$2 />");
+  expect(output).toContain("<Card$3 />");
+  const result = await import(join(dir, "lib.jsx"));
+  expect(renderToStaticMarkup(result.View())).toBe("<b>first</b><b>second</b><span>9</span>");
+  expect(renderToStaticMarkup(result.Card())).toBe("<b>local</b>");
+  const lines = output.split("\n");
+  const map = JSON.parse(readFileSync(join(dir, "lib.jsx.map"), "utf8"));
+  for (const [generated, original] of [["Card$2", "<first::Card"], ["Card$3", "<second::Card"]]) {
+    const line = lines.findIndex(l => l.includes(`<${generated}`));
+    expect(lookup(decodeMappings(map.mappings), line, lines[line].indexOf(generated))?.srcLine)
+      .toBe(source.split("\n").findIndex(l => l.includes(original)));
+  }
+  run(args);
+  expect(readFileSync(join(dir, "lib.jsx"), "utf8")).toBe(output);
 });
 
 test("JSX preserves evaluation order and maps tags and handler statements to their original lines", async () => {

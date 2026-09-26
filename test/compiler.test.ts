@@ -237,17 +237,17 @@ test("a crate split across files becomes one JS file per module", async () => {
 
   const area = await Bun.file(join(out, "geometry/area.js")).text();
   // Specifiers are relative, and aliases are unique within the file.
-  expect(area).toContain('import * as lib from "../lib.js";');
-  expect(area).toContain('import * as util$1 from "./util.js";');
-  expect(area).toContain('import * as util$2 from "../util.js";');
+  expect(area).toContain('import { clamp } from "../lib.js";');
+  expect(area).toContain('import { triple } from "./util.js";');
+  expect(area).toContain('import { double } from "../util.js";');
   // Imports are named after locals are known, so locals keep their names.
   expect(area).toContain("const util = (x + 1) >>> 0;");
-  expect(area).toContain("return util$2.double(util);");
+  expect(area).toContain("return double(util);");
   // lib ↔ stats import each other: a cycle, which Rust and ES modules allow.
   const stats = await Bun.file(join(out, "stats.js")).text();
-  expect(stats).toContain('import * as lib from "./lib.js";');
+  expect(stats).toContain('import { HALVES, clamp } from "./lib.js";');
   // A `const` of another module, by its name there.
-  expect(stats).toContain("return (x / lib.HALVES) >>> 0;");
+  expect(stats).toContain("return (x / HALVES) >>> 0;");
 
   // Each file's source map points into the .rs file its module lives in.
   const sources = async (f: string) => (await Bun.file(join(out, `${f}.map`)).json()).sources;
@@ -356,8 +356,13 @@ test("async code becomes async functions and await", async () => {
 test("the playground is Rust components, compiled to the JS main.ts starts", async () => {
   const read = (path: string) => Bun.file(join(target, "playground", path)).text();
   const lib = await read("lib.jsx");
-  expect(lib).toContain('import * as app from "./components/app.jsx";');
-  expect(lib).toContain("  root.render(\n    <StrictMode>\n      <app.App />\n    </StrictMode>");
+  expect(lib).toContain('import { App } from "./components/app.jsx";');
+  expect(lib).toContain("  root.render(\n    <StrictMode>\n      <App />\n    </StrictMode>");
+  const app = await read("components/app.jsx");
+  expect(app).toContain('import { Pane } from "./pane.jsx";');
+  expect(app).toContain('import { Toolbar } from "./toolbar.jsx";');
+  expect(app).toContain("<Pane");
+  expect(app).toContain("<Toolbar");
   // Each component's file exports it alone, which Fast Refresh needs.
   const components = [
     ["app", "App"], ["editor", "Editor"], ["example_picker", "ExamplePicker"], ["file_item", "FileItem"],
@@ -404,10 +409,11 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   expect(compiler).toContain("    if (entry instanceof Directory) {");
   // The file tree: sorted with a comparator, a copy of the tree's entries.
   expect(await read("tree.js")).toContain("  let entries = tree.slice();\n  entries.sort((a, b) => {");
-  // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
+  // The browser links named and namespace imports as real ES modules.
   const programs = await read("programs.js");
-  expect(programs).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
-  expect(programs).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
+  expect(programs).toContain('type="importmap"');
+  expect(programs).toContain("encodeURIComponent(body");
+  expect(programs).toContain("await import(");
   // CodeMirror, through imports (ADR 0028), its extensions made once (ADR 0037).
   const codemirror = await read("codemirror.js");
   expect(codemirror).toContain('import { EditorView, basicSetup } from "codemirror";');
@@ -679,8 +685,8 @@ pub fn tally_of_four() -> u32 {
   run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
   const lib = await Bun.file(join(dir, "lib.js")).text();
   const shapes = await Bun.file(join(dir, "shapes.js")).text();
-  expect(lib).toContain("const SIDE = { value: shapes.Square.sideLength(shapes.Square.new(3)) };");
-  expect(lib).toContain("  return shapes.Square.area(shapes.Square.new(side));");
+  expect(lib).toContain("const SIDE = { value: Square.sideLength(Square.new(3)) };");
+  expect(lib).toContain("  return Square.area(Square.new(side));");
   expect(shapes).toContain("export const Square = {\n  new(side) {");
   expect(shapes).toContain("  area(square) {\n    return Math.imul(Square.sideLength(square), Square.sideLength(square)) >>> 0;");
   expect(shapes).toContain("\nconst Tally = {\n  doubled(tally) {\n    return Math.imul(tally[0], 2) >>> 0;\n  },\n};\n\nexport function tallyOfFour() {");
@@ -730,7 +736,7 @@ thread_local! {
   writeFileSync(join(dir, "editor.rs"), "pub fn open() -> u32 {\n    1\n}\n");
   run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
   const lib = await Bun.file(join(dir, "lib.js")).text();
-  expect(lib).toContain('import * as util from "./util.js";');
+  expect(lib).toContain('import { COUNT, SIZE } from "./util.js";');
   expect(lib).not.toContain("editor.js");
   expect(lib).toContain("export function doubled(editor) {");
   const module = await import(join(dir, "lib.js"));

@@ -28,7 +28,7 @@ pub struct Module {
     pub header: String,
     /// Imports from JS modules, from `#[link_name = "module#path"]` (ADR 0028).
     pub packages: Vec<Package>,
-    /// `import * as <alias> from "<from>"`, one per module this one calls into.
+    /// Named imports, one declaration per Rust module this one uses.
     pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
     pub runtime: Vec<&'static str>,
@@ -60,7 +60,8 @@ pub struct Const {
 }
 
 pub struct Import {
-    pub alias: String,
+    /// Exports as `(export, local)`, aliased only for name collisions.
+    pub named: Vec<(String, String)>,
     /// A relative specifier, like `./math.js` or `../lib.js`.
     pub from: String,
 }

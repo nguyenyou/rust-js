@@ -119,7 +119,18 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     if !module.imports.is_empty() {
         code.push('\n');
         for import in &module.imports {
-            code.push_str(&format!("import * as {} from {:?};\n", import.alias, import.from));
+            let named: Vec<_> = import
+                .named
+                .iter()
+                .map(|(export, local)| {
+                    if export == local {
+                        export.clone()
+                    } else {
+                        format!("{export} as {local}")
+                    }
+                })
+                .collect();
+            code.push_str(&format!("import {{ {} }} from {:?};\n", named.join(", "), import.from));
         }
     }
     for helper in &module.runtime {

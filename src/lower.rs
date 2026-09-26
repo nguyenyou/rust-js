@@ -78,8 +78,7 @@ pub struct LoweredModule {
     /// What it imports from JS modules (ADR 0028), with the modules' names
     /// as written in `#[link_name]`.
     pub packages: Vec<js::Package>,
-    /// The modules this one calls into, as `(alias, path)`.
-    pub imports: Vec<(String, Vec<String>)>,
+    pub imports: Vec<LoweredImport>,
     pub namespaces: Vec<js::Namespace>,
     pub consts: Vec<js::Const>,
     pub functions: Vec<js::Function>,
@@ -88,6 +87,12 @@ pub struct LoweredModule {
     pub runtime: Vec<Helper>,
     /// Whether it has JSX, so it's a `.jsx` file (ADR 0040).
     pub jsx: bool,
+}
+
+/// Named exports used from one Rust module, before its JS path is resolved.
+pub struct LoweredImport {
+    pub path: Vec<String>,
+    pub named: Vec<(String, String)>,
 }
 
 /// A `#[test]` function (ADR 0026).

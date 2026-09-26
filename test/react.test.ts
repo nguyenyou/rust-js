@@ -206,7 +206,8 @@ pub fn full_name(person: &Person) -> String {
   const lib = await Bun.file(join(dir, "lib.jsx")).text();
   const people = await Bun.file(join(dir, "people.js")).text();
   // Functions, across modules.
-  expect(lib).toContain("export function greet(firstName) {\n  return people.fullName(people.makePerson(firstName));");
+  expect(lib).toContain('import { fullName, makePerson } from "./people.js";');
+  expect(lib).toContain("export function greet(firstName) {\n  return fullName(makePerson(firstName));");
   expect(people).toContain("export function makePerson(firstName) {");
   // Fields: of a struct, of an enum's variant, and one kept by its `#[rust_js::name]`.
   expect(people).toContain("firstName, lastName: \"Doe\", user_id: 7");

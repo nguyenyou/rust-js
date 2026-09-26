@@ -35,9 +35,9 @@ impl OutputPlan {
             let imports = module
                 .imports
                 .iter()
-                .map(|(alias, target)| js::Import {
-                    alias: alias.clone(),
-                    from: self.specifier(&module.path, target),
+                .map(|import| js::Import {
+                    named: import.named.clone(),
+                    from: self.specifier(&module.path, &import.path),
                 })
                 .collect();
             // A relative module in `#[link_name]` is relative to the root's
@@ -279,7 +279,7 @@ impl OutputPlan {
             let imports = module
                 .imports
                 .iter()
-                .map(|(_, target)| absolute(&self.js_path(target)))
+                .map(|import| absolute(&self.js_path(&import.path)))
                 .collect::<Result<Vec<_>, _>>()?;
             modules.push(json!({
                 "module": module.path, "file": file, "map": map,

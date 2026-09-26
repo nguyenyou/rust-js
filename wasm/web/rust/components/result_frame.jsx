@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from "react";
 
-import * as listen from "../listen.js";
-import * as programs from "../programs.js";
-import * as styles from "../styles.js";
+import { listen } from "../listen.js";
+import { outcome as outcome$1 } from "../programs.js";
+import { HEADING } from "../styles.js";
 
 export function ResultFrame({ program, onOutcome }) {
   const frame = useRef(undefined);
@@ -21,7 +21,7 @@ export function ResultFrame({ program, onOutcome }) {
       const reported = { value: false };
       const heard = reported;
       const told = onOutcome;
-      listen.listen(
+      listen(
         window,
         "message",
         (e) => {
@@ -40,7 +40,7 @@ export function ResultFrame({ program, onOutcome }) {
             return;
           }
           heard.value = true;
-          const outcome = programs.outcome(report);
+          const outcome = outcome$1(report);
           if (outcome != null) {
             told(outcome);
           }
@@ -61,7 +61,7 @@ export function ResultFrame({ program, onOutcome }) {
   }, [tmp$1[0]]);
   return (
     <section id="result-section" className="mt-3" hidden={program == null}>
-      <h2 className={styles.HEADING}>
+      <h2 className={HEADING}>
         Result{" "}
         <span className="font-normal">
           the root module's <code>main()</code>, or with Test its <code>#[test]</code>s, in a frame

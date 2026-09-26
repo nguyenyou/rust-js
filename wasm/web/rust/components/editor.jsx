@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-import * as codemirror from "../codemirror.js";
-import * as dark_mode from "../dark_mode.js";
+import { openView, setTheme, show } from "../codemirror.js";
+import { useDarkMode } from "../dark_mode.js";
 
 function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
   if (value == null) {
@@ -15,12 +15,9 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
 export function Editor({ state, view, onSubmit }) {
   const parent = useRef(undefined);
   const made = useRef(undefined);
-  const dark = dark_mode.useDarkMode();
+  const dark = useDarkMode();
   useEffect(() => {
-    const editor = codemirror.openView(
-      $unwrap(parent.current, "the editor's element is mounted"),
-      state,
-    );
+    const editor = openView($unwrap(parent.current, "the editor's element is mounted"), state);
     made.current = editor;
     if (view != null) {
       view.current = editor;
@@ -36,8 +33,8 @@ export function Editor({ state, view, onSubmit }) {
   useEffect(() => {
     const editor = made.current;
     if (editor != null) {
-      codemirror.show(editor, state);
-      codemirror.setTheme(editor, dark);
+      show(editor, state);
+      setTheme(editor, dark);
     }
   }, [state, dark]);
   const onKeyDownCapture = (e) => {

@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import * as listen from "./listen.js";
+import { listen } from "./listen.js";
 
 const DARK = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -10,7 +10,7 @@ export function useDarkMode() {
   return useSyncExternalStore(
     (notify) => {
       const controller = new AbortController();
-      listen.listen(
+      listen(
         DARK,
         "change",
         () => {

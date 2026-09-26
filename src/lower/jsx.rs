@@ -29,6 +29,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 // JSX reads a lowercase name as a DOM element's, and Fast
                 // Refresh only keeps the state of a capitalized component.
                 if let js::ExprKind::Var(name) = &tag.kind
+                    && let name = super::link::export_name(name)
                     && !name.starts_with(|c: char| c.is_ascii_uppercase())
                 {
                     let message =

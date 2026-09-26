@@ -17,7 +17,7 @@ use rustc_span::def_id::DefId;
 use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// A call to one of our functions (`f`, or `alias.f` in another module),
+    /// A call to one of our functions (local or imported by name),
     /// to JS (ADR 0021), or to one of the std functions rust-js knows (ADR 0023).
     pub(super) fn call(&mut self, fun: ExprId, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         // Only this call's value is unused, not its arguments'.
@@ -748,35 +748,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .then_some((method, args))
     }
 
-    /// A JS global or a path from one (`console.log`), or from an import
-    /// (`node:path#posix.join` is `posix.join`, ADR 0028).
-    /// One of our functions: `f`, or `alias.f` in another module.
     /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
     fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
         self.runtime.extend([Helper::SomeAt, Helper::Some]);
         Expr::call(Expr::var("$someAt"), vec![items, index])
     }
 
-    /// `f`, or `util.f` in another module; a method, `Counter.tick` or
-    /// `util.Counter.tick` (ADR 0047).
+    /// A function or its type's method object, imported by name when it lives
+    /// in another module. The linker resolves collisions after lowering.
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
         self.dependencies.borrow_mut().uses.push((self.item, def_id));
         let target = &self.krate.fns[&def_id];
         if target.module != self.module {
             self.dependencies.borrow_mut().references.insert((self.module, def_id));
         }
-        let module = (target.module != self.module).then(|| Expr::var(&super::link::symbol(target.module)));
-        let holder = match (module, &target.owner) {
-            (Some(module), Some(owner)) => Some(Expr::member(module, owner.clone())),
-            (None, Some(owner)) => Some(Expr::var(owner)),
-            (module, None) => module,
+        let export = target.owner.as_ref().unwrap_or(&target.name);
+        let reference = if target.module != self.module {
+            Expr::var(&super::link::symbol(target.module, export))
+        } else {
+            Expr::var(export)
         };
-        match holder {
-            Some(holder) => Expr::member(holder, target.name.clone()),
-            None => Expr::var(&target.name),
+        if target.owner.is_some() {
+            Expr::member(reference, target.name.clone())
+        } else {
+            reference
         }
     }
 
+    /// A JS global (`console.log`) or an explicit package import
+    /// (`node:path#posix.join` is `posix.join`, ADR 0028).
     pub(super) fn js_ref(&self, path: &str) -> Expr {
         match js_import(path) {
             Some((export, rest)) => {

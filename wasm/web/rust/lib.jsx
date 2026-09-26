@@ -3,7 +3,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import * as app from "./components/app.jsx";
+import { App } from "./components/app.jsx";
 
 function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
   if (value == null) {
@@ -16,7 +16,7 @@ export function start() {
   const root = createRoot($unwrap(document.getElementById("app"), "the page has an #app"));
   root.render(
     <StrictMode>
-      <app.App />
+      <App />
     </StrictMode>,
   );
 }

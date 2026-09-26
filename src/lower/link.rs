@@ -2,15 +2,24 @@
 //! Locals keep their names; import aliases avoid every binding that could
 //! shadow them, including parameters of nested arrows and copied defaults.
 
-use super::{LoweredModule, fresh_in};
+use super::{LoweredImport, LoweredModule, fresh_in};
 use crate::js::{Expr, ExprKind, Function, JsxTag, Pattern, Prop, Stmt, StmtKind};
 use rustc_span::def_id::LocalModDefId;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// NUL cannot occur in a Rust/JS identifier. These temporary names exist
 /// only inside lowering and are resolved before the JS AST leaves it.
-pub(super) fn symbol(module: LocalModDefId) -> String {
-    format!("\0module:{}", module.to_def_id().index.as_u32())
+pub(super) fn symbol(module: LocalModDefId, export: &str) -> String {
+    format!("\0module:{}:{export}", module.to_def_id().index.as_u32())
+}
+
+/// The eventual export name, before a symbolic reference has been linked.
+pub(super) fn export_name(name: &str) -> &str {
+    if name.starts_with('\0') {
+        name.rsplit(':').next().unwrap()
+    } else {
+        name
+    }
 }
 
 pub(super) fn resolve(
@@ -23,13 +32,21 @@ pub(super) fn resolve(
             names.insert(name.clone());
         }
     });
+    let mut grouped: BTreeMap<Vec<String>, Vec<(String, String)>> = BTreeMap::new();
     let replacements: HashMap<_, _> = imports
         .iter()
         .map(|(symbol, base, path)| {
             let alias = fresh_in(&mut names, base);
-            module.imports.push((alias.clone(), path.clone()));
+            grouped
+                .entry(path.clone())
+                .or_default()
+                .push((base.clone(), alias.clone()));
             (symbol.as_str(), alias)
         })
+        .collect();
+    module.imports = grouped
+        .into_iter()
+        .map(|(path, named)| LoweredImport { path, named })
         .collect();
     visit(module, &mut |name| {
         if name.starts_with('\0') {
