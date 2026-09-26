@@ -94,6 +94,13 @@ function $add(set, item) {
   return added;
 }
 
+function $orInsert(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, value);
+  }
+  return map.get(key);
+}
+
 function $splitBy(s, matches) {
   const pieces = [""];
   for (const c of s) {
@@ -300,7 +307,8 @@ export function word_freq(text) {
     (w) => w.length !== 0,
   )) {
     const key = w.toLowerCase();
-    m.set(key, ((m.get(key) ?? 0) + 1) >>> 0);
+    const current = $orInsert(m, key, 0);
+    m.set(key, (current + 1) >>> 0);
   }
   let v = Array.from(m);
   v.sort((a, b) => $cmp(b[1], a[1]) || $cmp(a[0], b[0]));

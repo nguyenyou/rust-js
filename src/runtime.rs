@@ -24,6 +24,7 @@ pub enum Helper {
     Insert,
     Add,
     Remove,
+    Repeat,
     OrInsert,
     OrInsertWith,
     SortedEntries,
@@ -1035,7 +1036,20 @@ function $sortedKeys(set, cmp) {
 }
 "#
             }
-            // `m.entry(k).or_insert(v)`: the value there, put there first if need be.
+            // `vec![item; count]`: clone all but the last slot, which takes item.
+            Helper::Repeat => {
+                r#"
+function $repeat(item, count, clone) {
+  const result = [];
+  if (count > 0) {
+    for (let i = 1; i < count; i++) result.push(clone(item));
+    result.push(item);
+  }
+  return result;
+}
+"#
+            }
+            // `m.entry(k).or_insert(v)`: initialize only a missing entry.
             Helper::OrInsert => {
                 r#"
 function $orInsert(map, key, value) {

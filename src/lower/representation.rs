@@ -22,6 +22,58 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
     }
 
+    /// Eligibility for JS Map/Set equality. A string-shaped enum alone is
+    /// not enough: user equality or ordering may equate distinct variants.
+    pub(super) fn is_key(&self, ty: Ty<'tcx>, ordered: bool) -> bool {
+        let ty = ty.peel_refs();
+        !ty.is_unit()
+            && Num::of(ty) != Some(Num::F64)
+            && self.is_primitive_key(ty)
+            && !self.has_user_impl(self.partial_eq_trait(), ty)
+            && (!ordered || !self.has_user_impl(self.ord_trait(), ty))
+    }
+
+    pub(super) fn is_primitive_key(&self, ty: Ty<'tcx>) -> bool {
+        self.is_string_like(ty)
+            || Num::of(ty).is_some()
+            || ty.is_bool()
+            || matches!(ty.kind(), ty::Adt(adt, _) if is_fieldless_enum(*adt))
+    }
+
+    /// Whether reconstructing a value can replace its Clone implementation.
+    /// References and Rc share their referent; owned fields must all qualify.
+    pub(super) fn structural_clone(&self, ty: Ty<'tcx>) -> bool {
+        self.structural_clone_in(ty, &mut Vec::new())
+    }
+
+    fn structural_clone_in(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+        if seen.contains(&ty) {
+            return true;
+        }
+        seen.push(ty);
+        let structural = match ty.kind() {
+            ty::Ref(..) => true,
+            ty::Param(_) | ty::Alias(..) | ty::Dynamic(..) => false,
+            ty::Tuple(parts) => parts.iter().all(|t| self.structural_clone_in(t, seen)),
+            ty::Array(item, _) | ty::Slice(item) => self.structural_clone_in(*item, seen),
+            ty::Adt(..)
+                if self.is_std_adt(ty, Symbol::intern("Rc")) || self.is_string_like(ty) || self.is_js_object(ty) =>
+            {
+                true
+            }
+            ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => false,
+            ty::Adt(_, args) if self.is_std_wrapper(ty) || self.is_map(ty) => {
+                args.types().all(|t| self.structural_clone_in(t, seen))
+            }
+            ty::Adt(adt, args) => adt
+                .all_fields()
+                .all(|f| self.structural_clone_in(f.ty(self.tcx, args), seen)),
+            _ => true,
+        };
+        seen.pop();
+        structural
+    }
+
     /// An iterator that's a JS array (ADR 0036): a slice's or a `Vec`'s, a
     /// `split` or `chars` of a string, and the adapters on them.
     pub(super) fn is_array_iter(&self, ty: Ty<'tcx>) -> bool {
@@ -508,7 +560,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A `HashMap` or `HashSet` (ADR 0059): keys JS compares by value.
             ty::Adt(_, args) if self.is_map(ty) => {
                 let key = args.type_at(0);
-                if !self.is_key(key) {
+                if !self.is_key(key, self.is_sorted(ty)) {
                     return Some(key);
                 }
                 // A map's value; after it, and after a set's key, the hasher.

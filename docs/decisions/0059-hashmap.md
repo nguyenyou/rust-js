@@ -13,7 +13,7 @@ and `Eq`. The two agree only where JS compares by value.
 ## Decision
 
 **A `HashMap<K, V>` is a `Map`, and a `HashSet<K>` a `Set`, when `K` is
-one JS compares by value:** a number (not `f64`, which isn't `Hash`
+one JS compares by value, without custom equality or (for B-trees) ordering:** a number (not `f64`, which isn't `Hash`
 anyway), a string, a `char`, a `bool`, or a fieldless enum, which is a
 string (ADR 0013). Any other key is a compile error.
 
@@ -25,8 +25,8 @@ string (ADR 0013). Any other key is a compile error.
 | `m.get(&k)`, `m.contains_key(&k)`, `m[&k]` | `m.get(k)`, `m.has(k)`, `$unwrap(m.get(k), "key not found")` |
 | `m.remove(&k);`, `s.remove(&x)` | `m.delete(k)`, `s.delete(x)` |
 | `m.len()`, `m.is_empty()` | `m.size`, `m.size === 0` |
-| `*m.entry(k).or_insert(0) += 1` | `m.set(k, (m.get(k) ?? 0) + 1)` |
-| `m.entry(k).or_default().push(x)` | `$orInsert(m, k, []).push(x)` |
+| `*m.entry(k).or_insert(0) += 1` | `const current = $orInsert(m, k, 0); m.set(k, current + 1)` |
+| `m.entry(k).or_default().push(x)` | `$orInsertWith(m, k, () => []).push(x)` |
 | `for (k, v) in &m` | `for (const [k, v] of m)` |
 | `m.iter()`, `keys()`, `values()`, `into_iter()` | `Array.from(m)`, … (arrays, ADR 0036) |
 | `collect()`, `HashMap::from(pairs)` | `new Map(pairs)` |
@@ -42,6 +42,9 @@ string (ADR 0013). Any other key is a compile error.
   m.get_mut(&k)` or `let ... else`, is a copy, `let n = m.get(k)`, and a
   write through it puts it back: `n = n + 1 >>> 0; m.set(k, n)`. While the
   `&mut` lives, nothing else can change that entry (ADR 0067).
+- **Prepare the target before writing it (ADR 0069).** Existence checks and
+  entry initialization run even on overwrite. `or_insert` evaluates its argument
+  eagerly; `or_insert_with` and `or_default` evaluate their factories lazily.
 - **A value in the map is written through `set`:**
   `*m.get_mut(&k).unwrap() += 1` is `m.set(k, $unwrap(m.get(k)) + 1)`. A
   value that's an object, like a `Vec`, is changed in place as any

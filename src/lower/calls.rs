@@ -294,10 +294,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `*m.entry(k).or_insert(0) += n` with a `&u32` `n`: as with a `u32` (ADR 0059).
             if let Some(slot) = self.map_slot(place) {
+                // A trait call evaluates its receiver before its argument.
+                let target = self.prepare_map_place(slot, true, span, out)?;
                 let value = self.expr(args[1], out)?;
                 let ty = self.thir[place].ty;
-                let write = |this: &mut Self, current| this.binary(op, current, value.clone(), None, ty, span);
-                self.map_slot_write(slot, &write, span, out)?;
+                let value = self.binary(op, target.read(), value, None, ty, span)?;
+                target.write(value, self.js_span(span), out);
                 return Ok(Expr::undefined());
             }
             let value = self.expr(args[1], out)?;
@@ -709,12 +711,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `f`, or `util.f` in another module; a method, `Counter.tick` or
     /// `util.Counter.tick` (ADR 0047).
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
-        self.krate.uses.borrow_mut().push((self.item, def_id));
+        self.dependencies.borrow_mut().uses.push((self.item, def_id));
         let target = &self.krate.fns[&def_id];
         if target.module != self.module {
-            self.krate.references.borrow_mut().insert((self.module, def_id));
+            self.dependencies.borrow_mut().references.insert((self.module, def_id));
         }
-        let module = (target.module != self.module).then(|| Expr::var(&self.aliases[&target.module]));
+        let module = (target.module != self.module).then(|| Expr::var(&super::link::symbol(target.module)));
         let holder = match (module, &target.owner) {
             (Some(module), Some(owner)) => Some(Expr::member(module, owner.clone())),
             (None, Some(owner)) => Some(Expr::var(owner)),
@@ -729,9 +731,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn js_ref(&self, path: &str) -> Expr {
         match js_import(path) {
             Some((export, rest)) => {
-                self.krate
-                    .package_uses
+                self.dependencies
                     .borrow_mut()
+                    .package_uses
                     .insert((self.module, export.clone()));
                 global(&format!("{}{rest}", self.krate.imports[&export]))
             }

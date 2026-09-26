@@ -19,6 +19,7 @@ an explicit responsibility:
 |---|---|
 | `main.rs` | CLI, rustc callbacks, analysis and the final diagnostic gate |
 | `lower/analysis.rs` | Discover definitions and module relationships; collect immutable crate facts; orchestrate lowering |
+| `lower/link.rs` | Resolve symbolic module references after reachability; allocate import aliases |
 | `lower.rs` | Function state, control flow, patterns, expression evaluation order and places |
 | `lower/representation.rs` | Supported types, numeric and aggregate representations, constants and copying |
 | `lower/bindings.rs` | Decode and validate binding attributes |
@@ -27,10 +28,12 @@ an explicit responsibility:
 | `runtime.rs` | Helpers selected by lowering and emitted on demand |
 | `js.rs` | Shared JavaScript/JSX tree, independent of rustc and oxc |
 | `prepare.rs` | Readability transformations on completed JS trees; preserve evaluation regions and source spans |
-| `to_oxc.rs` | The only oxc integration; conversion, layout and source maps |
+| `to_oxc.rs`, `format.rs` | oxc integration; conversion, formatting and source maps |
 | `output.rs` | Plan and validate filenames, generate artifacts, publish files and track ownership |
 
-`CrateFacts` is borrowed read-only by function contexts. Keep evaluation-order
+`CrateFacts` is borrowed read-only by function contexts. Functions return their
+dependencies with their lowered output; the link step resolves actual imports
+without lowering bodies again (ADR 0069). Keep evaluation-order
 machinery shared: feature modules must not invent their own argument-order rules.
 No lowering module predicts printer indentation. Semantic temporaries remain in
 lowering; optional JSX readability temporaries belong to preparation. Preparation
@@ -119,7 +122,7 @@ The refactor preserves the existing public bindings and readable-output fixtures
 ## Consequences
 
 Tests live in separate compiler, diagnostic, emission, React, browser and Vite
-suites with shared build helpers. PR CI runs the native checks, browser suites
+suites with shared build helpers. Nightly CI runs the native checks, Chromium browser suites
 and a production example build. The WASI package shares the source and declares
 the same new JSON dependency; its lockfile remains independently pinned.
 

@@ -245,11 +245,10 @@ does not claim to fix that policy's effect-order differences. A later lazy
 iterator implementation is separate from trait dispatch.
 
 Which modules a body uses is known only once it is lowered: a resolved trait
-call or a copied default can reach a module its Rust does not name. So the
-crate is lowered twice. The first pass reserves every module's import alias
-and records the uses; the output is the second, reserving aliases only for
-modules actually used, so an unused module never renames a local (a crate
-where every module uses every other is lowered once).
+call or a copied default can reach a module its Rust does not name. Originally
+this required two lowering passes. [ADR 0069](0069-lowering-effects-and-linking.md)
+replaces them with one pass that returns symbolic module references and explicit
+dependencies, followed by alias allocation and linking.
 
 Source spans are retained on method bodies. A copied default from another
 source file currently has no mapping for those out-of-file spans: existing

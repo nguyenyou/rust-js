@@ -89,6 +89,10 @@ differs is a helper with Rust's answer:**
   use that changes its copy would need `{ ...Vec2.ZERO }`, which is the
   value written out anyway.
 
+Custom or generic clones, including those in owned fields, use `$repeat`
+(ADR 0069): clone `n - 1` times, then move the original. Rebuilding pure parts
+is allowed only when cloning is structural.
+
 ## Consequences
 
 - JS's `Math.sin`, `Math.exp`, `Math.log` and `**` aren't required to be

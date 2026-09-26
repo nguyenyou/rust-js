@@ -41,6 +41,7 @@ mod combinators;
 mod display;
 mod format_spec;
 mod jsx;
+mod link;
 mod maps;
 mod numbers;
 mod ordering;
@@ -137,6 +138,7 @@ pub struct LoweredFn {
     pub function: js::Function,
     pub runtime: HashSet<Helper>,
     pub jsx: bool,
+    dependencies: Dependencies,
 }
 
 /// Where the value of a statement-lowered expression goes.
@@ -199,7 +201,7 @@ struct Loop {
     dest: Dest,
 }
 
-/// Crate facts and dependencies recorded while lowering function bodies.
+/// Immutable analysis inputs shared by function lowering.
 struct CrateFacts<'a, 'tcx> {
     mutated: &'a HashSet<Ty<'tcx>>,
     changed_vecs: &'a HashSet<Ty<'tcx>>,
@@ -208,14 +210,20 @@ struct CrateFacts<'a, 'tcx> {
     fns: &'a HashMap<DefId, FnInfo>,
     imports: &'a HashMap<Export, String>,
     trait_impls: &'a [DefId],
-    references: RefCell<HashSet<(LocalModDefId, DefId)>>,
-    package_uses: RefCell<HashSet<(LocalModDefId, Export)>>,
-    /// Each item, and a function it names (ADR 0060).
-    uses: RefCell<Vec<(DefId, DefId)>>,
+}
+
+/// Dependencies recorded by one function (including copied trait bodies and
+/// closures), returned with its JS. They never mutate the crate's inputs.
+#[derive(Default)]
+struct Dependencies {
+    references: HashSet<(LocalModDefId, DefId)>,
+    package_uses: HashSet<(LocalModDefId, Export)>,
+    uses: Vec<(DefId, DefId)>,
 }
 
 struct FnCx<'a, 'tcx> {
     krate: &'a CrateFacts<'a, 'tcx>,
+    dependencies: RefCell<Dependencies>,
     tcx: TyCtxt<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
@@ -229,9 +237,8 @@ struct FnCx<'a, 'tcx> {
     file_start: BytePos,
     file_end: BytePos,
     thir: &'a Thir<'tcx>,
-    /// The module being lowered, and its import aliases for other modules.
+    /// The module receiving this function and its recorded dependencies.
     module: LocalModDefId,
-    aliases: &'a HashMap<LocalModDefId, String>,
     vars: HashMap<LocalVarId, Var>,
     /// JS names already taken in this function.
     names: HashSet<String>,
@@ -282,6 +289,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             },
             runtime: std::mem::take(&mut self.runtime),
             jsx: self.jsx,
+            dependencies: self.dependencies.take(),
         })
     }
 
@@ -567,20 +575,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.slot_write(lhs, &write, span, out).map(|_| ())
             }
             ExprKind::Assign { lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
-                let value = self.expr(rhs, out)?;
-                self.map_slot_write(slot, &|_, _| Ok(value.clone()), expr.span, out)
+                let value = self.assignment_value(rhs, out)?;
+                let place = self.prepare_map_place(slot, false, expr.span, out)?;
+                place.write(value, span, out);
+                Ok(())
             }
             ExprKind::AssignOp { op, lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
-                let rhs_js = self.expr(rhs, out)?;
-                let ty = self.thir[lhs].ty;
-                let known = self.known_int(rhs);
-                let span = expr.span;
-                self.map_slot_write(
-                    slot,
-                    &|this, current| this.binary(assign_op(op), current, rhs_js.clone(), known, ty, span),
-                    span,
-                    out,
-                )
+                let rhs_js = self.assignment_value(rhs, out)?;
+                let place = self.prepare_map_place(slot, true, expr.span, out)?;
+                let value = self.binary(
+                    assign_op(op),
+                    place.read(),
+                    rhs_js,
+                    self.known_int(rhs),
+                    self.thir[lhs].ty,
+                    expr.span,
+                )?;
+                place.write(value, span, out);
+                Ok(())
             }
             // `v[i] = x` or `v[i].x = y`: Rust runs the right side first.
             ExprKind::Assign { lhs, rhs } if self.place(lhs).is_none() && self.in_element(lhs) => {
@@ -1968,6 +1980,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => Err(self.unsupported(span, "this expression")),
         }
+    }
+
+    /// Assignments evaluate the RHS before the target, including its checks.
+    /// A nonconstant value is captured before target preparation emits code.
+    fn assignment_value(&mut self, rhs: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        let value = self.expr(rhs, out)?;
+        Ok(if value.is_constant() {
+            value
+        } else {
+            self.spill("value", value, out)
+        })
     }
 
     /// Lower operands left to right. If a later operand needs statements,

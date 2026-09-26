@@ -127,6 +127,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let array = Expr::new_(Expr::var("Array"), vec![n]);
             return Ok(Expr::call(Expr::member(array, "fill"), vec![item]));
         }
+        // A hand-written Clone (including one in a field) can change values
+        // and run effects. Clone n - 1 times, then move the original item.
+        if !self.structural_clone(item_ty) {
+            let name = self.fresh("item");
+            let mut body = Vec::new();
+            let copy = self.clone_value(Expr::var(&name), item_ty, span, &mut body)?;
+            body.push(StmtKind::Return(Some(copy)).at(js::Span::NONE));
+            self.runtime.insert(Helper::Repeat);
+            return Ok(Expr::call(
+                Expr::var("$repeat"),
+                vec![item, n, Expr::arrow(vec![name.into()], body)],
+            ));
+        }
         let body = if rebuilt {
             vec![StmtKind::Return(Some(item)).at(js::Span::NONE)]
         } else {
@@ -150,6 +163,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// array or struct of such parts and of values that need no copy.
     fn rebuilt(&self, e: ExprId) -> bool {
         let e = self.strip(e);
+        if !self.structural_clone(self.thir[e].ty) {
+            return false;
+        }
         let part = |p: ExprId| self.rebuilt(p) || (!self.needs_clone(self.thir[p].ty) && self.pure(p));
         match self.thir[e].kind {
             ExprKind::Call { fun, ref args, .. } => match self.std_fn(fun) {

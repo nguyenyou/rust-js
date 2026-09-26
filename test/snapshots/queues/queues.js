@@ -147,9 +147,9 @@ function $pop(items) {
   return items.length === 0 ? undefined : $some(items.pop());
 }
 
-function $orInsert(map, key, value) {
+function $orInsertWith(map, key, make) {
   if (!map.has(key)) {
-    map.set(key, value);
+    map.set(key, make());
   }
   return map.get(key);
 }
@@ -473,7 +473,7 @@ export function report() {
   let words = new Map();
   for (const w$1 of "the quick brown fox jumps over the lazy dog".split(" ")) {
     const key = Array.from(w$1).length;
-    $orInsert(words, key, []).push(w$1);
+    $orInsertWith(words, key, () => []).push(w$1);
   }
   let lens = Array.from(words.keys());
   lens.sort((a, b) => $cmp(b, a));

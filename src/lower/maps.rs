@@ -2,10 +2,9 @@
 //! what JS compares by value: numbers, strings, `char`s, `bool`s and
 //! fieldless enums.
 
-use super::representation::Num;
 use super::stdlib::Std;
 use super::{FnCx, R};
-use crate::js::{Expr, Op, Stmt, StmtKind};
+use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
@@ -56,19 +55,6 @@ pub(super) enum Part {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// Can a `ty` be a JS `Map`'s key, compared by value as Rust compares it?
-    pub(super) fn is_key(&self, ty: Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
-        !ty.is_unit() && Num::of(ty) != Some(Num::F64) && self.is_primitive_key(ty)
-    }
-
-    pub(super) fn is_primitive_key(&self, ty: Ty<'tcx>) -> bool {
-        self.is_string_like(ty)
-            || Num::of(ty).is_some()
-            || ty.is_bool()
-            || matches!(ty.kind(), ty::Adt(adt, _) if super::is_fieldless_enum(*adt))
-    }
-
     /// A `HashMap`, `HashSet`, `BTreeMap` or `BTreeSet`: a JS `Map` or `Set`.
     pub(super) fn is_map(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
@@ -126,21 +112,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `or_insert` and the rest take the entry apart: `[m, k]`.
         if matches!(op, MapOp::OrInsert | MapOp::OrInsertWith | MapOp::OrDefault) {
             let (map, key) = self.entry_parts(args[0], out)?;
-            let default = match op {
-                MapOp::OrDefault => {
-                    let value = generic_args
-                        .types()
-                        .nth(1)
-                        .ok_or_else(|| self.unsupported(span, "this entry"))?;
-                    self.default_value(value, span)?
-                }
-                _ => self.expr(args[1], out)?,
-            };
-            let (name, helper_kind) = match op {
-                MapOp::OrInsertWith => ("$orInsertWith", Helper::OrInsertWith),
-                _ => ("$orInsert", Helper::OrInsert),
-            };
-            return Ok(helper(self, helper_kind, name, vec![map, key, default]));
+            let value = self.entry_value(op, args, generic_args, (map, key), span, out)?;
+            return Ok(value);
         }
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
@@ -267,47 +240,30 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// A write to a map's value, `m.set(k, value)`, where `value` is made
-    /// from the one that's there (or would be put there): `(m.get(k) ?? 0) + 1`.
-    pub(super) fn map_slot_write(
+    /// Resolve a map target before writing it. Checks and entry initialization
+    /// are statements, so overwriting the value cannot discard their effects.
+    pub(super) fn prepare_map_place(
         &mut self,
         slot: ExprId,
-        value: &dyn Fn(&mut Self, Expr) -> R<Expr>,
+        read: bool,
         span: Span,
         out: &mut Vec<Stmt>,
-    ) -> R<()> {
+    ) -> R<MapPlace> {
         let ExprKind::Call { fun, ref args, .. } = self.thir[self.strip(slot)].kind else {
             unreachable!("checked by map_slot")
         };
         let op = self.std_fn(fun);
         let args = args.clone();
-        let (map, key, current) = match op {
+        let (map, key, checked) = match op {
             Some(Std::Map(op)) => {
                 let (map, key) = self.entry_parts(args[0], out)?;
-                let there = Expr::call(Expr::member(map.clone(), "get"), vec![key.clone()]);
-                // The value put there first, if there's none: a primitive, so
-                // never `undefined` itself.
-                let default = match op {
-                    MapOp::OrDefault => {
-                        let ExprKind::Call { fun, .. } = self.thir[self.strip(args[0])].kind else {
-                            unreachable!("an entry")
-                        };
-                        let &ty::FnDef(_, entry_args) = self.thir[self.strip(fun)].ty.kind() else {
-                            unreachable!("an entry")
-                        };
-                        let value = entry_args
-                            .types()
-                            .nth(1)
-                            .ok_or_else(|| self.unsupported(span, "this entry"))?;
-                        self.default_value(value, span)?
-                    }
-                    MapOp::OrInsertWith => Expr::call(self.expr(args[1], out)?, Vec::new()),
-                    _ => self.expr(args[1], out)?,
+                let &ty::FnDef(_, generic_args) = self.thir[self.strip(fun)].ty.kind() else {
+                    unreachable!("an entry method")
                 };
-                (map, key, Expr::bin(Op::Coalesce, there, default))
+                let checked = self.entry_value(op, &args, generic_args, (map.clone(), key.clone()), span, out)?;
+                (map, key, checked)
             }
             _ => {
-                // `m.get_mut(&k).unwrap()`.
                 let ExprKind::Call { args: ref get, .. } = self.thir[self.strip(args[0])].kind else {
                     unreachable!("checked by map_slot")
                 };
@@ -327,9 +283,59 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 (map, key, Expr::call(Expr::var("$unwrap"), vec![there]))
             }
         };
-        let value = value(self, current)?;
-        let js_span = self.js_span(span);
-        out.push(StmtKind::Expr(Expr::call(Expr::member(map, "set"), vec![key, value])).at(js_span));
-        Ok(())
+        let current = if read {
+            Some(self.spill("current", checked, out))
+        } else {
+            out.push(StmtKind::Expr(checked).at(self.js_span(span)));
+            None
+        };
+        Ok(MapPlace { map, key, current })
+    }
+
+    /// Eager arguments stay eager; only the default factory runs lazily.
+    fn entry_value(
+        &mut self,
+        op: MapOp,
+        args: &[ExprId],
+        generic_args: ty::GenericArgsRef<'tcx>,
+        (map, key): (Expr, Expr),
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let default = match op {
+            MapOp::OrDefault => {
+                let value = generic_args
+                    .types()
+                    .nth(1)
+                    .ok_or_else(|| self.unsupported(span, "this entry"))?;
+                let value = self.default_value(value, span)?;
+                Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(js::Span::NONE)])
+            }
+            _ => self.expr(args[1], out)?,
+        };
+        let (helper, name) = match op {
+            MapOp::OrInsert => (Helper::OrInsert, "$orInsert"),
+            _ => (Helper::OrInsertWith, "$orInsertWith"),
+        };
+        self.runtime.insert(helper);
+        Ok(Expr::call(Expr::var(name), vec![map, key, default]))
+    }
+}
+
+/// An already evaluated target. Its checks have run even when no old value
+/// is needed. Emission of the write never evaluates the Rust target again.
+pub(super) struct MapPlace {
+    map: Expr,
+    key: Expr,
+    current: Option<Expr>,
+}
+
+impl MapPlace {
+    pub(super) fn read(&self) -> Expr {
+        self.current.clone().expect("prepared for a read")
+    }
+
+    pub(super) fn write(self, value: Expr, span: js::Span, out: &mut Vec<Stmt>) {
+        out.push(StmtKind::Expr(Expr::call(Expr::member(self.map, "set"), vec![self.key, value])).at(span));
     }
 }

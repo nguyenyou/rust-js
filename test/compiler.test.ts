@@ -226,11 +226,11 @@ test("a crate split across files becomes one JS file per module", async () => {
   const area = await Bun.file(join(out, "geometry/area.js")).text();
   // Specifiers are relative, and aliases are unique within the file.
   expect(area).toContain('import * as lib from "../lib.js";');
-  expect(area).toContain('import * as util from "./util.js";');
-  expect(area).toContain('import * as util$1 from "../util.js";');
-  // A local named like an alias is renamed rather than shadowing it.
-  expect(area).toContain("const util$2 = (x + 1) >>> 0;");
-  expect(area).toContain("return util$1.double(util$2);");
+  expect(area).toContain('import * as util$1 from "./util.js";');
+  expect(area).toContain('import * as util$2 from "../util.js";');
+  // Imports are named after locals are known, so locals keep their names.
+  expect(area).toContain("const util = (x + 1) >>> 0;");
+  expect(area).toContain("return util$2.double(util);");
   // lib ↔ stats import each other: a cycle, which Rust and ES modules allow.
   const stats = await Bun.file(join(out, "stats.js")).text();
   expect(stats).toContain('import * as lib from "./lib.js";');
@@ -358,7 +358,7 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   }
   // A folder's entries are a FileTree inside it: the component is recursive.
   expect(await read("components/file_tree.jsx")).toContain("<FileTree\n                tree={param[1]._0}\n                depth={(depth + 1) >>> 0}");
-  expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {");
+  expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree, depth, first, selected, onOpen, onDelete }) {");
   // The editor's view is made in an effect, and destroyed in its cleanup.
   expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");
   // A let chain on `&on_submit`, tested where it is: a reference is the value.
@@ -904,10 +904,10 @@ test("format options pad, round and change base as Rust does", async () => {
 test("HashMap and HashSet are a JS Map and Set", async () => {
   const js = await Bun.file(join(target, "collections.js")).text();
   // The count idiom: the value there, or the one it would start as.
-  expect(js).toContain("counts.set(word, ((counts.get(word) ?? 0) + 1) >>> 0);");
+  expect(js).toContain("const current = $orInsert(counts, word, 0);\n    counts.set(word, (current + 1) >>> 0);");
   // A value that's used is the old one; one that isn't is plain `set`.
   expect(js).toContain('  m.set("a", n);\n  const old = $insert(m, "a", (n + 1) >>> 0);');
-  expect(js).toContain("$orInsert(groups, key, []).push(i);");
+  expect(js).toContain("$orInsertWith(groups, key, () => []).push(i);");
   expect(js).toContain("const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));");
 });
 

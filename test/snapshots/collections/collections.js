@@ -54,6 +54,13 @@ function $orInsert(map, key, value) {
   return map.get(key);
 }
 
+function $orInsertWith(map, key, make) {
+  if (!map.has(key)) {
+    map.set(key, make());
+  }
+  return map.get(key);
+}
+
 function $sortedEntries(map, cmp) {
   return Array.from(map).sort((a, b) => cmp(a[0], b[0]));
 }
@@ -271,7 +278,8 @@ export function arrays(i) {
 export function word_counts(text) {
   let counts = new Map();
   for (const word of text.split(" ")) {
-    counts.set(word, ((counts.get(word) ?? 0) + 1) >>> 0);
+    const current = $orInsert(counts, word, 0);
+    counts.set(word, (current + 1) >>> 0);
   }
   let all = Array.from(counts);
   all.sort((a, b) => $cmp(a[0], b[0]) || $cmp(a[1], b[1]));
@@ -289,7 +297,8 @@ export function map_basics(n) {
   for (const [, v] of m) {
     total = (total + v) >>> 0;
   }
-  m.set("a", ($unwrap(m.get("a")) + 10) >>> 0);
+  const current = $unwrap(m.get("a"));
+  m.set("a", (current + 10) >>> 0);
   return [
     old,
     first,
@@ -324,7 +333,7 @@ export function grouped(n) {
   let groups = new Map();
   for (let i = 1; i < n; i++) {
     const key = i % 3;
-    $orInsert(groups, key, []).push(i);
+    $orInsertWith(groups, key, () => []).push(i);
   }
   const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));
   const zero = groups.get(0);
@@ -339,7 +348,8 @@ export function grouped(n) {
 export function sorted_maps(text) {
   let counts = new Map();
   for (const word of text.split(" ")) {
-    counts.set(word, ((counts.get(word) ?? 0) + 1) >>> 0);
+    const current = $orInsert(counts, word, 0);
+    counts.set(word, (current + 1) >>> 0);
   }
   let order = [];
   for (const [word$1, n] of $sortedEntries(counts, $cmp)) {

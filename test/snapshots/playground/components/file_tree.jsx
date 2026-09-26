@@ -2,10 +2,10 @@
 
 import * as file_item from "./file_item.jsx";
 import * as styles from "../styles.js";
-import * as tree from "../tree.js";
+import * as tree$1 from "../tree.js";
 
-export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {
-  const rows = tree.inOrder(tree$1, first).map((param) => {
+export function FileTree({ tree, depth, first, selected, onOpen, onDelete }) {
+  const rows = tree$1.inOrder(tree, first).map((param) => {
     if (param[1].TAG === "Folder") {
       return (
         <li key={`${param[0]}/`} className="flex items-center">

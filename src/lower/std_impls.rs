@@ -68,7 +68,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(Expr::call(self.fn_ref(instance.def_id()), values))
     }
 
-    fn clone_trait(&self) -> DefId {
+    pub(super) fn clone_trait(&self) -> DefId {
         self.tcx.require_lang_item(LangItem::Clone, rustc_span::DUMMY_SP)
     }
 

@@ -82,6 +82,13 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
   return value;
 }
 
+function $orInsert(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, value);
+  }
+  return map.get(key);
+}
+
 function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -146,7 +153,8 @@ var $minStockRule, $revenueRule, $storeDisplay;
 export const Store = {
   apply(store, e) {
     if (e.TAG === "Restock") {
-      store.stock.set(e.item, ((store.stock.get(e.item) ?? 0) + e.qty) >>> 0);
+      const current = $orInsert(store.stock, e.item, 0);
+      store.stock.set(e.item, (current + e.qty) >>> 0);
     } else if (e.TAG === "Sale") {
       let have = store.stock.get(e.item);
       if (have == null) {
@@ -255,7 +263,8 @@ export function tallies(words) {
   let counts = new Map();
   const one = 1;
   for (const w of words) {
-    counts.set(w, ((counts.get(w) ?? 0) + one) >>> 0);
+    const current = $orInsert(counts, w, 0);
+    counts.set(w, (current + one) >>> 0);
     let n = counts.get("b");
     if (n != null) {
       n = Math.imul(n, 2) >>> 0;
