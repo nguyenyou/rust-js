@@ -246,6 +246,10 @@ fn main() -> ExitCode {
         input.display().to_string(),
         "--crate-type=lib".to_string(),
         "--edition=2024".to_string(),
+        // `#[cfg(browser)]` marks tests that need a real browser (ADR 0027):
+        // `-- --cfg browser` turns it on. Declaring any cfg makes rustc check them
+        // all, so `test` is declared too, as Cargo does.
+        "--check-cfg=cfg(browser, test)".to_string(),
     ];
     if test {
         rustc_args.push("--test".to_string());

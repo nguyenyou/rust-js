@@ -12,3 +12,6 @@
 /wasm/web/node_modules
 /wasm/web/dist
 /node_modules
+/.vitest
+/test-results
+/playwright-report

@@ -324,8 +324,10 @@ async function compile(
   ];
   const outFile = `/out/${rootFile.replace(/\.rs$/, ".js")}`;
   // `--test`: the `#[test]` functions too, and `<root>.test.js` to run them (ADR 0026).
+  // This is a real browser, so tests marked `#[cfg(browser)]` run too (ADR 0027).
   const mode = test ? ["--test"] : [];
-  const args = ["rust-js", ...mode, `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot"];
+  const cfg = test ? ["--cfg=browser"] : [];
+  const args = ["rust-js", ...mode, `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot", ...cfg];
   // Every program may use the web crate; rustc only reads it if one does.
   args.push("--extern", "web=/web/libweb.rmeta");
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).

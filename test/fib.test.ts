@@ -55,6 +55,12 @@ beforeAll(async () => {
   tests("examples/counter.rs", "counter", withWeb);
   tests("examples/todo.rs", "todo", withWeb);
   tests("test/asserts.rs", "asserts");
+  // For real browsers (ADR 0027): `--cfg browser` turns on tests that need one.
+  const forBrowser = (rs: string, name: string, flags: string[] = []) =>
+    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "browser-tests", name, `${name}.js`), ...flags, "--cfg=browser"]);
+  forBrowser("examples/counter.rs", "counter", withWeb);
+  forBrowser("examples/todo.rs", "todo", withWeb);
+  forBrowser("test/asserts.rs", "asserts", ["--"]);
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -229,6 +235,37 @@ test("a failing test fails the way Rust's would", () => {
     expect(output).toContain(`(fail) tests::${name}`);
   }
 });
+
+// ADR 0027: the same tests in real browsers, Chromium, Firefox and WebKit,
+// through Playwright Test and through Vitest's browser mode, both on Bun.
+const browserTests = ["target/browser-tests/counter/counter.test.js", "target/browser-tests/todo/todo.test.js"];
+
+function inBrowsers(runner: "playwright" | "vitest", files: string[]): { exit: number; output: string } {
+  const command =
+    runner === "playwright"
+      ? ["bunx", "--bun", "playwright", "test", "-c", "browser/playwright.config.ts", "--reporter=line"]
+      : ["bunx", "--bun", "vitest", "run", "-c", "browser/vitest.config.ts"];
+  const p = Bun.spawnSync(command, { cwd: root, env: { ...process.env, RUST_JS_TESTS: files.join(" ") }, stderr: "pipe" });
+  return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
+}
+
+test("in real browsers, with Playwright Test on Bun", () => {
+  const { exit, output } = inBrowsers("playwright", browserTests);
+  // 8 tests, the layout one included, on 3 engines.
+  expect([exit, output.match(/(\d+) passed/)?.[1]]).toEqual([0, "24"]);
+  const failing = inBrowsers("playwright", ["target/browser-tests/asserts/asserts.test.js"]);
+  expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "12", "3"]);
+  expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: { x: 1, y: 2 }");
+}, 120_000);
+
+test("in real browsers, with Vitest's browser mode", () => {
+  const { exit, output } = inBrowsers("vitest", browserTests);
+  expect([exit, output.match(/Tests\s+(\d+) passed/)?.[1]]).toEqual([0, "24"]);
+  const failing = inBrowsers("vitest", ["target/browser-tests/asserts/asserts.test.js"]);
+  expect([failing.exit, failing.output.match(/Tests\s+(\d+) failed/)?.[1]]).toEqual([1, "12"]);
+  // Vitest follows the source map back into the Rust.
+  expect(failing.output).toContain("fails_an_assert test/asserts.rs:");
+}, 120_000);
 
 // The counter's JS reads like the Rust: methods, properties, globals, and one
 // shared `{ value }`. No wrappers from the web crate.

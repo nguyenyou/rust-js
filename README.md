@@ -7,7 +7,8 @@ replace the back end with one that prints JS from THIR.
 ```bash
 cargo build
 ./target/debug/rust-js examples/fib.rs          # writes examples/fib.js + fib.js.map
-bun install && bun test                      # native Rust vs. generated JS, source maps, Rust #[test]s
+bun install && bunx playwright install      # test tools, and the browsers for real-browser tests
+bun test                                     # native vs. JS, source maps, Rust #[test]s in happy-dom and 3 browsers
 ```
 
 **Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
@@ -67,5 +68,9 @@ bun test --preload ./test/happydom.ts ./out/todo.test.js
 ```
 
 `assert!`, `assert_eq!`, `panic!` and `#[should_panic]` fail with Rust's messages.
+
+The same tests run in real browsers (Chromium, Firefox, WebKit) with Playwright Test or Vitest's
+browser mode, both on Bun ([browser/](browser/README.md), [ADR 0027](docs/decisions/0027-real-browser-tests.md)).
+A test that needs one is marked `#[cfg_attr(not(browser), ignore)]`.
 
 Design decisions are recorded in [docs/](docs/README.md).

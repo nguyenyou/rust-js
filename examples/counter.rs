@@ -44,7 +44,7 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use web::{HtmlElement, html_element, node_list};
+    use web::{HtmlElement, dom_rect_read_only, html_element, node_list};
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {
@@ -85,5 +85,20 @@ mod tests {
         html_element::click(minus);
         html_element::click(minus);
         assert_eq!(shown(app), "-1");
+    }
+
+    /// Needs real layout, which happy-dom doesn't do (every box is empty there),
+    /// so it only runs in a browser: `-- --cfg browser` (ADR 0027).
+    #[test]
+    #[cfg_attr(not(browser), ignore = "needs a real browser")]
+    fn the_count_sits_between_the_buttons() {
+        let app = page();
+        main();
+        let minus = element::get_bounding_client_rect(nth_button(app, 0));
+        let output = element::get_bounding_client_rect(element::query_selector(app, "output"));
+        let plus = element::get_bounding_client_rect(nth_button(app, 1));
+        assert!(dom_rect_read_only::width(minus) > 0.0, "the buttons have a size");
+        assert!(dom_rect_read_only::right(minus) <= dom_rect_read_only::left(output));
+        assert!(dom_rect_read_only::right(output) <= dom_rect_read_only::left(plus));
     }
 }

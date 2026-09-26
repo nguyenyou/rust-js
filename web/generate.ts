@@ -11,7 +11,7 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom"];
+const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
@@ -28,6 +28,8 @@ const INTERFACES = [
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
   // cssom
   "CSSStyleDeclaration", "CSSStyleProperties",
+  // cssom-view, geometry: where things are on the page
+  "DOMRectReadOnly", "DOMRect",
 ];
 const known = new Set(INTERFACES);
 
