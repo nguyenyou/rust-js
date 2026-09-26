@@ -101,19 +101,27 @@ with the few members programs need so far: `uint8_array::new(buffer)`,
 - **Nullable:** a parameter takes the non-null type. A result is typed
   non-null, and its doc says it may be `null`, which isn't checked. When
   `Option` exists, those results become `Option<&T>`.
-- **Optional** arguments are left out: the shortest form is generated.
+- **Optional** arguments: the shortest form keeps the name, and each
+  optional argument, in order, adds a form, as web-sys names them:
+  `encode(this)`, `encode_with_input(this, input)`; later ones add
+  `_and_<name>` (`new_with_x_and_y`). An optional union gives a form per
+  member, named by its type: `decode_with_array_buffer`,
+  `decode_with_uint8_array`. The first optional argument whose type isn't
+  supported (a dictionary, say) ends the forms.
   **Variadic** ones take a single value.
 - **Unions:** one function per supported member. The first keeps the name
   (`append(this, &Node)`), the others add `_with_<type>`
   (`append_with_str(this, &str)`). A typedef of a union counts too:
   `fetch(this, &Request)` and `fetch_with_str(this, &str)` come from
-  `RequestInfo`.
+  `RequestInfo`, and a union inside a union counts as its members
+  (`BufferSource` includes `ArrayBufferView`, which includes `Uint8Array`).
 - **Names:** snake_case of the IDL names, and web-sys-style type names
   (`HTMLInputElement` is `HtmlInputElement`). A Rust keyword gets a `_`.
 
 **Which interfaces:** a list in `generate.ts`, the everyday DOM, grown as
 programs need more. The Fetch Standard's `Request`, `Response` and
-`Headers` came with async code (ADR 0029), for `window::fetch`. It isn't the whole platform (334 specs).
+`Headers` came with async code (ADR 0029), for `window::fetch`, and the
+Encoding Standard's `TextEncoder` and `TextDecoder` with binary data. It isn't the whole platform (334 specs).
 
 **Building:** `rustc --emit=metadata` produces `libweb.rmeta`, once per
 target: the host for the tests, `wasm32-unknown-unknown` for the playground,

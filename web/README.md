@@ -27,6 +27,8 @@ element::append(app, b);                                  // app.append(b)
 - A promise is a `Promise<T>`, to `.await`: `window::fetch_with_str(window, url).await`
   ([ADR 0029](../docs/decisions/0029-async-await.md)).
 - Binary data is JS's `ArrayBuffer` and `Uint8Array`: `response::bytes(r).await`.
+- An optional argument adds a form: `text_encoder::encode_with_input(e, "hi")`,
+  `text_decoder::decode_with_uint8_array(d, bytes)`.
 
 ## Use it
 

@@ -387,4 +387,10 @@ test("the web crate's bindings become plain JS", async () => {
   // A closure returning \`()\` is a block body: JS gets no return value Rust didn't have.
   expect(js).toContain('app.addEventListener("ping", (e) => {\n    e.preventDefault();\n  });');
   expect(js).toContain("window.dispatchEvent(ping);");
+  // Optional arguments: `encode_with_input`, and a union member by type.
+  expect(js).toContain('const bytes = new TextEncoder().encode(text);');
+  expect(js).toContain('const back = new TextDecoder("utf-8").decode(bytes);');
+  const { round_trip } = await import(join(target, "web_forms.js"));
+  // "é" is two bytes in UTF-8.
+  expect(round_trip("héllo")).toEqual([6, "héllo"]);
 });

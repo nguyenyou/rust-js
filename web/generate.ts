@@ -11,7 +11,7 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch"];
+const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
@@ -32,6 +32,8 @@ const INTERFACES = [
   "DOMRectReadOnly", "DOMRect",
   // fetch: `window::fetch`, and what it gives back
   "Headers", "Request", "Response",
+  // encoding: text to bytes and back
+  "TextEncoder", "TextDecoder",
 ];
 const known = new Set(INTERFACES);
 
@@ -158,11 +160,19 @@ function rustType(t: IdlType, at: Position): string | { skip: string } {
 
 /** The Rust types a parameter can take: one per supported member of a union. */
 function alternatives(t: IdlType): string[] {
-  // A typedef of a union, like `RequestInfo`, is that union.
+  // A typedef of a union, like `RequestInfo`, is that union, and a union
+  // inside a union (`ArrayBufferView` in `BufferSource`) is its members.
   const aliased = !t.union && !t.generic && typedefs.get(t.idlType as string);
   if (aliased) return alternatives(aliased);
-  const options = t.union ? (t.idlType as IdlType[]) : [t];
-  return options.map((o) => rustType(o, "param")).filter((r): r is string => typeof r === "string");
+  if (t.union) return (t.idlType as IdlType[]).flatMap(alternatives);
+  const rust = rustType(t, "param");
+  return typeof rust === "string" ? [rust] : [];
+}
+
+/** Is `t` a union, written out or through a typedef? */
+function isUnion(t: IdlType): boolean {
+  const aliased = !t.union && !t.generic && typedefs.get(t.idlType as string);
+  return t.union || (!!aliased && isUnion(aliased));
 }
 
 /** `&str` → `str`, `&HtmlElement` → `html_element`: for `append_with_str`. */
@@ -211,6 +221,28 @@ function functionsOf(i: Interface): Fn[] {
   // Each union parameter's alternatives make their own function: the first
   // keeps the name, the others add `_with_<type>`. Only the first union
   // varies; any others take their first alternative.
+  // Each optional argument, in order, gives one more form, after the
+  // required ones: `encode_with_input(this, input)`. One that's a union
+  // gives a form per member, named after its type: `decode_with_uint8_array`.
+  // Later ones add `_and_<name>`. The first unsupported one ends them.
+  const optionalForms = (base: string, sig: { names: string[]; options: string[][] }, args: Arg[]) => {
+    const forms: { name: string; params: string[] }[] = [];
+    const params = sig.options.map((o, j) => `${sig.names[j]}: ${o[0]}`);
+    const words: string[] = [];
+    for (const a of args.filter((a) => a.optional)) {
+      const alts = alternatives(a.idlType);
+      if (alts.length === 0) break;
+      const union = isUnion(a.idlType);
+      const word = (alt: string) => (union ? suffix(alt) : snakeWords(a.name));
+      for (const alt of union ? alts : alts.slice(0, 1)) {
+        forms.push({ name: `${base}_with_${[...words, word(alt)].join("_and_")}`, params: [...params, `${snake(a.name)}: ${alt}`] });
+      }
+      words.push(word(alts[0]));
+      params.push(`${snake(a.name)}: ${alts[0]}`);
+    }
+    return forms;
+  };
+
   const variants = (base: string, sig: { names: string[]; options: string[][] }) => {
     const varying = sig.options.findIndex((o) => o.length > 1);
     const pick = (k: number) => sig.options.map((o, j) => (j === varying ? o[k] : o[0]));
@@ -229,7 +261,7 @@ function functionsOf(i: Interface): Fn[] {
         skip(sig.skip);
         continue;
       }
-      for (const v of variants("new", sig)) {
+      for (const v of [...variants("new", sig), ...optionalForms("new", sig, m.arguments ?? [])]) {
         fns.push({ name: v.name, jsName: `new ${i.name}`, params: v.params, result: `&'static ${typeName(i.name)}`, doc: [`[MDN](${mdn(i.name, i.name)})`] });
       }
     } else if (m.type === "attribute") {
@@ -261,7 +293,7 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
-      for (const v of variants(snake(m.name), sig)) {
+      for (const v of [...variants(snake(m.name), sig), ...optionalForms(snake(m.name), sig, m.arguments ?? [])]) {
         fns.push({ name: v.name, jsName: m.name, params: [self, ...v.params], result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
       }
     }
