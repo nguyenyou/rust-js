@@ -53,8 +53,9 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     let cx = Cx { b: AstBuilder::new(&allocator), allocator: &allocator, depth: Cell::new(0), inline: Cell::new(false) };
     let b = &cx.b;
 
+    let namespaces = module.namespaces.iter().map(|n| cx.namespace(n));
     let consts = module.consts.iter().map(|c| cx.constant(c));
-    let body = ArenaVec::from_iter_in(consts.chain(module.functions.iter().map(|f| cx.function(f))), b);
+    let body = ArenaVec::from_iter_in(namespaces.chain(consts).chain(module.functions.iter().map(|f| cx.function(f))), b);
     let program = Program::new(
         Span::new(0, rust_source.len() as u32),
         SourceType::mjs(),
@@ -110,27 +111,70 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     code.push('\n');
 
     // oxc prints functions back to back; put a blank line between them.
-    // Record how far down each generated line ends up, to fix the map.
-    let mut shift = code.matches('\n').count() as u32;
-    let mut line_shift = Vec::new();
+    // oxc also puts an object of one property on one line, so a type with one
+    // method comes out `const Tally = { doubled(tally) {`: lay that out as an
+    // object of several, the method on its own lines. Record where each part
+    // of each generated line ends up, to fix the map.
+    let one_method: Vec<String> = module
+        .namespaces
+        .iter()
+        .filter(|n| n.methods.len() == 1)
+        .map(|n| format!("{}const {} = {{ ", if n.export { "export " } else { "" }, n.name))
+        .collect();
+    let mut out_line = code.matches('\n').count() as u32;
+    let mut places: Vec<Vec<Place>> = Vec::new();
+    let mut previous = None;
+    let mut in_object = false;
     for (i, line) in generated.code.lines().enumerate() {
         // Only functions start at column 0, so this can't match nested code.
-        if i > 0 && ["function ", "async function ", "export function ", "export async function "].iter().any(|p| line.starts_with(p)) {
+        let top_level = ["function ", "async function ", "export function ", "export async function "].iter().any(|p| line.starts_with(p));
+        // And after a type's methods, which end the object that holds them.
+        if i > 0 && (top_level || matches!(previous, Some("};" | "} };"))) {
             code.push('\n');
-            shift += 1;
+            out_line += 1;
         }
-        line_shift.push(shift);
-        code.push_str(line);
-        code.push('\n');
+        let mut put = |text: &str, from_col: u32, delta: i64, parts: &mut Vec<Place>| {
+            code.push_str(text);
+            code.push('\n');
+            parts.push(Place { from_col, line: out_line, delta });
+            out_line += 1;
+        };
+        let mut parts = Vec::new();
+        let opening = one_method.iter().find(|prefix| line.starts_with(prefix.as_str()) && line.ends_with('{'));
+        match opening {
+            Some(prefix) if !in_object => {
+                let at = prefix.len() as u32;
+                put(prefix.trim_end(), 0, 0, &mut parts);
+                put(&format!("  {}", &line[prefix.len()..]), at, 2 - i64::from(at), &mut parts);
+                in_object = true;
+            }
+            _ if in_object && line == "} };" => {
+                put("  }", 0, 2, &mut parts);
+                put("};", 1, -2, &mut parts);
+                in_object = false;
+            }
+            _ if in_object => put(&format!("  {line}"), 0, 2, &mut parts),
+            _ => put(line, 0, 0, &mut parts),
+        }
+        places.push(parts);
+        previous = Some(line);
     }
     code.push_str(&format!("//# sourceMappingURL={js_file_name}.map\n"));
 
     let map = generated.map.expect("a source map, since source_map_path is set");
-    Output { code, map: shift_lines(&map, &line_shift, js_file_name) }
+    Output { code, map: shift_lines(&map, &places, js_file_name) }
 }
 
-/// Rebuild `map` with each generated line `l` moved down by `line_shift[l]`.
-fn shift_lines(map: &SourceMap<'_>, line_shift: &[u32], js_file_name: &str) -> String {
+/// Where the part of a generated line from `from_col` on ends up: on output
+/// line `line`, `delta` columns over.
+struct Place {
+    from_col: u32,
+    line: u32,
+    delta: i64,
+}
+
+/// Rebuild `map` with each part of each generated line where `places` says.
+fn shift_lines(map: &SourceMap<'_>, places: &[Vec<Place>], js_file_name: &str) -> String {
     let mut out = SourceMapBuilder::default();
     out.set_file(js_file_name);
     for (source, content) in map.get_sources().zip(map.get_source_contents()) {
@@ -138,12 +182,17 @@ fn shift_lines(map: &SourceMap<'_>, line_shift: &[u32], js_file_name: &str) -> S
     }
     // `add_name` deduplicates, so ids can change: translate them.
     let name_ids: Vec<u32> = map.get_names().map(|name| out.add_name(name)).collect();
-    let last = line_shift.last().copied().unwrap_or_default();
+    // Past the last line, lines keep the last one's shift.
+    let last_shift = places.last().and_then(|parts| parts.last()).map_or(0, |p| p.line + 1 - places.len() as u32);
     for t in map.get_tokens() {
-        let line = t.get_dst_line();
+        let (line, col) = (t.get_dst_line(), t.get_dst_col());
+        let (line, col) = match places.get(line as usize).and_then(|parts| parts.iter().rev().find(|p| p.from_col <= col)) {
+            Some(place) => (place.line, (i64::from(col) + place.delta).max(0) as u32),
+            None => (line + last_shift, col),
+        };
         out.add_token(
-            line + line_shift.get(line as usize).copied().unwrap_or(last),
-            t.get_dst_col(),
+            line,
+            col,
             t.get_src_line(),
             t.get_src_col(),
             t.get_source_id(),
@@ -192,6 +241,42 @@ impl<'a> Cx<'a> {
             b,
         );
         if f.export { Statement::new_export_declaration(span(f.span), decl, b) } else { decl.into() }
+    }
+
+    /// `export const Counter = { new(step) { .. }, .. };`: each method in
+    /// shorthand, as a hand-written object of functions has them.
+    fn namespace(&self, n: &js::Namespace) -> Statement<'a> {
+        let b = &self.b;
+        let methods = self.nested(true, || {
+            ArenaVec::from_iter_in(
+                n.methods.iter().map(|f| {
+                    let params = self.params(FormalParameterKind::FormalParameter, &f.params);
+                    let body = FunctionBody::new(SPAN, ArenaVec::new_in(b), self.stmts(&f.body), b);
+                    let value = Expression::new_function_expression(
+                        span(f.span),
+                        FunctionType::FunctionExpression,
+                        None,
+                        false, // generator
+                        f.is_async,
+                        false, // declare
+                        None,  // type parameters
+                        None,  // this param
+                        ArenaBox::new_in(params, b),
+                        None, // return type
+                        Some(ArenaBox::new_in(body, b)),
+                        b,
+                    );
+                    let key = PropertyKey::new_static_identifier(span(f.name_span), self.name(&f.name), b);
+                    ObjectPropertyKind::new_object_property(span(f.span), PropertyKind::Init, key, value, true, false, false, b)
+                }),
+                b,
+            )
+        });
+        let id = BindingPattern::new_binding_identifier(SPAN, self.name(&n.name), b);
+        let object = Expression::new_object_expression(SPAN, methods, b);
+        let declarator = VariableDeclarator::new(SPAN, id, None, Some(object), false, b);
+        let decl = Declaration::new_variable_declaration(SPAN, VariableDeclarationKind::Const, ArenaVec::from_iter_in([declarator], b), false, b);
+        if n.export { Statement::new_export_declaration(SPAN, decl, b) } else { decl.into() }
     }
 
     fn constant(&self, c: &js::Const) -> Statement<'a> {

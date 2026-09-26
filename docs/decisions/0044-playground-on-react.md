@@ -58,7 +58,7 @@ up as callbacks** (`on_compile`, `on_open`, `on_outcome`) that set it:
   reducer's state would be one struct, and Rust's `..*state` can't copy its
   `Vec`s out of a reference.
 - **State is replaced, never changed.** `projects.rs` makes a new
-  `Project` for each edit: `opening(project, path, live)` is the project
+  `Project` for each edit: `project.opening(path, live)` is the project
   with another file open.
 - **Compile is a Transition** (`use_transition`), so `compiling` is React's
   own pending flag. It disables the buttons until the async compile is
@@ -109,6 +109,6 @@ site and serves it as GitHub Pages does. It:
   around:
   - Filled: `match` on string literals, `Option::map`, and `with` closures
     put in place.
-  - Filled next: names, with `#![rust_js::camel_case]` (ADR 0046).
-  - Worked around: methods (`projects.rs` has functions instead), and let
-    chains (nested `if`s).
+  - Filled next: names, with `#![rust_js::camel_case]` (ADR 0046), and
+    methods (ADR 0047): `projects.rs` is `impl Project`.
+  - Worked around: let chains (nested `if`s).

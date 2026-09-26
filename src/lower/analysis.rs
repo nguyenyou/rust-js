@@ -31,6 +31,10 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
             // A function declared in an `extern` block is JS's (ADR 0021),
             // and so is one with `#[rust_js::link_name]` (ADR 0039).
             DefKind::Fn => !is_binding(tcx, def_id.to_def_id()),
+            // A method of an `impl Type` block (ADR 0047).
+            DefKind::AssocFn => {
+                tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_some() && !is_binding(tcx, def_id.to_def_id())
+            }
             DefKind::Closure => true,
             _ => false,
         })
@@ -95,7 +99,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             // `#[derive(Clone, Copy)]` and friends write impls we never call.
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn if is_binding(tcx, def_id.to_def_id()) => continue,
-            DefKind::AssocFn => "methods",
+            DefKind::AssocFn if tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_some() => continue,
+            DefKind::AssocFn => "trait methods",
             DefKind::AssocConst { .. } => "associated constants",
             DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
             DefKind::Static { .. } => "statics",
@@ -112,7 +117,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // Closures are lowered inside the function that creates them.
     let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) = all_bodies
         .iter()
-        .partition(|body| tcx.def_kind(body.def_id) == DefKind::Fn);
+        .partition(|body| matches!(tcx.def_kind(body.def_id), DefKind::Fn | DefKind::AssocFn));
     let all_bodies = &all_bodies;
     let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
 
@@ -206,18 +211,37 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
 
     // Each function's JS name, unique within its module's file. `taken` also
     // collects the import aliases below, so local variables avoid both.
+    // A method is its type's (ADR 0047): a property of the object named after
+    // the type, unique in the module, and its name is unique among the type's.
     let mut taken: HashMap<LocalModDefId, HashSet<String>> = modules.iter().map(|&m| (m, globals.clone())).collect();
-    let fns: HashMap<DefId, FnInfo> = bodies
-        .iter()
-        .map(|body| body.def_id)
-        .chain(consts.iter().copied())
-        .map(|def_id| {
-            let module = tcx.parent_module_from_def_id(def_id);
-            let names = taken.entry(module).or_default();
-            let name = fresh_in(names, &bindings::fn_name(tcx, def_id.to_def_id()));
-            (def_id.to_def_id(), FnInfo { module, name })
-        })
-        .collect();
+    let mut owners: HashMap<(LocalModDefId, DefId), String> = HashMap::new();
+    let mut methods: HashMap<(LocalModDefId, DefId), HashSet<String>> = HashMap::new();
+    let mut fns: HashMap<DefId, FnInfo> = HashMap::new();
+    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()) {
+        let module = tcx.parent_module_from_def_id(def_id);
+        let names = taken.entry(module).or_default();
+        let js_name = bindings::fn_name(tcx, def_id.to_def_id());
+        let owner_type = tcx.inherent_impl_of_assoc(def_id.to_def_id()).and_then(|imp| {
+            match tcx.type_of(imp).instantiate_identity().kind() {
+                ty::Adt(adt, _) => Some(adt.did()),
+                _ => None,
+            }
+        });
+        let (name, owner) = match owner_type {
+            Some(ty) => {
+                let owner = owners.entry((module, ty)).or_insert_with(|| fresh_in(names, tcx.item_name(ty).as_str()));
+                // A property, so a name JS reserves for variables, like `new`, is fine.
+                let names = methods.entry((module, ty)).or_default();
+                let name = match names.insert(js_name.clone()) {
+                    true => js_name,
+                    false => (1..).map(|k| format!("{js_name}${k}")).find(|n| names.insert(n.clone())).expect("a free name"),
+                };
+                (name, Some(owner.clone()))
+            }
+            None => (fresh_in(names, &js_name), None),
+        };
+        fns.insert(def_id.to_def_id(), FnInfo { module, name, owner });
+    }
 
     // Which modules each module calls into, and which functions are called
     // from another module: those must be exported, even if private in Rust
@@ -333,6 +357,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         imports: &import_names,
     };
     let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
+    let mut namespaces: HashMap<LocalModDefId, Vec<js::Namespace>> = HashMap::new();
     let mut runtime: HashMap<LocalModDefId, HashSet<Helper>> = HashMap::new();
     let mut jsx: HashSet<LocalModDefId> = HashSet::new();
     for body in &bodies {
@@ -393,7 +418,25 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                     jsx.insert(module);
                 }
                 lowered.function.export |= called_from_elsewhere.contains(&def_id);
-                functions.entry(module).or_default().push(lowered.function);
+                match &fns[&def_id].owner {
+                    // Its type's object is exported if any of its methods is.
+                    Some(owner) => {
+                        let module_namespaces = namespaces.entry(module).or_default();
+                        let export = lowered.function.export;
+                        match module_namespaces.iter_mut().find(|n| n.name == *owner) {
+                            Some(namespace) => {
+                                namespace.export |= export;
+                                namespace.methods.push(lowered.function);
+                            }
+                            None => module_namespaces.push(js::Namespace {
+                                name: owner.clone(),
+                                methods: vec![lowered.function],
+                                export,
+                            }),
+                        }
+                    }
+                    None => functions.entry(module).or_default().push(lowered.function),
+                }
                 runtime.entry(module).or_default().extend(lowered.runtime);
             }
             Err(_) => failed = true,
@@ -457,6 +500,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 file: module_file(tcx, module),
                 packages,
                 imports,
+                namespaces: namespaces.remove(&module).unwrap_or_default(),
                 consts: const_items.remove(&module).unwrap_or_default(),
                 functions: functions.remove(&module).unwrap_or_default(),
                 runtime: helpers,

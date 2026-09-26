@@ -52,6 +52,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   `const [count, setCount] = f();`.
 - A struct is a plain object, `{ x: 1, y: 2 }`; a tuple or tuple struct is an array, `[1, 2]`.
   Rust's copies stay copies: `{ ...a }` where changing one could otherwise be seen through the other.
+- An `impl` block's methods are an object named after the type, as Rust's paths name them:
+  `Counter::new(1)` is `Counter.new(1)`, and `counter.tick()` is `Counter.tick(counter)`.
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
@@ -69,7 +71,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `i8`–`i32`, `u8`–`u32`, `f64`, `bool`, enums (with fields too), structs, tuples, `Option`, `const` items; `let`, `if`, `if let`, `while let`,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
-struct update syntax; closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+struct update syntax; methods (`impl` blocks, not yet traits); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.

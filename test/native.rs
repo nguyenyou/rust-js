@@ -20,6 +20,10 @@ mod closures;
 #[allow(dead_code)]
 mod structs;
 
+#[path = "../examples/methods.rs"]
+#[allow(dead_code)]
+mod methods;
+
 #[path = "../examples/options.rs"]
 #[allow(dead_code)]
 mod options;
@@ -144,6 +148,10 @@ fn main() {
     }
     for n in [-6, -3, 0, 1, 2, 7, 8, 64, 96] {
         case("options.half", &[n], || options::half(n as i32));
+        case("methods.ticking", &[n.abs()], || methods::ticking(n.unsigned_abs() as u32));
+        case("methods.lights", &[n.abs()], || methods::lights(n.unsigned_abs() as u32));
+        case("methods.pair_sum", &[n, 3], || methods::pair_sum(n as i32, 3));
+        case("methods.counted", &[n.abs(), 2], || methods::counted(n.unsigned_abs() as u32, 2));
         case("options.half_or_zero", &[n], || options::half_or_zero(n as i32));
         case("options.halvings", &[n], || options::halvings(n as i32));
         case("options.methods", &[n], || options::methods(n as i32));

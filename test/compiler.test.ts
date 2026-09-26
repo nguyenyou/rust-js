@@ -17,6 +17,7 @@ let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
+let methods: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -48,6 +49,8 @@ beforeAll(async () => {
   collections = await import(join(target, "collections.js"));
   run([join(target, "debug", "rust-js"), "examples/options.rs", "-o", join(target, "options.js")]);
   options = await import(join(target, "options.js"));
+  run([join(target, "debug", "rust-js"), "examples/methods.rs", "-o", join(target, "methods.js")]);
+  methods = await import(join(target, "methods.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -130,6 +133,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "consts") {
         return JSON.parse(JSON.stringify(consts[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+      }
+      if (path[0] === "methods") {
+        return methods[path[1]](...c.args);
       }
       if (path[0] === "options") {
         // `None` is `undefined` in JS, and `null` in the JSON: compare them as one.
@@ -528,3 +534,92 @@ test("the web crate's bindings become plain JS", async () => {
   expect(round_trip("héllo")).toEqual([6, "héllo"]);
 });
 
+
+// ADR 0047: a type's methods are an object named after it.
+test("methods are their type's object of functions", async () => {
+  const js = await Bun.file(join(target, "methods.js")).text();
+  expect(js).toContain("export const Counter = {\n  new(step) {\n    return {\n      count: 0,\n      step\n    };\n  },");
+  // `self` is named after its type; `&mut self` changes the object itself.
+  expect(js).toContain("  tick(counter) {\n    counter.count = counter.count + counter.step >>> 0;\n  },");
+  expect(js).toContain("      Counter.tick(next);");
+  // A call is the method with its receiver first, as Rust's `Counter::tick(&mut c)`.
+  expect(js).toContain("  return Counter.value(Counter.ticked(Counter.new(step), times));");
+  // Each type's `new` is its own, and the object ends with a blank line.
+  expect(js).toContain("};\n\nexport const Pair = {\n  new(a, b) {");
+});
+
+test("methods across modules, in a thread-local, and camelCase", async () => {
+  const { fixture, compiler } = await import("./support");
+  const { writeFileSync } = await import("node:fs");
+  const dir = fixture("methods");
+  writeFileSync(join(dir, "lib.rs"), `#![rust_js::camel_case]
+use std::cell::Cell;
+
+mod shapes;
+
+thread_local! {
+    static SIDE: Cell<u32> = Cell::new(shapes::Square::new(3).side_length());
+}
+
+pub fn area_of(side: u32) -> u32 {
+    shapes::Square::new(side).area()
+}
+
+pub fn first_side() -> u32 {
+    SIDE.get()
+}
+`);
+  writeFileSync(join(dir, "shapes.rs"), `pub struct Square {
+    pub side: u32,
+}
+
+impl Square {
+    pub fn new(side: u32) -> Square {
+        Square { side }
+    }
+
+    pub fn side_length(&self) -> u32 {
+        self.side
+    }
+
+    pub fn area(&self) -> u32 {
+        self.side_length() * self.side_length()
+    }
+}
+
+/// Only this module uses it, so its object isn't exported.
+struct Tally(u32);
+
+impl Tally {
+    fn doubled(&self) -> u32 {
+        self.0 * 2
+    }
+}
+
+pub fn tally_of_four() -> u32 {
+    Tally(4).doubled()
+}
+`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  const lib = await Bun.file(join(dir, "lib.js")).text();
+  const shapes = await Bun.file(join(dir, "shapes.js")).text();
+  expect(lib).toContain("const SIDE = { value: shapes.Square.sideLength(shapes.Square.new(3)) };");
+  expect(lib).toContain("  return shapes.Square.area(shapes.Square.new(side));");
+  expect(shapes).toContain("export const Square = {\n  new(side) {");
+  expect(shapes).toContain("  area(square) {\n    return Math.imul(Square.sideLength(square), Square.sideLength(square)) >>> 0;");
+  expect(shapes).toContain("\nconst Tally = {\n  doubled(tally) {\n    return Math.imul(tally[0], 2) >>> 0;\n  }\n};\n\nexport function tallyOfFour() {");
+  // Laid out on lines of its own, a lone method still maps back to its Rust.
+  const { decodeMappings, lookup } = await import("./sourcemap.ts");
+  const segments = decodeMappings((await Bun.file(join(dir, "shapes.js.map")).json()).mappings);
+  const jsLines = shapes.split("\n");
+  const rsLines = (await Bun.file(join(dir, "shapes.rs")).text()).split("\n");
+  for (const [jsText, rustText] of [["Math.imul(tally[0], 2)", "self.0 * 2"], ["doubled(tally) {", "doubled(&self)"]]) {
+    const line = jsLines.findIndex((l) => l.includes(jsText));
+    const hit = lookup(segments, line, jsLines[line].indexOf(jsText));
+    expect([jsText, hit && rsLines[hit.srcLine].slice(hit.srcCol).startsWith(rustText)]).toEqual([jsText, true]);
+  }
+  const module = await import(join(dir, "lib.js"));
+  expect(module.areaOf(4)).toBe(16);
+  expect(module.firstSide()).toBe(3);
+  expect((await import(join(dir, "shapes.js"))).tallyOfFour()).toBe(8);
+});

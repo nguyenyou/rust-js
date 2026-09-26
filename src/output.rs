@@ -56,6 +56,7 @@ impl OutputPlan {
                 packages,
                 imports,
                 runtime: module.runtime.iter().map(|helper| helper.source()).collect(),
+                namespaces: module.namespaces,
                 consts: module.consts,
                 functions: module.functions,
             };

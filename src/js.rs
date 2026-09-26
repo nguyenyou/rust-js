@@ -32,9 +32,20 @@ pub struct Module {
     pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
     pub runtime: Vec<&'static str>,
+    /// Types' methods, before the `const`s, whose values may call them.
+    pub namespaces: Vec<Namespace>,
     /// `const` items, with the values rustc computed (ADR 0031).
     pub consts: Vec<Const>,
     pub functions: Vec<Function>,
+}
+
+/// A type's methods (ADR 0047), an object named after the type:
+/// `export const Counter = { new(step) { .. }, tick(counter) { .. } };`.
+pub struct Namespace {
+    pub name: String,
+    /// Its methods, as functions: the object's properties.
+    pub methods: Vec<Function>,
+    pub export: bool,
 }
 
 /// `const SIZE = 4096;`, maybe exported.

@@ -50,13 +50,15 @@ pub fn module(module: &mut js::Module) {
         .iter()
         .map(|f| f.name.clone())
         .chain(module.consts.iter().map(|c| c.name.clone()))
+        .chain(module.namespaces.iter().map(|n| n.name.clone()))
         .chain(module.imports.iter().map(|i| i.alias.clone()))
         .collect();
     for package in &module.packages {
         names.extend(package.default.iter().chain(&package.namespace).cloned());
         names.extend(package.named.iter().map(|(_, name)| name.clone()));
     }
-    for function in &mut module.functions {
+    let methods = module.namespaces.iter_mut().flat_map(|n| n.methods.iter_mut());
+    for function in module.functions.iter_mut().chain(methods) {
         scope(&function.params, &mut function.body, &names);
     }
     // Top-level values can contain closures with JSX. Don't move their own

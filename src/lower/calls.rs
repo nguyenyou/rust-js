@@ -435,12 +435,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A JS global or a path from one (`console.log`), or from an import
     /// (`node:path#posix.join` is `posix.join`, ADR 0028).
     /// One of our functions: `f`, or `alias.f` in another module.
+    /// `f`, or `util.f` in another module; a method, `Counter.tick` or
+    /// `util.Counter.tick` (ADR 0047).
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
         let target = &self.krate.fns[&def_id];
-        if target.module == self.module {
-            Expr::var(&target.name)
-        } else {
-            Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
+        let module = (target.module != self.module).then(|| Expr::var(&self.aliases[&target.module]));
+        let holder = match (module, &target.owner) {
+            (Some(module), Some(owner)) => Some(Expr::member(module, owner.clone())),
+            (None, Some(owner)) => Some(Expr::var(owner)),
+            (module, None) => module,
+        };
+        match holder {
+            Some(holder) => Expr::member(holder, target.name.clone()),
+            None => Expr::var(&target.name),
         }
     }
 

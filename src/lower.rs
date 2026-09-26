@@ -67,6 +67,7 @@ pub struct LoweredModule {
     pub packages: Vec<js::Package>,
     /// The modules this one calls into, as `(alias, path)`.
     pub imports: Vec<(String, Vec<String>)>,
+    pub namespaces: Vec<js::Namespace>,
     pub consts: Vec<js::Const>,
     pub functions: Vec<js::Function>,
     /// Runtime helpers its functions use.
@@ -98,6 +99,8 @@ pub struct Lowered {
 struct FnInfo {
     module: LocalModDefId,
     name: String,
+    /// A method's type's object of methods (ADR 0047): `Counter` for `Counter.tick`.
+    owner: Option<String>,
 }
 
 /// A module's path below the crate root, e.g. `["math", "stats"]`.
@@ -273,7 +276,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         // `async fn f((a, b): ..)` takes `__arg0`, and takes it
                         // apart in its body (ADR 0029): named as in a plain `fn`.
                         let generated = name.as_str().strip_prefix("__arg").is_some_and(|n| n.parse::<u32>().is_ok());
-                        self.bind(*var, if generated { "param" } else { name.as_str() }, mode.1 == Mutability::Mut)
+                        // A method's `self` is named after its type, `counter`
+                        // for a `Counter`, as a JS function of one would name it.
+                        let receiver = match pat.ty.peel_refs().kind() {
+                            ty::Adt(adt, _) if name.as_str() == "self" => Some(lower_first(self.tcx.item_name(adt.did()).as_str())),
+                            _ => None,
+                        };
+                        let rust_name = match &receiver {
+                            Some(receiver) => receiver.as_str(),
+                            None if generated => "param",
+                            None => name.as_str(),
+                        };
+                        self.bind(*var, rust_name, mode.1 == Mutability::Mut)
                     }
                     PatKind::Wild => self.fresh("_"),
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
@@ -2061,6 +2075,12 @@ fn camel_case(name: &str) -> String {
     }
     out.push_str(trail);
     out
+}
+
+/// `Counter` → `counter`: a value of the type, named after it.
+fn lower_first(name: &str) -> String {
+    let mut chars = name.chars();
+    chars.next().map(|c| c.to_lowercase().chain(chars).collect()).unwrap_or_default()
 }
 
 /// Rust names that mean something else in JS get a `$` suffix.

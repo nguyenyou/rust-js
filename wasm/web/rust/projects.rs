@@ -1,8 +1,8 @@
 // The crate being edited: its files, its root, and the one that's open.
 //
 // React state doesn't change: each edit here makes a new `Project`, and
-// `App` renders with it. Functions, not methods, which rust-js can't compile
-// yet.
+// `App` renders with it. In JS, the methods are `Project`'s object of them
+// (ADR 0047): `project.opening(path, live)` is `Project.opening(project, path, live)`.
 
 use crate::codemirror::{EditorState, source_state, text_of};
 use crate::compiler::{JsMap, new_text_map};
@@ -31,67 +31,69 @@ pub fn js_name(path: &str) -> String {
     }
 }
 
-/// Before an example has loaded.
-pub fn empty_project() -> Project {
-    Project { root: "lib.rs".to_string(), files: Vec::new(), current: String::new() }
-}
-
-/// An example's files, with its root open.
-pub fn project_of(root: String, texts: Vec<(String, String)>) -> Project {
-    let files = texts.iter().map(|(path, text)| SourceFile { path: path.clone(), state: source_state(text) }).collect();
-    Project { current: root.clone(), root, files }
-}
-
-pub fn has_file(project: &Project, path: &str) -> bool {
-    project.files.iter().any(|f| f.path == path)
-}
-
-pub fn paths(project: &Project) -> Vec<String> {
-    project.files.iter().map(|f| f.path.clone()).collect()
-}
-
-/// The open file's state, as it was stored: its editor has the latest.
-pub fn current_state(project: &Project) -> Option<&'static EditorState> {
-    match project.files.iter().find(|f| f.path == project.current) {
-        Some(file) => Some(file.state),
-        None => None,
+impl Project {
+    /// Before an example has loaded.
+    pub fn empty() -> Project {
+        Project { root: "lib.rs".to_string(), files: Vec::new(), current: String::new() }
     }
-}
 
-/// With the open file's `live` state kept, since the editor has it.
-fn keeping(project: &Project, live: Option<&'static EditorState>) -> Vec<SourceFile> {
-    let mut files = copy(&project.files);
-    if let Some(live) = live {
-        for file in files.iter_mut() {
-            if file.path == project.current {
-                file.state = live;
-            }
+    /// An example's files, with its root open.
+    pub fn of(root: String, texts: Vec<(String, String)>) -> Project {
+        let files = texts.iter().map(|(path, text)| SourceFile { path: path.clone(), state: source_state(text) }).collect();
+        Project { current: root.clone(), root, files }
+    }
+
+    pub fn has(&self, path: &str) -> bool {
+        self.files.iter().any(|f| f.path == path)
+    }
+
+    pub fn paths(&self) -> Vec<String> {
+        self.files.iter().map(|f| f.path.clone()).collect()
+    }
+
+    /// The open file's state, as it was stored: its editor has the latest.
+    pub fn current_state(&self) -> Option<&'static EditorState> {
+        match self.files.iter().find(|f| f.path == self.current) {
+            Some(file) => Some(file.state),
+            None => None,
         }
     }
-    files
-}
 
-/// `path` open instead.
-pub fn opening(project: &Project, path: &str, live: Option<&'static EditorState>) -> Project {
-    Project { root: project.root.clone(), files: keeping(project, live), current: path.to_string() }
-}
+    /// With the open file's `live` state kept, since the editor has it.
+    fn keeping(&self, live: Option<&'static EditorState>) -> Vec<SourceFile> {
+        let mut files = copy(&self.files);
+        if let Some(live) = live {
+            for file in files.iter_mut() {
+                if file.path == self.current {
+                    file.state = live;
+                }
+            }
+        }
+        files
+    }
 
-/// With a new, empty file at `path`, open.
-pub fn adding(project: &Project, path: &str, live: Option<&'static EditorState>) -> Project {
-    let mut files = keeping(project, live);
-    files.push(SourceFile { path: path.to_string(), state: source_state("") });
-    Project { root: project.root.clone(), files, current: path.to_string() }
-}
+    /// `path` open instead.
+    pub fn opening(&self, path: &str, live: Option<&'static EditorState>) -> Project {
+        Project { root: self.root.clone(), files: self.keeping(live), current: path.to_string() }
+    }
 
-/// Without `path`; if it was open, the root is.
-pub fn removing(project: &Project, path: &str) -> Project {
-    let files = project.files.iter().filter(|f| f.path != path).map(|f| SourceFile { path: f.path.clone(), state: f.state }).collect();
-    let current = if project.current == path { project.root.clone() } else { project.current.clone() };
-    Project { root: project.root.clone(), files, current }
-}
+    /// With a new, empty file at `path`, open.
+    pub fn adding(&self, path: &str, live: Option<&'static EditorState>) -> Project {
+        let mut files = self.keeping(live);
+        files.push(SourceFile { path: path.to_string(), state: source_state("") });
+        Project { root: self.root.clone(), files, current: path.to_string() }
+    }
 
-/// The crate as text, `path → text`, with the open file's `live` edits.
-pub fn sources(project: &Project, live: Option<&'static EditorState>) -> &'static JsMap {
-    let files = keeping(project, live);
-    new_text_map(files.iter().map(|f| (f.path.clone(), text_of(f.state))).collect())
+    /// Without `path`; if it was open, the root is.
+    pub fn removing(&self, path: &str) -> Project {
+        let files = self.files.iter().filter(|f| f.path != path).map(|f| SourceFile { path: f.path.clone(), state: f.state }).collect();
+        let current = if self.current == path { self.root.clone() } else { self.current.clone() };
+        Project { root: self.root.clone(), files, current }
+    }
+
+    /// The crate as text, `path → text`, with the open file's `live` edits.
+    pub fn sources(&self, live: Option<&'static EditorState>) -> &'static JsMap {
+        let files = self.keeping(live);
+        new_text_map(files.iter().map(|f| (f.path.clone(), text_of(f.state))).collect())
+    }
 }

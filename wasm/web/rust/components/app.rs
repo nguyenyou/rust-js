@@ -23,7 +23,7 @@ use super::toolbar::{Toolbar, ToolbarProps};
 use crate::codemirror::{EditorView, editor_state, output_state, source_state};
 use crate::compiler::{Example, JsMap, Loaded, Stat, compile, load, load_example, mb, ms, set_last_result, text_entries};
 use crate::programs::{Outcome, Prepared, Program, prepare};
-use crate::projects::{adding, current_state, empty_project, has_file, js_name, opening, paths, project_of, removing, sources};
+use crate::projects::{Project, js_name};
 use crate::tree::build_tree;
 
 /// What the JavaScript side shows.
@@ -61,7 +61,7 @@ pub fn App() -> Element {
     let (stats, set_stats) = use_state(Vec::<(String, String)>::new());
     let (status, set_status) = use_state(say("Loading…".to_string(), Tone::Plain));
     let (example, set_example) = use_state(String::new());
-    let (project, set_project) = use_state(empty_project());
+    let (project, set_project) = use_state(Project::empty());
     let (output, set_output) = use_state(Output::Nothing);
     let (program, set_program) = use_state(None::<Program>);
     let (compiling, start_transition) = use_transition();
@@ -93,7 +93,7 @@ pub fn App() -> Element {
                     let texts = load_example(name.clone(), files).await;
                     if !done.get() {
                         set_example.set(name);
-                        set_project.set(project_of(root, texts));
+                        set_project.set(Project::of(root, texts));
                         set_loaded.set(Some(loaded));
                         set_status.set(say("Ready.".to_string(), Tone::Plain));
                     }
@@ -135,7 +135,7 @@ pub fn App() -> Element {
         if compiling {
             return;
         }
-        let sources = sources(project, live());
+        let sources = project.sources(live());
         let root = project.root.clone();
         let root_js = js_name(&project.root);
         let shown = match output {
@@ -191,7 +191,7 @@ pub fn App() -> Element {
             set_example.set(name.clone());
             spawn(Box::new(async move {
                 let texts = load_example(name, files).await;
-                set_project.set(project_of(root, texts));
+                set_project.set(Project::of(root, texts));
                 set_output.set(Output::Nothing);
                 set_program.set(None);
                 set_status.set(say("Ready.".to_string(), Tone::Plain));
@@ -199,10 +199,10 @@ pub fn App() -> Element {
         }
     });
 
-    let open_file: Rc<dyn Fn(String)> = Rc::new(move |path: String| set_project.set(opening(project, &path, live())));
+    let open_file: Rc<dyn Fn(String)> = Rc::new(move |path: String| set_project.set(project.opening(&path, live())));
     let delete_file: Rc<dyn Fn(String)> = Rc::new(move |path: String| {
         if window::confirm_with_message(window, &format!("Delete {path}?")) {
-            set_project.set(removing(project, &path));
+            set_project.set(project.removing(&path));
         }
     });
     let new_file = move || {
@@ -220,11 +220,11 @@ pub fn App() -> Element {
             set_status.set(say(text, Tone::Bad));
             return;
         }
-        if has_file(project, &path) {
+        if project.has(&path) {
             set_status.set(say(format!("{path} already exists."), Tone::Bad));
             return;
         }
-        set_project.set(adding(project, &path, live()));
+        set_project.set(project.adding(&path, live()));
         let file = match path.rsplit_once('/') {
             Some((_, file)) => file,
             None => path.as_str(),
@@ -243,7 +243,7 @@ pub fn App() -> Element {
     // What the editors show. A state is made once for each output, so the
     // editor only changes when it does.
     let blank = *use_memo(|| source_state(""), ());
-    let current = match current_state(project) {
+    let current = match project.current_state() {
         Some(state) => state,
         None => blank,
     };
@@ -261,7 +261,7 @@ pub fn App() -> Element {
         },
         (output,),
     );
-    let source_tree = use_memo(move || build_tree(&paths(project)), (project,));
+    let source_tree = use_memo(move || build_tree(&project.paths()), (project,));
     let (output_paths, shown) = match output {
         Output::Files { files, shown } => (files.iter().map(|(path, _)| path.clone()).collect(), shown.clone()),
         _ => (Vec::new(), String::new()),
