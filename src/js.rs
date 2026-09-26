@@ -171,6 +171,8 @@ pub enum Op {
     /// options, where `null` and `undefined` are both `None`.
     LooseEq,
     LooseNe,
+    /// `x instanceof C`: a `#[link_name = "instanceof C"]` binding.
+    InstanceOf,
     Lt,
     Le,
     Gt,

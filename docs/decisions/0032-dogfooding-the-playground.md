@@ -23,11 +23,14 @@ a rust-js crate, and `main.ts` imports what it exports, as it would import
 any module:
 
 ```ts
-import { load, mb, ms, stat } from "./rust/lib.js";
+import { compile, load, mb, ms, stat } from "./rust/lib.js";
 ```
 
 The first part is loading: downloading the compiler, the sysroot, the web
-crate and the examples, and the stats table.
+crate and the examples, and the stats table. The second is `compile`: running
+rust-js.wasm on a crate under the WASI shim, building its directories from the
+editor's files and reading the JS back, with a trapped compile as an `Err`
+(ADR 0035). It needed `instanceof` in bindings, and `split_once`.
 
 **It's compiled by `rust-js.wasm`**, the compiler the page runs, under the
 same WASI shim, in Bun (`wasm/web/compile-rust.ts`). `serve.ts` and
@@ -67,6 +70,6 @@ plainly.
   expects where it takes a value from it (`load()`'s result).
 - The loading's downloads keep running together, as `Promise.all` had them:
   each starts as it's made, and they're awaited afterwards (ADR 0029).
-- What's next to move is what rust-js can express next. Still missing:
-  `try`/`catch` (for a trapped compile), JS `Map`s and collections, enums
-  with fields, and string processing.
+- What's next to move is what rust-js can express next. A JS `Map` is a type
+  in the bindings, with the methods the code uses. Still missing for the rest:
+  sorting, iterator adapters, regular expressions, and CodeMirror's API.

@@ -337,8 +337,8 @@ test("async code becomes async functions and await", async () => {
 // ADR 0032: the playground is written in Rust in part, compiled by rust-js.
 test("the playground's own Rust compiles to the JS main.ts imports", async () => {
   const js = await Bun.file(join(target, "playground", "lib.js")).text();
-  expect(js).toContain('import { File } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["load", "stat", "ms", "mb"]) {
+  expect(js).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
+  for (const name of ["load", "stat", "ms", "mb", "compile"]) {
     expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
@@ -347,6 +347,10 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   // A `format!` value with effects is computed first, once.
   expect(js).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
   expect(js).toContain('  const response = await window.fetch("./sysroot/" + name);');
+  // A trapped compile is an `Err` (ADR 0035), and `instanceof` a binding.
+  expect(js).toContain("  const started = $try(() => wasi.start(instance));");
+  expect(js).toContain('  const ok = started.TAG === "Ok" && started._0 === 0;');
+  expect(js).toContain("    if (item[1] instanceof Directory) {");
 });
 
 // ADR 0035: JS that throws, as a `Result`; and `?`.

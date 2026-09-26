@@ -171,6 +171,7 @@ fn main() {
         case_with("strings.module_name", &[&s], || strings::module_name(s));
         case_with("strings.parts", &[&s], || strings::parts(s));
         case_with("strings.rejoined", &[&s], || strings::rejoined(s));
+        case_with("strings.folder_and_file", &[&s], || strings::folder_and_file(s));
     }
     for windows in [false, true] {
         case_with("strings.separator", &[&windows], || strings::separator(windows));

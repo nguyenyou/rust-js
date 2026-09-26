@@ -9,15 +9,7 @@
 // Each compile gets a fresh instance of the (compiled once) module: rustc
 // keeps global state, and a failed compile ends in a trap.
 
-import {
-  ConsoleStdout,
-  Directory,
-  File,
-  type Inode,
-  OpenFile,
-  PreopenDirectory,
-  WASI,
-} from "@bjorn3/browser_wasi_shim";
+import type { File, Inode } from "@bjorn3/browser_wasi_shim";
 import { javascript } from "@codemirror/lang-javascript";
 import { rust } from "@codemirror/lang-rust";
 import { Compartment, EditorState, type Extension, Prec } from "@codemirror/state";
@@ -27,7 +19,7 @@ import { basicSetup, EditorView } from "codemirror";
 
 // The part of the playground written in Rust: rust/lib.rs, which build.ts
 // and serve.ts compile to rust/lib.js with rust-js itself (compile-rust.ts).
-import { load, mb, ms, stat } from "./rust/lib.js";
+import { compile, load, mb, ms, stat } from "./rust/lib.js";
 
 type Example = { name: string; title: string; root: string; files: string[] };
 
@@ -256,101 +248,18 @@ function showDiagnostics(text: string) {
 }
 
 // ── Running rust-js ─────────────────────────────────────────────────────
+// `compile`, in rust/lib.rs: rust-js.wasm on the crate, under the WASI shim.
 
-function dir(entries: Record<string, Inode>): Directory {
-  return new Directory(new Map(Object.entries(entries)));
-}
-
-/** A WASI directory tree from `path → text`, e.g. `geometry/area.rs`. */
-function directoryOf(sources: Map<string, string>): Map<string, Inode> {
-  const top = new Map<string, Inode>();
-  for (const [path, text] of sources) {
-    const parts = path.split("/");
-    let folder = top;
-    for (const part of parts.slice(0, -1)) {
-      if (!folder.has(part)) folder.set(part, new Directory(new Map()));
-      folder = (folder.get(part) as Directory).contents;
-    }
-    folder.set(parts.at(-1)!, new File(new TextEncoder().encode(text)));
-  }
-  return top;
-}
-
-/** Every `.js` file under a WASI directory, as `path → text`. */
-function jsFilesIn(folder: Directory, prefix = "", found = new Map<string, string>()): Map<string, string> {
-  for (const [name, entry] of folder.contents) {
-    if (entry instanceof Directory) jsFilesIn(entry, `${prefix}${name}/`, found);
-    else if (entry instanceof File && name.endsWith(".js")) found.set(prefix + name, new TextDecoder().decode(entry.data));
-  }
-  return found;
-}
-
+/** What `compile` gives back: `exit` is the exit code, or how it trapped. */
 type Result = {
-  exit: number | string;
+  exit: string;
+  ok: boolean;
   files: Map<string, string>;
   stderr: string;
   instantiate: number;
   run: number;
   memory: number;
 };
-
-async function compile(
-  module: WebAssembly.Module,
-  sysroot: Map<string, Inode>,
-  webCrate: File,
-  sources: Map<string, string>,
-  rootFile: string,
-  test: boolean,
-): Promise<Result> {
-  const stderr: string[] = [];
-  const outDir = new PreopenDirectory("/out", new Map());
-  const fds = [
-    new OpenFile(new File([])), // stdin
-    ConsoleStdout.lineBuffered((line) => stderr.push(line)), // stdout
-    ConsoleStdout.lineBuffered((line) => stderr.push(line)), // stderr
-    new PreopenDirectory("/in", directoryOf(sources)),
-    outDir,
-    new PreopenDirectory(
-      "/sysroot",
-      new Map([["lib", dir({ rustlib: dir({ "wasm32-unknown-unknown": dir({ lib: new Directory(sysroot) }) }) })]]),
-    ),
-    new PreopenDirectory("/web", new Map([["libweb.rmeta", webCrate]])),
-  ];
-  const outFile = `/out/${rootFile.replace(/\.rs$/, ".js")}`;
-  // `--test`: the `#[test]` functions too, and `<root>.test.js` to run them (ADR 0026).
-  // This is a real browser, so tests marked `#[cfg(browser)]` run too (ADR 0027).
-  const mode = test ? ["--test"] : [];
-  const cfg = test ? ["--cfg=browser"] : [];
-  const args = ["rust-js", ...mode, `/in/${rootFile}`, "-o", outFile, "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot", ...cfg];
-  // Every program may use the web crate; rustc only reads it if one does.
-  args.push("--extern", "web=/web/libweb.rmeta");
-  // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
-  // Without options, the shim logs every call it handles.
-  const wasi = new WASI(args, ["RUSTC_ICE=0"], fds, { debug: false });
-
-  const t0 = performance.now();
-  const instance = (await WebAssembly.instantiate(module, {
-    wasi_snapshot_preview1: wasi.wasiImport,
-  })) as WebAssembly.Instance;
-  const t1 = performance.now();
-  let exit: number | string;
-  try {
-    exit = wasi.start(instance as { exports: { memory: WebAssembly.Memory; _start: () => unknown } });
-  } catch (e) {
-    // Errors end in a trap: panics can't unwind on wasm32-wasip1.
-    exit = `trap (${e instanceof Error ? e.message : String(e)})`;
-  }
-  const t2 = performance.now();
-
-  return {
-    exit,
-    files: exit === 0 ? jsFilesIn(outDir.dir) : new Map(),
-    stderr: stderr.join("\n"),
-    instantiate: t1 - t0,
-    run: t2 - t1,
-    memory: (instance.exports.memory as WebAssembly.Memory).buffer.byteLength,
-  };
-}
 
 // ── Running the program ─────────────────────────────────────────────────
 // If the root module exports `main`, run it in a frame with a
@@ -561,9 +470,9 @@ async function onCompile(test = false) {
   compiling = true;
   button.disabled = testButton.disabled = true;
   setStatus(test ? "Compiling the tests…" : "Compiling…");
-  const r = await compile(module, sysroot, webCrate, crateSources(), root, test);
+  const r = (await compile(module, sysroot, webCrate, crateSources(), root, test)) as Result;
   runs++;
-  const ok = r.exit === 0;
+  const ok = r.ok;
   if (ok) {
     outputs = r.files;
     // Keep showing the same file if it's still there; otherwise the root's.

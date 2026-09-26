@@ -443,6 +443,7 @@ fn binary_op(op: Op) -> Result<BinaryOperator, LogicalOperator> {
         Op::Ne => BinaryOperator::StrictInequality,
         Op::LooseEq => BinaryOperator::Equality,
         Op::LooseNe => BinaryOperator::Inequality,
+        Op::InstanceOf => BinaryOperator::Instanceof,
         Op::Lt => BinaryOperator::LessThan,
         Op::Le => BinaryOperator::LessEqualThan,
         Op::Gt => BinaryOperator::GreaterThan,

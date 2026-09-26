@@ -75,7 +75,7 @@ clones):
 - `{:?}` of an enum prints its JS shape: a variant without fields is a string
   at run time, which `$debug` can't tell from a Rust string. Getting it right
   needs the type at the `{:?}`.
-- A `matches!` is an `if` that returns `true` or `false`, not yet one
-  comparison.
+- A `matches!` (a `match` of `pat => true, _ => false`) is its test alone:
+  `s.TAG === "Circle"`.
 - `?` and `Result`'s methods came with ADR 0035. Not yet: enums with explicit
   discriminants, and `as` casts of them.

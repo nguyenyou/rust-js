@@ -69,6 +69,7 @@ holding an `unsafe extern "Rust"` block (ADR 0021). A first parameter named
 | `"set textContent"` | `this.textContent = v` | writable attributes |
 | `"new Event"` | `new Event(t)` | constructors |
 | `"this"` | `this`, unchanged | `unchecked_from`: a cast |
+| `"instanceof C"` | `this instanceof C` | a checked cast's test, in bindings a program writes (`C` may be an import, ADR 0028) |
 
 Mixins (`Element includes ParentNode`) are copied into every interface that
 includes them. `document` and `window` are globals at the crate root.

@@ -440,6 +440,8 @@ enum JsForm {
     New(String),
     /// `this` itself: an unchecked cast.
     This,
+    /// `this instanceof Class`: a checked one, as a `bool`.
+    InstanceOf(String),
 }
 
 fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
@@ -447,7 +449,8 @@ fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
     if name == "this" {
         return JsForm::This;
     }
-    let forms: [(&str, fn(String) -> JsForm); 3] = [("get ", JsForm::Get), ("set ", JsForm::Set), ("new ", JsForm::New)];
+    let forms: [(&str, fn(String) -> JsForm); 4] =
+        [("get ", JsForm::Get), ("set ", JsForm::Set), ("new ", JsForm::New), ("instanceof ", JsForm::InstanceOf)];
     for (prefix, form) in forms {
         if let Some(rest) = name.strip_prefix(prefix) {
             return form(rest.to_string());
@@ -462,8 +465,10 @@ fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
 fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
     match tcx.def_kind(def_id) {
         DefKind::Static { .. } => Some(js_name(tcx, def_id)),
-        DefKind::Fn if !is_method(tcx, def_id) => match js_form(tcx, def_id) {
-            JsForm::Call(name) | JsForm::New(name) => Some(name),
+        DefKind::Fn => match js_form(tcx, def_id) {
+            JsForm::Call(name) | JsForm::New(name) if !is_method(tcx, def_id) => Some(name),
+            // A class to test against is a global or an import like any other.
+            JsForm::InstanceOf(class) => Some(class),
             _ => None,
         },
         _ => None,
@@ -535,6 +540,8 @@ pub enum Helper {
     Unwrap,
     StripPrefix,
     StripSuffix,
+    SplitOnce,
+    RsplitOnce,
     Try,
     Settle,
     UnwrapOk,
@@ -636,6 +643,22 @@ function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` valu
     throw new Error(message + ": " + $debug(result._0));
   }
   return result._0;
+}
+"#
+            }
+            Helper::SplitOnce => {
+                r#"
+function $splitOnce(s, separator) {
+  const i = s.indexOf(separator);
+  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
+}
+"#
+            }
+            Helper::RsplitOnce => {
+                r#"
+function $rsplitOnce(s, separator) {
+  const i = s.lastIndexOf(separator);
+  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
 }
 "#
             }
@@ -777,6 +800,9 @@ enum Std {
     /// `strip_prefix` and `strip_suffix`: an option (ADR 0030).
     StripPrefix,
     StripSuffix,
+    /// `split_once` and `rsplit_once`: an option of the two sides.
+    SplitOnce,
+    RsplitOnce,
     /// `s.push_str(t)` and `s.push(c)`: `s = s + t`.
     PushStr,
     /// `.last()` of a `split`: `.at(-1)`.
@@ -1016,7 +1042,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             ExprKind::Match { .. } if let Some(for_loop) = self.as_for(e) => self.lower_for(for_loop, span, out),
-            ExprKind::Match { scrutinee, ref arms, .. } if self.as_await(e).is_none() && self.as_question(e).is_none() => {
+            ExprKind::Match { scrutinee, ref arms, .. }
+                if self.as_await(e).is_none() && self.as_question(e).is_none() && !self.is_matches(arms) =>
+            {
                 self.lower_match(scrutinee, arms, dest, out)
             }
             ExprKind::Return { value } => {
@@ -1553,6 +1581,47 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(test.unwrap_or_else(|| Expr::bool(true)))
     }
 
+    /// The shape `as_matches` takes: `pat => true, _ => false`.
+    fn is_matches(&self, arms: &[ArmId]) -> bool {
+        let is_bool = |arm: ArmId, want: bool| {
+            matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want))
+        };
+        matches!(arms, &[first, rest] if is_bool(first, true) && is_bool(rest, false)
+            && matches!(self.thir[rest].pattern.kind, PatKind::Wild) && self.thir[rest].guard.is_none())
+    }
+
+    /// `matches!(x, pat)`, or `match x { pat if guard => true, _ => false }`:
+    /// just the test, `x.TAG === "Circle"`, when the pattern binds nothing
+    /// the guard can't read where it is.
+    fn as_matches(&mut self, scrutinee: ExprId, arms: &[ArmId], out: &mut Vec<Stmt>) -> R<Option<Expr>> {
+        let is_bool = |arm: ArmId, want: bool| {
+            matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want))
+        };
+        let &[first, rest] = arms else { return Ok(None) };
+        if !is_bool(first, true) || !is_bool(rest, false) || !matches!(self.thir[rest].pattern.kind, PatKind::Wild) || self.thir[rest].guard.is_some() {
+            return Ok(None);
+        }
+        let (subject, stable) = self.subject(scrutinee, "match", out)?;
+        let mut bindings = Vec::new();
+        let test = self.pattern_test(&self.thir[first].pattern, &subject, &mut bindings)?;
+        if !bindings.is_empty() && (!stable || bindings.iter().any(|b| b.mutable)) {
+            return Err(self.unsupported(self.thir[first].pattern.span, "this binding in `matches!`"));
+        }
+        let span = self.js_span(self.thir[first].span);
+        self.bind_all(bindings, stable, span, out);
+        let guard = match self.thir[first].guard {
+            Some(guard) if self.is_simple(guard) => Some(self.expr(guard, out)?),
+            Some(guard) => return Err(self.unsupported(self.thir[guard].span, "this guard")),
+            None => None,
+        };
+        let test = match (test, guard) {
+            (Some(t), Some(g)) => Expr::bin(Op::And, t, g),
+            (Some(t), None) | (None, Some(t)) => t,
+            (None, None) => Expr::bool(true),
+        };
+        Ok(Some(test))
+    }
+
     /// A JS boolean test for "`subject` matches `pat`" (`None`: always matches).
     fn pattern_test(
         &mut self,
@@ -1744,6 +1813,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => Ok(Expr::await_(self.expr(awaited, out)?)),
             ExprKind::Match { .. } if let Some(tried) = self.as_question(e) => self.question(e, tried, None, out),
+            ExprKind::Match { scrutinee, ref arms, .. } if let Some(test) = self.as_matches(scrutinee, arms, out)? => Ok(test),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
                 if self.is_simple(then) && self.is_simple(els) =>
             {
@@ -1809,12 +1879,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is `e` a Rust expression that JS can only write as statements?
     fn is_control_flow(&self, e: ExprId) -> bool {
-        self.as_await(e).is_none()
-            && self.as_question(e).is_none()
-            && matches!(
-            self.thir[self.strip(e)].kind,
-            ExprKind::If { .. } | ExprKind::Match { .. } | ExprKind::Block { .. } | ExprKind::Loop { .. }
-        )
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Match { ref arms, .. } => {
+                self.as_await(e).is_none() && self.as_question(e).is_none() && !self.is_matches(arms)
+            }
+            ExprKind::If { .. } | ExprKind::Block { .. } | ExprKind::Loop { .. } => true,
+            _ => false,
+        }
     }
 
     /// Can `e` become a JS expression with no statements before it?
@@ -2077,6 +2148,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Expr::undefined()
                 }
                 (JsForm::This, Some(this)) if args.is_empty() => this,
+                (JsForm::InstanceOf(class), Some(this)) if args.is_empty() => Expr::bin(Op::InstanceOf, this, self.js_ref(&class)),
                 _ => {
                     let what = format!("the `#[link_name]` of `{}` with this signature", self.tcx.def_path_str(def_id));
                     return Err(self.unsupported(self.thir[fun].span, &what));
@@ -2182,10 +2254,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let rest = (1..args.len()).map(|_| arg()).collect();
                 Expr::call(Expr::member(this, name), rest)
             }
-            Std::StripPrefix | Std::StripSuffix => {
+            Std::StripPrefix | Std::StripSuffix | Std::SplitOnce | Std::RsplitOnce => {
                 let (helper, name) = match known {
                     Std::StripPrefix => (Helper::StripPrefix, "$stripPrefix"),
-                    _ => (Helper::StripSuffix, "$stripSuffix"),
+                    Std::StripSuffix => (Helper::StripSuffix, "$stripSuffix"),
+                    Std::SplitOnce => (Helper::SplitOnce, "$splitOnce"),
+                    _ => (Helper::RsplitOnce, "$rsplitOnce"),
                 };
                 self.runtime.insert(helper);
                 Expr::call(Expr::var(name), vec![arg(), arg()])
@@ -2404,7 +2478,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "as_str" if string => Std::Same,
             "trim" if owner.is_str() => Std::Trim,
             // Methods taking a pattern: only a string or a `char` one.
-            "starts_with" | "ends_with" | "contains" | "replace" | "split" | "strip_prefix" | "strip_suffix"
+            "starts_with" | "ends_with" | "contains" | "replace" | "split" | "strip_prefix" | "strip_suffix" | "split_once"
+            | "rsplit_once"
                 if owner.is_str() && !self_ty.is_some_and(|p| self.is_string_like(p)) =>
             {
                 return None;
@@ -2416,6 +2491,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "split" if owner.is_str() => Std::Method("split"),
             "strip_prefix" if owner.is_str() => Std::StripPrefix,
             "strip_suffix" if owner.is_str() => Std::StripSuffix,
+            "split_once" if owner.is_str() => Std::SplitOnce,
+            "rsplit_once" if owner.is_str() => Std::RsplitOnce,
             "to_uppercase" if owner.is_str() => Std::Method("toUpperCase"),
             "to_lowercase" if owner.is_str() => Std::Method("toLowerCase"),
             "trim_start" if owner.is_str() => Std::Method("trimStart"),

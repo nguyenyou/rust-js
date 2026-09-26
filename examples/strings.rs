@@ -69,6 +69,19 @@ pub fn separator(windows: bool) -> String {
     c.to_string() + if same { " (unix)" } else { " (windows)" }
 }
 
+/// `split_once` and `rsplit_once`: an option of the two sides.
+pub fn folder_and_file(path: &str) -> (String, String) {
+    let first = match path.split_once('/') {
+        Some((top, _)) => top.to_string(),
+        None => String::new(),
+    };
+    let file = match path.rsplit_once("/") {
+        Some((_, name)) => name,
+        None => path,
+    };
+    (first, file.to_string())
+}
+
 pub fn repeated(s: &str, n: u32) -> String {
     s.repeat(n as usize)
 }

@@ -25,6 +25,7 @@ count: Rust's `len()` and `&s[a..b]` count UTF-8 bytes, and JS's `length` and
 | `s.to_uppercase()`, `s.to_lowercase()` | `s.toUpperCase()`, `s.toLowerCase()` |
 | `s.trim_start()`, `s.trim_end()`, `s.repeat(n)` | `s.trimStart()`, `s.trimEnd()`, `s.repeat(n)` |
 | `s.strip_prefix(p)`, `s.strip_suffix(p)` | `$stripPrefix(s, p)`, `$stripSuffix(s, p)`: an `Option` (ADR 0030) |
+| `s.split_once(p)`, `s.rsplit_once(p)` | `$splitOnce(s, p)`, `$rsplitOnce(s, p)`: an `Option` of the two sides |
 | `s.split(p)` | `s.split(p)`, an array: for `for`, `collect()`, `last()` (`.at(-1)`), `count()` |
 | `parts.join(sep)` | `parts.join(sep)` |
 | `s.push_str(t)`, `s.push(c)` | `s = s + t` |
