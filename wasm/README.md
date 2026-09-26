@@ -69,9 +69,12 @@ changes.
 ([ADR 0032](../docs/decisions/0032-dogfooding-the-playground.md)):
 `web/rust/lib.rs` is all of it (the editors, through CodeMirror bindings, the file
 trees, `compile`, which runs `rust-js.wasm` under the WASI shim, and the Result
-frame), and `main.ts` only calls its `start`. `serve.ts` and `build.ts` compile it to `web/rust/lib.js`
-with `rust-js.wasm`, under the same WASI shim, in Bun (`web/compile-rust.ts`),
-before `main.ts` is bundled. On its own: `cd web && bun compile-rust.ts`.
+frame), and `main.ts` only calls its `start`. The page is a Vite app
+([ADR 0045](../docs/decisions/0045-playground-on-vite.md)), with React
+([ADR 0044](../docs/decisions/0044-playground-on-react.md)), React Compiler and
+Tailwind. `vite-plugin-rust-js` compiles `web/rust/` on start and on each save, with
+`rust-js.wasm` under the same WASI shim, in Bun (`web/compile-rust.ts`), so
+saving `page.rs` is a Fast Refresh. On its own: `cd web && bun compile-rust.ts`.
 
 It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),

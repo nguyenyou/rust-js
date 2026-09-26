@@ -1,0 +1,32 @@
+/* The playground's styles (ADR 0045): Tailwind, with the page's fonts and
+   colors as its theme. The classes are in index.html and rust/. */
+@import "tailwindcss";
+
+@theme {
+  --font-sans: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --color-page: #fbfbfa;
+  --color-ink: #1d1d1b;
+  --color-muted: #6b6b66;
+  --color-panel: #f1f0ec;
+  --color-line: #deddd6;
+  --color-selected: #e3e1d9;
+  --color-bad: #a3321f;
+  --color-good: #2f6b3a;
+}
+
+/* The same colors, for a dark system theme. */
+@layer theme {
+  :root {
+    @variant dark {
+      --color-page: #161614;
+      --color-ink: #e8e7e2;
+      --color-muted: #9a998f;
+      --color-panel: #1f1f1c;
+      --color-line: #34332e;
+      --color-selected: #2e2d29;
+      --color-bad: #ef8a78;
+      --color-good: #8fcf98;
+    }
+  }
+}

@@ -2,6 +2,10 @@
   "name": "rust-js-wasm-web",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "bunx --bun vite --configLoader native",
+    "build": "bunx --bun vite build --configLoader native"
+  },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "0.4.2",
     "@codemirror/lang-javascript": "6.2.5",
@@ -12,5 +16,15 @@
     "codemirror": "6.0.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-react": "6.1.1",
+    "babel-plugin-react-compiler": "1.0.0",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.0",
+    "vite-plugin-rust-js": "workspace:*"
   }
 }

@@ -119,6 +119,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
 - [0032 The playground is written in Rust, compiled by rust-js, a part at a time](decisions/0032-dogfooding-the-playground.md)
 - [0044 The playground on React, a slice at a time](decisions/0044-playground-on-react.md)
+- [0045 The playground is a Vite app, with React Compiler and Tailwind](decisions/0045-playground-on-vite.md)
 
 ## Research
 

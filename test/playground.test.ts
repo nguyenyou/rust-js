@@ -11,7 +11,7 @@ import { root, run } from "./support";
 const wasm = join(root, "wasm/target/wasm32-wasip1/release/rust-js.wasm");
 
 test.skipIf(!existsSync(wasm))("the playground loads, compiles and runs tests, rendered by React", async () => {
-  run(["bun", "wasm/web/build.ts"]);
+  run(["bun", "run", "site"]);
   const server = Bun.spawn(["bun", "wasm/web/preview.ts"], { cwd: root, env: { ...process.env, PORT: "0" }, stdout: "pipe" });
   const browser = await chromium.launch({ headless: true });
   try {

@@ -1,9 +1,12 @@
-// What the playground page needs besides itself, shared by the dev server
-// (serve.ts) and the static build for GitHub Pages (build.ts).
+// What the playground page needs besides itself: the files it fetches, for
+// Vite's dev server and the static build (vite.config.ts), and the crates
+// its own Rust and its users' programs are compiled with.
 
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
+
+import type { Plugin } from "vite";
 
 export const wasmPath = join(import.meta.dir, "../target/wasm32-wasip1/release/rust-js.wasm");
 export const sysrootDir = join(import.meta.dir, "../sysroot/lib/rustlib/wasm32-unknown-unknown/lib");
@@ -88,4 +91,62 @@ export function examples(): Example[] {
 /** What the page's `examples.json` holds: everything but local paths. */
 export function examplesManifest() {
   return examples().map(({ name, title, root, files }) => ({ name, title, root, files }));
+}
+
+/**
+ * What the page fetches beside itself (ADR 0045): the compiler, the sysroot's
+ * metadata, the web crate's, and the examples. Served by Vite's dev server,
+ * and put in the build as they are, unhashed, since the page asks for them
+ * by name.
+ */
+export function playgroundFiles(): Plugin {
+  const webCrate = join(import.meta.dir, "../../target/web/libweb.rmeta");
+  // The file at a path the page asks for, or the JSON to send.
+  function served(path: string): { file: string } | { json: unknown } | undefined {
+    const sysroot = sysrootFiles();
+    if (path === "/rust-js.wasm") return { file: wasmPath };
+    if (path === "/sysroot.json") return { json: sysroot };
+    const name = path.match(/^\/sysroot\/([^/]+)$/)?.[1];
+    if (name && sysroot.includes(name)) return { file: join(sysrootDir, name) };
+    if (path === "/web/libweb.rmeta") return { file: webCrate };
+    if (path === "/examples.json") return { json: examplesManifest() };
+    // Only files an example lists: never an arbitrary path.
+    const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
+    const found = examples().find((e) => e.name === example);
+    const file = rest.join("/");
+    if (found?.files.includes(file)) return { file: join(found.dir, file) };
+  }
+  // Every path the build needs, for `generateBundle`.
+  function all(): string[] {
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/web/libweb.rmeta", "/examples.json"];
+    paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
+    for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
+    return paths;
+  }
+  return {
+    name: "playground-files",
+    buildStart() {
+      buildWebCrate(webCrate);
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const found = served(decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname));
+        if (!found) return next();
+        if ("json" in found) {
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(found.json));
+        } else {
+          if (found.file.endsWith(".wasm")) res.setHeader("Content-Type", "application/wasm");
+          res.end(readFileSync(found.file));
+        }
+      });
+    },
+    generateBundle() {
+      for (const path of all()) {
+        const found = served(path)!;
+        const source = "json" in found ? JSON.stringify(found.json) : readFileSync(found.file);
+        this.emitFile({ type: "asset", fileName: path.slice(1), source });
+      }
+    },
+  };
 }

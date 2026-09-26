@@ -30,8 +30,12 @@ function run(command, args, cwd) {
  * @param {object} [options]
  * @param {string[]} [options.crates] Crate roots relative to Vite's root.
  * @param {string} [options.rustJs] Compiler binary; defaults to this checkout.
+ * @param {(job: { crate: string, output: string, manifest: string }) => Promise<void>} [options.compile]
+ *   Compile a crate some other way, like the playground's with rust-js.wasm:
+ *   write its JS beside it and a manifest (ADR 0042) to `manifest`, all paths
+ *   absolute, or throw rustc's errors. It builds the crates it needs itself.
  */
-export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, "debug/rust-js") } = {}) {
+export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, "debug/rust-js"), compile: custom } = {}) {
   let root, server, closed = false, metadataKey;
   let active;
   const pending = new Set();
@@ -75,7 +79,9 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
     const manifest = manifestPath(crate);
     await mkdir(dirname(manifest), { recursive: true });
     try {
-      await run(rustJs, [crate, "-o", crate.replace(/\.rs$/, ".js"), "--manifest", manifest,
+      const output = crate.replace(/\.rs$/, ".js");
+      if (custom) await custom({ crate: resolve(root, crate), output: resolve(root, output), manifest });
+      else await run(rustJs, [crate, "-o", output, "--manifest", manifest,
         "--", "--extern", `react=${join(metadata, "libreact.rmeta")}`, "-L", metadata], root);
     } catch (error) {
       // rustc names the version an item needs; say which one is installed.
@@ -115,7 +121,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
       const batch = [...pending];
       pending.clear();
       try {
-        await buildMetadata();
+        if (!custom) await buildMetadata();
         for (const crate of batch) {
           try { await compile(crate); }
           catch (error) { failures.set(crate, error.message); }
@@ -167,7 +173,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
       // The generated JS is committed, as ReScript recommends (ADR 0041), so
       // a checkout without rust-js still builds from it. With rust-js, the
       // Rust is always compiled, and an error is never hidden by an old file.
-      if (!existsSync(rustJs)) {
+      if (!custom && !existsSync(rustJs)) {
         const files = crates.map(crate => [".jsx", ".js"].map(ext => crate.replace(/\.rs$/, ext)).find(file => existsSync(resolve(root, file))));
         if (files.every(Boolean)) {
           for (const file of files) committed.add(resolve(root, file));

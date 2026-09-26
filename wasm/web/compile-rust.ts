@@ -1,14 +1,15 @@
 // Compile the playground's own Rust (./rust/lib.rs) to JS, beside it, with
-// rust-js.wasm: the compiler the page runs, here under the same WASI shim,
-// in Bun. build.ts and serve.ts run this before bundling main.ts, which
-// imports the result.
+// rust-js.wasm: the compiler the page runs, here under the same WASI shim.
+// vite.config.ts hands this to vite-plugin-rust-js, which calls it when Vite
+// starts and on every save (ADR 0045).
 //
 //   /wasm/web/rust/...   the crate, and where lib.jsx and its maps go
 //   /sysroot/...         the std metadata rustc type-checks against
 //   /crates/...          the react crate's metadata (ADR 0044), and the web
 //                        crate's it uses (ADR 0024)
+//   /out/manifest.json   what it read and wrote (ADR 0042)
 
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ConsoleStdout, Directory, File, type Inode, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";
@@ -17,10 +18,20 @@ import { buildReactCrate, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
 
 const rustDir = join(import.meta.dir, "rust");
 const cratesDir = join(import.meta.dir, "../../target/playground-crates");
+const virtual = "/wasm/web/rust";
 
-/** Compile ./rust/lib.rs, with the react and web crates. Throws rustc's errors. */
-export async function compileRust() {
-  buildReactCrate(cratesDir);
+let cratesBuilt = false;
+
+/**
+ * Compile ./rust/lib.rs, with the react and web crates. With `manifest`,
+ * write the compiler's manifest there, its paths the real ones. Throws
+ * rustc's errors.
+ */
+export async function compileRust(job: { manifest?: string } = {}) {
+  if (!cratesBuilt) {
+    buildReactCrate(cratesDir);
+    cratesBuilt = true;
+  }
   const crate = (name: string) => new File(readFileSync(join(cratesDir, name)), { readonly: true });
   const sources = new Map<string, Inode>(
     readdirSync(rustDir)
@@ -31,7 +42,8 @@ export async function compileRust() {
     sysrootFiles().map((name) => [name, new File(readFileSync(join(sysrootDir, name)), { readonly: true })]),
   );
   const dir = (entries: Record<string, Inode>) => new Directory(new Map(Object.entries(entries)));
-  const crateDir = new PreopenDirectory("/wasm/web/rust", sources);
+  const crateDir = new PreopenDirectory(virtual, sources);
+  const out = new PreopenDirectory("/out", new Map());
   const stderr: string[] = [];
   const fds = [
     new OpenFile(new File([])), // stdin
@@ -40,9 +52,10 @@ export async function compileRust() {
     crateDir,
     new PreopenDirectory("/sysroot", new Map([["lib", dir({ rustlib: dir({ "wasm32-unknown-unknown": dir({ lib: new Directory(sysroot) }) }) })]])),
     new PreopenDirectory("/crates", new Map([["libreact.rmeta", crate("libreact.rmeta")], ["libweb.rmeta", crate("libweb.rmeta")]])),
+    out,
   ];
   const args = [
-    "rust-js", "/wasm/web/rust/lib.rs", "-o", "/wasm/web/rust/lib.js",
+    "rust-js", `${virtual}/lib.rs`, "-o", `${virtual}/lib.js`, "--manifest", "/out/manifest.json",
     "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot",
     "--extern", "web=/crates/libweb.rmeta", "--extern", "react=/crates/libreact.rmeta", "-L", "/crates",
   ];
@@ -62,12 +75,27 @@ export async function compileRust() {
   if (exit !== 0) throw new Error(`rust-js failed on wasm/web/rust/lib.rs (exit ${exit}):\n${stderr.join("\n")}`);
   // Warnings, on success.
   if (stderr.length > 0) console.warn(stderr.join("\n"));
-  // A module with JSX is a `.jsx` file (ADR 0040). What an earlier build
-  // wrote under another name goes.
+
+  // A module with JSX is a `.jsx` file (ADR 0040). A file whose content is
+  // the same is left alone, so Vite doesn't update what didn't change; one an
+  // earlier build wrote that this one didn't goes.
   const written = /\.jsx?(\.map)?$/;
-  for (const name of readdirSync(rustDir).filter((n) => written.test(n))) rmSync(join(rustDir, name));
+  const outputs = new Map<string, Uint8Array>();
   for (const [name, entry] of crateDir.dir.contents) {
-    if (entry instanceof File && written.test(name)) writeFileSync(join(rustDir, name), entry.data);
+    if (entry instanceof File && written.test(name)) outputs.set(name, entry.data);
+  }
+  for (const name of readdirSync(rustDir).filter((n) => written.test(n) && !outputs.has(n))) rmSync(join(rustDir, name));
+  for (const [name, data] of outputs) {
+    const path = join(rustDir, name);
+    if (!existsSync(path) || !Buffer.from(readFileSync(path)).equals(Buffer.from(data))) writeFileSync(path, data);
+  }
+
+  if (job.manifest) {
+    const manifest = out.dir.contents.get("manifest.json");
+    if (!(manifest instanceof File)) throw new Error("rust-js wrote no manifest");
+    // The compiler saw the crate at /wasm/web/rust; it's at rustDir.
+    const text = new TextDecoder().decode(manifest.data).replaceAll(`"${virtual}/`, `"${rustDir}/`);
+    writeFileSync(job.manifest, text);
   }
 }
 

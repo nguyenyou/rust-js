@@ -16,7 +16,8 @@ Two things make the playground different from the Vite example:
 
 - **The compiler is the WebAssembly one.** `compile-rust.ts` builds the page
   with `rust-js.wasm`, under the WASI shim, as the page itself compiles.
-- **Bun, not Vite, bundles the page,** from `index.html`.
+- **Bun, not Vite, bundles the page,** from `index.html`. It became a Vite
+  app in [0045](0045-playground-on-vite.md).
 
 ## Decision
 

@@ -70,7 +70,7 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
   throws = await import(join(target, "throws.js"));
-  // The playground's own Rust (ADRs 0032, 0044), as build.ts compiles it with
+  // The playground's own Rust (ADRs 0032, 0044), as compile-rust.ts compiles it with
   // rust-js.wasm: with React.
   buildReact();
   run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"),

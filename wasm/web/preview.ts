@@ -1,5 +1,5 @@
 // Serve ./dist under /rust-js/, the way GitHub Pages will, to check the
-// static build before deploying. Run `bun build.ts` first.
+// static build before deploying. Run `bun run site` first.
 
 import { join, normalize } from "node:path";
 

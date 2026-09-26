@@ -167,8 +167,12 @@ pub fn mb(n: f64) -> String {
 pub fn stat(label: &str, value: &str) {
     let stats = document::get_element_by_id(document, "stats").expect("the page has a #stats table");
     let row = html_table_element::insert_row(html_table_element::unchecked_from(stats));
-    node::set_text_content(html_table_row_element::insert_cell(row), label);
-    node::set_text_content(html_table_row_element::insert_cell(row), value);
+    let name = html_table_row_element::insert_cell(row);
+    element::set_class_name(name, "py-0.5 pr-4 tabular-nums text-muted");
+    node::set_text_content(name, label);
+    let number = html_table_row_element::insert_cell(row);
+    element::set_class_name(number, "py-0.5 pr-4 tabular-nums");
+    node::set_text_content(number, value);
 }
 
 /// Download the compiler, the sysroot, the web crate and the examples.
@@ -293,24 +297,26 @@ fn render(tree: &Tree, into: &Element, depth: u32, options: &TreeOptions) {
     });
     for (name, entry) in entries {
         let li = document::create_element(document, "li");
+        // `group`: a file's delete button shows while its row is hovered.
+        element::set_class_name(li, "group flex items-center");
         let indent = format!("{}px", 8 + depth * 12);
         match entry {
             Entry::Folder(children) => {
                 let label = html_element::unchecked_from(document::create_element(document, "span"));
-                element::set_class_name(label, "folder");
+                element::set_class_name(label, "block px-2 py-0.5 text-muted");
                 css_style_declaration::set_property(html_element::style(label), "padding-left", &indent);
                 node::set_text_content(label, &format!("{name}/"));
                 let nested = document::create_element(document, "ul");
                 render(children, nested, depth + 1, options);
-                let wrapper = html_element::unchecked_from(document::create_element(document, "div"));
-                css_style_declaration::set_property(html_element::style(wrapper), "width", "100%");
+                let wrapper = document::create_element(document, "div");
+                element::set_class_name(wrapper, "w-full");
                 element::append(wrapper, label);
                 element::append(wrapper, nested);
                 element::append(li, wrapper);
             }
             Entry::File(path) => {
                 let file = html_element::unchecked_from(document::create_element(document, "button"));
-                element::set_class_name(file, "file");
+                element::set_class_name(file, "min-w-0 flex-1 cursor-pointer truncate px-2 py-0.5 text-left aria-[current=true]:bg-selected");
                 css_style_declaration::set_property(html_element::style(file), "padding-left", &indent);
                 node::set_text_content(file, name);
                 element::set_attribute(file, "aria-current", &(*path == options.selected).to_string());
@@ -553,7 +559,15 @@ pub fn link(files: &JsMap, start: &str) -> String {
 pub fn set_status(text: &str, kind: &str) {
     let status = document::get_element_by_id(document, "status").expect("the page has a #status");
     node::set_text_content(status, text);
-    element::set_class_name(status, kind);
+    // Not a `match` on the strings: rust-js can't compile string patterns yet.
+    let color = if kind == "good" {
+        "text-good"
+    } else if kind == "bad" {
+        "text-bad"
+    } else {
+        ""
+    };
+    element::set_class_name(status, color);
 }
 
 fn status_text() -> String {
@@ -1030,13 +1044,13 @@ fn render_source_files() {
             decorate: Some(Rc::new(|li, path| {
                 if path == root() {
                     let note = document::create_element(document, "span");
-                    element::set_class_name(note, "note");
+                    element::set_class_name(note, "text-[11px] text-muted");
                     node::set_text_content(note, "root ");
                     element::append(li, note);
                     return;
                 }
                 let remove = document::create_element(document, "button");
-                element::set_class_name(remove, "delete");
+                element::set_class_name(remove, "invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible");
                 node::set_text_content(remove, "×");
                 element::set_attribute(remove, "aria-label", &format!("Delete {path}"));
                 let deleted = path.clone();
@@ -1122,7 +1136,7 @@ fn render_output_files() {
     let paths: Vec<String> = OUTPUTS.with_borrow(|outputs| outputs.iter().map(|(p, _)| p.clone()).collect());
     if paths.is_empty() {
         let empty = document::create_element(document, "li");
-        element::set_class_name(empty, "empty");
+        element::set_class_name(empty, "flex items-center px-2 py-0.5 text-muted");
         node::set_text_content(empty, "(none)");
         element::replace_children(list, empty);
         return;
