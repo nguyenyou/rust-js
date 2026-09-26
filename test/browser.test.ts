@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { root, target, run, buildCompiler, buildWeb } from "./support";
 
 beforeAll(() => {
@@ -62,7 +63,8 @@ function inBrowsers(runner: "playwright" | "vitest", files: string[]): { exit: n
       ? ["bunx", "--bun", "playwright", "test", "-c", "browser/playwright.config.ts", "--reporter=line"]
       : ["bunx", "--bun", "vitest", "run", "-c", "browser/vitest.config.ts"];
   const p = Bun.spawnSync(command, { cwd: root, env: { ...process.env, RUST_JS_TESTS: files.join(" ") }, stderr: "pipe" });
-  return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
+  // CI reporters may color individual words and numbers in their summaries.
+  return { exit: p.exitCode ?? -1, output: stripVTControlCharacters(p.stdout.toString() + p.stderr.toString()) };
 }
 
 test("in real browsers, with Playwright Test on Bun", () => {
