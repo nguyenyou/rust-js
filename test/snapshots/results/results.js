@@ -106,4 +106,54 @@ export function unwrapped(c) {
 export function expected(c) {
   return $unwrapOk(parse_digit(c), "a digit");
 }
+
+function small_sum(a, b) {
+  const result = parse_digit(a);
+  if (result.TAG === "Err") {
+    return {
+      TAG: "Err",
+      _0: appErrorFromString_from(result._0)
+    };
+  }
+  const x = result._0;
+  const result$1 = parse_digit(b);
+  if (result$1.TAG === "Err") {
+    return {
+      TAG: "Err",
+      _0: appErrorFromString_from(result$1._0)
+    };
+  }
+  const y = result$1._0;
+  if (x + y >>> 0 > 4) {
+    return {
+      TAG: "Err",
+      _0: {
+        TAG: "TooBig",
+        _0: x + y >>> 0
+      }
+    };
+  }
+  return {
+    TAG: "Ok",
+    _0: x + y >>> 0
+  };
+}
+
+export function converted(a, b) {
+  const match = small_sum(a, b);
+  if (match.TAG === "Ok") {
+    return "ok " + String(match._0);
+  } else if (match.TAG === "Err" && match._0.TAG === "Parse") {
+    return "parse: " + match._0._0;
+  } else {
+    return "too big: " + String(match._0._0);
+  }
+}
+
+function appErrorFromString_from(message) {
+  return {
+    TAG: "Parse",
+    _0: message
+  };
+}
 //# sourceMappingURL=results.js.map

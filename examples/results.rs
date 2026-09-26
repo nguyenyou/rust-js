@@ -41,3 +41,33 @@ pub fn unwrapped(c: char) -> u32 {
 pub fn expected(c: char) -> u32 {
     parse_digit(c).expect("a digit")
 }
+
+/// An error of the crate's own, made from another with `From`.
+pub enum AppError {
+    Parse(String),
+    TooBig(u32),
+}
+
+impl From<String> for AppError {
+    fn from(message: String) -> Self {
+        AppError::Parse(message)
+    }
+}
+
+/// `?` converts the error with `From`: `Err(AppError::from(e))`.
+fn small_sum(a: char, b: char) -> Result<u32, AppError> {
+    let x = parse_digit(a)?;
+    let y = parse_digit(b)?;
+    if x + y > 4 {
+        return Err(AppError::TooBig(x + y));
+    }
+    Ok(x + y)
+}
+
+pub fn converted(a: char, b: char) -> String {
+    match small_sum(a, b) {
+        Ok(n) => format!("ok {n}"),
+        Err(AppError::Parse(message)) => format!("parse: {message}"),
+        Err(AppError::TooBig(n)) => format!("too big: {n}"),
+    }
+}

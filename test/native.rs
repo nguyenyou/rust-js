@@ -240,8 +240,9 @@ fn main() {
         case("iterators.compare", &[a, b], || iterators::compare(a as i32, b as i32));
     }
     case("iterators.bigger", &[3, 9], || iterators::bigger(3, 9));
-    for (a, b) in [('1', '2'), ('3', '0'), ('x', '1'), ('2', 'y')] {
+    for (a, b) in [('1', '2'), ('3', '0'), ('3', '2'), ('x', '1'), ('2', 'y')] {
         case_with("results.sum_digits", &[&a, &b], || results::sum_digits(a, b));
+        case_with("results.converted", &[&a, &b], || results::converted(a, b));
     }
     for c in ['0', '3', 'z'] {
         case_with("results.parse_digit", &[&c], || results::parse_digit(c));

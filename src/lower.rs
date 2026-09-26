@@ -2663,8 +2663,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !is_option && !self.is_std_adt(ty, sym::Result) {
             return Err(self.unsupported(span, &format!("`?` on a `{ty}`")));
         }
+        // The function's error type: the same as this one's, and the `Err` is
+        // returned as it is, or one with a `From` of the crate's own, and it's
+        // `{ TAG: "Err", _0: from(error) }`.
+        let mut from = None;
         if !is_option {
-            // The function's error type must be this one: `return r` as it is.
             let ExprKind::Match { ref arms, .. } = self.thir[self.strip(question)].kind else {
                 unreachable!("checked")
             };
@@ -2678,8 +2681,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ty::Adt(_, args) => args.types().nth(1),
                 _ => None,
             };
-            if returned.and_then(error) != error(ty) {
-                return Err(self.unsupported(span, "`?` that converts the error with `From`"));
+            let (to, from_ty) = (returned.and_then(error), error(ty));
+            if to != from_ty {
+                let (Some(to), Some(from_ty)) = (to, from_ty) else {
+                    return Err(self.unsupported(span, "this `?`"));
+                };
+                from = Some(
+                    self.error_from(to, from_ty)?
+                        .ok_or_else(|| self.unsupported(span, "`?` that converts the error with this `From`"))?,
+                );
             }
         }
         let (subject, _) = self.subject(tried, base.unwrap_or(if is_option { "value" } else { "result" }), out)?;
@@ -2694,10 +2704,45 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             (Expr::bin(Op::LooseEq, subject, Expr::null()), Expr::undefined(), value)
         } else {
             let failed = Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str("Err"));
-            (failed, subject.clone(), Expr::member(subject, "_0"))
+            let ret = match from {
+                Some(from) => Expr::object(vec![
+                    Prop::Field("TAG".into(), Expr::str("Err")),
+                    Prop::Field("_0".into(), Expr::call(from, vec![Expr::member(subject.clone(), "_0")])),
+                ]),
+                None => subject.clone(),
+            };
+            (failed, ret, Expr::member(subject, "_0"))
         };
         out.push(StmtKind::If(failed, vec![StmtKind::Return(Some(ret)).at(js_span)], None).at(js_span));
         Ok(value)
+    }
+
+    /// The function `?` converts an error with, `<to as From<from>>::from`,
+    /// if it's one of the crate's own (ADR 0052).
+    fn error_from(&mut self, to: Ty<'tcx>, from: Ty<'tcx>) -> R<Option<Expr>> {
+        let Some(from_trait) = self.tcx.get_diagnostic_item(sym::From) else {
+            return Ok(None);
+        };
+        let method = self.tcx.associated_item_def_ids(from_trait)[0];
+        let args = self.tcx.mk_args(&[to.into(), from.into()]);
+        let Some(instance) = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args)? else {
+            return Ok(None);
+        };
+        if !self.krate.fns.contains_key(&instance.def_id()) {
+            return Ok(None);
+        }
+        let evidence = self.evidence_args(instance.def_id(), instance.args, self.tcx.def_span(instance.def_id()))?;
+        let callee = self.fn_ref(instance.def_id());
+        Ok(Some(if evidence.is_empty() {
+            callee
+        } else {
+            let mut values = vec![Expr::var("error")];
+            values.extend(evidence);
+            Expr::arrow(
+                vec!["error".into()],
+                vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js::Span::NONE)],
+            )
+        }))
     }
 
     /// `Some(value)` of a generic `T` (ADR 0051): `$some(value)`.

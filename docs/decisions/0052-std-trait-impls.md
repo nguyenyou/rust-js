@@ -44,7 +44,8 @@ callers depend on. So before adding std traits, this ADR settles them.
 - **An impl's `from` is a function named like the others:** `impl From<u32>
   for Meters` gives `metersFromU32_from`. The trait's argument is in the
   name because a type usually has more than one `From`.
-- **`x.into()` is the same call** as the `from` it resolves to.
+- **`x.into()` is the same call** as the `from` it resolves to, and so is
+  the conversion `?` makes of an error (ADR 0035).
 - **`From` has no dictionaries.** A generic `T: From<U>` stays an error:
   there is nothing to call through yet.
 

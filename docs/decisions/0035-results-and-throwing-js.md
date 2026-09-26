@@ -43,7 +43,9 @@ const match = $try(() => JSON.parse(json));   // { TAG: "Ok", _0: .. } or { TAG:
   | `let a = g()?;` on an `Option` | `const a = g(); if (a == null) { return undefined; }` |
 
   It's recognized whole, like `.await`: the `match` on `Try::branch(e)`. An `Err`
-  whose type changes on the way out (a `From` conversion) is an error for now.
+  whose type changes on the way out is converted with the crate's own `From`
+  (ADR 0052): `return { TAG: "Err", _0: appErrorFromString_from(result._0) }`.
+  A `From` of std's, like into a `Box<dyn Error>`, is still an error.
 - **`Result`'s methods**: `is_ok()`, `is_err()` (`r.TAG === "Ok"`), `ok()` and
   `unwrap_or(d)` (`r.TAG === "Ok" ? r._0 : d`), and `unwrap()`, `expect(msg)`
   (`$unwrapOk`, with Rust's message and the error's `{:?}`).
@@ -75,5 +77,5 @@ const match = $try(() => JSON.parse(json));   // { TAG: "Ok", _0: .. } or { TAG:
   as a panic would.
 - `$try`'s `Err` is whatever was thrown. `&JsError` is the honest type, since
   JS can throw any value.
-- Not yet: `?` with a `From` conversion, `map`, `map_err`, `and_then`, `ok_or`,
+- Not yet: `?` with std's `From` conversions, `map`, `map_err`, `and_then`, `ok_or`,
   and `Result`'s other methods.
