@@ -138,8 +138,8 @@ return { x, y };
   never used again. Knowing a read is a variable's last use would remove
   most of those copies. We don't do that yet.
 - Derived impls (`#[derive(Clone, Copy, PartialEq, ..)]`) are skipped, since
-  `Copy` needs one. Calling them (`.clone()`, `==` on structs) isn't
-  supported yet.
+  `Copy` needs one. `==` on structs is `$eq` (ADR 0026), and `.clone()` of
+  a type that's never changed in place is the value itself (ADR 0035).
 - Not supported yet: unions, `..base` where `base` isn't
   a variable or field, default field values. Enums with fields follow
   ReScript (`{ TAG: "Circle", _0: 1 }`, and `Option` erased): ADRs 0030

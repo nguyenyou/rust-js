@@ -535,6 +535,9 @@ pub enum Helper {
     Unwrap,
     StripPrefix,
     StripSuffix,
+    Try,
+    Settle,
+    UnwrapOk,
 }
 
 impl Helper {
@@ -608,6 +611,34 @@ function $eq(a, b) {
 "#
             }
             // `assert_eq!` and `assert_ne!` failing, with Rust's message.
+            Helper::Try => {
+                r#"
+function $try(f) {
+  try {
+    return { TAG: "Ok", _0: f() };
+  } catch (e) {
+    return { TAG: "Err", _0: e };
+  }
+}
+"#
+            }
+            Helper::Settle => {
+                r#"
+function $settle(promise) {
+  return promise.then((value) => ({ TAG: "Ok", _0: value }), (e) => ({ TAG: "Err", _0: e }));
+}
+"#
+            }
+            Helper::UnwrapOk => {
+                r#"
+function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value") {
+  if (result.TAG === "Err") {
+    throw new Error(message + ": " + $debug(result._0));
+  }
+  return result._0;
+}
+"#
+            }
             Helper::StripPrefix => {
                 r#"
 function $stripPrefix(s, prefix) {
@@ -750,6 +781,14 @@ enum Std {
     PushStr,
     /// `.last()` of a `split`: `.at(-1)`.
     Last,
+    /// `Result` (ADR 0035): `r.TAG === "Ok"` (true) or `"Err"` (false).
+    IsOk(bool),
+    /// `r.ok()`: the value, or `undefined`.
+    ResultOk,
+    /// `r.unwrap()`, `r.expect(msg)`: `$unwrapOk(r)`.
+    UnwrapOk,
+    /// `r.unwrap_or(d)`.
+    ResultOr,
 }
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -977,7 +1016,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             ExprKind::Match { .. } if let Some(for_loop) = self.as_for(e) => self.lower_for(for_loop, span, out),
-            ExprKind::Match { scrutinee, ref arms, .. } if self.as_await(e).is_none() => {
+            ExprKind::Match { scrutinee, ref arms, .. } if self.as_await(e).is_none() && self.as_question(e).is_none() => {
                 self.lower_match(scrutinee, arms, dest, out)
             }
             ExprKind::Return { value } => {
@@ -1106,6 +1145,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => self.expr(init, out)?,
             };
             self.vars.insert(var, Var { place: parts, mutable: false, depth: self.loops.len() });
+            return Ok(());
+        }
+        // `let a = f()?;` on an option: the value is `a` itself, so it's kept
+        // under that name: `const a = f(); if (a == null) { return undefined; }`.
+        if let PatKind::Binding { name, var, mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. } = pat.kind
+            && let Some(init) = init
+            && let Some(tried) = self.as_question(init)
+            && self.option_of(self.thir[tried].ty).is_some()
+        {
+            let value = self.question(init, tried, Some(name.as_str()), out)?;
+            self.vars.insert(var, Var { place: value, mutable: false, depth: self.loops.len() });
             return Ok(());
         }
         if span.is_desugaring(DesugaringKind::Async)
@@ -1693,6 +1743,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => Ok(Expr::await_(self.expr(awaited, out)?)),
+            ExprKind::Match { .. } if let Some(tried) = self.as_question(e) => self.question(e, tried, None, out),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
                 if self.is_simple(then) && self.is_simple(els) =>
             {
@@ -1759,6 +1810,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Is `e` a Rust expression that JS can only write as statements?
     fn is_control_flow(&self, e: ExprId) -> bool {
         self.as_await(e).is_none()
+            && self.as_question(e).is_none()
             && matches!(
             self.thir[self.strip(e)].kind,
             ExprKind::If { .. } | ExprKind::Match { .. } | ExprKind::Block { .. } | ExprKind::Loop { .. }
@@ -1984,6 +2036,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(b) = value.try_to_bool() {
             return Ok(Expr::bool(b));
         }
+        if let Some(c) = char_value(value) {
+            return Ok(Expr::str(c.to_string()));
+        }
         let (Some(num), Some(leaf)) = (Num::of(value.ty), value.try_to_leaf()) else {
             return Err(self.unsupported(span, "this constant pattern"));
         };
@@ -2010,7 +2065,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.is_foreign_item(def_id) {
             let mut args = self.operands(args, out)?;
             let this = is_method(self.tcx, def_id).then(|| args.remove(0));
-            return Ok(match (js_form(self.tcx, def_id), this) {
+            let value = match (js_form(self.tcx, def_id), this) {
                 // A method or a property is on `this`: it can't be an import.
                 (JsForm::Call(name), Some(this)) if !name.contains('#') => Expr::call(Expr::member(this, name).or_at(fun_span), args),
                 (JsForm::Call(name), None) => Expr::call(self.js_ref(&name).or_at(fun_span), args),
@@ -2026,7 +2081,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let what = format!("the `#[link_name]` of `{}` with this signature", self.tcx.def_path_str(def_id));
                     return Err(self.unsupported(self.thir[fun].span, &what));
                 }
-            });
+            };
+            return Ok(self.catching(def_id, value));
         }
         // Calling a closure, `f(a, b)`, is `Fn::call(&f, (a, b))`: in JS, `f(a, b)`.
         if let Some(fn_trait) = self.tcx.trait_of_assoc(def_id)
@@ -2135,6 +2191,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var(name), vec![arg(), arg()])
             }
             Std::Last => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
+            Std::IsOk(ok) => Expr::bin(if ok { Op::Eq } else { Op::Ne }, Expr::member(arg(), "TAG"), Expr::str("Ok")),
+            Std::UnwrapOk => {
+                self.runtime.extend([Helper::UnwrapOk, Helper::Debug]);
+                let list = (0..args.len()).map(|_| arg()).collect();
+                Expr::call(Expr::var("$unwrapOk"), list)
+            }
+            // `r.TAG === "Ok" ? r._0 : d`, with `r` computed once, and `d` too,
+            // before the test, as Rust does.
+            Std::ResultOk | Std::ResultOr => {
+                let mut result = arg();
+                if result.has_effects() {
+                    result = self.spill("result", result, out);
+                }
+                let otherwise = match known {
+                    Std::ResultOr => {
+                        let d = arg();
+                        if d.has_effects() { self.spill("fallback", d, out) } else { d }
+                    }
+                    _ => Expr::undefined(),
+                };
+                let ok = Expr::bin(Op::Eq, Expr::member(result.clone(), "TAG"), Expr::str("Ok"));
+                Expr::cond(ok, Expr::member(result, "_0"), otherwise)
+            }
             Std::PushStr => unreachable!("handled above"),
             Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
             Std::IsNone => Expr::bin(Op::LooseEq, arg(), Expr::null()),
@@ -2292,13 +2371,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
-            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn) && (self.is_std_adt(ty, sym::Rc) || self.is_string_like(ty));
+            // A clone of what's never changed in place can be the value itself:
+            // nothing can tell them apart.
+            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn)
+                && (self.is_std_adt(ty, sym::Rc) || self.is_string_like(ty) || !self.contains_mutated(ty.peel_refs()));
             return (from_str || to_owned || rc_clone).then_some(Std::Same);
         }
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
         let string = self.is_lang_adt(owner, LangItem::String);
         let option = self.is_lang_adt(owner, LangItem::Option);
+        let result = self.is_std_adt(owner, sym::Result);
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
         Some(match tcx.item_name(def_id).as_str() {
@@ -2344,6 +2427,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_some" if option => Std::IsSome,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
+            "is_ok" if result => Std::IsOk(true),
+            "is_err" if result => Std::IsOk(false),
+            "ok" if result => Std::ResultOk,
+            "unwrap" | "expect" if result => Std::UnwrapOk,
+            "unwrap_or" if result => Std::ResultOr,
             _ => return None,
         })
     }
@@ -3095,6 +3183,77 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         const_js(self.tcx, value)?.as_int()
     }
 
+    /// A JS call that says, in Rust, that it may throw (ADR 0035): one
+    /// returning a `Result` runs in a `try`, `$try(() => f(x))`, and one
+    /// returning a `Promise<Result<..>>` settles either way, `$settle(p)`.
+    fn catching(&mut self, def_id: DefId, value: Expr) -> Expr {
+        let output = self.tcx.fn_sig(def_id).skip_binder().skip_binder().output();
+        if self.is_std_adt(output, sym::Result) {
+            self.runtime.insert(Helper::Try);
+            let span = value.span;
+            let thunk = Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(span)]);
+            return Expr::call(Expr::var("$try"), vec![thunk]);
+        }
+        let settles = matches!(output.kind(), ty::Adt(adt, args) if self.is_js_object(output)
+            && self.tcx.item_name(adt.did()).as_str() == "Promise"
+            && args.types().next().is_some_and(|t| self.is_std_adt(t, sym::Result)));
+        if settles {
+            self.runtime.insert(Helper::Settle);
+            return Expr::call(Expr::var("$settle"), vec![value]);
+        }
+        value
+    }
+
+    /// Recognize `?`'s desugaring (ADR 0035), and return what's tried:
+    ///
+    /// ```text
+    /// match Try::branch(e) { Continue(v) => v, Break(r) => return FromResidual::from_residual(r) }
+    /// ```
+    fn as_question(&self, e: ExprId) -> Option<ExprId> {
+        let thir = self.thir;
+        let ExprKind::Match { scrutinee, .. } = thir[strip(thir, e)].kind else { return None };
+        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else { return None };
+        let &ty::FnDef(branch, _) = thir[strip(thir, fun)].ty.kind() else { return None };
+        self.tcx.is_lang_item(branch, LangItem::TryTraitBranch).then(|| args[0])
+    }
+
+    /// `e?`: the value inside, after returning early with an `Err` or `None`.
+    /// Only when the `Err` is returned as it is: a `From` conversion isn't
+    /// supported yet.
+    fn question(&mut self, question: ExprId, tried: ExprId, base: Option<&str>, out: &mut Vec<Stmt>) -> R<Expr> {
+        let span = self.thir[question].span;
+        let ty = self.thir[tried].ty;
+        let is_option = self.option_of(ty).is_some();
+        if !is_option && !self.is_std_adt(ty, sym::Result) {
+            return Err(self.unsupported(span, &format!("`?` on a `{ty}`")));
+        }
+        if !is_option {
+            // The function's error type must be this one: `return r` as it is.
+            let ExprKind::Match { ref arms, .. } = self.thir[self.strip(question)].kind else { unreachable!("checked") };
+            let returned = arms.iter().find_map(|&arm| match self.thir[self.strip(self.thir[arm].body)].kind {
+                ExprKind::Return { value: Some(v) } => Some(self.thir[v].ty),
+                _ => None,
+            });
+            let error = |t: Ty<'tcx>| match t.kind() {
+                ty::Adt(_, args) => args.types().nth(1),
+                _ => None,
+            };
+            if returned.and_then(error) != error(ty) {
+                return Err(self.unsupported(span, "`?` that converts the error with `From`"));
+            }
+        }
+        let (subject, _) = self.subject(tried, base.unwrap_or(if is_option { "value" } else { "result" }), out)?;
+        let js_span = self.js_span(span);
+        let (failed, ret, value) = if is_option {
+            (Expr::bin(Op::LooseEq, subject.clone(), Expr::null()), Expr::undefined(), subject)
+        } else {
+            let failed = Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str("Err"));
+            (failed, subject.clone(), Expr::member(subject, "_0"))
+        };
+        out.push(StmtKind::If(failed, vec![StmtKind::Return(Some(ret)).at(js_span)], None).at(js_span));
+        Ok(value)
+    }
+
     /// `const <base> = value;`, so it's evaluated here, then its name.
     fn spill(&mut self, base: &str, value: Expr, out: &mut Vec<Stmt>) -> Expr {
         let name = self.fresh(base);
@@ -3159,6 +3318,9 @@ fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Option<Expr> {
     if let Some(num) = Num::of(ty) {
         return Some(num_literal(value.try_to_leaf()?.to_bits_unchecked(), num));
     }
+    if let Some(c) = char_value(value) {
+        return Some(Expr::str(c.to_string()));
+    }
     // An enum's value tree starts with its variant's index, then its fields.
     let children = || -> Option<Vec<ty::Value<'tcx>>> {
         match &**value.valtree {
@@ -3211,6 +3373,14 @@ fn variant_field(variant: &ty::VariantDef, i: usize) -> String {
         Some(CtorKind::Fn) => format!("_{i}"),
         _ => variant.fields.iter().nth(i).expect("a field of this variant").name.to_string(),
     }
+}
+
+/// A `char` constant (ADR 0034).
+fn char_value(value: ty::Value<'_>) -> Option<char> {
+    if !value.ty.is_char() {
+        return None;
+    }
+    char::from_u32(value.try_to_leaf()?.to_u32())
 }
 
 fn num_literal(bits: u128, num: Num) -> Expr {

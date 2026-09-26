@@ -36,6 +36,10 @@ mod enums;
 #[allow(dead_code)]
 mod strings;
 
+#[path = "../examples/results.rs"]
+#[allow(dead_code)]
+mod results;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -141,6 +145,18 @@ fn main() {
         case("options.label", &[n], || options::label(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+    }
+    for (a, b) in [('1', '2'), ('3', '0'), ('x', '1'), ('2', 'y')] {
+        case_with("results.sum_digits", &[&a, &b], || results::sum_digits(a, b));
+    }
+    for c in ['0', '3', 'z'] {
+        case_with("results.parse_digit", &[&c], || results::parse_digit(c));
+        case_with("results.methods", &[&c], || results::methods(c));
+        case_with("results.unwrapped", &[&c], || results::unwrapped(c));
+        case_with("results.expected", &[&c], || results::expected(c));
+    }
+    for n in [0, 1, 2, 4, 6, 12] {
+        case("results.halves", &[n], || results::halves(n as u32));
     }
     for n in [0, 1, 3] {
         case_with("strings.labeled", &[&"box", &(n as i64)], || strings::labeled("box", n));
@@ -272,6 +288,12 @@ impl Json for bool {
 impl Json for &str {
     fn json(&self) -> String {
         format!("{self:?}")
+    }
+}
+
+impl Json for char {
+    fn json(&self) -> String {
+        format!("{:?}", self.to_string())
     }
 }
 

@@ -29,6 +29,8 @@ let options: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
+let results: Record<string, (...args: any[]) => unknown>;
+let throws: Record<string, (...args: any[]) => any>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -59,6 +61,8 @@ beforeAll(async () => {
   enums = await import(join(target, "enums.js"));
   run([join(target, "debug", "rust-js"), "examples/strings.rs", "-o", join(target, "strings.js")]);
   strings = await import(join(target, "strings.js"));
+  run([join(target, "debug", "rust-js"), "examples/results.rs", "-o", join(target, "results.js")]);
+  results = await import(join(target, "results.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -67,6 +71,8 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
+  throws = await import(join(target, "throws.js"));
   // The playground's own Rust (ADR 0032), as build.ts compiles it with rust-js.wasm.
   run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
@@ -117,6 +123,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "results") {
+        return JSON.parse(JSON.stringify(results[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
       }
       if (path[0] === "strings") {
         return strings[path[1]](...c.args);
@@ -338,6 +347,29 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   // A `format!` value with effects is computed first, once.
   expect(js).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
   expect(js).toContain('  const response = await window.fetch("./sysroot/" + name);');
+});
+
+// ADR 0035: JS that throws, as a `Result`; and `?`.
+test("a throwing JS call is a Result, and ? returns early", async () => {
+  expect(throws.sum_json("[1, 2, 3]")).toEqual({ TAG: "Ok", _0: 6 });
+  const bad = throws.sum_json("[1, 2,");
+  expect(bad.TAG).toBe("Err");
+  expect(bad._0).toStartWith("SyntaxError");
+  // `?` hands the caught error on as it is.
+  expect(throws.first_twice("[4, 5]")).toEqual({ TAG: "Ok", _0: 8 });
+  expect(throws.first_twice("{")._0).toBeInstanceOf(SyntaxError);
+  // A rejected promise is an `Err` at its `.await`.
+  expect(await throws.settled(false)).toBe("7");
+  expect(await throws.settled(true)).toBe("rejected: no");
+
+  const js = await Bun.file(join(target, "throws.js")).text();
+  expect(js).toContain("  const match = $try(() => JSON.parse(json));");
+  expect(js).toContain('  const result = $try(() => JSON.parse(json));\n  if (result.TAG === "Err") {\n    return result;\n  }');
+  expect(js).toContain('await $settle(Promise.reject("no"))');
+  const results = await Bun.file(join(target, "results.js")).text();
+  // On an option, the value keeps the variable's name.
+  expect(results).toContain("  const a = half(n);\n  if (a == null) {\n    return undefined;\n  }");
+  expect(results).toContain('    r.TAG === "Ok" ? r._0 : 99,');
 });
 
 // ADR 0034: strings are JS strings, and their methods JS's.

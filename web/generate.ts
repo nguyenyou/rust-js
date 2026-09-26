@@ -445,6 +445,21 @@ unsafe extern "Rust" {
     pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
 }
 
+/// Whatever a JS function threw, or a promise rejected with: usually an
+/// [\`Error\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Error).
+/// An \`extern\` function that returns \`Result<T, &JsError>\` catches it (ADR 0035).
+pub struct JsError(PhantomData<JsObject>);
+
+pub mod js_error {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// \`String(e)\`: an \`Error\`'s name and message, or any value as text.
+        #[link_name = "String"]
+        pub safe fn to_string(error: &JsError) -> String;
+    }
+}
+
 /// A JS [\`ArrayBuffer\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer):
 /// raw bytes, as \`response::array_buffer\` gives them.
 pub struct ArrayBuffer(PhantomData<JsObject>);

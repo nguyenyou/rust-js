@@ -23,6 +23,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - Division by zero and `MIN / -1` throw, like Rust in every profile.
 - A fieldless enum variant is its name as a string: `Order::Ascending` is `"Ascending"`. One with
   fields is tagged with it, as in ReScript: `Shape::Circle(r)` is `{ TAG: "Circle", _0: r }`.
+- A JS call whose binding returns a `Result` runs in a `try`: a throw is an `Err`. `?` returns
+  an `Err` or a `None` early.
 - `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.
 - A `const` is the value rustc computed, declared once: `const SIZE = 4096;`.
 - A struct is a plain object, `{ x: 1, y: 2 }`; a tuple or tuple struct is an array, `[1, 2]`.

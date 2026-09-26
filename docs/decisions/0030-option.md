@@ -94,6 +94,6 @@ const app = $unwrap(document.getElementById("app"), "the page has an #app");
 - `{:?}` of an option prints the value for `Some` and `()` for `None`, since
   `$debug` can't tell `None` from `()` at run time. `assert_eq!` messages on
   options read that way too.
-- Not yet: `map`, `and_then`, `ok_or`, `?` on `Option`, `take`, `as_ref`,
+- `?` on an `Option` came with ADR 0035. Not yet: `map`, `and_then`, `ok_or`, `take`, `as_ref`,
   `as_mut`, and nested options. Other enums with fields are tagged objects
   (ADR 0033); `Option` is the special case that needs no tag.
