@@ -105,6 +105,7 @@ the generator picks more up: promise results came with ADR 0029, as
 
 JS's own types that WebIDL uses (`Promise`, `ArrayBuffer`, `Uint8Array`)
 aren't in any WebIDL file. They're declared by hand at the top of the crate,
+with `JsError` (ADR 0035) and `RegExp` (`reg_exp::new(pattern, flags)`, `test`),
 with the few members programs need so far: `uint8_array::new(buffer)`,
 `uint8_array::length`, `array_buffer::byte_length`. Also:
 

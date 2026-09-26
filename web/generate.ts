@@ -445,6 +445,25 @@ unsafe extern "Rust" {
     pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
 }
 
+/// A JS [\`RegExp\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/RegExp),
+/// for what Rust would use the \`regex\` crate for. String methods that take one
+/// (\`replace\` with a closure, \`matchAll\`) are bindings a program declares,
+/// typed for what it does with them.
+pub struct RegExp(PhantomData<JsObject>);
+
+pub mod reg_exp {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// \`new RegExp(pattern, flags)\`: flags like \`"gm"\`.
+        #[link_name = "new RegExp"]
+        pub safe fn new(pattern: &str, flags: &str) -> &'static RegExp;
+
+        #[link_name = "test"]
+        pub safe fn test(this: &RegExp, text: &str) -> bool;
+    }
+}
+
 /// Whatever a JS function threw, or a promise rejected with: usually an
 /// [\`Error\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Error).
 /// An \`extern\` function that returns \`Result<T, &JsError>\` catches it (ADR 0035).

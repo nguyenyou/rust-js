@@ -19,7 +19,7 @@ import { basicSetup, EditorView } from "codemirror";
 
 // The part of the playground written in Rust: rust/lib.rs, which build.ts
 // and serve.ts compile to rust/lib.js with rust-js itself (compile-rust.ts).
-import { compile, load, mb, ms, render_tree, stat } from "./rust/lib.js";
+import { compile, link as linkModules, load, mb, ms, render_tree, resolve as resolveSpecifier, stat } from "./rust/lib.js";
 
 type Example = { name: string; title: string; root: string; files: string[] };
 
@@ -222,45 +222,10 @@ type Result = {
 const resultSection = $<HTMLElement>("result-section");
 let resultFrame = $<HTMLIFrameElement>("result");
 
-/** `from`'s directory joined with a relative specifier like `../lib.js`. */
-function resolve(from: string, specifier: string): string {
-  const parts = from.split("/").slice(0, -1);
-  for (const part of specifier.split("/")) {
-    if (part === "..") parts.pop();
-    else if (part !== ".") parts.push(part);
-  }
-  return parts.join("/");
-}
-
-/**
- * rust-js's modules (ADR 0019) as one classic script. Each module becomes a
- * function that fills in its exports object, and `import * as util from
- * "./util.js"` becomes that module's exports object. The objects all exist
- * before any module runs, so cycles work: functions are only called later.
- */
-function link(files: Map<string, string>, start: string): string {
-  const key = (path: string) => JSON.stringify(path);
-  const parts = ["const modules = {};", ...[...files.keys()].map((path) => `modules[${key(path)}] = {};`)];
-  // A test file reads the tests' functions as it registers them, so it goes
-  // after the modules that define them.
-  const ordered = [...files].sort(([a], [b]) => Number(a.endsWith(".test.js")) - Number(b.endsWith(".test.js")));
-  for (const [path, code] of ordered) {
-    const exported: string[] = [];
-    const body = code
-      .replace(/^import \* as (\S+) from "([^"]+)";$/gm, (_, alias, specifier) => {
-        return `const ${alias} = modules[${key(resolve(path, specifier))}];`;
-      })
-      .replace(/^export function (\w+)/gm, (_, name) => {
-        exported.push(name);
-        return `function ${name}`;
-      })
-      .replace(/^\/\/# sourceMappingURL=.*$/m, "");
-    parts.push(`(function (exports) {\n${body}\nObject.assign(exports, { ${exported.join(", ")} });\n})(modules[${key(path)}]);`);
-  }
-  parts.push(start);
-  // A `</script>` in a string would end the script early; `<\/script>` is the same string.
-  return parts.join("\n").replaceAll("</script", "<\\/script");
-}
+// `resolve` and `link`, in rust/lib.rs, join the modules into one classic
+// script: each module a function filling in its exports object.
+const resolve = resolveSpecifier as (from: string, specifier: string) => string;
+const link = linkModules as (files: Map<string, string>, start: string) => string;
 
 let programRuns = 0;
 let reported = false;

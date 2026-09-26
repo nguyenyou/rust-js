@@ -68,7 +68,7 @@ changes.
 **The page is written partly in Rust**, compiled by rust-js itself
 ([ADR 0032](../docs/decisions/0032-dogfooding-the-playground.md)):
 `web/rust/lib.rs` holds what's been moved out of `main.ts` so far (loading,
-the stats table, the file trees, and `compile`, which runs `rust-js.wasm` under the WASI shim). `serve.ts` and `build.ts` compile it to `web/rust/lib.js`
+the stats table, the file trees, `compile`, which runs `rust-js.wasm` under the WASI shim, and `link`). `serve.ts` and `build.ts` compile it to `web/rust/lib.js`
 with `rust-js.wasm`, under the same WASI shim, in Bun (`web/compile-rust.ts`),
 before `main.ts` is bundled. On its own: `cd web && bun compile-rust.ts`.
 

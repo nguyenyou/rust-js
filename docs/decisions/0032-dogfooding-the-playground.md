@@ -23,7 +23,7 @@ a rust-js crate, and `main.ts` imports what it exports, as it would import
 any module:
 
 ```ts
-import { compile, load, mb, ms, render_tree, stat } from "./rust/lib.js";
+import { compile, link, load, mb, ms, render_tree, resolve, stat } from "./rust/lib.js";
 ```
 
 The first part is loading: downloading the compiler, the sysroot, the web
@@ -32,7 +32,12 @@ rust-js.wasm on a crate under the WASI shim, building its directories from the
 editor's files and reading the JS back, with a trapped compile as an `Err`
 (ADR 0035). It needed `instanceof` in bindings, and `split_once`. The third
 is the file trees: an enum of folders and files, sorted (ADR 0036) and drawn
-with the DOM, with `Rc<dyn Fn>` callbacks from `main.ts`.
+with the DOM, with `Rc<dyn Fn>` callbacks from `main.ts`. The fourth is
+`link` and `resolve`, which join the compiled modules into one script for the
+Result frame, with JS's `RegExp` (in the web crate) and `replace` with a
+closure. Porting it found that the TypeScript linker only unwrapped
+`export function`, so a program with a `pub const` or a `pub async fn` didn't
+run there. The Rust one unwraps all three.
 
 **It's compiled by `rust-js.wasm`**, the compiler the page runs, under the
 same WASI shim, in Bun (`wasm/web/compile-rust.ts`). `serve.ts` and
@@ -74,4 +79,5 @@ plainly.
   each starts as it's made, and they're awaited afterwards (ADR 0029).
 - What's next to move is what rust-js can express next. A JS `Map` is a type
   in the bindings, with the methods the code uses. Still missing for the rest:
-  regular expressions, and CodeMirror's API.
+  state at the module's top level (the Result frame's run counter), and
+  CodeMirror's API.

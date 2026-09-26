@@ -344,7 +344,7 @@ test("async code becomes async functions and await", async () => {
 test("the playground's own Rust compiles to the JS main.ts imports", async () => {
   const js = await Bun.file(join(target, "playground", "lib.js")).text();
   expect(js).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["load", "stat", "ms", "mb", "compile", "render_tree"]) {
+  for (const name of ["load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve"]) {
     expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
@@ -359,6 +359,9 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   expect(js).toContain("    if (item[1] instanceof Directory) {");
   // The file tree: sorted with a comparator, a copy of the tree's entries.
   expect(js).toContain("  let entries = tree.slice();\n  entries.sort((a, b) => {");
+  // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
+  expect(js).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
+  expect(js).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
 });
 
 // ADR 0036: an iterator is a JS array, and `Ordering` a comparator's number.

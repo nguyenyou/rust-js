@@ -3,8 +3,9 @@
 // the page runs (see ../compile-rust.ts), and main.ts imports it. More of
 // main.ts moves here, a part at a time.
 //
-// So far: loading what the page needs, the stats table, the file trees, and
-// running rust-js.wasm on a crate, under the WASI shim.
+// So far: loading what the page needs, the stats table, the file trees,
+// running rust-js.wasm on a crate, under the WASI shim, and linking what it
+// wrote into one script for the Result frame.
 
 #![feature(extern_types)]
 
@@ -13,9 +14,9 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use web::{
-    Element, JsError, JsObject, Promise, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
+    Element, JsError, JsObject, Promise, RegExp, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
     WebAssemblyModule, array_buffer, css_style_declaration, document, element, event_target, html_element,
-    html_table_element, html_table_row_element, js_error, node, response, text_decoder, text_encoder, uint8_array,
+    html_table_element, html_table_row_element, js_error, node, reg_exp, response, text_decoder, text_encoder, uint8_array,
     web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
@@ -455,4 +456,76 @@ pub async fn compile(
         run: t2 - t1,
         memory: array_buffer::byte_length(memory),
     }
+}
+
+// ── Linking the program ─────────────────────────────────────────────────
+
+// `replace` is one JS method, typed for each way it's called.
+#[allow(clashing_extern_declarations)]
+unsafe extern "Rust" {
+    #[link_name = "JSON.stringify"]
+    safe fn json_string(text: &str) -> String;
+    /// `text.replace(pattern, (match, a, b) => ..)`: a closure for each match.
+    #[link_name = "replace"]
+    safe fn replace_matches(this: &str, pattern: &RegExp, with: Box<dyn Fn(String, String, String) -> String>) -> String;
+    #[link_name = "replace"]
+    safe fn replace_pattern(this: &str, pattern: &RegExp, with: &str) -> String;
+}
+
+/// `from`'s directory joined with a relative specifier like `../lib.js`.
+pub fn resolve(from: &str, specifier: &str) -> String {
+    let mut parts: Vec<&str> = from.split('/').collect();
+    parts.pop();
+    for part in specifier.split('/') {
+        if part == ".." {
+            parts.pop();
+        } else if part != "." {
+            parts.push(part);
+        }
+    }
+    parts.join("/")
+}
+
+/// rust-js's modules (ADR 0019) as one classic script. Each module becomes a
+/// function that fills in its exports object, and `import * as util from
+/// "./util.js"` becomes that module's exports object. The objects all exist
+/// before any module runs, so cycles work: functions are only called later.
+pub fn link(files: &JsMap, start: &str) -> String {
+    let files = text_entries(files);
+    let mut parts = vec!["const modules = {};".to_string()];
+    for (path, _) in &files {
+        parts.push(format!("modules[{}] = {{}};", json_string(path)));
+    }
+    // A test file reads the tests' functions as it registers them, so it goes
+    // after the modules that define them.
+    let mut ordered: Vec<&(String, String)> = files.iter().collect();
+    ordered.sort_by_key(|(path, _)| path.ends_with(".test.js"));
+    let imports = reg_exp::new(r#"^import \* as (\S+) from "([^"]+)";$"#, "gm");
+    // What a module exports: its functions, async ones, and constants (ADRs 0019, 0029, 0031).
+    let exports = reg_exp::new(r"^export (async function|function|const) (\w+)", "gm");
+    let source_map = reg_exp::new(r"^//# sourceMappingURL=.*$", "m");
+    for (path, code) in ordered {
+        let from = path.clone();
+        let body = replace_matches(
+            code,
+            imports,
+            Box::new(move |_, alias, specifier| format!("const {alias} = modules[{}];", json_string(&resolve(&from, &specifier)))),
+        );
+        let exported = Rc::new(RefCell::new(Vec::new()));
+        let names = exported.clone();
+        let body = replace_matches(
+            &body,
+            exports,
+            Box::new(move |_, declared, name| {
+                names.borrow_mut().push(name.clone());
+                format!("{declared} {name}")
+            }),
+        );
+        let body = replace_pattern(&body, source_map, "");
+        let names = exported.borrow().join(", ");
+        parts.push(format!("(function (exports) {{\n{body}\nObject.assign(exports, {{ {names} }});\n}})(modules[{}]);", json_string(path)));
+    }
+    parts.push(start.to_string());
+    // A `</script>` in a string would end the script early; `<\/script>` is the same string.
+    parts.join("\n").replace("</script", "<\\/script")
 }

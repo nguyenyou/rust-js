@@ -30,6 +30,8 @@ element::append(app, b);                                  // app.append(b)
 - Binary data is JS's `ArrayBuffer` and `Uint8Array`: `response::bytes(r).await`.
 - An optional argument adds a form: `text_encoder::encode_with_input(e, "hi")`,
   `text_decoder::decode_with_uint8_array(d, bytes)`.
+- JS's `RegExp` is there for what Rust would use `regex` for: `reg_exp::new(r"^\d+$", "")`.
+  String methods that take one (`replace` with a closure) are bindings a program declares.
 - A namespace is a module: `web_assembly::compile(bytes).await` is
   `await WebAssembly.compile(bytes)`. An `object` parameter takes any Rust value
   as `&dyn Any`, such as a struct for an import object.

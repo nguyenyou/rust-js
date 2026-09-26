@@ -1961,7 +1961,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for (i, &e) in list.iter().enumerate() {
             let v = self.expr(e, out)?;
             // Constants, and places that can't change, read the same later.
+            // So are places that are borrowed: nothing can change or reassign
+            // them until the call, not even the later operands (`v.push(f(v.len()))`
+            // is a borrow error, and `&mut v` a two-phase borrow).
+            let borrowed = matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. } if self.place(arg).is_some());
             let settled = v.is_constant()
+                || borrowed
                 || self.stable_place(self.strip_refs(e)).is_some()
                 || self.ref_place(e).is_some_and(|(_, mutable)| !mutable);
             if last_complex.is_some_and(|k| i < k) && !settled {
@@ -2676,6 +2681,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "borrow" | "borrow_mut" if adt("RefCell") => Std::Borrow,
             "new" if adt("Vec") => Std::VecNew,
             "push" if adt("Vec") => Std::Push,
+            // JS's `pop()` gives `undefined` when empty: `None` (ADR 0030).
+            "pop" if adt("Vec") => Std::Method("pop"),
             "len" if adt("Vec") || owner.is_slice() => Std::Len,
             "clear" if adt("Vec") => Std::Clear,
             "retain" if adt("Vec") => Std::Retain,
