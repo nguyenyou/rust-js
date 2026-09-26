@@ -45,7 +45,8 @@ calls between functions, across modules and files.
 The DOM comes as the [`web`](web/README.md) crate: bindings generated from W3C's WebIDL
 ([ADR 0024](docs/decisions/0024-web-crate.md)). [examples/counter.rs](examples/counter.rs) is a
 counter written with it, [examples/todo.rs](examples/todo.rs) a todo list, and
-[examples/countdown.rs](examples/countdown.rs) a countdown with `async` code. All run in the
+[examples/countdown.rs](examples/countdown.rs) a countdown with `async` code, and
+[examples/fetch.rs](examples/fetch.rs) a `fetch`. All run in the
 playground's Result pane:
 
 ```bash

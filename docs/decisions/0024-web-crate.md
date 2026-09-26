@@ -98,12 +98,15 @@ the generator picks more up: promise results came with ADR 0029, as
   **Variadic** ones take a single value.
 - **Unions:** one function per supported member. The first keeps the name
   (`append(this, &Node)`), the others add `_with_<type>`
-  (`append_with_str(this, &str)`).
+  (`append_with_str(this, &str)`). A typedef of a union counts too:
+  `fetch(this, &Request)` and `fetch_with_str(this, &str)` come from
+  `RequestInfo`.
 - **Names:** snake_case of the IDL names, and web-sys-style type names
   (`HTMLInputElement` is `HtmlInputElement`). A Rust keyword gets a `_`.
 
 **Which interfaces:** a list in `generate.ts`, the everyday DOM, grown as
-programs need more. It isn't the whole platform (334 specs).
+programs need more. The Fetch Standard's `Request`, `Response` and
+`Headers` came with async code (ADR 0029), for `window::fetch`. It isn't the whole platform (334 specs).
 
 **Building:** `rustc --emit=metadata` produces `libweb.rmeta`, once per
 target: the host for the tests, `wasm32-unknown-unknown` for the playground,

@@ -24,6 +24,8 @@ element::append(app, b);                                  // app.append(b)
 - `unchecked_from` is a cast:
   `html_input_element::unchecked_from(document::create_element(document, "input"))`.
 - Results that may be `null` say so in their docs, but aren't checked yet.
+- A promise is a `Promise<T>`, to `.await`: `window::fetch_with_str(window, url).await`
+  ([ADR 0029](../docs/decisions/0029-async-await.md)).
 
 ## Use it
 

@@ -54,6 +54,7 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
+  run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
   asyncs = await import(join(target, "async.js"));
   // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
@@ -238,6 +239,16 @@ test("async code becomes async functions and await", async () => {
   expect(log.value).toEqual([1, 2]);
   await Bun.sleep(20);
   expect(log.value).toEqual([1, 2, 3]);
+  // `window::fetch_with_str`, from the web crate, and the response's promises.
+  // Bun has `fetch`; the web crate reaches it through `window`.
+  const server = Bun.serve({ port: 0, fetch: () => new Response("hello", { status: 201 }) });
+  (globalThis as any).window = globalThis;
+  try {
+    expect(await asyncs.load(server.url.href)).toEqual([201, true, "hello"]);
+  } finally {
+    delete (globalThis as any).window;
+    server.stop();
+  }
 
   const js = await Bun.file(join(target, "async.js")).text();
   expect(js).toContain("export async function sum(a, b) {\n  return await double(a) + await double(b) >>> 0;\n}");
@@ -254,6 +265,10 @@ test("async code becomes async functions and await", async () => {
   const countdown = await Bun.file(join(target, "countdown.js")).text();
   expect(countdown).toContain("return new Promise((resolve) => {\n    setTimeout(resolve, ms);\n  });");
   expect(countdown).toContain("    await sleep(500);\n");
+  const fetchJs = await Bun.file(join(target, "fetch.js")).text();
+  expect(fetchJs).toContain("  const response = await window.fetch(url);\n  const text = await response.text();\n");
+  // `spawn(Box::new(load(..)))`: the call is the promise.
+  expect(fetchJs).toContain('    load("data:text/plain,Hello from a fetch!", output);\n');
   // `spawn(Box::new(async move { .. }))` is the promise, unawaited.
   expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
 });

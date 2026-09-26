@@ -56,8 +56,10 @@ browser) to drive that loop. JS has one built in: the event loop.
 - **JS promises have a Rust type**, `web::Promise<T>`, which implements
   `Future` with `Output = T`, so rustc accepts `.await` on it. Its `poll` is
   never compiled: rust-js turns `.await` into `await`. The web crate's
-  WebIDL promise results are now included (`HtmlImageElement::decode`,
-  `Element::scroll_into_view`), and `extern` functions can return one:
+  WebIDL promise results are now included, with the Fetch Standard:
+  `window::fetch_with_str(window, url).await` is `await window.fetch(url)`,
+  and `response::text(r).await` is `await r.text()`. `extern` functions
+  can return one too:
 
   ```rust
   #[link_name = "node:timers/promises#setTimeout"]

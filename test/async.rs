@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{Promise, spawn};
+use web::{Promise, response, spawn, window};
 
 unsafe extern "Rust" {
     /// Resolves with `value` after `ms` milliseconds.
@@ -60,4 +60,11 @@ pub fn spawned() -> Rc<RefCell<Vec<u32>>> {
     }));
     log.borrow_mut().push(2);
     log
+}
+
+/// `fetch`, from the web crate: its promises, awaited one after the other.
+pub async fn load(url: &str) -> (u16, bool, String) {
+    let response = window::fetch_with_str(window, url).await;
+    let body = response::text(response).await;
+    (response::status(response), response::ok(response), body)
 }
