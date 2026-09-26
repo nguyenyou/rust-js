@@ -118,6 +118,8 @@ pub(super) enum Std {
     ResultOk,
     /// `r.unwrap()`, `r.expect(msg)`: `$unwrapOk(r)`.
     UnwrapOk,
+    /// `r.unwrap_err()`, `r.expect_err(msg)`: `$unwrapErr(r)`.
+    UnwrapErr,
     /// `r.unwrap_or(d)`.
     ResultOr,
     /// An iterator's adapter or consumer that is the array's method (ADR 0036):
@@ -595,6 +597,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "is_err" if result => Std::IsOk(false),
             "ok" if result => Std::ResultOk,
             "unwrap" | "expect" if result => Std::UnwrapOk,
+            "unwrap_err" | "expect_err" if result => Std::UnwrapErr,
             "unwrap_or" if result => Std::ResultOr,
             _ => return None,
         })

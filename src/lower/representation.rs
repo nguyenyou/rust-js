@@ -90,6 +90,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "std::str::SplitWhitespace",
                     "std::str::Lines",
                     "std::array::IntoIter",
+                    "std::char::ToUppercase",
+                    "std::char::ToLowercase",
                     "std::collections::vec_deque::Iter",
                     "std::collections::vec_deque::IntoIter",
                     "std::collections::binary_heap::Iter",

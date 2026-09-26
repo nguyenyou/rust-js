@@ -305,6 +305,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::DebugStr);
             return Ok(Expr::call(Expr::var("$debugStr"), vec![value]));
         }
+        // A parse error is its message (ADR 0063), which says its kind.
+        if self.is_parse_error(ty) {
+            let ty::Adt(adt, _) = ty.kind() else {
+                unreachable!("a struct")
+            };
+            let name = self.tcx.item_name(adt.did());
+            self.runtime.insert(Helper::DebugParseError);
+            return Ok(Expr::call(
+                Expr::var("$debugParseError"),
+                vec![value, Expr::str(name.as_str())],
+            ));
+        }
         if self.is_lang_adt(ty, LangItem::OrderingEnum) {
             let names = ["Less", "Equal", "Greater"];
             if let Some(n) = value.as_int().filter(|n| (-1..=1).contains(n)) {

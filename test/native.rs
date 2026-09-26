@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/report.rs"]
+#[allow(dead_code)]
+mod report;
+
 #[path = "../examples/queues.rs"]
 #[allow(dead_code)]
 mod queues;
@@ -227,6 +231,7 @@ fn main() {
     case("inventory.report", &[], inventory::report);
     // A heap's order, after each push and pop, is Rust's.
     case("queues.report", &[], queues::report);
+    case("report.report", &[], report::report);
     for i in [0, 1, 2, 3] {
         case("numbers.panics", &[i as i64], || numbers::panics(i));
     }

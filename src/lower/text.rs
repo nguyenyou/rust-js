@@ -22,6 +22,8 @@ pub(super) enum TextOp {
     ToDigit,
     IsDigit,
     SplitWhitespace,
+    /// `c.to_uppercase()`: its `char`s, as JS's own mapping gives them (`ß` is `SS`).
+    CharCase(bool),
     Lines,
     /// `s.split(|c| ..)` and `s.contains(|c| ..)`: a closure as the pattern.
     SplitBy,
@@ -55,6 +57,8 @@ pub(super) fn classify(name: &str, char: bool, str: bool) -> Option<TextOp> {
         "to_ascii_uppercase" if char => TextOp::ToAsciiUpper,
         "to_ascii_lowercase" if char => TextOp::ToAsciiLower,
         "to_digit" if char => TextOp::ToDigit,
+        "to_uppercase" if char => TextOp::CharCase(true),
+        "to_lowercase" if char => TextOp::CharCase(false),
         "is_digit" if char => TextOp::IsDigit,
         "split_whitespace" if str => TextOp::SplitWhitespace,
         "lines" if str => TextOp::Lines,
@@ -117,6 +121,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     ],
                 );
                 method(words, "filter", vec![word])
+            }
+            TextOp::CharCase(upper) => {
+                let mapped = method(arg(), if upper { "toUpperCase" } else { "toLowerCase" }, Vec::new());
+                Expr::call(Expr::member(Expr::var("Array"), "from"), vec![mapped])
             }
             TextOp::SplitBy => {
                 self.runtime.insert(Helper::SplitBy);

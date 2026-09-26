@@ -1,8 +1,10 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
 use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
+use super::numbers::NumOp;
 use super::representation::Num;
 use super::stdlib::Std;
+use super::text::TextOp;
 use super::{FnCx, R, global};
 use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
@@ -10,7 +12,7 @@ use crate::runtime::Helper;
 use rustc_ast::LitKind;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{ExprId, ExprKind};
-use rustc_middle::ty;
+use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, sym};
 
@@ -486,6 +488,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let list = (0..args.len()).map(|_| arg()).collect();
                 Expr::call(Expr::var("$unwrapOk"), list)
             }
+            Std::UnwrapErr => {
+                self.runtime.extend([Helper::UnwrapErr, Helper::Debug]);
+                let list = (0..args.len()).map(|_| arg()).collect();
+                Expr::call(Expr::var("$unwrapErr"), list)
+            }
             // `r.TAG === "Ok" ? r._0 : d`, with `r` computed once, and `d` too,
             // before the test, as Rust does.
             Std::ResultOk | Std::ResultOr => {
@@ -680,6 +687,44 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
         })
+    }
+
+    /// A std function taken as a value, `str::trim` in `.map(str::trim)`:
+    /// an arrow of one parameter, doing what a call does. `None` for one
+    /// that isn't one of these.
+    pub(super) fn std_fn_value(&mut self, known: Std, ty: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
+        let ty::FnDef(def_id, args) = *ty.kind() else {
+            return Ok(None);
+        };
+        let sig = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder();
+        let [input] = sig.inputs() else {
+            return Ok(None);
+        };
+        let input = input.peel_refs();
+        let name = if input.is_char() {
+            "c"
+        } else if self.is_string_like(input) {
+            "s"
+        } else if Num::of(input).is_some() {
+            "n"
+        } else {
+            "x"
+        };
+        let x = Expr::var(name);
+        let body = match known {
+            Std::Trim => Expr::call(Expr::member(x, "trim"), vec![]),
+            Std::Method(method) => Expr::call(Expr::member(x, method), vec![]),
+            Std::Same => x,
+            Std::ToString => self.display_string(x, input, span)?,
+            Std::Text(TextOp::Is(regex)) => Expr::call(Expr::member(Expr::regex(regex), "test"), vec![x]),
+            Std::Number(NumOp::Math(function)) => Expr::call(Expr::member(Expr::var("Math"), function), vec![x]),
+            _ => return Ok(None),
+        };
+        let js_span = self.js_span(span);
+        Ok(Some(Expr::arrow(
+            vec![name.into()],
+            vec![StmtKind::Return(Some(body)).at(js_span)],
+        )))
     }
 
     /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, if that's a

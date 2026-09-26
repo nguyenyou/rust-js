@@ -26,6 +26,7 @@ let calc: Record<string, (...args: any[]) => unknown>;
 let numbers: Record<string, (...args: any[]) => unknown>;
 let inventory: Record<string, (...args: any[]) => unknown>;
 let queues: Record<string, (...args: any[]) => unknown>;
+let report: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -75,6 +76,8 @@ beforeAll(async () => {
   inventory = await import(join(target, "inventory.js"));
   run([join(target, "debug", "rust-js"), "examples/queues.rs", "-o", join(target, "queues.js")]);
   queues = await import(join(target, "queues.js"));
+  run([join(target, "debug", "rust-js"), "examples/report.rs", "-o", join(target, "report.js")]);
+  report = await import(join(target, "report.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -178,6 +181,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "queues") {
         return queues[path[1]](...c.args);
+      }
+      if (path[0] === "report") {
+        return report[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -977,6 +983,18 @@ test("the store's JS: let-else, ranges, and writes through a map's value", async
   expect(js).toContain("? `revenue ${$toFixed(store.revenue, 2)} under ${$toFixed(revenue[0], 2)}`\n    : undefined;");
   // A block's statements go before the `const` of its value.
   expect(js).toContain("  const c = counter;\n  const bump = (n) => {");
+});
+
+// ADR 0070: a std function taken as a value is an arrow, and an array's
+// constant index below its length is read directly.
+test("the report's JS: function values, case mapping, and plain array reads", async () => {
+  const js = await Bun.file(join(target, "report.js")).text();
+  expect(js).toContain('const parts = line.split(",").map((s) => s.trim());');
+  expect(js).toContain(".flatMap((c) => Array.from(c.toUpperCase()))");
+  expect(js).toContain('.map((c) => /^\\p{White_Space}$/u.test(c))');
+  expect(js).toContain(".map((n) => Math.sqrt(n))");
+  expect(js).toContain("HEADERS[0]");
+  expect(js).toContain('$debugParseError($unwrapErr($parseInt("", 0, 255)), "ParseIntError")');
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

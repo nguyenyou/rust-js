@@ -42,6 +42,8 @@ pub enum Helper {
     CountOnes,
     BinarySearch,
     RemoveOpt,
+    UnwrapErr,
+    DebugParseError,
     SiftUp,
     SiftDown,
     HeapPush,
@@ -433,6 +435,16 @@ function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` valu
 }
 "#
             }
+            Helper::UnwrapErr => {
+                r#"
+function $unwrapErr(result, message = "called `Result::unwrap_err()` on an `Ok` value") {
+  if (result.TAG === "Ok") {
+    throw new Error(message + ": " + $debug(result._0));
+  }
+  return result._0;
+}
+"#
+            }
             Helper::SplitOnce => {
                 r#"
 function $splitOnce(s, separator) {
@@ -818,6 +830,25 @@ function $binarySearch(items, x) {
   }
   const found = items[base];
   return found === x ? { TAG: "Ok", _0: base } : { TAG: "Err", _0: base + (found < x ? 1 : 0) };
+}
+"#
+            }
+            // `{:?}` of a parse error, which is its message: its kind, by the message.
+            Helper::DebugParseError => {
+                r#"
+function $debugParseError(message, name) {
+  const kinds = {
+    "cannot parse integer from empty string": "Empty",
+    "invalid digit found in string": "InvalidDigit",
+    "number too large to fit in target type": "PosOverflow",
+    "number too small to fit in target type": "NegOverflow",
+    "number would be zero for non-zero type": "Zero",
+    "cannot parse float from empty string": "Empty",
+    "invalid float literal": "Invalid",
+    "cannot parse char from empty string": "EmptyString",
+    "too many characters in string": "TooManyChars",
+  };
+  return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
 }
 "#
             }

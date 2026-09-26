@@ -1831,8 +1831,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
             ExprKind::Index { lhs, index } => {
                 let values = self.indexed(lhs, index, out)?;
-                self.runtime.insert(Helper::Index);
-                Ok(self.copy_if_needed(Expr::call(Expr::var("$index"), values), ty))
+                let item = self.checked_index(lhs, values);
+                Ok(self.copy_if_needed(item, ty))
             }
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
             ExprKind::PointerCoercion {
@@ -1890,6 +1890,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js_span)],
                     ))
                 }
+            }
+            // `.map(str::trim)`: `(s) => s.trim()`, as a closure would be.
+            ExprKind::ZstLiteral { .. }
+                if let Some(known) = self.std_fn(e)
+                    && let Some(f) = self.std_fn_value(known, ty, span)? =>
+            {
+                Ok(f)
             }
             ExprKind::ZstLiteral { .. } if let Some(Std::MaxOf(max)) = self.std_fn(e) => {
                 self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
@@ -2748,8 +2755,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Deref { arg } => self.expr(arg, out),
             ExprKind::Index { lhs, index } => {
                 let values = self.indexed(lhs, index, out)?;
-                self.runtime.insert(Helper::Index);
-                Ok(Expr::call(Expr::var("$index"), values))
+                Ok(self.checked_index(lhs, values))
             }
             _ => self.expr(e, out),
         }
@@ -2785,12 +2791,38 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || matches!(self.thir[self.strip(e)].kind, ExprKind::Field { lhs, .. } if self.in_element(lhs))
     }
 
+    /// `v[i]`, checked: `$index(v, i)`, or just `v[i]` for an array whose
+    /// length is its type's and a constant index below it, which rustc checked.
+    fn checked_index(&mut self, lhs: ExprId, values: Vec<Expr>) -> Expr {
+        if self.in_bounds(lhs, &values[1]) {
+            let [items, index]: [Expr; 2] = values.try_into().ok().expect("the items and an index");
+            return Expr::index(items, index);
+        }
+        self.runtime.insert(Helper::Index);
+        Expr::call(Expr::var("$index"), values)
+    }
+
+    /// Is `index` a constant below the length of the array `lhs`'s type?
+    fn in_bounds(&self, lhs: ExprId, index: &Expr) -> bool {
+        let ty::Array(_, len) = self.thir[lhs].ty.peel_refs().kind() else {
+            return false;
+        };
+        let (Some(len), Some(i)) = (len.try_to_target_usize(self.tcx), index.as_int()) else {
+            return false;
+        };
+        (0..i128::from(len)).contains(&i)
+    }
+
     /// An element as the target of an assignment, `v[$at(v, i)]`, checked
     /// first since JS would make the array longer. A field of one is
     /// `$index(v, i).x`.
     fn element_target(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
         if let Some((items, index)) = self.element(e) {
+            let array = items;
             let [items, index]: [Expr; 2] = self.indexed(items, index, out)?.try_into().ok().unwrap();
+            if self.in_bounds(array, &index) {
+                return Ok(Expr::index(items, index));
+            }
             // `items` is read twice.
             let items = if items.reads_same() {
                 items
