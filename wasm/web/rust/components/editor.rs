@@ -55,12 +55,13 @@ pub fn Editor(EditorProps { state, view, on_submit }: EditorProps) -> Element {
         .r#ref(parent)
         // Before CodeMirror sees it, since its own Mod-Enter inserts a line.
         .on_key_down_capture(move |e: &Keyboard| {
-            if let Some(submit) = &on_submit {
-                if (e.meta_key() || e.ctrl_key()) && e.key() == "Enter" {
-                    e.prevent_default();
-                    e.stop_propagation();
-                    submit();
-                }
+            if let Some(submit) = &on_submit
+                && (e.meta_key() || e.ctrl_key())
+                && e.key() == "Enter"
+            {
+                e.prevent_default();
+                e.stop_propagation();
+                submit();
             }
         })
 }

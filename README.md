@@ -68,7 +68,7 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 
 ## Supported so far
 
-`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, enums (with fields too), structs, tuples, `Option`, `const` items; `let`, `if`, `if let`, `while let`,
+`i8`–`i32`, `u8`–`u32`, `f64`, `bool`, enums (with fields too), structs, tuples, `Option`, `const` items; `let`, `if`, `if let`, `while let`, let chains,
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; methods (`impl` blocks, not yet traits); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,

@@ -160,6 +160,10 @@ fn main() {
         case("options.eager", &[n], || options::eager(n as i32));
         case("options.label", &[n], || options::label(n as i32));
         case("options.mapped", &[n], || options::mapped(n as i32));
+        case("options.chained", &[n], || options::chained(n as i32));
+        case("options.chained_twice", &[n], || options::chained_twice(n as i32));
+        case("options.chained_statement", &[n], || options::chained_statement(n as i32));
+        case("options.chained_loop", &[n], || options::chained_loop(n as i32));
         case("options.mapped_more", &[n], || options::mapped_more(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));

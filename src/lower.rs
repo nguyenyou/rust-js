@@ -369,6 +369,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.stmt(source, dest, out),
             ExprKind::Block { block } => self.block(block, dest, out),
+            ExprKind::If { cond, then, else_opt, .. } if let Some(parts) = self.let_chain(cond) => {
+                self.lower_let_chain(parts, then, else_opt, dest, span, out)
+            }
             ExprKind::If { cond, then, else_opt, .. } => {
                 let mut then_out = Vec::new();
                 let cond = match self.thir[self.strip(cond)].kind {
@@ -616,6 +619,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// which is stable: no Rust variable can move or change it.
     fn subject(&mut self, e: ExprId, base: &str, out: &mut Vec<Stmt>) -> R<(Expr, bool)> {
         if let Some(place) = self.stable_place(e) {
+            return Ok((place, true));
+        }
+        // `&x`: a reference is the value (ADR 0023), and a borrowed `x` stays put.
+        if let ExprKind::Borrow { borrow_kind: BorrowKind::Shared, arg } = self.thir[self.strip(e)].kind
+            && let Some(place) = self.stable_place(arg)
+        {
             return Ok((place, true));
         }
         if let Some((place, _)) = self.place(e) {
@@ -921,6 +930,99 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// An `if`'s condition as the parts joined by `&&`, when there are
+    /// several and one is a `let`: a let chain (ADR 0048).
+    fn let_chain(&self, cond: ExprId) -> Option<Vec<ExprId>> {
+        fn parts(cx: &FnCx<'_, '_>, e: ExprId, found: &mut Vec<ExprId>) {
+            let e = cx.strip(e);
+            match cx.thir[e].kind {
+                ExprKind::LogicalOp { op: LogicalOp::And, lhs, rhs } => {
+                    parts(cx, lhs, found);
+                    parts(cx, rhs, found);
+                }
+                _ => found.push(e),
+            }
+        }
+        let mut found = Vec::new();
+        parts(self, cond, &mut found);
+        let has_let = found.iter().any(|&p| matches!(self.thir[p].kind, ExprKind::Let { .. }));
+        (found.len() > 1 && has_let).then_some(found)
+    }
+
+    /// `if let Some(h) = half(n) && h > 2 && let Some(q) = f(h) { .. } else { .. }`.
+    /// Each part runs only if the ones before it held, and may read what an
+    /// earlier `let` bound. Parts that need no statements of their own join
+    /// one test: `const h = half(n); if (h != null && h > 2) { .. }`. One that
+    /// does, like a `let` of a call, opens an `if` inside. With more than one,
+    /// the `else` follows them all in a labeled block, which the `then` leaves.
+    fn lower_let_chain(
+        &mut self,
+        parts: Vec<ExprId>,
+        then: ExprId,
+        else_opt: Option<ExprId>,
+        dest: &Dest,
+        span: js::Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
+        // Each level: what runs before its test, its test, and what its body
+        // starts with (a `let`'s bindings).
+        let mut levels: Vec<(Vec<Stmt>, Vec<Expr>, Vec<Stmt>)> = vec![(Vec::new(), Vec::new(), Vec::new())];
+        for part in parts {
+            let (mut before, mut bindings) = (Vec::new(), Vec::new());
+            let test = match self.thir[part].kind {
+                ExprKind::Let { expr, ref pat } => self.if_let(expr, pat, &mut bindings, &mut before)?,
+                _ => self.expr(part, &mut before)?,
+            };
+            let level = levels.last_mut().expect("a level");
+            if level.1.is_empty() || (before.is_empty() && level.2.is_empty()) {
+                level.0.extend(before);
+                level.1.push(test);
+                level.2.extend(bindings);
+            } else {
+                levels.push((before, vec![test], bindings));
+            }
+        }
+        let mut then_out = Vec::new();
+        self.stmt(then, dest, &mut then_out)?;
+        let mut else_out = match else_opt {
+            Some(els) => {
+                let mut else_out = Vec::new();
+                self.stmt(els, dest, &mut else_out)?;
+                Some(else_out)
+            }
+            None => None,
+        };
+        let label = (levels.len() > 1 && else_out.is_some()).then(|| fresh_in(&mut self.labels, "chain"));
+        let leaves = matches!(
+            then_out.last().map(|s| &s.kind),
+            Some(StmtKind::Return(_) | StmtKind::Throw(_) | StmtKind::Break(_) | StmtKind::Continue(_))
+        );
+        if let Some(label) = &label
+            && !leaves
+        {
+            then_out.push(StmtKind::Break(Some(label.clone())).at(span));
+        }
+        // Built from the innermost level out; only a lone level has the `else`.
+        let single = levels.len() == 1;
+        let mut body = then_out;
+        for (before, tests, bindings) in levels.into_iter().rev() {
+            let test = tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)).unwrap_or_else(|| Expr::bool(true));
+            let mut inner = bindings;
+            inner.extend(body);
+            let els = if single { else_out.take() } else { None };
+            body = before;
+            body.push(StmtKind::If(test, inner, els).at(span));
+        }
+        match (label, else_out) {
+            (Some(label), Some(else_out)) => {
+                body.extend(else_out);
+                out.push(StmtKind::Labeled(label, body).at(span));
+            }
+            _ => out.extend(body),
+        }
+        Ok(())
+    }
+
     /// `if let pat = scrutinee`: the test, with the pattern's variables
     /// bound at the start of the `then` branch. `if let Some(el) = find()`
     /// keeps the value in a `const` named like the variable, which is then
@@ -1188,7 +1290,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Match { .. } if let Some(tried) = self.as_question(e) => self.question(e, tried, None, out),
             ExprKind::Match { scrutinee, ref arms, .. } if let Some(test) = self.as_matches(scrutinee, arms, out)? => Ok(test),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
-                if self.is_simple(then) && self.is_simple(els) =>
+                if self.is_simple(then) && self.is_simple(els) && self.let_chain(cond).is_none() =>
             {
                 let c = self.expr(cond, out)?;
                 let t = self.expr(then, out)?;

@@ -110,3 +110,44 @@ pub fn mapped_more(n: i32) -> (Option<i32>, Option<i32>, u32, Option<i32>) {
     });
     (pair(n).map(|(a, b)| a * b), counted, calls.get(), half(n).map(|_| 7))
 }
+
+/// Let chains (Rust 2024): `let`s and conditions joined by `&&`. The
+/// condition reads what the `let` bound.
+pub fn chained(n: i32) -> i32 {
+    if let Some(h) = half(n) && h > 2 { h } else { -1 }
+}
+
+/// A `let` after another is only computed if everything before it held.
+pub fn chained_twice(n: i32) -> (i32, u32) {
+    let calls = Cell::new(0);
+    let counted = |m: i32| {
+        calls.set(calls.get() + 1);
+        half(m)
+    };
+    let v = if let Some(h) = half(n) && h != 0 && let Some(q) = counted(h) && q > 1 { q } else { 0 };
+    (v, calls.get())
+}
+
+/// Without an `else`, and binding a tuple.
+pub fn chained_statement(n: i32) -> i32 {
+    let mut total = 0;
+    if let Some(h) = half(n)
+        && let Some((a, b)) = if h > 0 { Some((h, h + 1)) } else { None }
+        && a < 10
+    {
+        total = a + b;
+    }
+    total
+}
+
+/// `while let` with a chain.
+pub fn chained_loop(mut n: i32) -> u32 {
+    let mut count = 0;
+    while let Some(h) = half(n)
+        && h != 0
+    {
+        n = h;
+        count += 1;
+    }
+    count
+}

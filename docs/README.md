@@ -87,6 +87,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0020 Structs are objects, tuples are arrays](decisions/0020-structs-and-tuples.md)
 - [0047 Methods are an object of functions named after their type](decisions/0047-methods.md)
 - [0014 `match` becomes an `if`/`else if` chain](decisions/0014-match-lowering.md)
+- [0048 Let chains: each part runs only once the ones before it held](decisions/0048-let-chains.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

@@ -335,6 +335,10 @@ impl<'a> Cx<'a> {
                 });
                 Statement::new_if_statement(sp, self.expr(cond), self.block(then), els, b)
             }
+            StmtKind::Labeled(label, body) => {
+                let block = Statement::new_block_statement(sp, self.stmts(body), b);
+                self.labeled(sp, Some(label), block)
+            }
             StmtKind::While { label, cond, body } => {
                 let w = Statement::new_while_statement(sp, self.expr(cond), self.block(body), b);
                 self.labeled(sp, label.as_deref(), w)

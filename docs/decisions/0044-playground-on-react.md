@@ -109,6 +109,6 @@ site and serves it as GitHub Pages does. It:
   around:
   - Filled: `match` on string literals, `Option::map`, and `with` closures
     put in place.
-  - Filled next: names, with `#![rust_js::camel_case]` (ADR 0046), and
-    methods (ADR 0047): `projects.rs` is `impl Project`.
-  - Worked around: let chains (nested `if`s).
+  - Filled next: names, with `#![rust_js::camel_case]` (ADR 0046),
+    methods (ADR 0047), so `projects.rs` is `impl Project`, and let
+    chains (ADR 0048).

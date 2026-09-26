@@ -128,6 +128,8 @@ pub enum StmtKind {
     ForOf { label: Option<String>, name: String, iterable: Expr, body: Vec<Stmt> },
     /// `for (let name = start; test; name++) { .. }`: a `for` over a range.
     For { label: Option<String>, name: String, start: Expr, test: Expr, body: Vec<Stmt> },
+    /// `label: { .. }`, which a `break label` leaves: a let chain's (ADR 0048).
+    Labeled(String, Vec<Stmt>),
     Break(Option<String>),
     Continue(Option<String>),
     Return(Option<Expr>),

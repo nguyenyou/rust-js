@@ -313,6 +313,8 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {");
   // The editor's view is made in an effect, and destroyed in its cleanup.
   expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");
+  // A let chain on `&on_submit`, tested where it is: a reference is the value.
+  expect(await read("components/editor.jsx")).toContain('    if (onSubmit != null && (e.metaKey || e.ctrlKey) && e.key === "Enter") {');
   // A hook, found by its name, and props as React code names them (ADR 0046).
   expect(await read("dark_mode.js")).toContain("export function useDarkMode() {\n  return useSyncExternalStore(");
 
@@ -467,6 +469,11 @@ test("options are the value or undefined", async () => {
   // `map` puts the closure's body in place, on the option read once.
   expect(js).toContain("    h != null ? double(h) : undefined,\n    h != null ? h > 2 : undefined,");
   expect(js).toContain("    option != null ? Math.imul(option[0], option[1]) : undefined,");
+  // Let chains (ADR 0048): one test when the parts need nothing else,
+  expect(js).toContain("  const h = half(n);\n  if (h != null && h > 2) {\n    return h;\n  } else {\n    return -1;");
+  // an `if` inside for a `let` of a call, only made once the rest held, and
+  // then the `else` after both, in a block the `then` leaves.
+  expect(js).toContain("  chain: {\n    const h = half(n);\n    if (h != null && h !== 0) {\n      const q = counted(h);\n      if (q != null && q > 1) {\n        v = q;\n        break chain;\n      }\n    }\n    v = 0;\n  }");
   // A closure of statements is called, by a name.
   expect(js).toContain("  const counted = h != null ? map(h) : undefined;");
   expect(options.same(null, undefined)).toBe(true);

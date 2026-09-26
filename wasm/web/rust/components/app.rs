@@ -89,7 +89,9 @@ pub fn App() -> Element {
                     Some(e) => Some((e.name.clone(), e.root.clone(), e.files.clone())),
                     None => None,
                 };
-                if let Some((name, root, files)) = first {
+                if let Some((name, root, files)) = first
+                    && !done.get()
+                {
                     let texts = load_example(name.clone(), files).await;
                     if !done.get() {
                         set_example.set(name);
