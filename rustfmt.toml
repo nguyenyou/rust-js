@@ -1,0 +1,3 @@
+# Lines up to 120 columns: closest to how the code was written before a
+# formatter checked it (`cargo fmt --check` runs in CI).
+max_width = 120

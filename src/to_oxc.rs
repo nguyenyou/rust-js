@@ -22,12 +22,12 @@ use std::path::PathBuf;
 
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
-    Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern, BindingProperty,
-    Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter, FormalParameterKind,
-    FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem, JSXAttributeName, JSXAttributeValue,
-    JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier, JSXMemberExpressionObject,
-    JSXOpeningElement, JSXOpeningFragment, SimpleAssignmentTarget, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey,
-    PropertyKind, Statement, VariableDeclarationKind, VariableDeclarator,
+    Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
+    BindingProperty, Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter, FormalParameterKind,
+    FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem, JSXAttributeName,
+    JSXAttributeValue, JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier,
+    JSXMemberExpressionObject, JSXOpeningElement, JSXOpeningFragment, LabelIdentifier, ObjectPropertyKind, Program,
+    PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -50,12 +50,22 @@ pub struct Output {
 /// and `js_file_name` is the output's file name, for `sourceMappingURL`.
 pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name: &str) -> Output {
     let allocator = Allocator::default();
-    let cx = Cx { b: AstBuilder::new(&allocator), allocator: &allocator, depth: Cell::new(0), inline: Cell::new(false) };
+    let cx = Cx {
+        b: AstBuilder::new(&allocator),
+        allocator: &allocator,
+        depth: Cell::new(0),
+        inline: Cell::new(false),
+    };
     let b = &cx.b;
 
     let namespaces = module.namespaces.iter().map(|n| cx.namespace(n));
     let consts = module.consts.iter().map(|c| cx.constant(c));
-    let body = ArenaVec::from_iter_in(namespaces.chain(consts).chain(module.functions.iter().map(|f| cx.function(f))), b);
+    let body = ArenaVec::from_iter_in(
+        namespaces
+            .chain(consts)
+            .chain(module.functions.iter().map(|f| cx.function(f))),
+        b,
+    );
     let program = Program::new(
         Span::new(0, rust_source.len() as u32),
         SourceType::mjs(),
@@ -83,7 +93,13 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
             let named: Vec<String> = package
                 .named
                 .iter()
-                .map(|(export, local)| if export == local { export.clone() } else { format!("{export} as {local}") })
+                .map(|(export, local)| {
+                    if export == local {
+                        export.clone()
+                    } else {
+                        format!("{export} as {local}")
+                    }
+                })
                 .collect();
             let named = (!named.is_empty()).then(|| format!("{{ {} }}", named.join(", ")));
             let clause: Vec<String> = package.default.iter().cloned().chain(named).collect();
@@ -130,7 +146,14 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     let mut in_object = false;
     for (i, line) in generated.code.lines().enumerate() {
         // Only functions start at column 0, so this can't match nested code.
-        let top_level = ["function ", "async function ", "export function ", "export async function "].iter().any(|p| line.starts_with(p));
+        let top_level = [
+            "function ",
+            "async function ",
+            "export function ",
+            "export async function ",
+        ]
+        .iter()
+        .any(|p| line.starts_with(p));
         // And after a type's methods, which end the object that holds them.
         if i > 0 && (top_level || matches!(previous, Some("};" | "} };"))) {
             code.push('\n');
@@ -139,16 +162,27 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
         let mut put = |text: &str, from_col: u32, delta: i64, parts: &mut Vec<Place>| {
             code.push_str(text);
             code.push('\n');
-            parts.push(Place { from_col, line: out_line, delta });
+            parts.push(Place {
+                from_col,
+                line: out_line,
+                delta,
+            });
             out_line += 1;
         };
         let mut parts = Vec::new();
-        let opening = one_method.iter().find(|prefix| line.starts_with(prefix.as_str()) && line.ends_with('{'));
+        let opening = one_method
+            .iter()
+            .find(|prefix| line.starts_with(prefix.as_str()) && line.ends_with('{'));
         match opening {
             Some(prefix) if !in_object => {
                 let at = prefix.len() as u32;
                 put(prefix.trim_end(), 0, 0, &mut parts);
-                put(&format!("  {}", &line[prefix.len()..]), at, 2 - i64::from(at), &mut parts);
+                put(
+                    &format!("  {}", &line[prefix.len()..]),
+                    at,
+                    2 - i64::from(at),
+                    &mut parts,
+                );
                 in_object = true;
             }
             _ if in_object && line == "} };" => {
@@ -165,7 +199,10 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     code.push_str(&format!("//# sourceMappingURL={js_file_name}.map\n"));
 
     let map = generated.map.expect("a source map, since source_map_path is set");
-    Output { code, map: shift_lines(&map, &places, js_file_name) }
+    Output {
+        code,
+        map: shift_lines(&map, &places, js_file_name),
+    }
 }
 
 /// Where the part of a generated line from `from_col` on ends up: on output
@@ -186,10 +223,16 @@ fn shift_lines(map: &SourceMap<'_>, places: &[Vec<Place>], js_file_name: &str) -
     // `add_name` deduplicates, so ids can change: translate them.
     let name_ids: Vec<u32> = map.get_names().map(|name| out.add_name(name)).collect();
     // Past the last line, lines keep the last one's shift.
-    let last_shift = places.last().and_then(|parts| parts.last()).map_or(0, |p| p.line + 1 - places.len() as u32);
+    let last_shift = places
+        .last()
+        .and_then(|parts| parts.last())
+        .map_or(0, |p| p.line + 1 - places.len() as u32);
     for t in map.get_tokens() {
         let (line, col) = (t.get_dst_line(), t.get_dst_col());
-        let (line, col) = match places.get(line as usize).and_then(|parts| parts.iter().rev().find(|p| p.from_col <= col)) {
+        let (line, col) = match places
+            .get(line as usize)
+            .and_then(|parts| parts.iter().rev().find(|p| p.from_col <= col))
+        {
             Some(place) => (place.line, (i64::from(col) + place.delta).max(0) as u32),
             None => (line + last_shift, col),
         };
@@ -220,7 +263,18 @@ impl<'a> Cx<'a> {
     fn params(&self, kind: FormalParameterKind, patterns: &[js::Pattern]) -> FormalParameters<'a> {
         let b = &self.b;
         let params = patterns.iter().map(|pattern| {
-            FormalParameter::new(SPAN, ArenaVec::new_in(b), self.pattern(pattern), None, None, false, None, false, false, b)
+            FormalParameter::new(
+                SPAN,
+                ArenaVec::new_in(b),
+                self.pattern(pattern),
+                None,
+                None,
+                false,
+                None,
+                false,
+                false,
+                b,
+            )
         });
         FormalParameters::new(SPAN, kind, ArenaVec::from_iter_in(params, b), None, b)
     }
@@ -243,7 +297,11 @@ impl<'a> Cx<'a> {
             Some(ArenaBox::new_in(body, b)),
             b,
         );
-        if f.export { Statement::new_export_declaration(span(f.span), decl, b) } else { decl.into() }
+        if f.export {
+            Statement::new_export_declaration(span(f.span), decl, b)
+        } else {
+            decl.into()
+        }
     }
 
     /// `export const Counter = { new(step) { .. }, .. };`: each method in
@@ -270,7 +328,16 @@ impl<'a> Cx<'a> {
                         b,
                     );
                     let key = PropertyKey::new_static_identifier(span(f.name_span), self.name(&f.name), b);
-                    ObjectPropertyKind::new_object_property(span(f.span), PropertyKind::Init, key, value, true, false, false, b)
+                    ObjectPropertyKind::new_object_property(
+                        span(f.span),
+                        PropertyKind::Init,
+                        key,
+                        value,
+                        true,
+                        false,
+                        false,
+                        b,
+                    )
                 }),
                 b,
             )
@@ -278,8 +345,18 @@ impl<'a> Cx<'a> {
         let id = BindingPattern::new_binding_identifier(SPAN, self.name(&n.name), b);
         let object = Expression::new_object_expression(SPAN, methods, b);
         let declarator = VariableDeclarator::new(SPAN, id, None, Some(object), false, b);
-        let decl = Declaration::new_variable_declaration(SPAN, VariableDeclarationKind::Const, ArenaVec::from_iter_in([declarator], b), false, b);
-        if n.export { Statement::new_export_declaration(SPAN, decl, b) } else { decl.into() }
+        let decl = Declaration::new_variable_declaration(
+            SPAN,
+            VariableDeclarationKind::Const,
+            ArenaVec::from_iter_in([declarator], b),
+            false,
+            b,
+        );
+        if n.export {
+            Statement::new_export_declaration(SPAN, decl, b)
+        } else {
+            decl.into()
+        }
     }
 
     fn constant(&self, c: &js::Const) -> Statement<'a> {
@@ -287,12 +364,24 @@ impl<'a> Cx<'a> {
         let sp = span(c.span);
         let id = BindingPattern::new_binding_identifier(SPAN, self.name(&c.name), b);
         let declarator = VariableDeclarator::new(sp, id, None, Some(self.expr(&c.value)), false, b);
-        let decl = Declaration::new_variable_declaration(sp, VariableDeclarationKind::Const, ArenaVec::from_iter_in([declarator], b), false, b);
-        if c.export { Statement::new_export_declaration(sp, decl, b) } else { decl.into() }
+        let decl = Declaration::new_variable_declaration(
+            sp,
+            VariableDeclarationKind::Const,
+            ArenaVec::from_iter_in([declarator], b),
+            false,
+            b,
+        );
+        if c.export {
+            Statement::new_export_declaration(sp, decl, b)
+        } else {
+            decl.into()
+        }
     }
 
     fn stmts(&self, stmts: &[js::Stmt]) -> ArenaVec<'a, Statement<'a>> {
-        self.nested(true, || ArenaVec::from_iter_in(stmts.iter().map(|s| self.stmt(s)), &self.b))
+        self.nested(true, || {
+            ArenaVec::from_iter_in(stmts.iter().map(|s| self.stmt(s)), &self.b)
+        })
     }
 
     /// Run `f` one level deeper, if `deeper`.
@@ -314,9 +403,18 @@ impl<'a> Cx<'a> {
         match &s.kind {
             StmtKind::Const(name, init) => self.declare(sp, VariableDeclarationKind::Const, name, Some(init)),
             StmtKind::Let(name, init) => self.declare(sp, VariableDeclarationKind::Let, name, init.as_ref()),
-            StmtKind::Destructure { pattern, value, mutable } => {
-                let kind = if *mutable { VariableDeclarationKind::Let } else { VariableDeclarationKind::Const };
-                let declarator = VariableDeclarator::new(sp, self.pattern(pattern), None, Some(self.expr(value)), false, b);
+            StmtKind::Destructure {
+                pattern,
+                value,
+                mutable,
+            } => {
+                let kind = if *mutable {
+                    VariableDeclarationKind::Let
+                } else {
+                    VariableDeclarationKind::Const
+                };
+                let declarator =
+                    VariableDeclarator::new(sp, self.pattern(pattern), None, Some(self.expr(value)), false, b);
                 Statement::new_variable_declaration(sp, kind, ArenaVec::from_iter_in([declarator], b), false, b)
             }
             StmtKind::Assign(target, value) => {
@@ -333,7 +431,11 @@ impl<'a> Cx<'a> {
             StmtKind::If(cond, then, els) => {
                 let els = els.as_deref().map(|els| match els {
                     // A lone `if` in the `else` prints as `else if`.
-                    [only @ js::Stmt { kind: StmtKind::If(..), .. }] => self.stmt(only),
+                    [
+                        only @ js::Stmt {
+                            kind: StmtKind::If(..), ..
+                        },
+                    ] => self.stmt(only),
                     _ => self.block(els),
                 });
                 Statement::new_if_statement(sp, self.expr(cond), self.block(then), els, b)
@@ -346,7 +448,12 @@ impl<'a> Cx<'a> {
                 let w = Statement::new_while_statement(sp, self.expr(cond), self.block(body), b);
                 self.labeled(sp, label.as_deref(), w)
             }
-            StmtKind::ForOf { label, name, iterable, body } => {
+            StmtKind::ForOf {
+                label,
+                name,
+                iterable,
+                body,
+            } => {
                 let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
                 let declarator = VariableDeclarator::new(SPAN, id, None, None, false, b);
                 let left = ForStatementLeft::new_variable_declaration(
@@ -359,7 +466,13 @@ impl<'a> Cx<'a> {
                 let l = Statement::new_for_of_statement(sp, false, left, self.expr(iterable), self.block(body), b);
                 self.labeled(sp, label.as_deref(), l)
             }
-            StmtKind::For { label, name, start, test, body } => {
+            StmtKind::For {
+                label,
+                name,
+                start,
+                test,
+                body,
+            } => {
                 let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
                 let declarator = VariableDeclarator::new(SPAN, id, None, Some(self.expr(start)), false, b);
                 let init = ForStatementInit::new_variable_declaration(
@@ -371,19 +484,22 @@ impl<'a> Cx<'a> {
                 );
                 let counter = SimpleAssignmentTarget::new_assignment_target_identifier(SPAN, self.name(name), b);
                 let update = Expression::new_update_expression(SPAN, UpdateOperator::Increment, false, counter, b);
-                let l = Statement::new_for_statement(sp, Some(init), Some(self.expr(test)), Some(update), self.block(body), b);
+                let l = Statement::new_for_statement(
+                    sp,
+                    Some(init),
+                    Some(self.expr(test)),
+                    Some(update),
+                    self.block(body),
+                    b,
+                );
                 self.labeled(sp, label.as_deref(), l)
             }
-            StmtKind::Break(label) => {
-                Statement::new_break_statement(sp, label.as_deref().map(|l| self.label(l)), b)
-            }
+            StmtKind::Break(label) => Statement::new_break_statement(sp, label.as_deref().map(|l| self.label(l)), b),
             StmtKind::Continue(label) => {
                 Statement::new_continue_statement(sp, label.as_deref().map(|l| self.label(l)), b)
             }
             StmtKind::Throw(value) => Statement::new_throw_statement(sp, self.expr(value), b),
-            StmtKind::Return(value) => {
-                Statement::new_return_statement(sp, value.as_ref().map(|v| self.expr(v)), b)
-            }
+            StmtKind::Return(value) => Statement::new_return_statement(sp, value.as_ref().map(|v| self.expr(v)), b),
         }
     }
 
@@ -433,13 +549,7 @@ impl<'a> Cx<'a> {
         }
     }
 
-    fn declare(
-        &self,
-        sp: Span,
-        kind: VariableDeclarationKind,
-        name: &str,
-        init: Option<&js::Expr>,
-    ) -> Statement<'a> {
+    fn declare(&self, sp: Span, kind: VariableDeclarationKind, name: &str, init: Option<&js::Expr>) -> Statement<'a> {
         let b = &self.b;
         let id = BindingPattern::new_binding_identifier(SPAN, self.name(name), b);
         let declarator = VariableDeclarator::new(sp, id, None, init.map(|e| self.expr(e)), false, b);
@@ -498,7 +608,12 @@ impl<'a> Cx<'a> {
                 let params = ArenaBox::new_in(self.params(FormalParameterKind::ArrowFormalParameters, params), b);
                 // `() => x` when the body only returns a value.
                 let body = match body.as_slice() {
-                    [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => ArrowFunctionBody::from(self.expr(value)),
+                    [
+                        js::Stmt {
+                            kind: StmtKind::Return(Some(value)),
+                            ..
+                        },
+                    ] => ArrowFunctionBody::from(self.expr(value)),
                     _ => ArrowFunctionBody::new_function_body(SPAN, ArenaVec::new_in(b), self.stmts(body), b),
                 };
                 Expression::new_arrow_function_expression(sp, is_async, None, params, None, body, b)
@@ -542,7 +657,8 @@ impl<'a> Cx<'a> {
             return Expression::new_jsx_fragment(sp, open, children, close, b);
         }
         let attrs = jsx.props.iter().filter_map(|prop| self.jsx_attribute(prop));
-        let opening = JSXOpeningElement::boxed(SPAN, self.jsx_name(&jsx.tag), None, ArenaVec::from_iter_in(attrs, b), b);
+        let opening =
+            JSXOpeningElement::boxed(SPAN, self.jsx_name(&jsx.tag), None, ArenaVec::from_iter_in(attrs, b), b);
         // `<img />` has nothing to close.
         let closing = (!children.is_empty()).then(|| JSXClosingElement::boxed(SPAN, self.jsx_name(&jsx.tag), b));
         Expression::new_jsx_element(sp, opening, children, closing, b)
@@ -593,7 +709,11 @@ impl<'a> Cx<'a> {
             ExprKind::Str(s) if jsx_text_safe(s) && !s.contains('"') => {
                 Some(JSXAttributeValue::new_string_literal(sp, self.name(s), None, b))
             }
-            _ => Some(JSXAttributeValue::new_expression_container(sp, JSXExpression::from(self.expr(value)), b)),
+            _ => Some(JSXAttributeValue::new_expression_container(
+                sp,
+                JSXExpression::from(self.expr(value)),
+                b,
+            )),
         };
         let name = JSXAttributeName::new_identifier(SPAN, self.name(name), b);
         Some(JSXAttributeItem::new_attribute(SPAN, name, value, b))
@@ -639,7 +759,16 @@ impl<'a> Cx<'a> {
                 } else {
                     PropertyKey::new_static_identifier(SPAN, self.name(name), b)
                 };
-                ObjectPropertyKind::new_object_property(SPAN, PropertyKind::Init, key, value, false, shorthand, computed, b)
+                ObjectPropertyKind::new_object_property(
+                    SPAN,
+                    PropertyKind::Init,
+                    key,
+                    value,
+                    false,
+                    shorthand,
+                    computed,
+                    b,
+                )
             }
             Prop::Spread(value) => ObjectPropertyKind::new_spread_property(SPAN, self.expr(value), b),
         }

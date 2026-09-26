@@ -1,9 +1,8 @@
 //! Collect crate facts and orchestrate lowering; no filesystem writes.
 
 use super::bindings;
-use super::traits;
-use std::cell::RefCell;
 use super::bindings::{Export, is_binding, js_import, js_path, module_binding};
+use super::traits;
 use super::{
     Body, CrateFacts, FnCx, FnInfo, Lowered, LoweredModule, TestFn, camel_case, const_js, eval_const, fresh_in,
     module_file, module_path, strip,
@@ -18,6 +17,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LOCAL_CRATE, LocalDefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Copy the THIR of every function and closure in the crate.
@@ -125,7 +125,10 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             DefKind::AssocTy => "associated types",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())
-                    && !traits::operational(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) => "user implementations of this standard or external trait",
+                    && !traits::operational(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) =>
+            {
+                "user implementations of this standard or external trait"
+            }
             DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
             DefKind::Static { .. } => "statics",
             _ => continue,
@@ -138,9 +141,15 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         return None;
     }
 
-    let trait_impls: Vec<DefId> = tcx.hir_crate_items(()).definitions()
-        .filter(|&id| matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) && !tcx.is_automatically_derived(id.to_def_id()))
-        .map(|id| id.to_def_id()).collect();
+    let trait_impls: Vec<DefId> = tcx
+        .hir_crate_items(())
+        .definitions()
+        .filter(|&id| {
+            matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
+                && !tcx.is_automatically_derived(id.to_def_id())
+        })
+        .map(|id| id.to_def_id())
+        .collect();
 
     // Closures are lowered inside the function that creates them.
     let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) = all_bodies
@@ -230,7 +239,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     // The modules that get a JS file: the root, then every module with a
     // function or a `const`, in the order the first one appears.
     let mut modules = vec![LocalModDefId::CRATE_DEF_ID];
-    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()).chain(trait_impls.iter().map(|id| id.expect_local())) {
+    for def_id in bodies
+        .iter()
+        .map(|body| body.def_id)
+        .chain(consts.iter().copied())
+        .chain(trait_impls.iter().map(|id| id.expect_local()))
+    {
         let module = tcx.parent_module_from_def_id(def_id);
         if !modules.contains(&module) {
             modules.push(module);
@@ -245,17 +259,27 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     let mut owners: HashMap<(LocalModDefId, DefId), String> = HashMap::new();
     let mut methods: HashMap<(LocalModDefId, DefId), HashSet<String>> = HashMap::new();
     let mut fns: HashMap<DefId, FnInfo> = HashMap::new();
-    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()).chain(trait_impls.iter().map(|id| id.expect_local())) {
+    for def_id in bodies
+        .iter()
+        .map(|body| body.def_id)
+        .chain(consts.iter().copied())
+        .chain(trait_impls.iter().map(|id| id.expect_local()))
+    {
         let module = tcx.parent_module_from_def_id(def_id);
         let names = taken.entry(module).or_default();
         let js_name = if trait_impls.contains(&def_id.to_def_id()) {
             traits::impl_name(tcx, def_id.to_def_id())
         } else if tcx.def_kind(def_id) == DefKind::AssocFn && tcx.inherent_impl_of_assoc(def_id.to_def_id()).is_none() {
             let parent = tcx.parent(def_id.to_def_id());
-            let prefix = if trait_impls.contains(&parent) { traits::impl_name(tcx, parent) }
-                else { super::lower_first(tcx.item_name(parent).as_str()) };
+            let prefix = if trait_impls.contains(&parent) {
+                traits::impl_name(tcx, parent)
+            } else {
+                super::lower_first(tcx.item_name(parent).as_str())
+            };
             format!("{prefix}_{}", bindings::fn_name(tcx, def_id.to_def_id()))
-        } else { bindings::fn_name(tcx, def_id.to_def_id()) };
+        } else {
+            bindings::fn_name(tcx, def_id.to_def_id())
+        };
         if trait_impls.contains(&def_id.to_def_id()) && names.contains(&js_name) {
             tcx.dcx().span_err(tcx.def_span(def_id), format!("rust-js: generated trait implementation name `{js_name}` collides; put the implementations in separate modules"));
             failed = true;
@@ -268,12 +292,17 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         });
         let (name, owner) = match owner_type {
             Some(ty) => {
-                let owner = owners.entry((module, ty)).or_insert_with(|| fresh_in(names, tcx.item_name(ty).as_str()));
+                let owner = owners
+                    .entry((module, ty))
+                    .or_insert_with(|| fresh_in(names, tcx.item_name(ty).as_str()));
                 // A property, so a name JS reserves for variables, like `new`, is fine.
                 let names = methods.entry((module, ty)).or_default();
                 let name = match names.insert(js_name.clone()) {
                     true => js_name,
-                    false => (1..).map(|k| format!("{js_name}${k}")).find(|n| names.insert(n.clone())).expect("a free name"),
+                    false => (1..)
+                        .map(|k| format!("{js_name}${k}"))
+                        .find(|n| names.insert(n.clone()))
+                        .expect("a free name"),
                 };
                 (name, Some(owner.clone()))
             }
@@ -338,7 +367,11 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
      -> HashMap<LocalModDefId, HashMap<LocalModDefId, String>> {
         let mut aliases = HashMap::new();
         for &module in &modules {
-            let mut targets: Vec<_> = modules.iter().copied().filter(|&m| m != module && uses(module, m)).collect();
+            let mut targets: Vec<_> = modules
+                .iter()
+                .copied()
+                .filter(|&m| m != module && uses(module, m))
+                .collect();
             targets.sort_by(|a, b| paths[a].cmp(&paths[b]));
             let names = taken.entry(module).or_default();
             let module_aliases = targets
@@ -408,9 +441,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             references: RefCell::new(HashSet::new()),
             package_uses: RefCell::new(HashSet::new()),
         };
-        for (def_id, body) in bodies.iter().filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none()).map(|b| (b.def_id.to_def_id(), Some(*b)))
-            .chain(trait_impls.iter().map(|id| (*id, None))) {
-
+        for (def_id, body) in bodies
+            .iter()
+            .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
+            .map(|b| (b.def_id.to_def_id(), Some(*b)))
+            .chain(trait_impls.iter().map(|id| (*id, None)))
+        {
             let module = fns[&def_id].module;
             let file = module_file(tcx, module);
             let mut cx = FnCx {
@@ -439,7 +475,9 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                     let cache = format!("${}", fns[&def_id].name);
                     pass.caches.entry(module).or_default().push(cache.clone());
                     cx.lower_dictionary(def_id, &cache).map(|function| super::LoweredFn {
-                        function, runtime: std::mem::take(&mut cx.runtime), jsx: cx.jsx,
+                        function,
+                        runtime: std::mem::take(&mut cx.runtime),
+                        jsx: cx.jsx,
                     })
                 }
             };
@@ -519,8 +557,11 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     if first.failed {
         return None;
     }
-    let used: HashSet<(LocalModDefId, LocalModDefId)> =
-        first.references.iter().map(|&(from, id)| (from, fns[&id].module)).collect();
+    let used: HashSet<(LocalModDefId, LocalModDefId)> = first
+        .references
+        .iter()
+        .map(|&(from, id)| (from, fns[&id].module))
+        .collect();
     let all_used = used.len() == modules.len() * (modules.len() - 1);
     let aliases = assign_aliases(&mut taken, &|from, to| used.contains(&(from, to)));
     let mut pass = if all_used { first } else { lower_all(&aliases, &taken) };
@@ -534,15 +575,31 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     for &(_, id) in pass.references.iter() {
         let info = &fns[&id];
         if let Some(owner) = &info.owner {
-            if let Some(ns) = pass.namespaces.get_mut(&info.module).and_then(|ns| ns.iter_mut().find(|ns| ns.name == *owner)) { ns.export = true; }
-        } else if let Some(f) = pass.functions.get_mut(&info.module).and_then(|fs| fs.iter_mut().find(|f| f.name == info.name)) { f.export = true; }
+            if let Some(ns) = pass
+                .namespaces
+                .get_mut(&info.module)
+                .and_then(|ns| ns.iter_mut().find(|ns| ns.name == *owner))
+            {
+                ns.export = true;
+            }
+        } else if let Some(f) = pass
+            .functions
+            .get_mut(&info.module)
+            .and_then(|fs| fs.iter_mut().find(|f| f.name == info.name))
+        {
+            f.export = true;
+        }
     }
     let lowered = modules
         .into_iter()
         .map(|module| {
             let mut imports: Vec<(String, Vec<String>)> = aliases[&module]
                 .iter()
-                .filter(|(target, _)| pass.references.iter().any(|(from, id)| *from == module && fns[id].module == **target))
+                .filter(|(target, _)| {
+                    pass.references
+                        .iter()
+                        .any(|(from, id)| *from == module && fns[id].module == **target)
+                })
                 .map(|(target, alias)| (alias.clone(), paths[target].clone()))
                 .collect();
             imports.sort_by(|a, b| a.1.cmp(&b.1));
@@ -550,7 +607,9 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             let mut packages: BTreeMap<&str, js::Package> = BTreeMap::new();
             for export in imported
                 .iter()
-                .filter(|(export, users)| users.contains(&module) || pass.package_uses.contains(&(module, (*export).clone())))
+                .filter(|(export, users)| {
+                    users.contains(&module) || pass.package_uses.contains(&(module, (*export).clone()))
+                })
                 .map(|(export, _)| export)
             {
                 let (from, name) = export;

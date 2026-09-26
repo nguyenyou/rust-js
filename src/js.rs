@@ -120,16 +120,35 @@ pub enum StmtKind {
     Const(String, Expr),
     Let(String, Option<Expr>),
     /// `const [a, b] = value;`, or `let` if one of them is reassigned.
-    Destructure { pattern: Pattern, value: Expr, mutable: bool },
+    Destructure {
+        pattern: Pattern,
+        value: Expr,
+        mutable: bool,
+    },
     /// `target = value`, where `target` is a variable, `a.b` or `a[0]`.
     Assign(Expr, Expr),
     Expr(Expr),
     If(Expr, Vec<Stmt>, Option<Vec<Stmt>>),
-    While { label: Option<String>, cond: Expr, body: Vec<Stmt> },
+    While {
+        label: Option<String>,
+        cond: Expr,
+        body: Vec<Stmt>,
+    },
     /// `for (const name of iterable) { .. }`: a `for` over a sequence (ADR 0025).
-    ForOf { label: Option<String>, name: String, iterable: Expr, body: Vec<Stmt> },
+    ForOf {
+        label: Option<String>,
+        name: String,
+        iterable: Expr,
+        body: Vec<Stmt>,
+    },
     /// `for (let name = start; test; name++) { .. }`: a `for` over a range.
-    For { label: Option<String>, name: String, start: Expr, test: Expr, body: Vec<Stmt> },
+    For {
+        label: Option<String>,
+        name: String,
+        start: Expr,
+        test: Expr,
+        body: Vec<Stmt>,
+    },
     /// `label: { .. }`, which a `break label` leaves: a let chain's (ADR 0048).
     Labeled(String, Vec<Stmt>),
     Break(Option<String>),
@@ -301,14 +320,19 @@ impl Expr {
 
     pub fn unary(op: UnaryOp, arg: Expr) -> Expr {
         // `!(a === b)` is `a !== b`, for every `a` and `b`.
-        if let (UnaryOp::Not, ExprKind::Binary(eq @ (Op::Eq | Op::Ne | Op::LooseEq | Op::LooseNe), a, b)) = (op, &arg.kind) {
+        if let (UnaryOp::Not, ExprKind::Binary(eq @ (Op::Eq | Op::Ne | Op::LooseEq | Op::LooseNe), a, b)) =
+            (op, &arg.kind)
+        {
             let ne = match eq {
                 Op::Eq => Op::Ne,
                 Op::Ne => Op::Eq,
                 Op::LooseEq => Op::LooseNe,
                 _ => Op::LooseEq,
             };
-            return Expr { kind: ExprKind::Binary(ne, a.clone(), b.clone()), span: arg.span };
+            return Expr {
+                kind: ExprKind::Binary(ne, a.clone(), b.clone()),
+                span: arg.span,
+            };
         }
         Expr::new(ExprKind::Unary(op, Box::new(arg)))
     }

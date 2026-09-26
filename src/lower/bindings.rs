@@ -165,7 +165,9 @@ pub(super) fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
 
 /// `#[rust_js::name = ".."]`: what an item is in JS, as written.
 fn given_name(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
-    let attr = tcx.get_attrs_by_path(def_id, &[Symbol::intern("rust_js"), sym::name]).next()?;
+    let attr = tcx
+        .get_attrs_by_path(def_id, &[Symbol::intern("rust_js"), sym::name])
+        .next()?;
     attr.value_str().map(|s| s.to_string())
 }
 
@@ -179,9 +181,12 @@ pub(super) fn variant_name(tcx: TyCtxt<'_>, variant: &VariantDef) -> String {
 /// `#![rust_js::camel_case]`: the crate's own functions and fields are
 /// camelCase in JS, as its variables are (ADR 0046).
 pub(super) fn camel_case_crate(tcx: TyCtxt<'_>) -> bool {
-    tcx.get_attrs_by_path(CRATE_DEF_ID.to_def_id(), &[Symbol::intern("rust_js"), Symbol::intern("camel_case")])
-        .next()
-        .is_some()
+    tcx.get_attrs_by_path(
+        CRATE_DEF_ID.to_def_id(),
+        &[Symbol::intern("rust_js"), Symbol::intern("camel_case")],
+    )
+    .next()
+    .is_some()
 }
 
 /// What an item of this crate is called in JS: its `#[rust_js::name]`, or

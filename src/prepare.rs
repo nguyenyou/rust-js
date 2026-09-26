@@ -369,7 +369,9 @@ fn position_independent(e: &Expr) -> bool {
         ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => true,
         ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null => true,
         ExprKind::Array(items) => items.iter().all(position_independent),
-        ExprKind::Object(props) => props.iter().all(|p| matches!(p, Prop::Field(_, e) if position_independent(e))),
+        ExprKind::Object(props) => props
+            .iter()
+            .all(|p| matches!(p, Prop::Field(_, e) if position_independent(e))),
         _ => false,
     }
 }

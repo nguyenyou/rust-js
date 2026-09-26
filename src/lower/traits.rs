@@ -15,9 +15,7 @@ use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 
 pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    id.is_local()
-        || tcx.is_lang_item(id, LangItem::Copy)
-        || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+    id.is_local() || tcx.is_lang_item(id, LangItem::Copy) || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
 
 pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
@@ -68,8 +66,7 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
                 {
                     let name = tcx.item_name(p.trait_ref.def_id).to_string();
                     if name == "__proto__" || !names.insert(name) {
-                        tcx.dcx()
-                            .span_err(span, "rust-js: supertrait dictionary names collide");
+                        tcx.dcx().span_err(span, "rust-js: supertrait dictionary names collide");
                         valid = false;
                     }
                 }
@@ -206,9 +203,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ),
             )]));
         }
-        let selected = self
-            .tcx
-            .codegen_select_candidate(self.typing_env.as_query_input(tr));
+        let selected = self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr));
         if let Ok(ImplSource::UserDefined(imp)) = selected
             && self.krate.trait_impls.contains(&imp.impl_def_id)
         {
@@ -219,12 +214,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Err(self.unsupported(span, &format!("implementation evidence for `{tr}`")))
     }
 
-    pub(super) fn evidence_args(
-        &mut self,
-        id: DefId,
-        args: ty::GenericArgsRef<'tcx>,
-        span: Span,
-    ) -> R<Vec<Expr>> {
+    pub(super) fn evidence_args(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
         bounds(self.tcx, id)
             .into_iter()
             .map(|bound| {
@@ -318,13 +308,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    pub(super) fn unsize_trait(
-        &mut self,
-        source: Ty<'tcx>,
-        target: Ty<'tcx>,
-        value: Expr,
-        span: Span,
-    ) -> R<Expr> {
+    pub(super) fn unsize_trait(&mut self, source: Ty<'tcx>, target: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
         if self.dynamic_trait(target).is_none() {
             return Ok(value);
         }
@@ -381,10 +365,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let dictionary = self.dictionary(predicate.trait_ref, span)?;
                 props.push(Prop::Field(
                     self.tcx.item_name(predicate.trait_ref.def_id).to_string(),
-                    Expr::arrow(
-                        Vec::new(),
-                        vec![StmtKind::Return(Some(dictionary)).at(js::Span::NONE)],
-                    ),
+                    Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(dictionary)).at(js::Span::NONE)]),
                 ));
             }
         }
@@ -405,9 +386,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
             let method = instance.def_id();
             if !self.krate.fns.contains_key(&method) {
-                return Err(
-                    self.unsupported(span, &format!("trait method `{}`", self.tcx.def_path_str(method)))
-                );
+                return Err(self.unsupported(span, &format!("trait method `{}`", self.tcx.def_path_str(method))));
             }
             if self.tcx.trait_of_assoc(method).is_some() {
                 let value = self.default_method(method, instance.args)?;
@@ -469,10 +448,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             );
             self.runtime.insert(Helper::TraitImpl);
             let keys = Expr::array(self.evidence.iter().map(|(_, value)| value.clone()).collect());
-            let make = Expr::arrow(
-                Vec::new(),
-                vec![StmtKind::Return(Some(object)).at(js::Span::NONE)],
-            );
+            let make = Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(object)).at(js::Span::NONE)]);
             body.push(
                 StmtKind::Return(Some(Expr::call(
                     Expr::var("$traitImpl"),

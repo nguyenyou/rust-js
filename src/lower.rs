@@ -13,8 +13,8 @@
 //! integer arithmetic wraps. Division by zero and `MIN / -1` still panic,
 //! because Rust panics on those in every profile.
 
-use std::collections::{HashMap, HashSet};
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rustc_ast::{LitKind, Mutability};
@@ -24,8 +24,7 @@ use rustc_hir::{BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, Coroutin
 use rustc_middle::middle::region;
 use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
-    self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind,
-    Thir,
+    self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind, Thir,
 };
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty, TyCtxt};
@@ -42,11 +41,13 @@ mod representation;
 mod stdlib;
 mod traits;
 
+use crate::runtime::Helper;
 pub use analysis::{collect_bodies, lower_crate};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
+use representation::{
+    Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, variant_field,
+};
 use stdlib::Std;
-use representation::{Num, is_fieldless_enum, eval_const, const_js, variant_field, ordering_value, char_value, num_literal};
-use crate::runtime::Helper;
 
 type R<T> = Result<T, ErrorGuaranteed>;
 
@@ -238,7 +239,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(self.tcx.def_span(def_id), "this kind of body"));
         };
         self.check_value_ty(sig.output(), self.tcx.def_span(def_id))?;
-        let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
+        let dest = if sig.output().is_unit() {
+            Dest::Discard
+        } else {
+            Dest::Return
+        };
         let is_async = self.lower_body(body.expr, &dest, &mut out)?;
 
         Ok(LoweredFn {
@@ -247,10 +252,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 params,
                 body: out,
                 export: self.tcx.visibility(def_id).is_public()
-                    && (self.tcx.def_kind(def_id) != rustc_hir::def::DefKind::AssocFn || self.tcx.inherent_impl_of_assoc(def_id).is_some()),
+                    && (self.tcx.def_kind(def_id) != rustc_hir::def::DefKind::AssocFn
+                        || self.tcx.inherent_impl_of_assoc(def_id).is_some()),
                 is_async,
                 span: self.js_span(self.tcx.def_span(def_id)),
-                name_span: self.tcx.def_ident_span(def_id).map_or(js::Span::NONE, |s| self.js_span(s)),
+                name_span: self
+                    .tcx
+                    .def_ident_span(def_id)
+                    .map_or(js::Span::NONE, |s| self.js_span(s)),
             },
             runtime: std::mem::take(&mut self.runtime),
             jsx: self.jsx,
@@ -266,13 +275,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.check_value_ty(param.ty, span)?;
             // `|&x|`: a reference is the value (ADR 0023), so the parameter is `x`.
             let mut inner = param.pat.as_deref();
-            while let Some(Pat { kind: PatKind::Deref { subpattern, .. }, .. }) = inner {
+            while let Some(Pat {
+                kind: PatKind::Deref { subpattern, .. },
+                ..
+            }) = inner
+            {
                 inner = Some(subpattern);
             }
             let binding = |p: &Pat<'tcx>| {
-                matches!(p.kind, PatKind::Binding { mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. })
+                matches!(
+                    p.kind,
+                    PatKind::Binding {
+                        mode: BindingMode(ByRef::No, Mutability::Not),
+                        subpattern: None,
+                        ..
+                    }
+                )
             };
-            let peeled = if inner.is_some_and(binding) { inner } else { param.pat.as_deref() };
+            let peeled = if inner.is_some_and(binding) {
+                inner
+            } else {
+                param.pat.as_deref()
+            };
             // `Props { initial, label }: Props` is `{ initial, label }`, as a
             // React component takes its props.
             if let Some(pat) = peeled
@@ -283,15 +307,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             let name = match peeled {
                 Some(pat) => match &pat.kind {
-                    PatKind::Binding { name, var, mode, subpattern: None, .. } => {
+                    PatKind::Binding {
+                        name,
+                        var,
+                        mode,
+                        subpattern: None,
+                        ..
+                    } => {
                         self.check_by_value(*mode, pat.ty, pat.span)?;
                         // `async fn f((a, b): ..)` takes `__arg0`, and takes it
                         // apart in its body (ADR 0029): named as in a plain `fn`.
-                        let generated = name.as_str().strip_prefix("__arg").is_some_and(|n| n.parse::<u32>().is_ok());
+                        let generated = name
+                            .as_str()
+                            .strip_prefix("__arg")
+                            .is_some_and(|n| n.parse::<u32>().is_ok());
                         // A method's `self` is named after its type, `counter`
                         // for a `Counter`, as a JS function of one would name it.
                         let receiver = match pat.ty.peel_refs().kind() {
-                            ty::Adt(adt, _) if name.as_str() == "self" => Some(lower_first(self.tcx.item_name(adt.did()).as_str())),
+                            ty::Adt(adt, _) if name.as_str() == "self" => {
+                                Some(lower_first(self.tcx.item_name(adt.did()).as_str()))
+                            }
                             _ => None,
                         };
                         let rust_name = match &receiver {
@@ -321,14 +356,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// variables, and says whether one is `mut`. `None`, binding nothing, if a
     /// part is anything else, or needs a copy of its own (ADR 0020).
     fn js_pattern(&mut self, pat: &Pat<'tcx>) -> Option<(js::Pattern, bool)> {
-        let PatKind::Leaf { subpatterns } = &pat.kind else { return None };
+        let PatKind::Leaf { subpatterns } = &pat.kind else {
+            return None;
+        };
         let parts: Vec<_> = subpatterns
             .iter()
             .map(|field| match field.pattern.kind {
                 PatKind::Wild => Some((field.field.as_usize(), None)),
-                PatKind::Binding { name, var, mode: BindingMode(ByRef::No, mutability), subpattern: None, ty, .. }
-                    if self.unsupported_part(ty).is_none() && !(self.contains_mutated(ty) && self.is_copy(ty)) =>
-                {
+                PatKind::Binding {
+                    name,
+                    var,
+                    mode: BindingMode(ByRef::No, mutability),
+                    subpattern: None,
+                    ty,
+                    ..
+                } if self.unsupported_part(ty).is_none() && !(self.contains_mutated(ty) && self.is_copy(ty)) => {
                     Some((field.field.as_usize(), Some((name, var, mutability == Mutability::Mut))))
                 }
                 _ => None,
@@ -350,7 +392,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Shape::Object(fields) => js::Pattern::Object(
                 parts
                     .into_iter()
-                    .filter_map(|(i, part)| part.map(|(name, var, m)| (fields[i].0.clone(), self.bind(var, name.as_str(), m))))
+                    .filter_map(|(i, part)| {
+                        part.map(|(name, var, m)| (fields[i].0.clone(), self.bind(var, name.as_str(), m)))
+                    })
                     .collect(),
             ),
             Shape::Other => return None,
@@ -365,11 +409,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let expr = &self.thir[e];
         // A unit value carries no information, and a never value never
         // arrives. Either way, there is nothing to deliver.
-        let dest = if expr.ty.is_unit() || expr.ty.is_never() { &Dest::Discard } else { dest };
+        let dest = if expr.ty.is_unit() || expr.ty.is_never() {
+            &Dest::Discard
+        } else {
+            dest
+        };
         let span = self.js_span(expr.span);
 
         match expr.kind {
-            ExprKind::Scope { value, hir_id, region_scope } => {
+            ExprKind::Scope {
+                value,
+                hir_id,
+                region_scope,
+            } => {
                 if let ExprKind::Loop { body } = self.thir[value].kind {
                     self.lower_loop(region_scope, hir_id, body, dest, span, out)
                 } else {
@@ -381,13 +433,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.stmt(source, dest, out),
             ExprKind::Block { block } => self.block(block, dest, out),
-            ExprKind::If { cond, then, else_opt, .. } if let Some(parts) = self.let_chain(cond) => {
-                self.lower_let_chain(parts, then, else_opt, dest, span, out)
-            }
-            ExprKind::If { cond, then, else_opt, .. } => {
+            ExprKind::If {
+                cond, then, else_opt, ..
+            } if let Some(parts) = self.let_chain(cond) => self.lower_let_chain(parts, then, else_opt, dest, span, out),
+            ExprKind::If {
+                cond, then, else_opt, ..
+            } => {
                 let mut then_out = Vec::new();
                 let cond = match self.thir[self.strip(cond)].kind {
-                    ExprKind::Let { expr: scrutinee, ref pat } => self.if_let(scrutinee, pat, &mut then_out, out)?,
+                    ExprKind::Let {
+                        expr: scrutinee,
+                        ref pat,
+                    } => self.if_let(scrutinee, pat, &mut then_out, out)?,
                     _ => self.expr(cond, out)?,
                 };
                 self.stmt(then, dest, &mut then_out)?;
@@ -403,9 +460,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             ExprKind::Match { .. } if let Some(for_loop) = self.as_for(e) => self.lower_for(for_loop, span, out),
-            ExprKind::Match { scrutinee, ref arms, .. }
-                if self.as_await(e).is_none() && self.as_question(e).is_none() && !self.is_matches(arms) =>
-            {
+            ExprKind::Match {
+                scrutinee, ref arms, ..
+            } if self.as_await(e).is_none() && self.as_question(e).is_none() && !self.is_matches(arms) => {
                 self.lower_match(scrutinee, arms, dest, out)
             }
             ExprKind::Return { value } => {
@@ -460,7 +517,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
                 let known = self.known_int(rhs);
-                let value = self.binary(assign_op(op), current, rhs_js, known, ty, expr.span)?.or_at(span);
+                let value = self
+                    .binary(assign_op(op), current, rhs_js, known, ty, expr.span)?
+                    .or_at(span);
                 out.push(StmtKind::Assign(target, value).at(span));
                 Ok(())
             }
@@ -501,7 +560,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for &stmt in &block.stmts {
             match &self.thir[stmt].kind {
                 thir::StmtKind::Expr { expr, .. } => self.stmt(*expr, &Dest::Discard, out)?,
-                thir::StmtKind::Let { pattern, initializer, else_block, span, .. } => {
+                thir::StmtKind::Let {
+                    pattern,
+                    initializer,
+                    else_block,
+                    span,
+                    ..
+                } => {
                     if else_block.is_some() {
                         return Err(self.unsupported(*span, "`let ... else`"));
                     }
@@ -512,13 +577,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
-    fn lower_let(
-        &mut self,
-        pat: &Pat<'tcx>,
-        init: Option<ExprId>,
-        span: Span,
-        out: &mut Vec<Stmt>,
-    ) -> R<()> {
+    fn lower_let(&mut self, pat: &Pat<'tcx>, init: Option<ExprId>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
         // `async fn f(x)` moves `x` into its body with `let x = x;` (ADR 0029).
         // In JS the body is the function's, so they're one variable.
         // `format_args!` holds its values in `super let args = (&a, &b);`, then
@@ -526,40 +585,81 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Both are only read from, so they name their parts where they are:
         // `format!("{} ms", t)` is `t + " ms"`, with no arrays in between.
         if self.in_format_args(span)
-            && let PatKind::Binding { var, mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. } = pat.kind
+            && let PatKind::Binding {
+                var,
+                mode: BindingMode(ByRef::No, Mutability::Not),
+                subpattern: None,
+                ..
+            } = pat.kind
             && let Some(init) = init
         {
             let parts = match self.thir[self.strip(init)].kind {
                 ExprKind::Tuple { ref fields } => self.tuple_parts(fields, "arg", true, out)?,
                 _ => self.expr(init, out)?,
             };
-            self.vars.insert(var, Var { place: parts, mutable: false, depth: self.loops.len() });
+            self.vars.insert(
+                var,
+                Var {
+                    place: parts,
+                    mutable: false,
+                    depth: self.loops.len(),
+                },
+            );
             return Ok(());
         }
         // `let a = f()?;` on an option: the value is `a` itself, so it's kept
         // under that name: `const a = f(); if (a == null) { return undefined; }`.
-        if let PatKind::Binding { name, var, mode: BindingMode(ByRef::No, Mutability::Not), subpattern: None, .. } = pat.kind
+        if let PatKind::Binding {
+            name,
+            var,
+            mode: BindingMode(ByRef::No, Mutability::Not),
+            subpattern: None,
+            ..
+        } = pat.kind
             && let Some(init) = init
             && let Some(tried) = self.as_question(init)
             && self.option_of(self.thir[tried].ty).is_some()
         {
             let value = self.question(init, tried, Some(name.as_str()), out)?;
-            self.vars.insert(var, Var { place: value, mutable: false, depth: self.loops.len() });
+            self.vars.insert(
+                var,
+                Var {
+                    place: value,
+                    mutable: false,
+                    depth: self.loops.len(),
+                },
+            );
             return Ok(());
         }
         if span.is_desugaring(DesugaringKind::Async)
-            && let PatKind::Binding { var, mode: BindingMode(ByRef::No, mutability), subpattern: None, .. } = pat.kind
+            && let PatKind::Binding {
+                var,
+                mode: BindingMode(ByRef::No, mutability),
+                subpattern: None,
+                ..
+            } = pat.kind
             && let Some(init) = init
             && let ExprKind::UpvarRef { var_hir_id, .. } = self.thir[self.strip(init)].kind
             && let Some(outer) = self.vars.get(&var_hir_id)
         {
-            let alias = Var { place: outer.place.clone(), mutable: mutability == Mutability::Mut, depth: outer.depth };
+            let alias = Var {
+                place: outer.place.clone(),
+                mutable: mutability == Mutability::Mut,
+                depth: outer.depth,
+            };
             self.vars.insert(var, alias);
             return Ok(());
         }
         let span = self.js_span(span);
         match &pat.kind {
-            PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
+            PatKind::Binding {
+                name,
+                var,
+                mode,
+                subpattern: None,
+                ty,
+                ..
+            } => {
                 self.check_by_value(*mode, *ty, pat.span)?;
                 self.check_value_ty(*ty, pat.span)?;
                 let mutable = mode.1 == Mutability::Mut;
@@ -570,7 +670,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Some(init) if self.is_simple(init) || !self.is_control_flow(init) => {
                         let value = self.expr(init, out)?;
                         let name = self.bind(*var, name.as_str(), mutable);
-                        let kind = if mutable { StmtKind::Let(name, Some(value)) } else { StmtKind::Const(name, value) };
+                        let kind = if mutable {
+                            StmtKind::Let(name, Some(value))
+                        } else {
+                            StmtKind::Const(name, value)
+                        };
                         out.push(kind.at(span));
                     }
                     Some(init) => {
@@ -600,7 +704,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if self.place(init).is_none() && !self.is_control_flow(init) {
                     let value = self.expr(init, out)?;
                     if let Some((pattern, mutable)) = self.js_pattern(pat) {
-                        out.push(StmtKind::Destructure { pattern, value, mutable }.at(span));
+                        out.push(
+                            StmtKind::Destructure {
+                                pattern,
+                                value,
+                                mutable,
+                            }
+                            .at(span),
+                        );
                         return Ok(());
                     }
                     let subject = self.spill("tmp", value, out);
@@ -634,7 +745,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok((place, true));
         }
         // `&x`: a reference is the value (ADR 0023), and a borrowed `x` stays put.
-        if let ExprKind::Borrow { borrow_kind: BorrowKind::Shared, arg } = self.thir[self.strip(e)].kind
+        if let ExprKind::Borrow {
+            borrow_kind: BorrowKind::Shared,
+            arg,
+        } = self.thir[self.strip(e)].kind
             && let Some(place) = self.stable_place(arg)
         {
             return Ok((place, true));
@@ -666,7 +780,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some(place) => place,
                 None => {
                     let value = self.expr(f, out)?;
-                    if value.is_constant() || (used_once && !value.has_effects()) { value } else { self.spill(base, value, out) }
+                    if value.is_constant() || (used_once && !value.has_effects()) {
+                        value
+                    } else {
+                        self.spill(base, value, out)
+                    }
                 }
             };
             parts.push(part);
@@ -686,12 +804,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
         for b in bindings {
             if stable && !b.mutable {
-                self.vars.insert(b.var, Var { place: b.place, mutable: false, depth: self.loops.len() });
+                self.vars.insert(
+                    b.var,
+                    Var {
+                        place: b.place,
+                        mutable: false,
+                        depth: self.loops.len(),
+                    },
+                );
                 continue;
             }
             let value = self.copy_if_needed(b.place, b.ty).or_at(span);
             let name = self.bind(b.var, &b.name, b.mutable);
-            let kind = if b.mutable { StmtKind::Let(name, Some(value)) } else { StmtKind::Const(name, value) };
+            let kind = if b.mutable {
+                StmtKind::Let(name, Some(value))
+            } else {
+                StmtKind::Const(name, value)
+            };
             out.push(kind.at(span));
         }
     }
@@ -709,7 +838,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             hir::ExprKind::Loop(_, Some(label), ..) => label.ident.name.as_str().trim_start_matches('\'').to_string(),
             _ => "loop".to_string(),
         };
-        self.loops.push(Loop { scope, label_base, label: None, dest: dest.clone() });
+        self.loops.push(Loop {
+            scope,
+            label_base,
+            label: None,
+            dest: dest.clone(),
+        });
 
         let mut body_out = Vec::new();
         // `while c { .. }` reaches us desugared as `loop { if c { .. } else { break } }`.
@@ -727,7 +861,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
 
         let label = self.loops.pop().unwrap().label;
-        out.push(StmtKind::While { label, cond, body: body_out }.at(span));
+        out.push(
+            StmtKind::While {
+                label,
+                cond,
+                body: body_out,
+            }
+            .at(span),
+        );
         Ok(())
     }
 
@@ -749,21 +890,56 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => None,
         };
-        let ExprKind::Match { scrutinee, ref arms, .. } = thir[strip(thir, e)].kind else { return None };
+        let ExprKind::Match {
+            scrutinee, ref arms, ..
+        } = thir[strip(thir, e)].kind
+        else {
+            return None;
+        };
         let head = is_call_to(scrutinee, LangItem::IntoIterIntoIter)?;
         let [arm] = &arms[..] else { return None };
-        let ExprKind::Scope { value, region_scope, hir_id } = thir[thir[*arm].body].kind else { return None };
-        let ExprKind::Loop { body } = thir[value].kind else { return None };
-        let ExprKind::Block { block } = thir[strip(thir, body)].kind else { return None };
-        let ([stmt], None) = (&*thir[block].stmts, thir[block].expr) else { return None };
-        let thir::StmtKind::Expr { expr, .. } = thir[*stmt].kind else { return None };
-        let ExprKind::Match { scrutinee: next, ref arms, .. } = thir[strip(thir, expr)].kind else { return None };
+        let ExprKind::Scope {
+            value,
+            region_scope,
+            hir_id,
+        } = thir[thir[*arm].body].kind
+        else {
+            return None;
+        };
+        let ExprKind::Loop { body } = thir[value].kind else {
+            return None;
+        };
+        let ExprKind::Block { block } = thir[strip(thir, body)].kind else {
+            return None;
+        };
+        let ([stmt], None) = (&*thir[block].stmts, thir[block].expr) else {
+            return None;
+        };
+        let thir::StmtKind::Expr { expr, .. } = thir[*stmt].kind else {
+            return None;
+        };
+        let ExprKind::Match {
+            scrutinee: next,
+            ref arms,
+            ..
+        } = thir[strip(thir, expr)].kind
+        else {
+            return None;
+        };
         is_call_to(next, LangItem::IteratorNext)?;
         let some = arms.iter().find_map(|&a| match &thir[a].pattern.kind {
-            PatKind::Variant { subpatterns, .. } if subpatterns.len() == 1 => Some((&subpatterns[0].pattern, thir[a].body)),
+            PatKind::Variant { subpatterns, .. } if subpatterns.len() == 1 => {
+                Some((&subpatterns[0].pattern, thir[a].body))
+            }
             _ => None,
         })?;
-        Some(ForLoop { head, pat: some.0, body: some.1, scope: region_scope, hir_id })
+        Some(ForLoop {
+            head,
+            pat: some.0,
+            body: some.1,
+            scope: region_scope,
+            hir_id,
+        })
     }
 
     /// Recognize `.await`'s desugaring, and return what's awaited (ADR 0029):
@@ -775,9 +951,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// ```
     fn as_await(&self, e: ExprId) -> Option<ExprId> {
         let thir = self.thir;
-        let ExprKind::Match { scrutinee, ref arms, .. } = thir[strip(thir, e)].kind else { return None };
-        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else { return None };
-        let &ty::FnDef(into_future, _) = thir[strip(thir, fun)].ty.kind() else { return None };
+        let ExprKind::Match {
+            scrutinee, ref arms, ..
+        } = thir[strip(thir, e)].kind
+        else {
+            return None;
+        };
+        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else {
+            return None;
+        };
+        let &ty::FnDef(into_future, _) = thir[strip(thir, fun)].ty.kind() else {
+            return None;
+        };
         let [arm] = &arms[..] else { return None };
         let is_loop = matches!(thir[strip(thir, thir[*arm].body)].kind, ExprKind::Loop { .. })
             || matches!(thir[thir[*arm].body].kind, ExprKind::Scope { value, .. } if matches!(thir[value].kind, ExprKind::Loop { .. }));
@@ -800,8 +985,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ExprKind::Adt(ref adt) = self.thir[self.strip(f.head)].kind else {
                 return Err(self.unsupported(head_span, "this range"));
             };
-            let bound = |i: usize| adt.fields.iter().find(|field| field.name.as_usize() == i).map(|field| field.expr);
-            let (Some(start), Some(end)) = (bound(0), bound(1)) else { unreachable!("a range has a start and an end") };
+            let bound = |i: usize| {
+                adt.fields
+                    .iter()
+                    .find(|field| field.name.as_usize() == i)
+                    .map(|field| field.expr)
+            };
+            let (Some(start), Some(end)) = (bound(0), bound(1)) else {
+                unreachable!("a range has a start and an end")
+            };
             self.num(self.thir[start].ty, head_span)?;
             let [start_js, end_js] = self.operands(&[start, end], out)?.try_into().ok().unwrap();
             // Rust works out the end once; JS would test it again each time round.
@@ -832,9 +1024,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // immutable binding, else a fresh one that the body takes apart.
         let mut body = Vec::new();
         let name = match &f.pat.kind {
-            PatKind::Binding { name, var, mode, subpattern: None, ty, .. }
-                if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) =>
-            {
+            PatKind::Binding {
+                name,
+                var,
+                mode,
+                subpattern: None,
+                ty,
+                ..
+            } if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) => {
                 self.check_value_ty(*ty, f.pat.span)?;
                 self.bind(*var, name.as_str(), false)
             }
@@ -845,47 +1042,74 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         };
 
-        self.loops.push(Loop { scope: f.scope, label_base, label: None, dest: Dest::Discard });
+        self.loops.push(Loop {
+            scope: f.scope,
+            label_base,
+            label: None,
+            dest: Dest::Discard,
+        });
         self.stmt(f.body, &Dest::Discard, &mut body)?;
         let label = self.loops.pop().unwrap().label;
-        out.push(match (iterable, start_end) {
-            (Some(iterable), _) => StmtKind::ForOf { label, name, iterable, body },
-            (None, Some((start, end))) => {
-                let test = Expr::bin(Op::Lt, Expr::var(&name), end);
-                StmtKind::For { label, name, start, test, body }
+        out.push(
+            match (iterable, start_end) {
+                (Some(iterable), _) => StmtKind::ForOf {
+                    label,
+                    name,
+                    iterable,
+                    body,
+                },
+                (None, Some((start, end))) => {
+                    let test = Expr::bin(Op::Lt, Expr::var(&name), end);
+                    StmtKind::For {
+                        label,
+                        name,
+                        start,
+                        test,
+                        body,
+                    }
+                }
+                (None, None) => unreachable!("a range or a sequence"),
             }
-            (None, None) => unreachable!("a range or a sequence"),
-        }
-        .at(span));
+            .at(span),
+        );
         Ok(())
     }
 
     /// Recognize the `while` desugaring; returns `(cond, body)`.
     fn as_while(&self, body: ExprId, scope: region::Scope) -> Option<(ExprId, ExprId)> {
-        let ExprKind::Block { block } = self.thir[self.strip(body)].kind else { return None };
+        let ExprKind::Block { block } = self.thir[self.strip(body)].kind else {
+            return None;
+        };
         let block = &self.thir[block];
-        let (true, Some(tail)) = (block.stmts.is_empty(), block.expr) else { return None };
-        let ExprKind::If { cond, then, else_opt: Some(els), .. } = self.thir[self.strip(tail)].kind
+        let (true, Some(tail)) = (block.stmts.is_empty(), block.expr) else {
+            return None;
+        };
+        let ExprKind::If {
+            cond,
+            then,
+            else_opt: Some(els),
+            ..
+        } = self.thir[self.strip(tail)].kind
         else {
             return None;
         };
-        let ExprKind::Block { block: els } = self.thir[self.strip(els)].kind else { return None };
+        let ExprKind::Block { block: els } = self.thir[self.strip(els)].kind else {
+            return None;
+        };
         let els = &self.thir[els];
-        let ([stmt], None) = (&*els.stmts, els.expr) else { return None };
-        let thir::StmtKind::Expr { expr, .. } = self.thir[*stmt].kind else { return None };
+        let ([stmt], None) = (&*els.stmts, els.expr) else {
+            return None;
+        };
+        let thir::StmtKind::Expr { expr, .. } = self.thir[*stmt].kind else {
+            return None;
+        };
         let ExprKind::Break { label, value: None } = self.thir[self.strip(expr)].kind else {
             return None;
         };
         (label == scope && self.is_simple(cond)).then_some((cond, then))
     }
 
-    fn lower_match(
-        &mut self,
-        scrutinee: ExprId,
-        arms: &[ArmId],
-        dest: &Dest,
-        out: &mut Vec<Stmt>,
-    ) -> R<()> {
+    fn lower_match(&mut self, scrutinee: ExprId, arms: &[ArmId], dest: &Dest, out: &mut Vec<Stmt>) -> R<()> {
         // Evaluate the scrutinee once, unless it's a place that can be
         // tested where it is.
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
@@ -948,7 +1172,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         fn parts(cx: &FnCx<'_, '_>, e: ExprId, found: &mut Vec<ExprId>) {
             let e = cx.strip(e);
             match cx.thir[e].kind {
-                ExprKind::LogicalOp { op: LogicalOp::And, lhs, rhs } => {
+                ExprKind::LogicalOp {
+                    op: LogicalOp::And,
+                    lhs,
+                    rhs,
+                } => {
                     parts(cx, lhs, found);
                     parts(cx, rhs, found);
                 }
@@ -1018,7 +1246,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let single = levels.len() == 1;
         let mut body = then_out;
         for (before, tests, bindings) in levels.into_iter().rev() {
-            let test = tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)).unwrap_or_else(|| Expr::bool(true));
+            let test = tests
+                .into_iter()
+                .reduce(|a, b| Expr::bin(Op::And, a, b))
+                .unwrap_or_else(|| Expr::bool(true));
             let mut inner = bindings;
             inner.extend(body);
             let els = if single { else_out.take() } else { None };
@@ -1056,9 +1287,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// The shape `as_matches` takes: `pat => true, _ => false`.
     fn is_matches(&self, arms: &[ArmId]) -> bool {
-        let is_bool = |arm: ArmId, want: bool| {
-            matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want))
-        };
+        let is_bool = |arm: ArmId, want: bool| matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want));
         matches!(arms, &[first, rest] if is_bool(first, true) && is_bool(rest, false)
             && matches!(self.thir[rest].pattern.kind, PatKind::Wild) && self.thir[rest].guard.is_none())
     }
@@ -1067,11 +1296,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// just the test, `x.TAG === "Circle"`, when the pattern binds nothing
     /// the guard can't read where it is.
     fn as_matches(&mut self, scrutinee: ExprId, arms: &[ArmId], out: &mut Vec<Stmt>) -> R<Option<Expr>> {
-        let is_bool = |arm: ArmId, want: bool| {
-            matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want))
-        };
+        let is_bool = |arm: ArmId, want: bool| matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want));
         let &[first, rest] = arms else { return Ok(None) };
-        if !is_bool(first, true) || !is_bool(rest, false) || !matches!(self.thir[rest].pattern.kind, PatKind::Wild) || self.thir[rest].guard.is_some() {
+        if !is_bool(first, true)
+            || !is_bool(rest, false)
+            || !matches!(self.thir[rest].pattern.kind, PatKind::Wild)
+            || self.thir[rest].guard.is_some()
+        {
             return Ok(None);
         }
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
@@ -1096,15 +1327,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// A JS boolean test for "`subject` matches `pat`" (`None`: always matches).
-    fn pattern_test(
-        &mut self,
-        pat: &Pat<'tcx>,
-        subject: &Expr,
-        bindings: &mut Vec<Binding<'tcx>>,
-    ) -> R<Option<Expr>> {
+    fn pattern_test(&mut self, pat: &Pat<'tcx>, subject: &Expr, bindings: &mut Vec<Binding<'tcx>>) -> R<Option<Expr>> {
         match &pat.kind {
             PatKind::Wild => Ok(None),
-            PatKind::Binding { name, var, mode, subpattern: None, ty, .. } => {
+            PatKind::Binding {
+                name,
+                var,
+                mode,
+                subpattern: None,
+                ty,
+                ..
+            } => {
                 self.check_by_value(*mode, *ty, pat.span)?;
                 bindings.push(Binding {
                     var: *var,
@@ -1122,11 +1355,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // `Some(p)`: not `null` or `undefined`, and the value itself matches `p`.
             // A constant needs no `!= null`: `o === 0` already says it. So does
             // one through a reference, like every string literal: `o === "a"`.
-            PatKind::Variant { adt_def, variant_index, subpatterns, .. } if self.tcx.is_lang_item(adt_def.did(), LangItem::Option) => {
+            PatKind::Variant {
+                adt_def,
+                variant_index,
+                subpatterns,
+                ..
+            } if self.tcx.is_lang_item(adt_def.did(), LangItem::Option) => {
                 let Some(field) = subpatterns.first() else {
                     return Ok(Some(Expr::bin(Op::LooseEq, subject.clone(), Expr::null())));
                 };
-                debug_assert!(self.tcx.is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome));
+                debug_assert!(
+                    self.tcx
+                        .is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome)
+                );
                 let inner = self.pattern_test(&field.pattern, subject, bindings)?;
                 let present = Expr::bin(Op::LooseNe, subject.clone(), Expr::null());
                 let mut value = &field.pattern;
@@ -1141,7 +1382,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A variant (ADR 0013, 0033): its name, or its `TAG`, then its fields.
             // An enum with one variant needs no test.
-            PatKind::Variant { adt_def, variant_index, subpatterns, .. } => {
+            PatKind::Variant {
+                adt_def,
+                variant_index,
+                subpatterns,
+                ..
+            } => {
                 let variant = adt_def.variant(*variant_index);
                 if let Some(n) = ordering_value(self.tcx, adt_def.did(), variant.name) {
                     return Ok(Some(Expr::bin(Op::Eq, subject.clone(), Expr::int(n))));
@@ -1155,7 +1401,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     });
                 }
                 for field in subpatterns {
-                    let part = Expr::member(subject.clone(), variant_field(self.tcx, variant, field.field.as_usize()));
+                    let part = Expr::member(
+                        subject.clone(),
+                        variant_field(self.tcx, variant, field.field.as_usize()),
+                    );
                     tests.extend(self.pattern_test(&field.pattern, &part, bindings)?);
                 }
                 Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
@@ -1235,17 +1484,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::StaticRef { .. } => self.read(e, out),
             // A shared reference is the value it points to (ADR 0023): JS
             // shares objects anyway, and nothing can change through it.
-            ExprKind::Borrow { borrow_kind: BorrowKind::Shared, arg } => match self.place(arg) {
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Shared,
+                arg,
+            } => match self.place(arg) {
                 Some((place, _)) => Ok(place),
                 None => self.expr(arg, out),
             },
             // `&mut` to a JS object is the object (ADR 0025).
-            ExprKind::Borrow { borrow_kind: BorrowKind::Mut { .. }, arg } if self.is_object(self.thir[arg].ty) => {
-                match self.place(arg) {
-                    Some((place, _)) => Ok(place),
-                    None => self.expr(arg, out),
-                }
-            }
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Mut { .. },
+                arg,
+            } if self.is_object(self.thir[arg].ty) => match self.place(arg) {
+                Some((place, _)) => Ok(place),
+                None => self.expr(arg, out),
+            },
             ExprKind::Borrow { arg, .. } => {
                 Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
             }
@@ -1256,30 +1509,60 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(self.copy_if_needed(Expr::call(Expr::var("$index"), values), ty))
             }
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
-            ExprKind::PointerCoercion { cast: PointerCoercion::Unsize, source, .. } => {
+            ExprKind::PointerCoercion {
+                cast: PointerCoercion::Unsize,
+                source,
+                ..
+            } => {
                 let value = self.expr(source, out)?;
                 self.unsize_trait(self.thir[source].ty, ty, value, span)
             }
-            ExprKind::PointerCoercion { cast: PointerCoercion::ReifyFnPointer(_), source, .. } => {
-                self.expr(source, out)
-            }
+            ExprKind::PointerCoercion {
+                cast: PointerCoercion::ReifyFnPointer(_),
+                source,
+                ..
+            } => self.expr(source, out),
             // A function as a value, `component(Card, props)`: its JS name.
-            ExprKind::ZstLiteral { .. } if let &ty::FnDef(def_id, args) = ty.kind() && self.krate.fns.contains_key(&def_id) => {
+            ExprKind::ZstLiteral { .. }
+                if let &ty::FnDef(def_id, args) = ty.kind()
+                    && self.krate.fns.contains_key(&def_id) =>
+            {
                 if self.tcx.trait_of_assoc(def_id).is_some() {
-                    let count = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder().inputs().len();
+                    let count = self
+                        .tcx
+                        .fn_sig(def_id)
+                        .instantiate(self.tcx, args)
+                        .skip_binder()
+                        .inputs()
+                        .len();
                     let params: Vec<String> = (0..count).map(|i| self.fresh(&format!("arg{i}"))).collect();
                     let values = params.iter().map(|name| Expr::var(name)).collect();
-                    let call = self.trait_call(def_id, args, values, span)?
+                    let call = self
+                        .trait_call(def_id, args, values, span)?
                         .ok_or_else(|| self.unsupported(span, "this trait function value"))?;
-                    return Ok(Expr::arrow(params.into_iter().map(Into::into).collect(), vec![StmtKind::Return(Some(call)).at(js_span)]));
+                    return Ok(Expr::arrow(
+                        params.into_iter().map(Into::into).collect(),
+                        vec![StmtKind::Return(Some(call)).at(js_span)],
+                    ));
                 }
                 let callee = self.fn_ref(def_id);
                 let evidence = self.evidence_args(def_id, args, span)?;
-                if evidence.is_empty() { Ok(callee) } else {
-                    let count = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder().inputs().len();
+                if evidence.is_empty() {
+                    Ok(callee)
+                } else {
+                    let count = self
+                        .tcx
+                        .fn_sig(def_id)
+                        .instantiate(self.tcx, args)
+                        .skip_binder()
+                        .inputs()
+                        .len();
                     let params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
                     let values = params.iter().map(|name| Expr::var(name)).chain(evidence).collect();
-                    Ok(Expr::arrow(params.into_iter().map(Into::into).collect(), vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js_span)]))
+                    Ok(Expr::arrow(
+                        params.into_iter().map(Into::into).collect(),
+                        vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js_span)],
+                    ))
                 }
             }
             ExprKind::ZstLiteral { .. } if let Some(Std::MaxOf(max)) = self.std_fn(e) => {
@@ -1326,12 +1609,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
-            ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => Ok(Expr::await_(self.expr(awaited, out)?)),
+            ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => {
+                Ok(Expr::await_(self.expr(awaited, out)?))
+            }
             ExprKind::Match { .. } if let Some(tried) = self.as_question(e) => self.question(e, tried, None, out),
-            ExprKind::Match { scrutinee, ref arms, .. } if let Some(test) = self.as_matches(scrutinee, arms, out)? => Ok(test),
-            ExprKind::If { cond, then, else_opt: Some(els), .. }
-                if self.is_simple(then) && self.is_simple(els) && self.let_chain(cond).is_none() =>
-            {
+            ExprKind::Match {
+                scrutinee, ref arms, ..
+            } if let Some(test) = self.as_matches(scrutinee, arms, out)? => Ok(test),
+            ExprKind::If {
+                cond,
+                then,
+                else_opt: Some(els),
+                ..
+            } if self.is_simple(then) && self.is_simple(els) && self.let_chain(cond).is_none() => {
                 let c = self.expr(cond, out)?;
                 let t = self.expr(then, out)?;
                 let f = self.expr(els, out)?;
@@ -1373,7 +1663,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // So are places that are borrowed: nothing can change or reassign
             // them until the call, not even the later operands (`v.push(f(v.len()))`
             // is a borrow error, and `&mut v` a two-phase borrow).
-            let borrowed = matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. } if self.place(arg).is_some());
+            let borrowed =
+                matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. } if self.place(arg).is_some());
             let settled = v.is_constant()
                 || borrowed
                 || self.stable_place(self.strip_refs(e)).is_some()
@@ -1392,10 +1683,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Does calling `fun` become an assignment statement?
     fn is_assignment_call(&self, fun: ExprId) -> bool {
-        if matches!(self.std_fn(fun), Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr)) {
+        if matches!(
+            self.std_fn(fun),
+            Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr)
+        ) {
             return true;
         }
-        let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else { return false };
+        let &ty::FnDef(def_id, _) = self.thir[self.strip(fun)].ty.kind() else {
+            return false;
+        };
         is_binding(self.tcx, def_id) && matches!(js_form(self.tcx, def_id), JsForm::Set(_))
     }
 
@@ -1435,7 +1731,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => self.is_simple(awaited),
             // Its body's statements go inside the arrow; only snapshots come first.
             ExprKind::Closure(ref closure) => closure.upvars.iter().all(|&u| !self.needs_snapshot(u)),
-            ExprKind::Tuple { ref fields } | ExprKind::Array { ref fields } => fields.iter().all(|&f| self.is_simple(f)),
+            ExprKind::Tuple { ref fields } | ExprKind::Array { ref fields } => {
+                fields.iter().all(|&f| self.is_simple(f))
+            }
             ExprKind::Adt(ref adt) => {
                 let base_simple = match &adt.base {
                     AdtExprBase::Base(fru) => self.is_simple(fru.base),
@@ -1451,18 +1749,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `cell.set(v)` and JS property setters are assignment statements.
             ExprKind::Call { fun, ref args, .. } => {
-                !self.is_assignment_call(fun)
-                    && self.is_simple(fun)
-                    && args.iter().all(|&a| self.is_simple(a))
+                !self.is_assignment_call(fun) && self.is_simple(fun) && args.iter().all(|&a| self.is_simple(a))
             }
-            ExprKind::If { cond, then, else_opt: Some(els), .. } => {
-                self.is_simple(cond) && self.is_simple(then) && self.is_simple(els)
-            }
+            ExprKind::If {
+                cond,
+                then,
+                else_opt: Some(els),
+                ..
+            } => self.is_simple(cond) && self.is_simple(then) && self.is_simple(els),
             ExprKind::Block { block } => {
                 let block = &self.thir[block];
-                !block.targeted_by_break
-                    && block.stmts.is_empty()
-                    && block.expr.is_none_or(|t| self.is_simple(t))
+                !block.targeted_by_break && block.stmts.is_empty() && block.expr.is_none_or(|t| self.is_simple(t))
             }
             _ => false,
         }
@@ -1490,8 +1787,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // `&`, `|`, `^` on bools evaluate both sides and give a bool.
             return match op {
                 BinOp::BitXor => Ok(Expr::bin(Op::Ne, l, r)),
-                BinOp::BitAnd => Ok(Expr::unary(UnaryOp::Not, Expr::unary(UnaryOp::Not, Expr::bin(Op::BitAnd, l, r)))),
-                BinOp::BitOr => Ok(Expr::unary(UnaryOp::Not, Expr::unary(UnaryOp::Not, Expr::bin(Op::BitOr, l, r)))),
+                BinOp::BitAnd => Ok(Expr::unary(
+                    UnaryOp::Not,
+                    Expr::unary(UnaryOp::Not, Expr::bin(Op::BitAnd, l, r)),
+                )),
+                BinOp::BitOr => Ok(Expr::unary(
+                    UnaryOp::Not,
+                    Expr::unary(UnaryOp::Not, Expr::bin(Op::BitOr, l, r)),
+                )),
                 _ => Err(self.unsupported(span, "this operator on `bool`")),
             };
         }
@@ -1525,7 +1828,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => (Op::Rem, Helper::Rem, "$rem"),
                 };
                 // A literal divisor that can't panic stays inline: `a / 3 | 0`.
-                let safe = known.or_else(|| r.as_int()).is_some_and(|d| d != 0 && !(num.signed() && d == -1));
+                let safe = known
+                    .or_else(|| r.as_int())
+                    .is_some_and(|d| d != 0 && !(num.signed() && d == -1));
                 let quotient = if safe {
                     Expr::bin(js_op, l, r)
                 } else {
@@ -1537,7 +1842,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Expr::call(Expr::var(name), args)
                 };
                 // The remainder of in-range integers is already in range.
-                if op == BinOp::Rem && safe { quotient } else { num.wrap(quotient) }
+                if op == BinOp::Rem && safe {
+                    quotient
+                } else {
+                    num.wrap(quotient)
+                }
             }
             BinOp::BitAnd => self.bitwise(Op::BitAnd, l, r, num),
             BinOp::BitOr => self.bitwise(Op::BitOr, l, r, num),
@@ -1618,7 +1927,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(Expr::int(if neg { -n } else { n }))
             }
             LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F64) => {
-                let x: f64 = sym.as_str().replace('_', "").parse().expect("rustc validated the literal");
+                let x: f64 = sym
+                    .as_str()
+                    .replace('_', "")
+                    .parse()
+                    .expect("rustc validated the literal");
                 Ok(Expr::num(if neg { -x } else { x }))
             }
             _ => Err(self.unsupported(span, "this literal")),
@@ -1636,7 +1949,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // reference's valtree is its pointee's, so rustc reads the bytes as a
         // `&str`'s. It's a JS string (ADR 0034): `===` compares the contents.
         if value.ty.is_str() {
-            let as_ref = ty::Value { ty: Ty::new_imm_ref(self.tcx, self.tcx.lifetimes.re_static, value.ty), valtree: value.valtree };
+            let as_ref = ty::Value {
+                ty: Ty::new_imm_ref(self.tcx, self.tcx.lifetimes.re_static, value.ty),
+                valtree: value.valtree,
+            };
             if let Some(bytes) = as_ref.try_to_raw_bytes(self.tcx) {
                 return Ok(Expr::str(str::from_utf8(bytes).expect("a `str` constant is UTF-8")));
             }
@@ -1671,13 +1987,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let value = self.read(upvar, out)?;
             // Named after what it copies, from the Rust name: `n` gives `n$1`.
             let base = match self.place(upvar) {
-                Some((Expr { kind: js::ExprKind::Member(_, field), .. }, _)) => field,
-                Some((Expr { kind: js::ExprKind::Var(name), .. }, _)) => name,
+                Some((
+                    Expr {
+                        kind: js::ExprKind::Member(_, field),
+                        ..
+                    },
+                    _,
+                )) => field,
+                Some((
+                    Expr {
+                        kind: js::ExprKind::Var(name),
+                        ..
+                    },
+                    _,
+                )) => name,
                 _ => "capture".to_string(),
             };
             let name = self.fresh(base.split('$').next().unwrap_or_default());
             out.push(StmtKind::Let(name.clone(), Some(value)).at(self.js_span(span)));
-            let snapshot = Var { place: Expr::var(&name), mutable: true, depth: self.loops.len() };
+            let snapshot = Var {
+                place: Expr::var(&name),
+                mutable: true,
+                depth: self.loops.len(),
+            };
             shadowed.push((path.clone(), self.captures.insert(path, snapshot)));
         }
 
@@ -1696,13 +2028,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let loops = std::mem::take(&mut self.loops);
-        let names = if known { std::mem::replace(&mut self.names, inner) } else { self.names.clone() };
+        let names = if known {
+            std::mem::replace(&mut self.names, inner)
+        } else {
+            self.names.clone()
+        };
         let mut stmts = Vec::new();
         // An `async` block takes no arguments, and runs as soon as it's
         // made: an async arrow, called right away (ADR 0029).
         let block = matches!(
             self.tcx.coroutine_kind(closure.closure_id),
-            Some(CoroutineKind::Desugared(CoroutineDesugaring::Async, CoroutineSource::Block))
+            Some(CoroutineKind::Desugared(
+                CoroutineDesugaring::Async,
+                CoroutineSource::Block
+            ))
         );
         // The first parameter is the closure itself, which JS doesn't need.
         let params = if block {
@@ -1717,8 +2056,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             self.lower_params(params, self.tcx.def_span(body.def_id), &mut stmts)?
         };
-        let BodyTy::Fn(sig) = body.thir.body_type else { unreachable!("a closure body is a function") };
-        let dest = if sig.output().is_unit() { Dest::Discard } else { Dest::Return };
+        let BodyTy::Fn(sig) = body.thir.body_type else {
+            unreachable!("a closure body is a function")
+        };
+        let dest = if sig.output().is_unit() {
+            Dest::Discard
+        } else {
+            Dest::Return
+        };
         let is_async = if block {
             self.stmt(body.expr, &Dest::Return, &mut stmts)?;
             true
@@ -1749,7 +2094,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Closure(ref closure)
                 if matches!(
                     self.tcx.coroutine_kind(closure.closure_id),
-                    Some(CoroutineKind::Desugared(CoroutineDesugaring::Async, CoroutineSource::Fn | CoroutineSource::Closure))
+                    Some(CoroutineKind::Desugared(
+                        CoroutineDesugaring::Async,
+                        CoroutineSource::Fn | CoroutineSource::Closure
+                    ))
                 ) =>
             {
                 closure.closure_id
@@ -1788,13 +2136,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if matches!(self.thir[u].kind, ExprKind::Borrow { .. }) {
             return false;
         }
-        let Some(var) = self.root_var(u).and_then(|id| self.vars.get(&id)) else { return false };
+        let Some(var) = self.root_var(u).and_then(|id| self.vars.get(&id)) else {
+            return false;
+        };
         if !var.mutable {
             return false;
         }
         let only_use = match self.thir[u].kind {
             ExprKind::VarRef { id } => {
-                let uses = self.thir.exprs.iter().filter(|e| matches!(e.kind, ExprKind::VarRef { id: i } if i == id));
+                let uses = self
+                    .thir
+                    .exprs
+                    .iter()
+                    .filter(|e| matches!(e.kind, ExprKind::VarRef { id: i } if i == id));
                 uses.count() == 1 && var.depth == self.loops.len()
             }
             _ => false,
@@ -1865,8 +2219,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
         }
-        let mut given: HashMap<usize, Expr> =
-            adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
+        let mut given: HashMap<usize, Expr> = adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
 
         let tag = adt.adt_def.is_enum().then(|| bindings::variant_name(self.tcx, variant));
         let shape = match tag {
@@ -1916,7 +2269,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A reference is the value it points to, so `*r` is where `r` is.
             // (A static is reached through a pointer to it.)
-            ExprKind::Deref { arg } if matches!(self.thir[arg].ty.kind(), ty::Ref(..) | ty::RawPtr(..)) || self.thir[arg].ty.is_box() => {
+            ExprKind::Deref { arg }
+                if matches!(self.thir[arg].ty.kind(), ty::Ref(..) | ty::RawPtr(..)) || self.thir[arg].ty.is_box() =>
+            {
                 self.place(arg).or_else(|| self.ref_place(arg))
             }
             // A JS global (ADR 0021).
@@ -1967,11 +2322,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `*r = v` with a `&mut` variable `r` would only rebind the JS variable.
         if let ExprKind::Deref { arg } = self.thir[self.strip(e)].kind
             && matches!(self.thir[arg].ty.kind(), ty::Ref(..))
-            && matches!(self.thir[self.strip(arg)].kind, ExprKind::VarRef { .. } | ExprKind::Field { .. })
+            && matches!(
+                self.thir[self.strip(arg)].kind,
+                ExprKind::VarRef { .. } | ExprKind::Field { .. }
+            )
         {
             return Err(self.unsupported(self.thir[e].span, "assigning a whole value through a `&mut`"));
         }
-        self.place(e).map(|(place, _)| place).ok_or_else(|| self.unsupported(self.thir[e].span, "assigning to this place"))
+        self.place(e)
+            .map(|(place, _)| place)
+            .ok_or_else(|| self.unsupported(self.thir[e].span, "assigning to this place"))
     }
 
     /// Read a variable or field's value.
@@ -2006,7 +2366,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if span.lo() < self.file_start || span.hi() > self.file_end {
             return js::Span::NONE;
         }
-        js::Span { lo: (span.lo() - self.file_start).0, hi: (span.hi() - self.file_start).0 }
+        js::Span {
+            lo: (span.lo() - self.file_start).0,
+            hi: (span.hi() - self.file_start).0,
+        }
     }
 
     fn strip(&self, e: ExprId) -> ExprId {
@@ -2047,7 +2410,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn bind(&mut self, var: LocalVarId, name: &str, mutable: bool) -> String {
         let name = self.fresh(&camel_case(name));
-        self.vars.insert(var, Var { place: Expr::var(&name), mutable, depth: self.loops.len() });
+        self.vars.insert(
+            var,
+            Var {
+                place: Expr::var(&name),
+                mutable,
+                depth: self.loops.len(),
+            },
+        );
         name
     }
 
@@ -2058,7 +2428,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.krate.fns.contains_key(&def_id) {
             // `fn_ref` also records the use, which is what imports its module.
             let place = self.fn_ref(def_id);
-            return Ok(if self.contains_mutated(ty) { self.copy(place, ty) } else { place });
+            return Ok(if self.contains_mutated(ty) {
+                self.copy(place, ty)
+            } else {
+                place
+            });
         }
         eval_const(self.tcx, self.typing_env, def_id, args, span)
             .and_then(|value| const_js(self.tcx, value))
@@ -2067,7 +2441,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// An integer `const`'s value: `x / SIZE` can't divide by zero.
     fn known_int(&self, e: ExprId) -> Option<i128> {
-        let ExprKind::NamedConst { def_id, args, .. } = self.thir[self.strip(e)].kind else { return None };
+        let ExprKind::NamedConst { def_id, args, .. } = self.thir[self.strip(e)].kind else {
+            return None;
+        };
         let value = eval_const(self.tcx, self.typing_env, def_id, args, self.thir[e].span)?;
         const_js(self.tcx, value)?.as_int()
     }
@@ -2079,9 +2455,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// ```
     fn as_question(&self, e: ExprId) -> Option<ExprId> {
         let thir = self.thir;
-        let ExprKind::Match { scrutinee, .. } = thir[strip(thir, e)].kind else { return None };
-        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else { return None };
-        let &ty::FnDef(branch, _) = thir[strip(thir, fun)].ty.kind() else { return None };
+        let ExprKind::Match { scrutinee, .. } = thir[strip(thir, e)].kind else {
+            return None;
+        };
+        let ExprKind::Call { fun, ref args, .. } = thir[strip(thir, scrutinee)].kind else {
+            return None;
+        };
+        let &ty::FnDef(branch, _) = thir[strip(thir, fun)].ty.kind() else {
+            return None;
+        };
         self.tcx.is_lang_item(branch, LangItem::TryTraitBranch).then(|| args[0])
     }
 
@@ -2097,11 +2479,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if !is_option {
             // The function's error type must be this one: `return r` as it is.
-            let ExprKind::Match { ref arms, .. } = self.thir[self.strip(question)].kind else { unreachable!("checked") };
-            let returned = arms.iter().find_map(|&arm| match self.thir[self.strip(self.thir[arm].body)].kind {
-                ExprKind::Return { value: Some(v) } => Some(self.thir[v].ty),
-                _ => None,
-            });
+            let ExprKind::Match { ref arms, .. } = self.thir[self.strip(question)].kind else {
+                unreachable!("checked")
+            };
+            let returned = arms
+                .iter()
+                .find_map(|&arm| match self.thir[self.strip(self.thir[arm].body)].kind {
+                    ExprKind::Return { value: Some(v) } => Some(self.thir[v].ty),
+                    _ => None,
+                });
             let error = |t: Ty<'tcx>| match t.kind() {
                 ty::Adt(_, args) => args.types().nth(1),
                 _ => None,
@@ -2113,7 +2499,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (subject, _) = self.subject(tried, base.unwrap_or(if is_option { "value" } else { "result" }), out)?;
         let js_span = self.js_span(span);
         let (failed, ret, value) = if is_option {
-            (Expr::bin(Op::LooseEq, subject.clone(), Expr::null()), Expr::undefined(), subject)
+            (
+                Expr::bin(Op::LooseEq, subject.clone(), Expr::null()),
+                Expr::undefined(),
+                subject,
+            )
         } else {
             let failed = Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str("Err"));
             (failed, subject.clone(), Expr::member(subject, "_0"))
@@ -2131,7 +2521,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn unsupported(&self, span: Span, what: &str) -> ErrorGuaranteed {
-        self.tcx.dcx().span_err(span, format!("rust-js does not support {what} yet"))
+        self.tcx
+            .dcx()
+            .span_err(span, format!("rust-js does not support {what} yet"))
     }
 }
 
@@ -2191,7 +2583,10 @@ fn fresh_in(taken: &mut HashSet<String>, base: &str) -> String {
     if taken.insert(base.clone()) {
         return base;
     }
-    (1..).map(|k| format!("{base}${k}")).find(|name| taken.insert(name.clone())).unwrap()
+    (1..)
+        .map(|k| format!("{base}${k}"))
+        .find(|name| taken.insert(name.clone()))
+        .unwrap()
 }
 
 /// A Rust variable's name as JS code writes it (ADR 0038): `set_count` is
@@ -2207,7 +2602,9 @@ fn camel_case(name: &str) -> String {
     let mut out = lead.to_string();
     for (i, word) in core.split('_').filter(|w| !w.is_empty()).enumerate() {
         let mut chars = word.chars();
-        if i > 0 && let Some(first) = chars.next() {
+        if i > 0
+            && let Some(first) = chars.next()
+        {
             out.push(first.to_ascii_uppercase());
         }
         out.extend(chars);
@@ -2219,19 +2616,79 @@ fn camel_case(name: &str) -> String {
 /// `Counter` → `counter`: a value of the type, named after it.
 fn lower_first(name: &str) -> String {
     let mut chars = name.chars();
-    chars.next().map(|c| c.to_lowercase().chain(chars).collect()).unwrap_or_default()
+    chars
+        .next()
+        .map(|c| c.to_lowercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// Rust names that mean something else in JS get a `$` suffix.
 fn js_ident(name: &str) -> String {
     const RESERVED: &[&str] = &[
-        "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger",
-        "default", "delete", "do", "else", "enum", "eval", "export", "extends", "false", "finally",
-        "for", "function", "if", "implements", "import", "in", "instanceof", "interface", "let",
-        "new", "null", "package", "private", "protected", "public", "return", "static", "super",
-        "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with",
-        "yield", "undefined", "NaN", "Infinity", "Math", "Error", "String",
-        "WeakMap", "DataView", "ArrayBuffer", "Number", "BigInt", "Object",
+        "arguments",
+        "await",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "debugger",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "enum",
+        "eval",
+        "export",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "function",
+        "if",
+        "implements",
+        "import",
+        "in",
+        "instanceof",
+        "interface",
+        "let",
+        "new",
+        "null",
+        "package",
+        "private",
+        "protected",
+        "public",
+        "return",
+        "static",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "var",
+        "void",
+        "while",
+        "with",
+        "yield",
+        "undefined",
+        "NaN",
+        "Infinity",
+        "Math",
+        "Error",
+        "String",
+        "WeakMap",
+        "DataView",
+        "ArrayBuffer",
+        "Number",
+        "BigInt",
+        "Object",
     ];
-    if RESERVED.contains(&name) { format!("{name}$") } else { name.to_string() }
+    if RESERVED.contains(&name) {
+        format!("{name}$")
+    } else {
+        name.to_string()
+    }
 }

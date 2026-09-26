@@ -101,7 +101,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let callee = values.remove(0);
             return Ok(Expr::call(callee, values));
         }
-        if self.tcx.trait_of_assoc(def_id).is_some_and(|id| super::traits::operational(self.tcx, id))
+        if self
+            .tcx
+            .trait_of_assoc(def_id)
+            .is_some_and(|id| super::traits::operational(self.tcx, id))
             || (self.tcx.trait_of_assoc(def_id).is_some()
                 && ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, generic_args)?
                     .is_some_and(|i| self.krate.fns.contains_key(&i.def_id())))
@@ -246,9 +249,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let callee = if Num::of(self.thir[args[0]].ty.peel_refs()) == Some(Num::F64) {
                     self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
                     Expr::var(if max { "$f64Max" } else { "$f64Min" })
-                } else { Expr::member(Expr::var("Math"), if max { "max" } else { "min" }) };
+                } else {
+                    Expr::member(Expr::var("Math"), if max { "max" } else { "min" })
+                };
                 Expr::call(callee, vec![arg(), arg()])
-            },
+            }
             // An `Ordering` is -1, 0 or 1: `Equal` is the one that's falsy.
             Std::Operator(op) => {
                 let ty = generic_args
@@ -260,7 +265,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.binary(op, l, r, None, ty, span)?
             }
             Std::UnaryOperator(op) => {
-                let ty = generic_args.types().next().expect("an operator's trait has a type").peel_refs();
+                let ty = generic_args
+                    .types()
+                    .next()
+                    .expect("an operator's trait has a type")
+                    .peel_refs();
                 let a = arg();
                 self.unary(op, a, ty, span)?
             }
@@ -360,7 +369,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 let body = match &f.kind {
                     js::ExprKind::Arrow(_, body) => match body.as_slice() {
-                        [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] => Some(value.clone()),
+                        [
+                            js::Stmt {
+                                kind: StmtKind::Return(Some(value)),
+                                ..
+                            },
+                        ] => Some(value.clone()),
                         _ => None,
                     },
                     _ => None,
@@ -483,7 +497,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn js_ref(&self, path: &str) -> Expr {
         match js_import(path) {
             Some((export, rest)) => {
-                self.krate.package_uses.borrow_mut().insert((self.module, export.clone()));
+                self.krate
+                    .package_uses
+                    .borrow_mut()
+                    .insert((self.module, export.clone()));
                 global(&format!("{}{rest}", self.krate.imports[&export]))
             }
             None => global(path),
@@ -524,7 +541,12 @@ fn apply(f: Expr, args: Vec<Expr>) -> Expr {
         }
     }
     if let js::ExprKind::Arrow(params, body) = &f.kind
-        && let [js::Stmt { kind: StmtKind::Return(Some(value)), .. }] = body.as_slice()
+        && let [
+            js::Stmt {
+                kind: StmtKind::Return(Some(value)),
+                ..
+            },
+        ] = body.as_slice()
         && params.len() <= args.len()
         && args.iter().all(reads_same)
     {
