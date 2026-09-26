@@ -5,6 +5,7 @@
   "description": "Compile Rust to readable JavaScript. Every task is a script here: `bun run` lists them.",
   "workspaces": [
     "web",
+    "react",
     "wasm/web",
     "vite-plugin",
     "examples/vite-react"
@@ -14,6 +15,7 @@
     "build": "cargo build && react/build.sh -o \"$PWD/target/libreact.rmeta\"",
     "test": "bun test",
     "generate": "bun web/generate.ts",
+    "generate:react": "bun react/generate.ts",
     "react-example": "bun run --cwd examples/vite-react dev",
     "wasm": "wasm/build.sh",
     "dev": "bun wasm/web/serve.ts",

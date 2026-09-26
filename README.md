@@ -19,6 +19,7 @@ Every task is a script in [package.json](package.json), and `bun run` lists them
 | `build` | `cargo build`, and the `web` and `react` crates' metadata in `target/` |
 | `test` | `bun test` |
 | `generate` | regenerate the `web` crate from WebIDL ([web/](web/README.md)) |
+| `generate:react` | read each React release into `react/versions.json`, and regenerate `react/src/elements.rs` ([react/](react/README.md)) |
 | `react-example` | the [React + Vite example](examples/vite-react/README.md) at http://localhost:5173 |
 | `wasm` | build `rust-js.wasm`, with rustc's front end ([wasm/](wasm/README.md)) |
 | `dev` | the playground at http://localhost:4400 |

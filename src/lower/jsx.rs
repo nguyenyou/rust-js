@@ -129,6 +129,38 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .collect()
     }
 
+    /// `{}` or `{__html}`: an object literal, its fields the arguments.
+    pub(super) fn object_binding(&mut self, keys: &[String], args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        if keys.len() != args.len() {
+            return Err(self.unsupported(span, "an object binding whose fields don't match its arguments"));
+        }
+        let values = self.operands(args, out)?;
+        Ok(Expr::object(keys.iter().cloned().zip(values).map(|(k, v)| Prop::Field(k, v)).collect()))
+    }
+
+    /// `style.color("red")` on an object being built: one more field. Its
+    /// earlier fields go in `const`s first when this one's value needs
+    /// statements, so they're still evaluated first.
+    fn object_field(&mut self, mut object: Expr, name: String, value: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
+        let js::ExprKind::Object(fields) = &mut object.kind else { unreachable!("checked by the caller") };
+        if !self.is_simple(value) {
+            for prop in fields.iter_mut() {
+                let (base, value) = match prop {
+                    Prop::Field(name, value) => (name.as_str(), value),
+                    Prop::Spread(value) => ("props", value),
+                };
+                if !value.is_constant() {
+                    let old = std::mem::replace(value, Expr::undefined());
+                    *value = self.spill(&camel_case(&js_ident(base)), old, out);
+                }
+            }
+        }
+        let value = self.expr(value, out)?;
+        let js::ExprKind::Object(fields) = &mut object.kind else { unreachable!("checked by the caller") };
+        fields.push(Prop::Field(name, value));
+        Ok(object)
+    }
+
     /// `element.class_name("hero")`, a binding like `#[rust_js::link_name =
     /// "prop className"]`: the attribute, on the element being built.
     pub(super) fn jsx_prop(&mut self, name: Option<&str>, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
@@ -144,6 +176,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => return Err(self.unsupported(span, "this JSX attribute binding's signature")),
         };
         let mut element = self.expr(args[0], out)?;
+        if let js::ExprKind::Object(_) = element.kind {
+            return self.object_field(element, name, value, out);
+        }
         if !matches!(element.kind, js::ExprKind::Jsx(_)) {
             let message = "rust-js makes JSX from one expression: set an element's props in the chain that makes it";
             return Err(self.tcx.dcx().span_err(self.thir[args[0]].span, message));

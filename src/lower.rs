@@ -1013,7 +1013,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if let Some(n) = ordering_value(self.tcx, adt_def.did(), variant.name) {
                     return Ok(Some(Expr::bin(Op::Eq, subject.clone(), Expr::int(n))));
                 }
-                let name = Expr::str(variant.name.to_string());
+                let name = Expr::str(bindings::variant_name(self.tcx, variant));
                 let mut tests = Vec::new();
                 if adt_def.variants().len() > 1 {
                     tests.push(match variant.fields.is_empty() {
@@ -1660,7 +1660,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::int(n));
         }
         if adt.adt_def.is_enum() && variant.fields.is_empty() {
-            return Ok(Expr::str(variant.name.to_string()));
+            return Ok(Expr::str(bindings::variant_name(self.tcx, variant)));
         }
         if adt.adt_def.is_union() {
             return Err(self.unsupported(span, "unions"));
@@ -1698,7 +1698,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut given: HashMap<usize, Expr> =
             adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
 
-        let tag = adt.adt_def.is_enum().then(|| variant.name.to_string());
+        let tag = adt.adt_def.is_enum().then(|| bindings::variant_name(self.tcx, variant));
         let shape = match tag {
             Some(_) => Shape::Object(self.variant_fields(variant, adt.args)),
             None => self.shape(ty),

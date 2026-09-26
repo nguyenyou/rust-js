@@ -1,0 +1,10 @@
+{
+  "name": "rust-js-react-generator",
+  "private": true,
+  "description": "Generates react/versions.json and react/src/dom.rs from each React release and W3C's specs. See docs/decisions/0043-react-versions.md.",
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5",
+    "@webref/css": "8.7.5",
+    "@webref/elements": "2.9.0"
+  }
+}

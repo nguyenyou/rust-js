@@ -32,6 +32,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             match js_form(self.tcx, def_id) {
                 JsForm::Jsx(tag) => return self.jsx(&tag, args, span, out),
                 JsForm::Prop(name) => return self.jsx_prop(name.as_deref(), args, span, out),
+                JsForm::Object(keys) => return self.object_binding(&keys, args, span, out),
                 _ => {}
             }
             let mut values = self.operands(args, out)?;

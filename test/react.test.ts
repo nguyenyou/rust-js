@@ -102,3 +102,28 @@ pub fn Capture() -> Element {
     else globalThis.record = old;
   }
 });
+
+// ADR 0043: the rest of React's and React DOM's API, run by React 19.3.
+test("React's and React DOM's APIs are hand-written React, and they run", () => {
+  buildReact();
+  const out = join(target, "react-apis");
+  run([join(target, "debug", "rust-js"), "test/apis.rs", "-o", join(out, "apis.js"),
+    "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
+  const js = require("node:fs").readFileSync(join(out, "apis.jsx"), "utf8");
+  // Built-in components are JSX tags, and `use` is `use`.
+  expect(js).toContain('return <Suspense fallback={<p className="loading">Loading</p>}>\n    <Greeting />\n  </Suspense>;');
+  expect(js).toContain("const text = use(globalThis.greeting);");
+  expect(js).toContain('<Activity mode={hidden ? "hidden" : "visible"}>');
+  expect(js).toContain("{[1, 2].map((n) => <Fragment key={n}>");
+  // Objects built by methods: a style, raw HTML, and options.
+  expect(js).toContain('const style = {\n    color: "red",\n    fontSize: 12,\n    "--gap": "4px"\n  };');
+  expect(js).toContain('dangerouslySetInnerHTML={{ __html: "<i>raw</i>" }}');
+  expect(js).toContain('return renderToString(<Page />, { identifierPrefix: "s-" });');
+  expect(js).toContain('const root = createRoot(container, { identifierPrefix: "c-" });');
+  expect(js).toContain('const LAZY_CARD = lazy(() => import("./lazy-card.jsx"));');
+  Bun.write(join(out, "lazy-card.jsx"), 'export default function LazyCard() {\n  return <em className="lazy">lazy card</em>;\n}\n');
+  copyFileSync(join(root, "test", "apis.jsx"), join(out, "apis.test.jsx"));
+  const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", join(out, "apis.test.jsx")], { cwd: root, stderr: "pipe" });
+  const output = p.stdout.toString() + p.stderr.toString();
+  expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "7"]);
+}, 120_000);

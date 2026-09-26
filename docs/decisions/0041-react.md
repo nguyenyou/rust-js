@@ -169,8 +169,8 @@ own guides do, with nothing specific to rust-js:
   context goes in a module of its own. rust-js doesn't rewrite an unchanged
   file, so Vite doesn't run that module again, and the context survives. A
   `memo` component keeps its state in its own module.
-- Not yet: `forwardRef` (a plain `ref` prop in React 19), `style` objects,
-  portals, Suspense, and React 19's `use`, `useActionState` and `useOptimistic`. The playground can't run React, since its Result frame has no
-  module loader.
+- The rest of React's and React DOM's API, and React versions before the
+  latest, came with [0043](0043-react-versions.md). The playground can't run
+  React, since its Result frame has no module loader.
 - The plugin compiles with the rust-js binary in this repository
   (`bun run build`). Publishing rust-js and the crates is a later step.

@@ -336,10 +336,7 @@ impl Context {
         }
     }
     fn hoist(&mut self, base: &str, value: &mut Expr, out: &mut Vec<Stmt>, prior: bool, blocked: bool) {
-        if !blocked
-            && prints_on_lines(value)
-            && (!prior || matches!(value.kind, ExprKind::Arrow(..) | ExprKind::AsyncArrow(..)))
-        {
+        if prints_on_lines(value) && (position_independent(value) || (!blocked && !prior)) {
             let name = (0..)
                 .map(|n| {
                     if n == 0 {
@@ -356,6 +353,19 @@ impl Context {
         }
     }
 }
+/// Is `e` the same wherever it's evaluated? Making a function evaluates
+/// nothing, and neither do literals, so they can move out of a condition or
+/// ahead of earlier code. A variable can't: earlier code may change it.
+fn position_independent(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => true,
+        ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null => true,
+        ExprKind::Array(items) => items.iter().all(position_independent),
+        ExprKind::Object(props) => props.iter().all(|p| matches!(p, Prop::Field(_, e) if position_independent(e))),
+        _ => false,
+    }
+}
+
 fn prop_value(prop: &Prop) -> &Expr {
     match prop {
         Prop::Field(_, e) | Prop::Spread(e) => e,

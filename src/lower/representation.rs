@@ -501,7 +501,7 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
                 return Some(Expr::int(n));
             }
             if fields.is_empty() {
-                return Some(Expr::str(variant.name.to_string()));
+                return Some(Expr::str(super::bindings::variant_name(tcx, variant)));
             }
             let values = all(fields)?;
             let props = values

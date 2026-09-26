@@ -2,14 +2,19 @@
 // and Fast Refresh. The compiler manifest owns dependencies and output paths.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const target = join(repo, "target");
-const metadataInputs = ["rust-toolchain.toml", "react/build.sh", "react/src/lib.rs", "web/build.sh", "web/src/lib.rs"].map(p => join(repo, p));
+const metadataInputs = [
+  "rust-toolchain.toml", "react/build.sh", "react/cfg.ts", "react/versions.json",
+  "react/src/lib.rs", "react/src/event.rs", "react/src/dom.rs", "react/src/elements.rs",
+  "web/build.sh", "web/src/lib.rs",
+].map(p => join(repo, p));
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -38,23 +43,47 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
   const committed = new Set();
   const manifestPath = crate => join(target, "vite", createHash("sha256").update(resolve(root, crate)).digest("hex") + ".json");
 
+  // The React the project has installed, whose API the react crate is built
+  // with (ADR 0043): what a later React added doesn't compile. `null` without
+  // one, which gets the latest's.
+  function installedReact() {
+    try {
+      const require = createRequire(join(root, "package.json"));
+      return JSON.parse(readFileSync(require.resolve("react/package.json"), "utf8")).version;
+    } catch {
+      return null;
+    }
+  }
+
+  // web's and react's metadata for that React, each version in its own folder.
+  let metadata, react;
   async function buildMetadata() {
     if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: run bun run build in the rust-js repository`);
+    react = installedReact();
+    metadata = join(target, "react", react ?? "latest");
     const compiler = await stat(rustJs);
-    const hash = createHash("sha256").update(`${compiler.mtimeMs}:${compiler.size}`);
+    const hash = createHash("sha256").update(`${compiler.mtimeMs}:${compiler.size}:${react}`);
     for (const path of metadataInputs) hash.update(await readFile(path));
     const key = hash.digest("hex");
-    if (metadataKey === key && existsSync(join(target, "libreact.rmeta")) && existsSync(join(target, "libweb.rmeta"))) return;
-    await mkdir(target, { recursive: true });
-    await run(join(repo, "react/build.sh"), ["-o", join(target, "libreact.rmeta")], repo);
+    if (metadataKey === key && existsSync(join(metadata, "libreact.rmeta")) && existsSync(join(metadata, "libweb.rmeta"))) return;
+    await mkdir(metadata, { recursive: true });
+    await run(join(repo, "react/build.sh"), ["-o", join(metadata, "libreact.rmeta"), ...(react ? ["--react", react] : [])], repo);
     metadataKey = key;
   }
 
   async function compile(crate) {
     const manifest = manifestPath(crate);
     await mkdir(dirname(manifest), { recursive: true });
-    await run(rustJs, [crate, "-o", crate.replace(/\.rs$/, ".js"), "--manifest", manifest,
-      "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target], root);
+    try {
+      await run(rustJs, [crate, "-o", crate.replace(/\.rs$/, ".js"), "--manifest", manifest,
+        "--", "--extern", `react=${join(metadata, "libreact.rmeta")}`, "-L", metadata], root);
+    } catch (error) {
+      // rustc names the version an item needs; say which one is installed.
+      if (react && error.message.includes("configured out")) {
+        error.message += `\nnote: this project has React ${react}; an item gated \`react = "X.Y"\` needs React X.Y or later\n`;
+      }
+      throw error;
+    }
     const result = JSON.parse(await readFile(manifest, "utf8"));
     const old = manifests.get(crate);
     manifests.set(crate, result);

@@ -538,7 +538,11 @@ impl<'a> Cx<'a> {
                 // In a literal, a plain `__proto__:` key sets the prototype. Quoted
                 // and computed, it's an ordinary field, like any other Rust field.
                 let computed = name == "__proto__";
-                let key = if computed {
+                // A key that isn't a JS name, like a CSS custom property's
+                // `--gap`, is quoted.
+                let identifier = name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_' || c == '$')
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
+                let key = if computed || !identifier {
                     PropertyKey::new_string_literal(SPAN, self.name(name), None, b)
                 } else {
                     PropertyKey::new_static_identifier(SPAN, self.name(name), b)

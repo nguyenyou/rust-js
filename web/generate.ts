@@ -11,20 +11,20 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api", "wasm-web-api"];
+const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api", "wasm-web-api", "xhr", "streams", "touch-events"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
   // dom
   "EventTarget", "Event", "Node", "CharacterData", "Text", "Comment", "Element", "Document",
-  "DocumentFragment", "DOMTokenList", "NodeList", "HTMLCollection",
+  "DocumentFragment", "DOMTokenList", "NodeList", "HTMLCollection", "AbortController", "AbortSignal",
   // html
   "HTMLElement", "HTMLAnchorElement", "HTMLButtonElement", "HTMLDivElement", "HTMLFormElement",
   "HTMLHeadingElement", "HTMLImageElement", "HTMLInputElement", "HTMLLabelElement", "HTMLLIElement",
   "HTMLOListElement", "HTMLOptionElement", "HTMLOutputElement", "HTMLParagraphElement",
   "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement", "HTMLUListElement",
   "HTMLTableElement", "HTMLTableSectionElement", "HTMLTableRowElement", "HTMLTableCellElement", "HTMLIFrameElement",
-  "Window", "Location", "History", "Storage",
+  "Window", "Location", "History", "Storage", "DataTransfer", "ToggleEvent",
   // uievents
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
   // cssom
@@ -33,12 +33,38 @@ const INTERFACES = [
   "DOMRectReadOnly", "DOMRect", "MediaQueryList", "MediaQueryListEvent",
   // fetch: `window::fetch`, and what it gives back
   "Headers", "Request", "Response",
+  // xhr, streams, touch-events: what React's forms, server rendering and touch events use
+  "FormData", "ReadableStream", "Touch", "TouchList",
   // encoding: text to bytes and back
   "TextEncoder", "TextDecoder",
   // wasm-js-api: `WebAssembly.Module` and friends
   "Module", "Instance", "Memory",
 ];
 const known = new Set(INTERFACES);
+
+// Members written by hand, for results the generator can't type: a union
+// with an interface it doesn't bind.
+const EXTRA: Record<string, Fn[]> = {
+  FormData: [
+    {
+      name: "get",
+      jsName: "get",
+      params: ["this: &FormData", "name: &str"],
+      result: "Option<String>",
+      doc: [
+        "[MDN](https://developer.mozilla.org/docs/Web/API/FormData/get): a text field's value.",
+        "A file field's value is a `File`, which this doesn't bind.",
+      ],
+    },
+    {
+      name: "get_all",
+      jsName: "getAll",
+      params: ["this: &FormData", "name: &str"],
+      result: "Vec<String>",
+      doc: ["[MDN](https://developer.mozilla.org/docs/Web/API/FormData/getAll): every text value of a field."],
+    },
+  ],
+};
 
 // Namespaces: a module of functions, like `web_assembly::compile`.
 const NAMESPACES = ["WebAssembly"];
@@ -559,7 +585,7 @@ for (const name of INTERFACES) {
     line(`    }`);
     line(`}`);
   }
-  module(snake(qualified(name)), functionsOf(i));
+  module(snake(qualified(name)), [...functionsOf(i), ...(EXTRA[name] ?? [])]);
 }
 
 for (const name of NAMESPACES) {

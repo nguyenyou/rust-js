@@ -87,9 +87,13 @@ pub(super) enum JsForm {
     /// A JSX element (ADR 0040): `<div>`, `<>`, an imported component like
     /// `<react#StrictMode>`, or `<*>` for the component given first.
     Jsx(String),
-    /// `prop className`: a JSX attribute of `this`, the element being built.
-    /// Just `prop`: the attribute's name comes first, as a string literal.
+    /// `prop className`: a JSX attribute of `this`, the element being built,
+    /// or a field of `this`, an object being built. Just `prop`: the name
+    /// comes first, as a string literal.
     Prop(Option<String>),
+    /// `{}`, or `{__html}`: an object, with the arguments as its fields, in
+    /// order. With `prop`, it builds `style={{ color: "red" }}` and options.
+    Object(Vec<String>),
     /// `this instanceof Class`: a checked one, as a `bool`.
     InstanceOf(String),
 }
@@ -104,6 +108,10 @@ pub(super) fn js_form(tcx: TyCtxt<'_>, def_id: DefId) -> JsForm {
     }
     if let Some(tag) = name.strip_prefix('<').and_then(|t| t.strip_suffix('>')) {
         return JsForm::Jsx(tag.to_string());
+    }
+    if let Some(keys) = name.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
+        let keys = keys.split(',').map(str::trim).filter(|k| !k.is_empty());
+        return JsForm::Object(keys.map(str::to_string).collect());
     }
     if let Some(prop) = name.strip_prefix("prop ") {
         return JsForm::Prop(Some(prop.to_string()));
@@ -137,6 +145,16 @@ pub(super) fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+/// What a variant without fields is in JS: its name, or its
+/// `#[rust_js::name = ".."]`, for a string that isn't a Rust name, as in
+/// `enum Mode { #[rust_js::name = "hidden"] Hidden, .. }` (ADR 0039).
+pub(super) fn variant_name(tcx: TyCtxt<'_>, variant: &rustc_middle::ty::VariantDef) -> String {
+    match tcx.get_attrs_by_path(variant.def_id, &[Symbol::intern("rust_js"), sym::name]).next() {
+        Some(attr) => attr.value_str().map_or_else(|| variant.name.to_string(), |s| s.to_string()),
+        None => variant.name.to_string(),
     }
 }
 

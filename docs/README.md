@@ -109,6 +109,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 
 - [0040 JSX: bindings whose `link_name` is a tag, printed as JSX in a `.jsx` file](decisions/0040-jsx.md)
 - [0041 React: the `react` crate, and Vite with Fast Refresh](decisions/0041-react.md)
+- [0043 React's whole API, gated by the release that added it](decisions/0043-react-versions.md)
 
 **Scope and process**
 
