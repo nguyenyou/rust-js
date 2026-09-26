@@ -50,28 +50,45 @@ test("JSX preparation preserves evaluation order, conditional execution and text
   const dir = fixture("jsx-semantics");
   const input = join(dir, "lib.rs");
   await Bun.write(input, `#![allow(non_snake_case)]
-use react::{Element, html::div};
+use react::Element;
 unsafe extern "Rust" {
-    #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32;
+    #[link_name = "globalThis.record"]
+    safe fn record(n: i32) -> i32;
 }
 pub fn Order() -> Element {
-    div().attr("data-first", record(1).to_string()).children(vec![record(2), record(3), record(4)])
+    jsx! {
+        <div data-first={record(1).to_string()}>{vec![record(2), record(3), record(4)]}</div>
+    }
 }
 pub fn ChildrenFirst() -> Element {
-    div().children(vec![record(1), record(2), record(3)]).attr("title", record(4).to_string())
+    let children = vec![record(1), record(2), record(3)];
+    jsx! {
+        <div title={record(4).to_string()}>{children}</div>
+    }
 }
 pub fn StatementValue() -> Element {
-    div().attr("title", record(1).to_string()).children({ let n = record(2); vec![n, record(3), record(4)] })
+    jsx! {
+        <div title={record(1).to_string()}>{{ let n = record(2); vec![n, record(3), record(4)] }}</div>
+    }
 }
 pub fn Conditional(flag: bool) -> Element {
-    div().children(if flag { vec![record(5), record(6), record(7)] } else { vec![record(8)] })
+    jsx! {
+        <div>{if flag { vec![record(5), record(6), record(7)] } else { vec![record(8)] }}</div>
+    }
 }
 pub fn Text() -> Element {
-    div().attr("title", "\\\"<&>\\n").children(" leading <&>{}\\ntrailing ")
+    jsx! {
+        <div
+            title="\\\"<&>\\n">
+            {" leading <&>{}\\ntrailing "}
+        </div>
+    }
 }
 pub fn Capture() -> Element {
     let count = 4;
-    div().on_click(move |_| { record(count); record(count + 1); })
+    jsx! {
+        <div onClick={move |_| { record(count); record(count + 1); }} />
+    }
 }
 `);
   run([compiler, input, "-o", join(dir, "lib.js"), "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
@@ -142,8 +159,7 @@ test("a camel_case crate names its functions, fields and props the JS way", asyn
 
 mod people;
 
-use react::html::button;
-use react::{Element, component, use_state};
+use react::{Element, use_state};
 
 pub fn greet(first_name: &str) -> String {
     people::full_name(&people::make_person(first_name))
@@ -160,7 +176,10 @@ pub fn rect_width(shape: &Shape) -> u32 {
 }
 
 pub fn wide_rect() -> Shape {
-    Shape::Rect { top_left: 1, bottom_right: 4 }
+    Shape::Rect {
+        top_left: 1,
+        bottom_right: 4,
+    }
 }
 
 pub fn use_clicks() -> u32 {
@@ -174,12 +193,16 @@ pub struct FancyButtonProps {
 }
 
 pub fn FancyButton(FancyButtonProps { label_text, on_press }: FancyButtonProps) -> Element {
-    button().on_click(move |_| on_press()).children(label_text)
+    jsx! {
+        <button onClick={move |_| on_press()}>{label_text}</button>
+    }
 }
 
 pub fn App() -> Element {
     let clicks = use_clicks();
-    component(FancyButton, FancyButtonProps { label_text: format!("{clicks} clicks"), on_press: Box::new(|| ()) })
+    jsx! {
+        <FancyButton labelText={format!("{clicks} clicks")} onPress={Box::new(|| ())} />
+    }
 }
 
 #[rust_js::name = "keep_me"]

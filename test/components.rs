@@ -4,10 +4,9 @@
 #![allow(non_snake_case)]
 
 use react::event::{Change, Keyboard};
-use react::html::{button, div, h2, input, li, p, span, ul};
 use react::{
-    Context, Element, Memo, Provider, component, create_context, fragment, memo, memo_with, use_context, use_effect,
-    use_id, use_memo, use_reducer, use_ref, use_state,
+    Context, Element, Memo, create_context, memo, memo_with, use_context, use_effect, use_id, use_memo,
+    use_reducer, use_ref, use_state,
 };
 
 /// Props are a struct; `children` is the element's children.
@@ -17,7 +16,12 @@ pub struct CardProps {
 }
 
 pub fn Card(CardProps { title, children }: CardProps) -> Element {
-    div().class_name("card").children((h2().children(title), children))
+    jsx! {
+        <div className="card">
+            <h2>{title}</h2>
+            {children}
+        </div>
+    }
 }
 
 pub struct Todo {
@@ -34,13 +38,29 @@ pub enum Action {
 fn reduce(todos: &Vec<Todo>, action: Action) -> Vec<Todo> {
     match action {
         Action::Add(text) => {
-            let mut next: Vec<Todo> = todos.iter().map(|t| Todo { id: t.id, text: t.text.clone(), done: t.done }).collect();
-            next.push(Todo { id: todos.len() as u32 + 1, text, done: false });
+            let mut next: Vec<Todo> = todos
+                .iter()
+                .map(|t| Todo {
+                    id: t.id,
+                    text: t.text.clone(),
+                    done: t.done,
+                })
+                .collect();
+            next.push(Todo {
+                id: todos.len() as u32 + 1,
+                text,
+                done: false,
+            });
             next
         }
-        Action::Toggle(id) => {
-            todos.iter().map(|t| Todo { id: t.id, text: t.text.clone(), done: if t.id == id { !t.done } else { t.done } }).collect()
-        }
+        Action::Toggle(id) => todos
+            .iter()
+            .map(|t| Todo {
+                id: t.id,
+                text: t.text.clone(),
+                done: if t.id == id { !t.done } else { t.done },
+            })
+            .collect(),
     }
 }
 
@@ -56,35 +76,47 @@ pub fn Todos() -> Element {
             set_draft.set(String::new());
         }
     };
-    component(Card, CardProps {
-        title: "Todos".to_string(),
-        children: fragment((
-            input()
-                .id(id.clone())
-                .value(draft.clone())
-                .on_change(move |e: &Change| set_draft.set(e.value()))
-                .on_key_down(move |e: &Keyboard| {
-                    if e.key() == "Enter" {
-                        add();
-                    }
-                }),
-            button().class_name("add").on_click(move |_| add()).children("Add"),
-            ul().children(
-                todos
+    jsx! {
+        <Card title={"Todos".to_string()}>
+            <>
+                <input
+                    id={id.clone()}
+                    value={draft.clone()}
+                    onChange={move |e: &Change| set_draft.set(e.value())}
+                    onKeyDown={move |e: &Keyboard| {
+                        if e.key() == "Enter" {
+                            add();
+                        }
+                    }} />
+                <button className="add" onClick={move |_| add()}>{"Add"}</button>
+                <ul>
+                    {todos
                     .iter()
                     .map(|t| {
-                        li().key(t.id)
-                            .class_name(if t.done { "done" } else { "" })
-                            .on_click(move |_| dispatch.dispatch(Action::Toggle(t.id)))
-                            .children(t.text.clone())
+                        jsx! {
+                            <li
+                                key={t.id}
+                                className={if t.done { "done" } else { "" }}
+                                onClick={move |_| dispatch.dispatch(Action::Toggle(t.id))}>
+                                {t.text.clone()}
+                            </li>
+                        }
                     })
-                    .collect::<Vec<_>>(),
-            ),
-            if todos.is_empty() { Some(p().class_name("empty").children("Nothing to do")) } else { None },
-            todos.last().map(|t| p().class_name("latest").children(t.text.clone())),
-            span().class_name("left").children((left, " left")),
-        )),
-    })
+                    .collect::<Vec<_>>()}
+                </ul>
+                {if todos.is_empty() { Some(jsx! {
+                    <p className="empty">{"Nothing to do"}</p>
+                }) } else { None }}
+                {todos.last().map(|t| jsx! {
+                    <p className="latest">{t.text.clone()}</p>
+                })}
+                <span className="left">
+                    {left}
+                    {" left"}
+                </span>
+            </>
+        </Card>
+    }
 }
 
 /// State, an effect that runs once and cleans up, and a ref.
@@ -99,10 +131,12 @@ pub fn Clock() -> Element {
         },
         (),
     );
-    fragment((
-        span().class_name("ticks").children(ticks),
-        button().class_name("tick").on_click(move |_| set_ticks.update(|t| t + 1)).children("tick"),
-    ))
+    jsx! {
+        <>
+            <span className="ticks">{ticks}</span>
+            <button className="tick" onClick={move |_| set_ticks.update(|t| t + 1)}>{"tick"}</button>
+        </>
+    }
 }
 
 thread_local! {
@@ -126,27 +160,36 @@ pub struct BadgeProps {
 pub fn Badge(BadgeProps { label }: BadgeProps) -> Element {
     rendered(label);
     let theme = use_context(&THEME);
-    span().class_name(format!("badge {theme}")).children(label)
+    jsx! {
+        <span className={format!("badge {theme}")}>{label}</span>
+    }
 }
 
 /// Context from a provider, or its default outside one; `memo` skipping renders.
 pub fn Themed() -> Element {
     let (dark, set_dark) = use_state(false);
     let (clicks, set_clicks) = use_state(0);
-    fragment((
-        component(&BADGE, BadgeProps { label: "outside" }),
-        component(&THEME, Provider {
-            value: if *dark { "dark" } else { "light" },
-            children: fragment((
-                component(&BADGE, BadgeProps { label: "inside" }),
-                component(&LOOSE_BADGE, BadgeProps { label: if clicks % 2 == 0 { "even" } else { "odd!" } }),
-            )),
-        }),
-        button().class_name("theme").on_click(move |_| set_dark.update(|d| !d)).children("theme"),
-        button().class_name("click").on_click(move |_| set_clicks.update(|c| c + 1)).children(clicks),
-    ))
+    jsx! {
+        <>
+            <BADGE label="outside" />
+            <THEME value={if *dark { "dark" } else { "light" }}>
+                <>
+                    <BADGE label="inside" />
+                    <LOOSE_BADGE label={if clicks % 2 == 0 { "even" } else { "odd!" }} />
+                </>
+            </THEME>
+            <button className="theme" onClick={move |_| set_dark.update(|d| !d)}>{"theme"}</button>
+            <button className="click" onClick={move |_| set_clicks.update(|c| c + 1)}>{clicks}</button>
+        </>
+    }
 }
 
 pub fn App() -> Element {
-    div().id("app").children((component(Todos, ()), component(Clock, ()), component(Themed, ())))
+    jsx! {
+        <div id="app">
+            <Todos />
+            <Clock />
+            <Themed />
+        </div>
+    }
 }

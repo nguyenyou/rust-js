@@ -150,7 +150,7 @@ fn main() -> ExitCode {
         // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
         // and `#![rust_js::import = "./App.css"]` inside a module.
         "-Zcrate-attr=feature(register_tool, custom_inner_attributes)".to_string(),
-        "-Zcrate-attr=feature(decl_macro)".to_string(),
+        "-Zcrate-attr=feature(decl_macro, stmt_expr_attributes)".to_string(),
         "-Zcrate-attr=register_tool(rust_js)".to_string(),
     ];
     if test {

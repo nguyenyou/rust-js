@@ -71,7 +71,7 @@ struct Pass {
 /// Lower every function, grouped by module. Reports all unsupported
 /// features as rustc errors.
 pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Lowered> {
-    if !bindings::validate(tcx) || !traits::validate(tcx) {
+    if !bindings::validate(tcx) || !traits::validate(tcx) || !super::jsx_api::validate(tcx) {
         return None;
     }
     // With `--test`, rustc adds a harness: a `const` per test, marked

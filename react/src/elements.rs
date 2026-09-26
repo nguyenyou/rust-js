@@ -8,6 +8,7 @@ use super::*;
 
 /// Attributes, as React names them: `class_name` is `className`. Any other,
 /// like `aria-*` and `data-*`, is [`attr`](Element::attr).
+#[doc(hidden)]
 impl Element {
     /// `about`
     #[rust_js::link_name = "prop about"]
@@ -42,12 +43,6 @@ impl Element {
     /// `accumulate`
     #[rust_js::link_name = "prop accumulate"]
     pub fn accumulate(self, value: impl Value) -> Element {
-        unreachable!()
-    }
-
-    /// `action`
-    #[rust_js::link_name = "prop action"]
-    pub fn action(self, value: impl Value) -> Element {
         unreachable!()
     }
 
@@ -728,12 +723,6 @@ impl Element {
     /// `form`
     #[rust_js::link_name = "prop form"]
     pub fn form(self, value: impl Value) -> Element {
-        unreachable!()
-    }
-
-    /// `formAction`
-    #[rust_js::link_name = "prop formAction"]
-    pub fn form_action(self, value: impl Value) -> Element {
         unreachable!()
     }
 
@@ -2433,6 +2422,7 @@ impl Element {
 
 /// Event handlers: `on_click` is `onClick`. A handler must not borrow
 /// anything, since it runs later: write it `move |e| ..`.
+#[doc(hidden)]
 impl Element {
     /// `onAbort`
     #[rust_js::link_name = "prop onAbort"]

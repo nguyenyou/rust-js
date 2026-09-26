@@ -30,8 +30,8 @@
     "test:browser": "bun test test/browser.test.ts",
     "test:vite": "bun test test/vite.test.ts",
     "test:playground": "bun test test/playground.test.ts",
-    "test:snapshots": "bun test test/snapshots.test.ts",
-    "bless": "BLESS=1 bun test test/snapshots.test.ts",
+    "test:snapshots": "bun test test/snapshots.test.ts test/jsx.test.ts",
+    "bless": "BLESS=1 bun test test/snapshots.test.ts test/jsx.test.ts",
     "bench:lowering": "cargo build --locked && bun bench/lowering.ts"
   },
   "devDependencies": {

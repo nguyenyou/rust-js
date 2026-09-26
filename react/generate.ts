@@ -164,7 +164,7 @@ const BOOLEAN = new Set(
 );
 
 // Written by hand in lib.rs, where they take their own types.
-const HAND_WRITTEN = new Set(["style", "dangerouslySetInnerHTML", "children", "ref", "key", "innerHTML"]);
+const HAND_WRITTEN = new Set(["action", "formAction", "style", "dangerouslySetInnerHTML", "children", "ref", "key", "innerHTML"]);
 
 // Which React event each handler gets, as react.dev's common components
 // page groups them. Any other is `Event`, React's base event.
@@ -219,6 +219,7 @@ const lines: string[] = [
   "",
   "/// Attributes, as React names them: `class_name` is `className`. Any other,",
   '/// like `aria-*` and `data-*`, is [`attr`](Element::attr).',
+  "#[doc(hidden)]",
   "impl Element {",
 ];
 const methods = new Set(["children", "key", "r#ref", "attr"]);
@@ -237,7 +238,7 @@ for (const [name, entry] of Object.entries(versions.attributes)) {
     "",
   );
 }
-lines.push("}", "", "/// Event handlers: `on_click` is `onClick`. A handler must not borrow", "/// anything, since it runs later: write it `move |e| ..`.", "impl Element {");
+lines.push("}", "", "/// Event handlers: `on_click` is `onClick`. A handler must not borrow", "/// anything, since it runs later: write it `move |e| ..`.", "#[doc(hidden)]", "impl Element {");
 for (const [name, entry] of Object.entries(versions.events)) {
   if (entry.removed) continue;
   const base = name.replace(/Capture$/, "");

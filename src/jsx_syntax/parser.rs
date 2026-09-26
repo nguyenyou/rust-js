@@ -108,21 +108,17 @@ impl Jsx<'_> {
                 self.at += 1;
                 // JSX braces delimit an expression; they are not necessarily a
                 // Rust block. Keep a block only when it actually has statements.
-                let mut parser = Parser::new(&self.sess.psess, value.clone(), Some("JSX expression"));
-                let expression = match parser.parse_expr() {
-                    Ok(_) => parser.token.kind == TokenKind::Eof,
-                    Err(e) => {
-                        e.cancel();
-                        false
-                    }
-                };
-                if expression {
-                    return rust_expression(self.sess, value);
-                }
-                rust_expression(
-                    self.sess,
-                    TokenStream::new(vec![TokenTree::Delimited(span, spacing, Delimiter::Brace, value)]),
-                )
+                let block = TokenStream::new(vec![TokenTree::Delimited(
+                    span,
+                    spacing,
+                    Delimiter::Brace,
+                    value.clone(),
+                )]);
+                let mut parser = Parser::new(&self.sess.psess, block.clone(), Some("JSX expression"));
+                let parsed = parser.parse_block().map_err(|e| e.emit())?;
+                let expression =
+                    matches!(parsed.stmts.as_slice(), [stmt] if matches!(stmt.kind, ast::StmtKind::Expr(_)));
+                rust_expression(self.sess, if expression { value } else { block })
             }
             Some(TokenTree::Token(ref token, _)) if matches!(token.kind, TokenKind::Literal(_)) => {
                 let value = self.tokens[self.at].clone();
@@ -133,6 +129,42 @@ impl Jsx<'_> {
         }
     }
 
+    // Rust turbofish on a JSX component: <Card::<T> ... />. Preserve the
+    // original type tokens, including lifetimes and nested generic arguments.
+    fn type_args(&mut self) -> R<TokenStream> {
+        self.need(TokenKind::Lt, "expected generic arguments")?;
+        let mut depth = 1;
+        let mut args = Vec::new();
+        while let Some(tree) = self.tokens.get(self.at).cloned() {
+            if let TokenTree::Token(mut token, spacing) = tree {
+                match token.kind {
+                    TokenKind::Lt => depth += 1,
+                    TokenKind::Gt => depth -= 1,
+                    TokenKind::Shr if depth <= 2 => {
+                        token.kind = TokenKind::Gt;
+                        if depth == 1 {
+                            token.span = token.span.with_lo(token.span.lo() + rustc_span::BytePos(1));
+                            self.tokens[self.at] = TokenTree::Token(token, spacing);
+                        } else {
+                            token.span = token.span.with_hi(token.span.lo() + rustc_span::BytePos(1));
+                            args.push(TokenTree::Token(token, spacing));
+                            self.at += 1;
+                        }
+                        return Ok(TokenStream::new(args));
+                    }
+                    TokenKind::Shr => depth -= 2,
+                    _ => {}
+                }
+            }
+            self.at += 1;
+            if depth == 0 {
+                return Ok(TokenStream::new(args));
+            }
+            args.push(tree);
+        }
+        Err(self.error("missing > after generic arguments"))
+    }
+
     fn element(&mut self, depth: usize, indent: usize) -> R<TokenStream> {
         if depth > 128 {
             return Err(self.error("JSX nesting exceeds 128 elements"));
@@ -141,11 +173,23 @@ impl Jsx<'_> {
         let indent = self.mark(indent);
         self.need(TokenKind::Lt, "expected <tag> or <>fragment</>")?;
         let mut name = String::new();
+        let mut types = None;
+        let mut provider = false;
         if !self.is(TokenKind::Gt) {
             name = self.ident()?;
-            while self.eat(TokenKind::PathSep) || self.eat(TokenKind::Dot) {
+            while self.is(TokenKind::PathSep) || self.is(TokenKind::Dot) {
+                let member = self.eat(TokenKind::Dot);
+                if !member {
+                    self.at += 1;
+                }
+                if self.is(TokenKind::Lt) {
+                    types = Some(self.type_args()?);
+                    break;
+                }
                 name.push_str("::");
-                name.push_str(&self.ident()?);
+                let segment = self.ident()?;
+                provider = member && segment == "Provider";
+                name.push_str(&segment);
             }
         }
         let intrinsic = !name.is_empty() && !name.contains("::") && name.starts_with(char::is_lowercase);
@@ -154,8 +198,13 @@ impl Jsx<'_> {
             "StrictMode" => Some("strict_mode"),
             "Suspense" => Some("suspense"),
             "Activity" => Some("activity"),
+            "Profiler" => Some("profiler"),
+            "ViewTransition" => Some("view_transition"),
             _ => None,
         };
+        if types.is_some() && (intrinsic || builtin.is_some() || provider) {
+            return Err(self.error("generic arguments belong on a function component"));
+        }
         let mut attrs: Vec<(String, TokenStream, Span)> = Vec::new();
         let mut spread = None;
         while !self.is(TokenKind::Gt) && !self.is(TokenKind::Slash) {
@@ -243,6 +292,7 @@ impl Jsx<'_> {
                 return Err(self.error("a fragment is <>children</>"));
             }
             return Ok(call(
+                self.sess,
                 template(self.sess, "::react::fragment".into(), span),
                 vec![children],
                 span,
@@ -254,6 +304,7 @@ impl Jsx<'_> {
                 |n| format!("::react::{n}"),
             );
             let mut expr = call(
+                self.sess,
                 template(self.sess, function, span),
                 if name == "StrictMode" {
                     vec![arguments(vec![], span)]
@@ -273,7 +324,7 @@ impl Jsx<'_> {
             if let Some(props) = spread {
                 expr = method_call(self.sess, expr, "props", vec![props], span);
             }
-            if has_children {
+            if has_children || (builtin.is_some() && name != "StrictMode") {
                 expr = method_call(self.sess, expr, "children", vec![children], span);
             }
             return Ok(expr);
@@ -285,7 +336,8 @@ impl Jsx<'_> {
             .iter()
             .position(|(name, _, _)| name == "key")
             .is_some_and(|at| at + 1 != attrs.len() || spread.is_some() || has_children)
-            || (spread.is_some() && has_children);
+            || (spread.is_some() && has_children)
+            || attrs.iter().any(|(name, _, _)| name == "ref");
         // Evaluate attributes in written order, including `key`, before
         // constructing props. The match bindings cannot capture user names:
         // every user expression is in the scrutinee, outside their scope.
@@ -319,13 +371,45 @@ impl Jsx<'_> {
         if spread.is_some() && !attrs.is_empty() {
             return Err(self.error("a component takes either named props or a props spread; use a Rust struct update inside the spread to override fields"));
         }
+        let mut reference_prop = None;
+        attrs.retain(|(name, value, _)| {
+            if name == "ref" {
+                reference_prop = Some(value.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let component = if provider {
+            name.strip_suffix("::Provider").unwrap()
+        } else {
+            &name
+        };
+        let target = if provider {
+            format!("::react::provider(&{component})")
+        } else {
+            format!("&{name}")
+        };
+        let mut reference = template(self.sess, target, span);
+        if let Some(types) = &types {
+            reference = TokenStream::new(
+                reference
+                    .iter()
+                    .chain(template(self.sess, "::<".into(), span).iter())
+                    .chain(types.iter())
+                    .chain(template(self.sess, ">".into(), span).iter())
+                    .cloned()
+                    .collect(),
+            );
+        }
         let mut expr = if attrs.is_empty()
             && !has_children
             && let Some(props) = spread.clone()
         {
             call(
+                self.sess,
                 template(self.sess, "::react::component".into(), span),
-                vec![template(self.sess, name.clone(), span), props],
+                vec![reference, props],
                 span,
             )
         } else {
@@ -345,7 +429,23 @@ impl Jsx<'_> {
                 fields.extend(template(self.sess, "..".into(), span).iter().cloned());
                 fields.extend(base.iter().cloned());
             }
-            let mut tokens: Vec<_> = template(self.sess, format!("{name}!"), span).iter().cloned().collect();
+            if let Some(reference) = reference_prop {
+                let mut prefix: Vec<_> = template(self.sess, "@ref".into(), span).iter().cloned().collect();
+                prefix.push(group(Delimiter::Parenthesis, reference, span));
+                fields.splice(0..0, prefix);
+            }
+            if let Some(types) = types {
+                let mut prefix: Vec<_> = template(self.sess, "@types".into(), span).iter().cloned().collect();
+                prefix.push(group(Delimiter::Parenthesis, types, span));
+                fields.splice(0..0, prefix);
+            }
+            if provider {
+                fields.splice(0..0, template(self.sess, "@provider ".into(), span).iter().cloned());
+            }
+            let mut tokens: Vec<_> = template(self.sess, format!("{component}!"), span)
+                .iter()
+                .cloned()
+                .collect();
             tokens.push(group(Delimiter::Brace, TokenStream::new(fields), span));
             TokenStream::new(tokens)
         };
@@ -367,9 +467,18 @@ impl Jsx<'_> {
 
 fn snake(name: &str) -> String {
     let mut result = String::new();
-    for c in name.chars() {
+    let chars: Vec<char> = name.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
         if c.is_ascii_uppercase() {
-            result.push('_');
+            // Match the bindings generator: HTML stays one word, while
+            // innerHTML and HTMLInput become inner_html and html_input.
+            let previous = i.checked_sub(1).map(|i| chars[i]);
+            let next = chars.get(i + 1);
+            if previous.is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+                || (previous.is_some_and(|c| c.is_ascii_uppercase()) && next.is_some_and(|c| c.is_ascii_lowercase()))
+            {
+                result.push('_');
+            }
             result.push(c.to_ascii_lowercase());
         } else {
             result.push(c);
@@ -416,56 +525,113 @@ fn arguments(parts: Vec<TokenStream>, span: Span) -> TokenStream {
     TokenStream::new(vec![group(Delimiter::Parenthesis, TokenStream::new(tokens), span)])
 }
 
-fn call(function: TokenStream, args: Vec<TokenStream>, span: Span) -> TokenStream {
-    TokenStream::new(function.iter().chain(arguments(args, span).iter()).cloned().collect())
+fn call(sess: &Session, function: TokenStream, args: Vec<TokenStream>, span: Span) -> TokenStream {
+    let marker = template(sess, "#[rust_js::jsx]".into(), span);
+    TokenStream::new(
+        marker
+            .iter()
+            .chain(function.iter())
+            .chain(arguments(args, span).iter())
+            .cloned()
+            .collect(),
+    )
 }
 
 fn method_call(sess: &Session, receiver: TokenStream, method: &str, args: Vec<TokenStream>, span: Span) -> TokenStream {
     let method = template(sess, format!(".r#{method}"), span);
+    let receiver = TokenStream::new(vec![group(Delimiter::Parenthesis, receiver, span)]);
     let function = TokenStream::new(receiver.iter().chain(method.iter()).cloned().collect());
-    call(function, args, span)
+    call(sess, function, args, span)
 }
 
 /// A hygienic props constructor beside a component. Rust resolves its props
 /// type in the definition's module, including aliases and private imports.
 /// Calling it through an imported/renamed component uses Rust's macro namespace.
 pub(super) fn component(sess: &Session, item: &ast::Item) -> Option<Box<ast::Item>> {
-    let ItemKind::Fn(f) = &item.kind else { return None };
-    let FnRetTy::Ty(ret) = &f.sig.decl.output else {
-        return None;
+    super::configured_attrs(sess, &item.attrs)?;
+    let (ident, target, props, handle) = match &item.kind {
+        ItemKind::Fn(f) => {
+            let FnRetTy::Ty(ret) = &f.sig.decl.output else {
+                return None;
+            };
+            let TyKind::Path(_, path) = &ret.kind else { return None };
+            if path.segments.last()?.ident.as_str() != "Element" || f.sig.decl.inputs.len() > 1 {
+                return None;
+            }
+            let props = match f.sig.decl.inputs.first() {
+                Some(param) => props_path(&param.ty)?,
+                None => String::new(),
+            };
+            (f.ident, f.ident.to_string(), props, None)
+        }
+        ItemKind::Static(s) => {
+            let TyKind::Path(_, path) = &s.ty.kind else { return None };
+            let segment = path.segments.last()?;
+            let ast::GenericArgs::AngleBracketed(args) = segment.args.as_deref()? else {
+                return None;
+            };
+            let Some(ast::AngleBracketedArg::Arg(ast::GenericArg::Type(ty))) = args.args.first() else {
+                return None;
+            };
+            let props = match segment.ident.as_str() {
+                "Context" => "::react::Provider".to_string(),
+                "Memo" | "Lazy" | "ForwardRef" => props_path(ty)?,
+                _ => return None,
+            };
+            {
+                let handle = if segment.ident.as_str() == "ForwardRef" {
+                    let Some(ast::AngleBracketedArg::Arg(ast::GenericArg::Type(handle))) = args.args.get(1) else {
+                        return None;
+                    };
+                    Some(sess.source_map().span_to_snippet(handle.span).ok()?)
+                } else {
+                    None
+                };
+                (s.ident, format!("&{}", s.ident), props, handle)
+            }
+        }
+        _ => return None,
     };
-    let TyKind::Path(_, path) = &ret.kind else { return None };
-    if !f.ident.as_str().starts_with(char::is_uppercase)
-        || path.segments.last()?.ident.as_str() != "Element"
-        || !f.generics.params.is_empty()
-        || f.sig.decl.inputs.len() > 1
-    {
+    if !ident.as_str().starts_with(char::is_uppercase) {
         return None;
     }
-    let props = if let Some(param) = f.sig.decl.inputs.first() {
-        let TyKind::Path(_, path) = &param.ty.kind else {
-            return None;
-        };
-        if path.segments.iter().any(|s| s.args.is_some()) {
-            return None;
+    let pattern = if props.is_empty() {
+        ""
+    } else {
+        "$($field:ident: $value:expr,)* $(..$base:expr)?"
+    };
+    let value = if props.is_empty() {
+        "()".to_string()
+    } else {
+        format!("{props} {{ $($field: $value,)* $(..$base)? }}")
+    };
+    let call = |target: &str, value: &str| format!("#[rust_js::jsx] ::react::component({target}, {value})");
+    let arm = |prefix: &str, body: &str| format!("({prefix} {pattern}) => {{ {body} }}");
+    let mut arms = vec![arm("", &call(&target, &value))];
+    let ref_value = format!("{props} {{ r#ref: $reference, $($field: $value,)* $(..$base)? }}");
+    if let Some(handle) = handle {
+        let body = format!(
+            "#[rust_js::jsx] ({}).r#ref(::react::checked_ref::<{handle}, _, _>($reference))",
+            call(&target, &value)
+        );
+        arms.push(arm("@ref ($reference:expr)", &body));
+    } else if !props.is_empty() {
+        arms.push(arm("@ref ($reference:expr)", &call(&target, &ref_value)));
+    }
+    if props == "::react::Provider" {
+        arms.push(arm("@provider", &call(&format!("::react::provider({target})"), &value)));
+    } else if matches!(&item.kind, ItemKind::Fn(f) if !f.generics.params.is_empty()) {
+        let target = format!("{target}::<$($types)*>");
+        arms.push(arm("@types ($($types:tt)*)", &call(&target, &value)));
+        if !props.is_empty() {
+            arms.push(arm(
+                "@types ($($types:tt)*) @ref ($reference:expr)",
+                &call(&target, &ref_value),
+            ));
         }
-        path.segments
-            .iter()
-            .map(|s| s.ident.to_string())
-            .collect::<Vec<_>>()
-            .join("::")
-    } else {
-        String::new()
-    };
-    let body = if props.is_empty() {
-        format!("() {{ ::react::component({}, ()) }}", f.ident)
-    } else {
-        format!(
-            "{{ ($($field:ident: $value:expr,)* $(..$base:expr)?) => {{ ::react::component({}, {props} {{ $($field: $value,)* $(..$base)? }}) }} }}",
-            f.ident
-        )
-    };
-    let tokens = template(sess, format!("macro {} {body}", f.ident), item.span);
+    }
+    let body = format!("{{ {} }}", arms.join(","));
+    let tokens = template(sess, format!("macro {ident} {body}"), item.span);
     let mut parser = Parser::new(&sess.psess, tokens, Some("JSX component props"));
     match parser.parse_item(ForceCollect::No, AllowConstBlockItems::No) {
         Ok(Some(mut companion)) => {
@@ -478,4 +644,52 @@ pub(super) fn component(sess: &Session, item: &ast::Item) -> Option<Box<ast::Ite
             None
         }
     }
+}
+
+fn props_path(ty: &ast::Ty) -> Option<String> {
+    match &ty.kind {
+        TyKind::Tup(parts) if parts.is_empty() => Some(String::new()),
+        // Rust infers generic arguments from the fields and component call.
+        TyKind::Path(None, path) => Some(
+            path.segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::"),
+        ),
+        _ => None,
+    }
+}
+
+// rustc stores module items in boxes.
+#[allow(clippy::vec_box)]
+pub(super) fn thread_local_components(sess: &Session, item: &ast::Item) -> Vec<Box<ast::Item>> {
+    let ItemKind::MacCall(mac) = &item.kind else {
+        return Vec::new();
+    };
+    if mac
+        .path
+        .segments
+        .last()
+        .is_none_or(|s| s.ident.as_str() != "thread_local")
+    {
+        return Vec::new();
+    }
+    let mut parser = Parser::new(&sess.psess, mac.args.tokens.clone(), Some("JSX component declarations"));
+    let mut companions = Vec::new();
+    while parser.token.kind != TokenKind::Eof {
+        match parser.parse_item(ForceCollect::No, AllowConstBlockItems::No) {
+            Ok(Some(declaration)) => {
+                if let Some(companion) = component(sess, &declaration) {
+                    companions.push(companion);
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                e.emit();
+                break;
+            }
+        }
+    }
+    companions
 }

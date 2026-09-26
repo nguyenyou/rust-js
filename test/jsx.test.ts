@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { buildReact, compiler, fixture, run, target } from "./support";
+import { buildReact, compiler, expectSnapshot, fixture, root, run, target } from "./support";
 import { decodeMappings, lookup } from "./sourcemap";
 
 beforeAll(buildReact, 600_000);
@@ -17,6 +17,14 @@ function compile(source: string, files: Record<string, string> = {}) {
   const args = [compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--manifest", join(dir, "manifest.json"),
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target];
   return { dir, args };
+}
+
+// Keep the whole emitted module, including imports and formatting. Only the
+// temporary source directory varies between runs; never normalize emitted code.
+function snapshot(dir: string, name: string) {
+  expectSnapshot(dir, join(root, "test/snapshots/jsx", name), {
+    normalize: text => text.replaceAll(dir + "/", "test/jsx/"),
+  });
 }
 
 test("JSX supports components across modules, fragments, lists, conditions and spreads", async () => {
@@ -57,6 +65,7 @@ pub(crate) fn Card(p: Props) -> Element {
 `;
   const { dir, args } = compile(source, { "ui/card.rs": card });
   run(args);
+  snapshot(dir, "modules");
   const code = readFileSync(join(dir, "lib.jsx"), "utf8");
   expect(code).toContain('import { Card } from "./card.jsx";');
   expect(code).toContain('<Card title="Numbers">');
@@ -91,6 +100,7 @@ pub fn View() -> Element {
     "second.rs": 'use react::Element; pub fn Card() -> Element { jsx! { <b>{"second"}</b> } }',
   });
   run(args);
+  snapshot(dir, "import-collisions");
   const output = readFileSync(join(dir, "lib.jsx"), "utf8");
   expect(output).toContain('import { Card as Card$2 } from "./first.jsx";');
   expect(output).toContain('import { Card as Card$3 } from "./second.jsx";');
@@ -133,6 +143,7 @@ pub fn App() -> Element {
 `;
   const { dir, args } = compile(source);
   run(args);
+  snapshot(dir, "evaluation-order");
   const log: number[] = [];
   const previous = globalThis.record;
   globalThis.record = (n: number) => { log.push(n); return n; };
@@ -191,6 +202,7 @@ pub fn Tokens() -> Element {
 `;
   const { dir, args } = compile(source);
   run(args);
+  snapshot(dir, "nested-expressions");
   const output = readFileSync(join(dir, "lib.jsx"), "utf8");
   expect(output).toContain(`export function App(active) {
   return (
@@ -233,6 +245,7 @@ pub fn Tokens() -> Element {
 test("JSX children have no twelve-sibling tuple limit", async () => {
   const {dir, args} = compile('use react::Element; pub fn View() -> Element { jsx! { <div>' + Array.from({length: 40}, (_, i) => `<span>{${i}}</span>`).join('') + '</div> } }');
   run(args);
+  snapshot(dir, "many-children");
   const result = await import(join(dir, "lib.jsx"));
   expect(result.View().props.children).toHaveLength(40);
 });
@@ -244,6 +257,7 @@ pub fn View() -> Element {
 }
 `);
   run(args);
+  snapshot(dir, "svg");
   const result = await import(join(dir, "lib.jsx"));
   expect(renderToStaticMarkup(result.View())).toBe('<svg viewBox="0 0 10 10"><defs><linearGradient id="paint"></linearGradient></defs></svg>');
 });
@@ -260,6 +274,7 @@ pub fn App() -> Element {
 }
 `);
   run(args);
+  snapshot(dir, "keys");
   const log: number[] = [];
   const previous = globalThis.record;
   globalThis.record = (n: number) => { log.push(n); return n; };
@@ -288,6 +303,7 @@ pub fn view() -> Element { jsx! { <>{inner::view()}{inline::leaf::view()}{altern
     "alternate.rs": 'use react::Element; pub fn view() -> Element { jsx! { <p>{"three"}</p> } }',
   });
   run(args);
+  snapshot(dir, "module-resolution");
   const result = await import(join(dir, "lib.js"));
   expect(renderToStaticMarkup(result.App())).toBe("<b>one</b><i>two</i><p>three</p>");
 });
@@ -313,13 +329,20 @@ for (const [name, body, message] of [
   ["unknown component prop", '<Card nope="x" />', 'no field named'],
   ["invalid spread", '<div {...123} />', 'non-struct'],
   ["mixed component spread", '<Card title="x" {...Props { title: "y" }} />', 'either named props or a props spread'],
+  ["adjacent roots", '<div /><span />', 'wrap adjacent JSX elements'],
+  ["spread followed by attribute", '<div {...Props { title: "x" }} id="y" />', 'put the props spread last'],
+  ["multiple spreads", '<div {...Props { title: "x" }} {...Props { title: "y" }} />', 'put the props spread last'],
+  ["duplicate children", '<Card title="x" children={1}>{2}</Card>', 'children were provided twice'],
+  ["intrinsic generic", '<div::<i32> />', 'generic arguments belong on a function component'],
+  ["HTML entity", '<p>&amp;</p>', 'literal or a Rust expression'],
+  ["empty attribute expression", '<div title={} />', 'Value'],
   ["bare text", '<p>Hello world</p>', 'literal or a Rust expression'],
 ] as const) {
   test(`JSX ${name} reports the original source and preserves existing output`, () => {
-    const {dir, args} = compile(`#![allow(non_snake_case)]\nuse react::Element;\npub struct Props { pub title: &'static str }\npub fn Card(p: Props) -> Element { react::html::div().children(p.title) }\npub fn App() -> Element {\n    jsx! { ${body} }\n}`);
+    const {dir, args} = compile(`#![allow(non_snake_case)]\nuse react::Element;\npub struct Props { pub title: &'static str }\npub fn Card(p: Props) -> Element { jsx! { <div>{p.title}</div> } }\npub fn App() -> Element {\n    jsx! { ${body} }\n}`);
     const output = join(dir, "lib.jsx");
     writeFileSync(output, "previous output");
-    const result = Bun.spawnSync(args);
+    const result = Bun.spawnSync(args, { cwd: dir });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(message);
     // Missing fields are diagnosed in the hygienic props constructor, with
@@ -329,3 +352,310 @@ for (const [name, body, message] of [
     expect(existsSync(join(dir, "manifest.json"))).toBe(false);
   });
 }
+
+test("JSX covers generic functions, memo/lazy/forward-ref values and context providers", async () => {
+  const { dir, args } = compile(`#![deny(warnings)]
+#![allow(non_snake_case)]
+use react::{Element, Node};
+mod wrapped;
+use wrapped::{MEMO as Cached, THEME as Theme};
+pub struct Props<T> { pub value: T }
+#[cfg_attr(all(), inline)]
+pub fn Generic<T: Node>(p: Props<T>) -> Element { jsx! { <span>{p.value}</span> } }
+pub struct Children<T> { pub children: T }
+pub fn Group<T: Node>(p: Children<T>) -> Element { jsx! { <div>{p.children}</div> } }
+pub fn Empty<T>() -> Element { jsx! { <i /> } }
+pub fn App() -> Element {
+    let Selected = Generic::<i32>;
+    jsx! {
+        <>
+            <Generic value={7} />
+            <Generic::<i32> value={8} />
+            <Generic::<&'static str> value="borrowed" />
+            <Generic::<Vec<i32>> value={vec![9, 10]} />
+            <Group::<Vec<i32>>>{vec![1]}</Group>
+            <Selected {...Props { value: 11 }} />
+            <Empty::<i32> />
+            <Cached label="memo" />
+            <wrapped::Provider />
+            <wrapped::LAZY />
+            <wrapped::FORWARD label="forward" />
+            <Theme value="dark"><Cached label="child" /></Theme>
+            <Theme.Provider value="legacy"><Cached label="old" /></Theme.Provider>
+        </>
+    }
+}
+`, {
+    "wrapped.rs": `use react::{Context, Element, Memo, Lazy, ForwardRef, Ref, create_context, memo, lazy, import_module, forward_ref};
+pub struct Props { pub label: &'static str }
+pub fn Card(p: Props) -> Element { jsx! { <b>{p.label}</b> } }
+pub fn Provider() -> Element { jsx! { <i /> } }
+pub fn Input(p: Props, _: Ref<Option<i32>>) -> Element { jsx! { <b>{p.label}</b> } }
+thread_local! {
+    pub static MEMO: Memo<Props> = memo(Card);
+    pub static LAZY: Lazy<()> = lazy(|| import_module::<()>("./lazy.jsx"));
+    pub static FORWARD: ForwardRef<Props, i32> = forward_ref(Input);
+    pub static THEME: Context<&'static str> = create_context("light");
+    #[cfg(any())] pub static DISABLED: Memo<Missing> = missing();
+}
+`,
+  });
+  run(args);
+  snapshot(dir, "component-kinds");
+  const code = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(code).toContain('<Generic value={7} />');
+  expect(code).toContain('<Generic value={8} />');
+  expect(code).toContain('<MEMO label="memo" />');
+  expect(code).toContain('<THEME value="dark">');
+  expect(code).toContain('<THEME.Provider value="legacy">');
+  expect(code).toContain('<FORWARD label="forward" />');
+  expect(code).toContain('<LAZY />');
+  expect(code).not.toContain('component(');
+  const source = readFileSync(join(dir, "lib.rs"), "utf8");
+  const map = JSON.parse(readFileSync(join(dir, "lib.jsx.map"), "utf8"));
+  const lines = code.split("\n");
+  for (const [generated, original] of [["<MEMO label=\"memo\"", "<Cached label=\"memo\""], ["<THEME.Provider", "<Theme.Provider"], ["<Generic value={8}", "<Generic::<i32>"]]) {
+    const line = lines.findIndex(l => l.includes(generated));
+    expect(lookup(decodeMappings(map.mappings), line, lines[line].indexOf(generated))?.srcLine)
+      .toBe(source.split("\n").findIndex(l => l.includes(original)));
+  }
+});
+
+test("JSX built-ins finish as elements and use one spelling for ref and form actions", () => {
+  const { dir, args } = compile(`#![allow(non_snake_case)]
+use react::{Element, Style, use_ref, web};
+pub fn App() -> Element {
+    let object = use_ref(None::<&'static web::Element>);
+    jsx! {
+        <Profiler id="test" onRender={|_, _, _, _, _, _| ()}>
+            <ViewTransition name="page">
+                <form action={|_: &'static web::FormData| ()}>
+                    <input ref={object} />
+                    <input ref={|_: Option<&'static web::Element>| ()} />
+                    <button formAction="/save" style={Style::new().color("red")}>{"Save"}</button>
+                </form>
+            </ViewTransition>
+            <Suspense />
+            <Activity />
+            <StrictMode />
+        </Profiler>
+    }
+}
+`);
+  run(args);
+  snapshot(dir, "builtins");
+  const code = readFileSync(join(dir, "lib.jsx"), "utf8");
+  for (const name of ["Profiler", "ViewTransition", "Suspense", "Activity", "StrictMode"]) expect(code).toContain(`<${name}`);
+  expect(code).toContain('formAction="/save"');
+  expect(code).not.toContain('actionFn');
+  expect(code).not.toContain('refCallback');
+});
+
+for (const [name, body] of [
+  ["constructor", "react::html::div()"],
+  ["import alias", "{ use react::html::div as make; make() }"],
+  ["function value", "{ let make = react::html::div; make() }"],
+  ["method", "jsx! { <div /> }.children(\"no\")"],
+  ["UFCS", "react::Element::children(jsx! { <div /> }, \"no\")"],
+  ["component", "react::component(Card, ())"],
+  ["fragment", "react::fragment(())"],
+  ["inside JSX expression", "jsx! { <div>{react::html::span()}</div> }"],
+  ["inside component prop", "jsx! { <Wrapper content={react::html::span()} /> }"],
+  ["inside closure", "jsx! { <button onClick={|_| { let _ = react::html::span(); }} /> }"],
+  ["ordinary macro", "{ macro_rules! old { () => { react::html::span() } } old!() }"],
+] as const) {
+  test(`direct element builder ${name} is rejected without replacing output`, () => {
+    const { dir, args } = compile(`#![allow(non_snake_case, dead_code)]
+use react::Element;
+pub fn Card() -> Element { jsx! { <div /> } }
+pub struct Props { pub content: Element }
+pub fn Wrapper(p: Props) -> Element { p.content }
+fn unused() -> Element { ${body} }
+`);
+    const file = join(dir, "lib.jsx");
+    writeFileSync(file, "previous output");
+    const result = Bun.spawnSync(args);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("element builders are compiler-only");
+    expect(readFileSync(file, "utf8")).toBe("previous output");
+  });
+}
+
+test("JSX context providers and refs work on React 18 while newer APIs stay gated", () => {
+  const { dir, args } = compile(`#![deny(warnings)]
+#![allow(non_snake_case)]
+use react::{Context, Element, create_context, web};
+thread_local! { static THEME: Context<&'static str> = create_context("light"); }
+pub fn App() -> Element {
+    jsx! {
+        <THEME.Provider value="dark">
+            <Suspense key="body" fallback="loading">
+                <form action="/save"><input ref={|_: Option<&'static web::Element>| ()} /></form>
+            </Suspense>
+        </THEME.Provider>
+    }
+}
+`);
+  const source = readFileSync(join(dir, "lib.rs"), "utf8");
+  const metadata = join(dir, "libreact.rmeta");
+  run(["react/build.sh", "-o", metadata, "--react", "18.2.0"]);
+  const versionArgs = args.map(arg => arg === `react=${join(target, "libreact.rmeta")}` ? `react=${metadata}` : arg === target ? dir : arg);
+  run(versionArgs);
+  snapshot(dir, "react18");
+  const code = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(code).toContain('<THEME.Provider value="dark">');
+  expect(code).toContain('<Suspense key="body" fallback="loading">');
+  for (const unsupported of [
+    source.replaceAll("THEME.Provider", "THEME"),
+    source.replace('action="/save"', "action={|_: &'static web::FormData| ()}"),
+    source.replace('key="body" fallback="loading"', '').replaceAll('Suspense', 'Activity'),
+  ]) {
+    writeFileSync(join(dir, "lib.rs"), unsupported);
+    expect(Bun.spawnSync(versionArgs, { cwd: dir }).exitCode).not.toBe(0);
+    expect(readFileSync(join(dir, "lib.jsx"), "utf8")).toBe(code);
+  }
+}, 30_000);
+
+test("forwarded refs keep their handle type, evaluation order and handwritten JSX", async () => {
+  const { dir, args } = compile(`#![allow(non_snake_case)]
+use react::{Element, ForwardRef, Ref, forward_ref, web};
+unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32; }
+pub struct Props { pub label: i32 }
+pub fn Input(p: Props, reference: Ref<Option<&'static web::Element>>) -> Element {
+    jsx! { <input ref={reference} title={p.label} /> }
+}
+thread_local! { static INPUT: ForwardRef<Props, &'static web::Element> = forward_ref(Input); }
+pub fn Plain(reference: Ref<Option<&'static web::Element>>) -> Element {
+    jsx! { <INPUT ref={reference} label={1} /> }
+}
+pub fn App(reference: Ref<Option<&'static web::Element>>) -> Element {
+    jsx! { <INPUT ref={record(1); reference} label={record(2)} /> }
+}
+pub struct NormalProps { pub r#ref: Ref<Option<&'static web::Element>>, pub title: i32 }
+pub fn Normal(p: NormalProps) -> Element { jsx! { <input ref={p.r#ref} title={p.title} /> } }
+pub fn Ordinary(reference: Ref<Option<&'static web::Element>>) -> Element {
+    jsx! { <Normal title={record(3)} ref={record(4); reference} /> }
+}
+`);
+  run(args);
+  snapshot(dir, "refs");
+  const output = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(output).not.toContain('checked_ref');
+  expect(output).not.toContain('component(');
+  expect(output).toContain('export function Plain(reference) {\n  return <INPUT label={1} ref={reference} />;\n}');
+  const result = await import(join(dir, "lib.jsx"));
+  const previous = globalThis.record;
+  const calls: number[] = [];
+  globalThis.record = (n: number) => { calls.push(n); return n; };
+  try {
+    const reference = { current: null };
+    const tree = result.App(reference);
+    expect(calls).toEqual([1, 2]);
+    expect(tree.props.ref).toBe(reference);
+    expect(tree.type.render(tree.props, tree.props.ref).props.ref).toBe(reference);
+    result.Ordinary(reference);
+    expect(calls).toEqual([1, 2, 3, 4]);
+  } finally { globalThis.record = previous; }
+  const file = join(dir, "lib.rs");
+  const source = readFileSync(file, "utf8");
+  writeFileSync(file, source.replace('pub fn App(reference: Ref<Option<&\'static web::Element>>)', 'pub fn App(reference: Ref<Option<i32>>)'));
+  const invalid = Bun.spawnSync(args, { cwd: dir });
+  expect(invalid.exitCode).not.toBe(0);
+  expect(invalid.stderr.toString()).toContain('RefValue');
+  expect(readFileSync(join(dir, "lib.jsx"), "utf8")).toBe(output);
+});
+
+// Grammar cases live together so their complete output is easy to review.
+// API-specific behavior (hooks, mounting, async actions) stays in react.test.ts.
+test("JSX grammar: literals, empty forms, Rust children and attribute expressions", async () => {
+  const { dir, args } = compile(`#![allow(non_snake_case)]
+use react::{Element, Style, inner_html};
+pub fn Empty() -> Element { jsx! { <></> } }
+pub fn Literals() -> Element {
+    jsx! {
+        <div>
+            " leading "
+            {"<&>"}
+            {r#"raw "quote""#}
+            {42}{1.5}{true}{false}{()}{None::<i32>}{Some(7)}
+            {/* a comment contributes no child */}
+            <span></span>
+        </div>
+    }
+}
+pub fn Expressions(show: bool) -> Element {
+    let pair = (1, 2);
+    let list = vec![3, 4];
+    jsx! {
+        <section>
+            {pair}{list}
+            {if show { Some(jsx! { <b>{"yes"}</b> }) } else { None }}
+            {match show { true => "on", false => "off" }}
+            {let n = 5; n + 1}
+        </section>
+    }
+}
+pub fn Attributes() -> Element {
+    jsx! {
+        <>
+            <button disabled title={let n = 2; n.to_string()} aria-label="Save" data-state="ready" tabIndex=3 />
+            <input disabled={false} defaultValue="a" />
+            <div style={Style::new().color("red")} dangerouslySetInnerHTML={inner_html("<b>raw</b>")} />
+        </>
+    }
+}
+`);
+  run(args);
+  snapshot(dir, "grammar");
+  const source = readFileSync(join(dir, "lib.rs"), "utf8").split("\n");
+  const lines = readFileSync(join(dir, "lib.jsx"), "utf8").split("\n");
+  const map = JSON.parse(readFileSync(join(dir, "lib.jsx.map"), "utf8"));
+  for (const [generated, original] of [["const n = 5", "{let n = 5"], ["const n = 2", "title={let n = 2"]]) {
+    const line = lines.findIndex(l => l.includes(generated));
+    expect(line).toBeGreaterThanOrEqual(0);
+    expect(lookup(decodeMappings(map.mappings), line, lines[line].indexOf("n ="))?.srcLine)
+      .toBe(source.findIndex(l => l.includes(original)));
+  }
+  const result = await import(join(dir, "lib.jsx"));
+  expect(renderToStaticMarkup(result.Empty())).toBe("");
+  expect(renderToStaticMarkup(result.Literals())).toBe('<div> leading &lt;&amp;&gt;raw &quot;quote&quot;421.57<span></span></div>');
+  expect(renderToStaticMarkup(result.Expressions(true))).toBe('<section>1234<b>yes</b>on6</section>');
+  expect(renderToStaticMarkup(result.Expressions(false))).toBe('<section>1234off6</section>');
+  expect(renderToStaticMarkup(result.Attributes())).toBe('<button disabled="" title="2" aria-label="Save" data-state="ready" tabindex="3"></button><input value="a"/><div style="color:red"><b>raw</b></div>');
+});
+
+test("JSX grammar: spread precedence, children overrides, component paths and keyed fragments", async () => {
+  const { dir, args } = compile(`#![allow(non_snake_case)]
+#![rust_js::camel_case]
+use react::Element;
+mod ui;
+use ui::Card as Panel;
+pub struct Attrs { pub title: &'static str, pub class_name: &'static str }
+pub fn App() -> Element {
+    let attrs = Attrs { title: "spread", class_name: "card" };
+    let props = ui::Props { title: "panel", children: jsx! { <i>{"old"}</i> } };
+    let Selected = ui::Empty;
+    jsx! {
+        <Fragment key="group">
+            <div title="named" {...attrs} />
+            <Panel {...props}><b>{"new"}</b></Panel>
+            <ui.Card title="dot"><i /></ui.Card>
+            <ui::Card title="path" children={jsx! { <u /> }} />
+            <Selected {...()} />
+        </Fragment>
+    }
+}
+`, {
+    "ui.rs": `use react::Element;
+pub struct Props { pub title: &'static str, pub children: Element }
+pub fn Card(p: Props) -> Element { jsx! { <section title={p.title}>{p.children}</section> } }
+pub fn Empty() -> Element { jsx! { <hr /> } }
+`,
+  });
+  run(args);
+  snapshot(dir, "spreads-and-paths");
+  const result = await import(join(dir, "lib.jsx"));
+  const tree = result.App();
+  expect(tree.key).toBe("group");
+  expect(renderToStaticMarkup(tree)).toBe('<div title="spread" class="card"></div><section title="panel"><b>new</b></section><section title="dot"><i></i></section><section title="path"><u></u></section><hr/>');
+});

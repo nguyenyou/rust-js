@@ -41,6 +41,7 @@ mod combinators;
 mod display;
 mod format_spec;
 mod jsx;
+mod jsx_api;
 mod link;
 mod maps;
 mod numbers;

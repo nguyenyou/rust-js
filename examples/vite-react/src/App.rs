@@ -5,8 +5,7 @@
 #![rust_js::import = "./App.css"]
 #![allow(non_snake_case)]
 
-use react::html::{a, button, code, div, h1, h2, img, li, p, section, span, svg, ul, r#use};
-use react::{Element, fragment, use_state};
+use react::{Element, use_state};
 
 unsafe extern "Rust" {
     #[link_name = "./assets/hero.png#default"]
@@ -20,95 +19,100 @@ unsafe extern "Rust" {
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
 
-    fragment((
-        section().id("center").children((
-            div().class_name("hero").children((
-                img().src(hero_img).class_name("base").width("170").height("179").alt(""),
-                img().src(react_logo).class_name("framework").alt("React logo"),
-                img().src(vite_logo).class_name("vite").alt("Vite logo"),
-            )),
-            div().children((
-                h1().children("Get started"),
-                p().children(("Edit ", code().children("src/App.rs"), " and save to test ", code().children("HMR"))),
-            )),
-            button()
-                .r#type("button")
-                .class_name("counter")
-                .on_click(move |_| set_count.update(|count| count + 1))
-                .children((
-                    "Count is ",
-                    // Tailwind finds its classes in this file: whole string literals.
-                    span()
-                        .class_name(if count % 2 == 0 { "font-bold text-emerald-500" } else { "font-bold text-sky-500" })
-                        .children(count),
-                )),
-        )),
-        div().class_name("ticks"),
-        section().id("next-steps").children((
-            div().id("docs").children((
-                svg()
-                    .class_name("icon")
-                    .role("presentation")
-                    .attr("aria-hidden", "true")
-                    .children(r#use().href("/icons.svg#documentation-icon")),
-                h2().children("Documentation"),
-                p().children("Your questions, answered"),
-                ul().children((
-                    li().children(a().href("https://vite.dev/").target("_blank").children((
-                        img().class_name("logo").src(vite_logo).alt(""),
-                        "Explore Vite",
-                    ))),
-                    li().children(a().href("https://react.dev/").target("_blank").children((
-                        img().class_name("button-icon").src(react_logo).alt(""),
-                        "Learn more",
-                    ))),
-                )),
-            )),
-            div().id("social").children((
-                svg()
-                    .class_name("icon")
-                    .role("presentation")
-                    .attr("aria-hidden", "true")
-                    .children(r#use().href("/icons.svg#social-icon")),
-                h2().children("Connect with us"),
-                p().children("Join the Vite community"),
-                ul().children((
-                    li().children(a().href("https://github.com/vitejs/vite").target("_blank").children((
-                        svg()
-                            .class_name("button-icon")
-                            .role("presentation")
-                            .attr("aria-hidden", "true")
-                            .children(r#use().href("/icons.svg#github-icon")),
-                        "GitHub",
-                    ))),
-                    li().children(a().href("https://chat.vite.dev/").target("_blank").children((
-                        svg()
-                            .class_name("button-icon")
-                            .role("presentation")
-                            .attr("aria-hidden", "true")
-                            .children(r#use().href("/icons.svg#discord-icon")),
-                        "Discord",
-                    ))),
-                    li().children(a().href("https://x.com/vite_js").target("_blank").children((
-                        svg()
-                            .class_name("button-icon")
-                            .role("presentation")
-                            .attr("aria-hidden", "true")
-                            .children(r#use().href("/icons.svg#x-icon")),
-                        "X.com",
-                    ))),
-                    li().children(a().href("https://bsky.app/profile/vite.dev").target("_blank").children((
-                        svg()
-                            .class_name("button-icon")
-                            .role("presentation")
-                            .attr("aria-hidden", "true")
-                            .children(r#use().href("/icons.svg#bluesky-icon")),
-                        "Bluesky",
-                    ))),
-                )),
-            )),
-        )),
-        div().class_name("ticks"),
-        section().id("spacer"),
-    ))
+    jsx! {
+        <>
+            <section id="center">
+                <div className="hero">
+                    <img src={hero_img} className="base" width="170" height="179" alt="" />
+                    <img src={react_logo} className="framework" alt="React logo" />
+                    <img src={vite_logo} className="vite" alt="Vite logo" />
+                </div>
+                <div>
+                    <h1>{"Get started"}</h1>
+                    <p>
+                        {"Edit "}
+                        <code>{"src/App.rs"}</code>
+                        {" and save to test "}
+                        <code>{"HMR"}</code>
+                    </p>
+                </div>
+                <button type="button" className="counter" onClick={move |_| set_count.update(|count| count + 1)}>
+                    {"Count is "}
+                    {/* Tailwind finds its classes in this file: whole string literals. */}
+                    <span
+                        className={if count % 2 == 0 { "font-bold text-emerald-500" } else { "font-bold text-sky-500" }}
+                    >
+                        {count}
+                    </span>
+                </button>
+            </section>
+            <div className="ticks" />
+            <section id="next-steps">
+                <div id="docs">
+                    <svg className="icon" role="presentation" aria-hidden="true">
+                        <use href="/icons.svg#documentation-icon" />
+                    </svg>
+                    <h2>{"Documentation"}</h2>
+                    <p>{"Your questions, answered"}</p>
+                    <ul>
+                        <li>
+                            <a href="https://vite.dev/" target="_blank">
+                                <img className="logo" src={vite_logo} alt="" />
+                                {"Explore Vite"}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://react.dev/" target="_blank">
+                                <img className="button-icon" src={react_logo} alt="" />
+                                {"Learn more"}
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div id="social">
+                    <svg className="icon" role="presentation" aria-hidden="true">
+                        <use href="/icons.svg#social-icon" />
+                    </svg>
+                    <h2>{"Connect with us"}</h2>
+                    <p>{"Join the Vite community"}</p>
+                    <ul>
+                        <li>
+                            <a href="https://github.com/vitejs/vite" target="_blank">
+                                <svg className="button-icon" role="presentation" aria-hidden="true">
+                                    <use href="/icons.svg#github-icon" />
+                                </svg>
+                                {"GitHub"}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://chat.vite.dev/" target="_blank">
+                                <svg className="button-icon" role="presentation" aria-hidden="true">
+                                    <use href="/icons.svg#discord-icon" />
+                                </svg>
+                                {"Discord"}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://x.com/vite_js" target="_blank">
+                                <svg className="button-icon" role="presentation" aria-hidden="true">
+                                    <use href="/icons.svg#x-icon" />
+                                </svg>
+                                {"X.com"}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://bsky.app/profile/vite.dev" target="_blank">
+                                <svg className="button-icon" role="presentation" aria-hidden="true">
+                                    <use href="/icons.svg#bluesky-icon" />
+                                </svg>
+                                {"Bluesky"}
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+            <div className="ticks" />
+            <section id="spacer" />
+        </>
+    }
 }

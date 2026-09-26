@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCompiler, compiler, fixture, root, run } from "./support";
+import { buildCompiler, buildReact, target, compiler, fixture, root, run } from "./support";
 
 beforeAll(buildCompiler, 600_000);
 
@@ -155,14 +155,14 @@ test("impls and default bodies retain their defining modules across cycles", asy
 });
 
 test("copied JSX defaults select the implementation module's JSX extension", () => {
+  buildReact();
   const dir = fixture("trait-jsx");
   writeFileSync(join(dir, "lib.rs"), `pub mod contracts {
-    #[rust_js::link_name = "<div>"] fn el() -> i32 { unreachable!() }
-    pub trait View { fn render(&self) -> i32 { el() } }
+    pub trait View { fn render(&self) -> react::Element { jsx! { <div /> } } }
   }
   pub mod implementations { pub struct Page; impl super::contracts::View for Page {} }
-  pub fn render() -> i32 { contracts::View::render(&implementations::Page) }`);
-  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  pub fn render() -> react::Element { contracts::View::render(&implementations::Page) }`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   expect(readFileSync(join(dir, "implementations.jsx"), "utf8")).toContain("<div");
   expect(readFileSync(join(dir, "lib.js"), "utf8")).toContain('./implementations.jsx');
 });

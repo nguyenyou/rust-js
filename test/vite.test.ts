@@ -94,8 +94,12 @@ process.exit(code);
     writeFileSync(app, `#![allow(non_snake_case)]
 use react::Element;
 #[rust_js::link_name = "react#createElement"]
-fn make(tag: &str, props: (), child: &str) -> Element { unreachable!() }
-pub fn App() -> Element { make("button", (), "Plain") }
+fn make(tag: &str, props: (), child: &str) -> Element {
+    unreachable!()
+}
+pub fn App() -> Element {
+    make("button", (), "Plain")
+}
 `);
     await button.filter({ hasText: "Plain" }).waitFor();
     expect(existsSync(output)).toBe(false);
@@ -125,10 +129,14 @@ test("Tailwind and React Compiler keep Fast Refresh's state", async () => {
   writeFileSync(join(dir, "src/main.jsx"), 'import "./index.css"; import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   const app = (classes: string) => `#![allow(non_snake_case)]
 use react::{Element, use_state};
-use react::html::button;
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
-    button().class_name("${classes}").on_click(move |_| set_count.update(|n| n + 1)).children(("Count ", count))
+    jsx! {
+        <button className="${classes}" onClick={move |_| set_count.update(|n| n + 1)}>
+            {"Count "}
+            {count}
+        </button>
+    }
 }
 `;
   writeFileSync(join(dir, "src/App.rs"), app("font-bold"));
@@ -173,8 +181,11 @@ test("Without rust-js, a build uses the committed JSX", async () => {
   writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   writeFileSync(join(dir, "src/App.rs"), `#![allow(non_snake_case)]
 use react::Element;
-use react::html::p;
-pub fn App() -> Element { p().children("Committed") }
+pub fn App() -> Element {
+    jsx! {
+        <p>{"Committed"}</p>
+    }
+}
 `);
   await build({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent" });
   const committed = readFileSync(join(dir, "src/App.jsx"), "utf8");
@@ -222,21 +233,32 @@ thread_local! {
 }
 `);
   const app = (label: string) => `#![allow(non_snake_case)]
-use react::{Element, Memo, Provider, component, memo, use_context, use_state};
-use react::html::button;
+use react::{Element, Memo, memo, use_context, use_state};
 mod theme;
 use theme::THEME;
 thread_local! {
     static FAST_LABEL: Memo<LabelProps> = memo(Label);
 }
-pub struct LabelProps { pub text: &'static str }
+pub struct LabelProps {
+    pub text: &'static str,
+}
 pub fn Label(LabelProps { text }: LabelProps) -> Element {
     let theme = use_context(&THEME);
     let (n, set_n) = use_state(0);
-    button().class_name(*theme).on_click(move |_| set_n.update(|n| n + 1)).children((text, " ", n))
+    jsx! {
+        <button className={*theme} onClick={move |_| set_n.update(|n| n + 1)}>
+            {text}
+            {" "}
+            {n}
+        </button>
+    }
 }
 pub fn App() -> Element {
-    component(&THEME, Provider { value: "dark", children: component(&FAST_LABEL, LabelProps { text: "${label}" }) })
+    jsx! {
+        <THEME value="dark">
+            <FAST_LABEL text="${label}" />
+        </THEME>
+    }
 }
 `;
   writeFileSync(join(dir, "src/App.rs"), app("Count"));

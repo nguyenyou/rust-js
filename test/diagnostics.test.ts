@@ -31,7 +31,7 @@ for (const [name, source, message] of [
   ["a &mut to a number returned", 'pub fn pick(a: &mut u32) -> &mut u32 { a }', "does not support"],
   ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],
-  ["invalid JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "JSX binding"],
+  ["handwritten JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "element builders are compiler-only"],
 ]) {
   test(`${name} reports a source location and preserves existing output`, () => {
     const dir = fixture("diagnostic");

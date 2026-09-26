@@ -86,7 +86,14 @@ mod right { pub fn step(n: u32) -> u32 { if n == 0 { 2 } else { super::left::ste
     await page.keyboard.insertText(`#![allow(non_snake_case)]
 use react::Element;
 pub struct Props { pub text: &'static str }
-pub fn Tile(p: Props) -> Element { jsx! { <button disabled>{p.text}</button> } }
+pub fn Tile(p: Props) -> Element {
+    jsx! {
+        <>
+            <button disabled title={let n = 2; n.to_string()}>{true}{p.text}</button>
+            <div dangerouslySetInnerHTML={react::inner_html("<b>raw</b>")} />
+        </>
+    }
+}
 pub fn App() -> Element { jsx! { <Tile text="Hello JSX" /> } }
 `);
     await page.evaluate(() => { (window as any).lastResult = undefined; });

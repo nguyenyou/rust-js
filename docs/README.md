@@ -140,6 +140,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0041 React: the `react` crate, and Vite with Fast Refresh](decisions/0041-react.md)
 - [0043 React's whole API, gated by the release that added it](decisions/0043-react-versions.md)
 - [0072 JSX syntax in the native and browser compilers](decisions/0072-jsx-syntax.md)
+- [0075 JSX is the public syntax for React elements](decisions/0075-jsx-only-elements.md)
 
 **Scope and process**
 

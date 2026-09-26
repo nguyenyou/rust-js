@@ -146,6 +146,7 @@ impl Expand<'_> {
                 continue;
             };
             self.item(item, &attrs);
+            companions.extend(parser::thread_local_components(self.sess, item));
             if let Some(companion) = parser::component(self.sess, item) {
                 companions.push(companion);
             }
@@ -273,7 +274,7 @@ impl Expand<'_> {
             let mut p = Parser::new(&self.sess.psess, tokens, Some("jsx"));
             match p.parse_expr() {
                 Ok(mut expr) => {
-                    expr.attrs = mac.attrs.clone();
+                    expr.attrs.extend(mac.attrs.clone());
                     stmt.kind = if mac.style == ast::MacStmtStyle::Semicolon {
                         ast::StmtKind::Semi(expr)
                     } else {
@@ -320,7 +321,7 @@ impl MutVisitor for Expand<'_> {
             let mut p = Parser::new(&self.sess.psess, tokens, Some("jsx"));
             match p.parse_expr() {
                 Ok(mut value) => {
-                    value.attrs = expr.attrs.clone();
+                    value.attrs.extend(expr.attrs.clone());
                     *expr = *value;
                 }
                 Err(e) => {

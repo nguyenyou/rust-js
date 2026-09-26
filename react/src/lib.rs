@@ -1,18 +1,19 @@
 //! [React](https://react.dev) and React DOM for rust-js (ADRs 0041, 0043). A
 //! component is a function that returns an [`Element`], and elements are
-//! built with typed methods, which rust-js prints as the JSX you'd write by
-//! hand (ADR 0040):
+//! written with `jsx!`, which rust-js prints as the JSX you would write by
+//! hand (ADR 0075):
 //!
 //! ```ignore
-//! use react::html::{button, div};
 //! use react::{Element, use_state};
 //!
 //! pub fn Counter() -> Element {
 //!     let (count, set_count) = use_state(0);
-//!     div().class_name("counter").children((
-//!         button().on_click(move |_| set_count.update(|count| count + 1)).children("+"),
-//!         count,
-//!     ))
+//!     jsx! {
+//!         <div className="counter">
+//!             <button onClick={move |_| set_count.update(|count| count + 1)}>{"+"}</button>
+//!             {count}
+//!         </div>
+//!     }
 //! }
 //! ```
 //!
@@ -58,14 +59,14 @@ pub mod dom;
 mod elements;
 pub mod event;
 
+#[doc(hidden)]
 pub use elements::html;
 /// The DOM, whose types React's APIs use: `react::web::FormData`.
 pub use web;
 
 /// A React element: what a component returns, and what goes in children.
-/// Made by an element function like [`html::div`], by [`component`], by
-/// [`fragment`], or by a built-in component like [`suspense`]; its
-/// attributes and children are set by methods, in the expression that makes it.
+/// Construct it with `jsx! { <Tag ... /> }`.
+#[rust_js::jsx_element]
 pub struct Element(PhantomData<JsObject>);
 
 /// What React renders as a child: elements, text and numbers, and tuples,
@@ -79,6 +80,7 @@ impl Node for Element {}
 impl Node for &str {}
 impl Node for String {}
 impl Node for () {}
+impl Node for bool {}
 impl<T: Node + ?Sized> Node for &T {}
 impl<T: Node> Node for Option<T> {}
 impl<T: Node> Node for Vec<T> {}
@@ -154,6 +156,7 @@ pub fn inner_html(html: impl Value) -> InnerHtml {
     unreachable!()
 }
 
+#[doc(hidden)]
 impl Element {
     /// Spread a props struct into this element. Fields keep the JS names of
     /// their Rust struct (including the crate's camel_case setting).
@@ -174,17 +177,8 @@ impl Element {
         unreachable!()
     }
 
-    /// Puts the DOM element in `r` once it's on the page (see [`use_ref`]).
     #[rust_js::link_name = "prop ref"]
-    pub fn r#ref<E: 'static>(self, r: Ref<Option<&'static E>>) -> Element {
-        unreachable!()
-    }
-
-    /// A ref callback: called with the DOM element once it's on the page.
-    /// What it returns runs when the element leaves; before React 19,
-    /// cleanups don't exist, and `f` is called with `None` instead.
-    #[rust_js::link_name = "prop ref"]
-    pub fn ref_callback<E: 'static, C: Cleanup>(self, f: impl Fn(Option<&'static E>) -> C + 'static) -> Element {
+    pub fn r#ref<H, M>(self, value: impl RefValue<H, M>) -> Element {
         unreachable!()
     }
 
@@ -208,26 +202,13 @@ impl Element {
         unreachable!()
     }
 
-    /// A `<form>`'s [`action`](https://react.dev/reference/react-dom/components/form)
-    /// as a function: called with the form's data when it's submitted, in a
-    /// Transition. A string URL is [`action`](Element::action).
-    #[cfg(react = "19.0")]
     #[rust_js::link_name = "prop action"]
-    pub fn action_fn<R: ActionResult<M>, M>(self, action: impl Fn(&'static web::FormData) -> R + 'static) -> Element {
+    pub fn action<M>(self, value: impl FormAction<M>) -> Element {
         unreachable!()
     }
 
-    /// A `<button>`'s or `<input>`'s `formAction` as a function, like [`action_fn`](Element::action_fn).
-    #[cfg(react = "19.0")]
     #[rust_js::link_name = "prop formAction"]
-    pub fn form_action_fn<R: ActionResult<M>, M>(self, action: impl Fn(&'static web::FormData) -> R + 'static) -> Element {
-        unreachable!()
-    }
-
-    /// `action={formAction}`: [`use_action_state`]'s action, sent the form's data.
-    #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop action"]
-    pub fn action_dispatch(self, dispatch: Dispatch<&'static web::FormData>) -> Element {
+    pub fn form_action<M>(self, value: impl FormAction<M>) -> Element {
         unreachable!()
     }
 
@@ -250,6 +231,31 @@ pub struct AsyncAction;
 impl ActionResult<SyncAction> for () {}
 #[cfg(react = "19.0")]
 impl<F: Future<Output = ()>> ActionResult<AsyncAction> for F {}
+
+/// A JSX ref is a ref object or a callback. React calls a callback on attach
+/// and detach; from React 19, its returned cleanup runs on detach.
+/// The marker only distinguishes types.
+pub trait RefValue<H, M> {}
+#[doc(hidden)]
+pub struct ObjectRef;
+#[doc(hidden)]
+pub struct CallbackRef<C>(PhantomData<C>);
+impl<H> RefValue<H, ObjectRef> for Ref<Option<H>> {}
+impl<H: 'static, C: Cleanup, F: Fn(Option<H>) -> C + 'static> RefValue<H, CallbackRef<C>> for F {}
+
+/// A JSX form action is a URL or, on React 19+, a function or action dispatch.
+pub trait FormAction<M> {}
+#[doc(hidden)]
+pub struct UrlAction;
+#[doc(hidden)]
+pub struct FunctionAction<M>(PhantomData<M>);
+#[doc(hidden)]
+pub struct DispatchAction;
+impl<T: Value> FormAction<UrlAction> for T {}
+#[cfg(react = "19.0")]
+impl<M, R: ActionResult<M>, F: Fn(&'static web::FormData) -> R + 'static> FormAction<FunctionAction<M>> for F {}
+#[cfg(react = "19.0")]
+impl FormAction<DispatchAction> for Dispatch<&'static web::FormData> {}
 
 // ── Hooks ───────────────────────────────────────────────────────────────
 //
@@ -636,11 +642,12 @@ pub fn use_debug_value_with<T>(value: T, format: impl Fn(&T) -> String + 'static
 /// takes none, `component(App, ())`. A component's name starts with an
 /// uppercase letter, as JSX and Fast Refresh need.
 #[rust_js::link_name = "<*>"]
+#[doc(hidden)]
 pub fn component<P, M>(component: impl Component<P, M>, props: P) -> Element {
     unreachable!()
 }
 
-/// What [`component`] takes: a function from its props to an [`Element`], or
+/// A JSX component: a function from its props to an [`Element`], or
 /// one with no props, or one made by [`memo`], [`lazy`] or [`forward_ref`].
 /// `M` only tells them apart.
 pub trait Component<P, M> {}
@@ -653,12 +660,14 @@ impl<P, F: Fn(P) -> Element> Component<P, WithProps> for F {}
 
 /// Children with nothing around them: `<>..</>`.
 #[rust_js::link_name = "<>"]
+#[doc(hidden)]
 pub fn fragment(children: impl Node) -> Element {
     unreachable!()
 }
 
 /// [`<StrictMode>`](https://react.dev/reference/react/StrictMode).
 #[rust_js::link_name = "<react#StrictMode>"]
+#[doc(hidden)]
 pub fn strict_mode(children: impl Node) -> Element {
     unreachable!()
 }
@@ -669,11 +678,14 @@ macro_rules! built_in {
     ($(#[doc = $doc:literal])* $(#[cfg($cfg:meta)])? $name:ident = $make:ident $tag:literal { $($(#[doc = $pdoc:literal])* $prop:ident: $ty:ty = $js:literal;)* }) => {
         $(#[doc = $doc])*
         $(#[cfg($cfg)])?
+        #[rust_js::jsx_element]
+        #[doc(hidden)]
         pub struct $name(PhantomData<JsObject>);
 
         #[doc = concat!("`<", $tag, ">`: set its props, then its children.")]
         $(#[cfg($cfg)])?
         #[rust_js::link_name = concat!("<react#", $tag, ">")]
+        #[doc(hidden)]
         pub fn $make() -> $name {
             unreachable!()
         }
@@ -682,7 +694,18 @@ macro_rules! built_in {
         impl Node for $name {}
 
         $(#[cfg($cfg)])?
+        #[doc(hidden)]
         impl $name {
+            #[rust_js::link_name = "prop key"]
+            pub fn key(self, value: impl Key) -> $name {
+                unreachable!()
+            }
+
+            #[rust_js::link_name = "prop ..."]
+            pub fn props<P>(self, value: P) -> $name {
+                unreachable!()
+            }
+
             $(
                 $(#[doc = $pdoc])*
                 #[rust_js::link_name = concat!("prop ", $js)]
@@ -703,9 +726,7 @@ macro_rules! built_in {
 built_in! {
     /// [`<Fragment>`](https://react.dev/reference/react/Fragment) with a key,
     /// for a list item of several elements. Without one, [`fragment`] is `<>`.
-    Fragment = keyed_fragment "Fragment" {
-        key: impl Key = "key";
-    }
+    Fragment = keyed_fragment "Fragment" {}
 }
 
 built_in! {
@@ -824,7 +845,7 @@ impl ViewTransitionInstance {
 //     const THEME = createContext("light");
 //     const FAST_CARD = memo(Card);
 //
-// The rest take the key: `use_context(&THEME)`, `component(&FAST_CARD, props)`.
+// Hooks take the key: `use_context(&THEME)`. JSX uses `<FAST_CARD ... />`.
 
 /// A [context](https://react.dev/reference/react/createContext): a value that
 /// a component's descendants read with [`use_context`], from the nearest
@@ -837,9 +858,8 @@ pub fn create_context<T>(default: T) -> Context<T> {
     unreachable!()
 }
 
-/// A context's provider's props: `component(&THEME, Provider { value: "dark",
-/// children })` is `<THEME value="dark">{children}</THEME>`, as React 19
-/// writes a provider. Before 19, [`provider`] gives `<THEME.Provider>`.
+/// Props of `<THEME value={value}>{children}</THEME>` on React 19+,
+/// or `<THEME.Provider value={value}>{children}</THEME.Provider>` on React 18+.
 pub struct Provider<T> {
     pub value: T,
     pub children: Element,
@@ -851,8 +871,9 @@ pub struct ProvidesContext;
 impl<T> Component<Provider<T>, ProvidesContext> for &'static LocalKey<Context<T>> {}
 
 /// `THEME.Provider`, a context's provider in every React version:
-/// `component(provider(&THEME), Provider { value, children })`.
+/// Used by `<THEME.Provider value={value}>{children}</THEME.Provider>`.
 #[rust_js::link_name = "get Provider"]
+#[doc(hidden)]
 pub fn provider<T>(this: &'static LocalKey<Context<T>>) -> ContextProvider<T> {
     unreachable!()
 }
@@ -891,7 +912,7 @@ pub struct Module<P>(PhantomData<JsObject>, PhantomData<P>);
 
 /// [`lazy`](https://react.dev/reference/react/lazy), in a `thread_local!`:
 /// `lazy(|| import_module("./Chart.jsx"))`. It suspends while it loads, so
-/// render it inside a [`suspense`].
+/// render it inside `<Suspense fallback={...}>...</Suspense>`.
 #[rust_js::link_name = "react#lazy"]
 pub fn lazy<P>(load: impl Fn() -> Promise<Module<P>> + 'static) -> Lazy<P> {
     unreachable!()
@@ -922,6 +943,13 @@ pub fn forward_ref<P, H>(render: impl Fn(P, Ref<Option<H>>) -> Element + 'static
 pub struct Forwarded;
 
 impl<P, H> Component<P, Forwarded> for &'static LocalKey<ForwardRef<P, H>> {}
+
+/// Check the handle type of a forwarded JSX ref without emitting a runtime call.
+#[doc(hidden)]
+#[rust_js::link_name = "this"]
+pub fn checked_ref<H, M, R: RefValue<H, M>>(this: R) -> R {
+    unreachable!()
+}
 
 // ── APIs ────────────────────────────────────────────────────────────────
 

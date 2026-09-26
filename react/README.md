@@ -39,31 +39,17 @@ Tags and attributes look like JSX; expressions inside braces are Rust.
 Text is quoted (`{"Hello"}`), and handlers are Rust closures. See the
 [syntax guide](../docs/jsx.md) for components, spreads and current limits.
 
-The builder API remains available and can be mixed with `jsx!`:
+**Use JSX to construct elements.** Element builders and `component(...)` are
+compiler plumbing; direct use produces an error. Hooks, styles and React DOM
+operations remain ordinary Rust APIs.
 
-| Rust | JSX |
-|---|---|
-| `div()`, `button()`, .. in `react::html` | `<div />`, `<button />` |
-| `.class_name("a")`, `.html_for(id)`, `.r#type("button")` | `className="a"`, `htmlFor={id}`, `type="button"` |
-| `.attr("aria-hidden", "true")` | `aria-hidden="true"` |
-| `.style(Style::new().color("red").font_size(12))` | `style={{ color: "red", fontSize: 12 }}` |
-| `.dangerously_set_inner_html(inner_html(html))` | `dangerouslySetInnerHTML={{ __html: html }}` |
-| `.on_click(move \|e\| ..)` | `onClick={(e) => ..}` |
-| `.children(("Count is ", count))` | `Count is {count}` |
-| `.key(t.id)` | `key={t.id}` |
-| `component(Card, CardProps { title, children })` | `<Card title={title}>{children}</Card>` |
-| `component(App, ())` | `<App />` |
-| `fragment((a, b))`, `keyed_fragment().key(k).children(..)` | `<>{a}{b}</>`, `<Fragment key={k}>..</Fragment>` |
-| `suspense().fallback(spinner).children(..)` | `<Suspense fallback={spinner}>..</Suspense>` |
-| `strict_mode(app)`, `profiler().id("a").on_render(f)`, `activity().mode(..)`, `view_transition()` | `<StrictMode>`, `<Profiler>`, `<Activity>`, `<ViewTransition>` |
+Attributes use React's spelling: `className`, `onPointerDownCapture`,
+`aria-label`, and so on. Handlers receive typed events such as
+`event::Mouse` and `event::Keyboard`. A `ref` accepts a ref object or a
+callback; `action` and `formAction` accept URLs, or on React 19+, functions
+and action dispatches. No alternate prop names are needed.
 
-Every attribute and event React DOM knows is a method, generated from React
-DOM's own tables: `class_name`, `popover_target`, `on_pointer_down_capture`,
-and so on. So is every HTML and SVG element, and every CSS property on
-`Style`. Handlers get React's typed events, `event::Mouse`, `event::Keyboard`
-and the rest, each dereferencing to the one it extends.
-
-A component is a `pub fn` with a capitalized name that returns `Element`.
+A component is a function with a capitalized name that returns `Element`.
 Its props, if it has any, are a struct, and a field named `children` holds
 its children. A tuple of children is several of them, a `Vec` is a list
 whose items need keys, and `None` renders nothing.
@@ -98,11 +84,11 @@ thread_local! {
 
 pub fn Toolbar() -> Element {
     let theme = use_context(&THEME);
-    component(&FAST_CARD, CardProps { title: theme })
+    jsx! { <FAST_CARD title={theme} /> }
 }
 
 pub fn App() -> Element {
-    component(&THEME, Provider { value: "dark", children: component(Toolbar, ()) })
+    jsx! { <THEME value="dark"><Toolbar /></THEME> }
 }
 ```
 
@@ -123,6 +109,8 @@ export function App() {
 ```
 
 `memo_with(Card, |a, b| ..)` is `memo(Card, arePropsEqual)`.
+Use `<THEME.Provider value="dark">...</THEME.Provider>` on React 18;
+React 19 also supports `<THEME value="dark">...</THEME>`.
 
 Put a context in a module of its own, `mod theme;`, as React advises. Saving
 a file runs its module again, and a context made there is a new one, so

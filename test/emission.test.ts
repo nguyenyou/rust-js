@@ -1,9 +1,9 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
-import { root, target, run, buildCompiler } from "./support";
+import { root, target, run, buildReact } from "./support";
 
 beforeAll(() => {
-  buildCompiler();
+  buildReact();
   run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
 }, 600_000);
 
@@ -59,9 +59,9 @@ test("root and child output collisions leave no partial artifacts", async () => 
   for (const jsx of [false, true]) {
     const dir = fixture("collision");
     const input = join(dir, "lib.rs"), output = join(dir, "same.js");
-    const body = jsx ? '#[rust_js::link_name = "<div>"] fn el() -> i32 { unreachable!() } pub fn f() -> i32 { el() }' : 'pub fn f() -> i32 { 1 }';
+    const body = jsx ? 'pub fn f() -> react::Element { jsx! { <div /> } }' : 'pub fn f() -> i32 { 1 }';
     writeFileSync(input, `${body}\npub mod same { ${body} }`);
-    const p = Bun.spawnSync([compiler, input, "-o", output]);
+    const p = Bun.spawnSync([compiler, input, "-o", output, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
     expect(p.exitCode).not.toBe(0);
     expect(p.stderr.toString()).toContain("collision");
     expect(existsSync(output)).toBe(false);
@@ -75,8 +75,8 @@ test("manifest owns artifacts and records even modules that emit no code", async
   const dir = fixture("manifest");
   const input = join(dir, "lib.rs"), output = join(dir, "lib.js"), manifest = join(dir, "manifest.json");
   writeFileSync(join(dir, "types.rs"), "pub struct Props { pub x: i32 }");
-  writeFileSync(input, 'mod types; #[rust_js::link_name = "<div>"] fn el() -> i32 { unreachable!() } pub fn f() -> i32 { el() }');
-  const args = [compiler, input, "-o", output, "--manifest", manifest];
+  writeFileSync(input, 'mod types; pub fn f() -> react::Element { jsx! { <div /> } }');
+  const args = [compiler, input, "-o", output, "--manifest", manifest, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target];
   run(args);
   const first = await Bun.file(manifest).json();
   expect(first.sources).toContain(join(dir, "types.rs"));
@@ -87,7 +87,7 @@ test("manifest owns artifacts and records even modules that emit no code", async
   expect(existsSync(join(dir, "lib.jsx.map"))).toBe(false);
   expect(existsSync(output)).toBe(true);
   writeFileSync(output, "user edited this file");
-  writeFileSync(input, '#[rust_js::link_name = "<div>"] fn el() -> i32 { unreachable!() } pub fn f() -> i32 { el() }');
+  writeFileSync(input, 'pub fn f() -> react::Element { jsx! { <div /> } }');
   run(args);
   expect(await Bun.file(output).text()).toBe("user edited this file");
 });
@@ -95,11 +95,11 @@ test("manifest owns artifacts and records even modules that emit no code", async
 test("mixed JS and JSX modules use their final paths in imports and the manifest", async () => {
   const { fixture, compiler } = await import("./support");
   const dir = fixture("mixed-modules");
-  await Bun.write(join(dir, "lib.rs"), `mod view; mod plain; pub fn f() -> i32 { view::render() + plain::value() }`);
-  await Bun.write(join(dir, "view.rs"), '#[rust_js::link_name = "<div>"] fn el() -> i32 { unreachable!() } pub fn render() -> i32 { el() }');
+  await Bun.write(join(dir, "lib.rs"), `mod view; mod plain; pub fn f() -> (react::Element, i32) { (view::render(), plain::value()) }`);
+  await Bun.write(join(dir, "view.rs"), 'pub fn render() -> react::Element { jsx! { <div /> } }');
   await Bun.write(join(dir, "plain.rs"), 'pub fn value() -> i32 { 1 }');
   const manifest = join(dir, "manifest.json");
-  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--manifest", manifest]);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--manifest", manifest, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   const code = await Bun.file(join(dir, "lib.js")).text();
   expect(code).toContain('from "./view.jsx"');
   expect(code).toContain('from "./plain.js"');

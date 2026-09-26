@@ -48,7 +48,7 @@ function bindings(release: string): Set<string> {
   mkdirSync(out, { recursive: true });
   run(["web/build.sh", "-o", join(out, "libweb.rmeta")]);
   run([
-    "rustdoc", "-Zunstable-options", "--output-format=json", "--edition=2024", "--crate-name=react",
+    "rustdoc", "-Zunstable-options", "--document-hidden-items", "--output-format=json", "--edition=2024", "--crate-name=react",
     "react/src/lib.rs", "--extern", `web=${join(out, "libweb.rmeta")}`, ...cfgFlags(release).flags, "-o", out,
   ]);
   const docs = JSON.parse(readFileSync(join(out, "react.json"), "utf8"));
@@ -135,12 +135,13 @@ test("elements.rs is what react/generate.ts makes of versions.json", () => {
 // A program for React 18.2 can't use what React 19.2 added: it's a compile
 // error, which names the release it needs, not a crash in the browser.
 const usesUseEffectEvent = `#![allow(non_snake_case)]
-use react::html::button;
 use react::{Element, use_effect_event, use_state};
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
     let log = use_effect_event(move || set_count.set(*count));
-    button().on_click(move |_| log()).children(count)
+    jsx! {
+        <button onClick={move |_| log()}>{count}</button>
+    }
 }
 `;
 
