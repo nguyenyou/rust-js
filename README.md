@@ -65,6 +65,7 @@ bun run react-example                 # React + Vite at localhost:5173
 ```
 
 Run `bun test` for native Rust comparisons, output snapshots, and Chromium tests.
+Run `bun run fmt` to format Rust and playground JSX, or `bun run fmt:check` to check.
 Run `bun run` to list all tasks.
 
 rust-js is a growing subset of Rust with JavaScript representations and

@@ -21,7 +21,16 @@ pub struct FileTreeProps {
     pub on_delete: Option<Rc<dyn Fn(String)>>,
 }
 
-pub fn FileTree(FileTreeProps { tree, depth, first, selected, on_open, on_delete }: FileTreeProps) -> Element {
+pub fn FileTree(
+    FileTreeProps {
+        tree,
+        depth,
+        first,
+        selected,
+        on_open,
+        on_delete,
+    }: FileTreeProps,
+) -> Element {
     let rows: Vec<Element> = in_order(tree, &first)
         .into_iter()
         .map(|(name, entry)| match entry {

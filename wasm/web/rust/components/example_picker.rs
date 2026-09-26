@@ -14,7 +14,13 @@ pub struct ExamplePickerProps {
     pub on_choose: Rc<dyn Fn(String)>,
 }
 
-pub fn ExamplePicker(ExamplePickerProps { examples, chosen, on_choose }: ExamplePickerProps) -> Element {
+pub fn ExamplePicker(
+    ExamplePickerProps {
+        examples,
+        chosen,
+        on_choose,
+    }: ExamplePickerProps,
+) -> Element {
     jsx! {
         <select
             id="example"

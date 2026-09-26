@@ -8,18 +8,34 @@ use rustc_parse::parser::{AllowConstBlockItems, ForceCollect, Parser};
 use rustc_session::Session;
 use rustc_span::{ErrorGuaranteed, Span};
 
+use super::formatting::Layout;
 use super::{rust_expression, template};
 
 type R<T> = Result<T, ErrorGuaranteed>;
 
 pub(super) fn jsx(sess: &Session, tokens: TokenStream, span: Span) -> R<TokenStream> {
+    parse(sess, tokens, span, 0, None)
+}
+
+pub(super) fn formatted(sess: &Session, tokens: TokenStream, span: Span, indent: usize, layout: &mut Layout) -> R<()> {
+    parse(sess, tokens, span, indent, Some(layout)).map(|_| ())
+}
+
+fn parse(
+    sess: &Session,
+    tokens: TokenStream,
+    span: Span,
+    indent: usize,
+    layout: Option<&mut Layout>,
+) -> R<TokenStream> {
     let mut p = Jsx {
         sess,
         tokens: tokens.iter().cloned().collect(),
         at: 0,
         span,
+        layout,
     };
-    let element = p.element(0)?;
+    let element = p.element(0, indent)?;
     if p.at != p.tokens.len() {
         return Err(p.error("wrap adjacent JSX elements in <>...</>"));
     }
@@ -31,9 +47,17 @@ struct Jsx<'a> {
     tokens: Vec<TokenTree>,
     at: usize,
     span: Span,
+    layout: Option<&'a mut Layout>,
 }
 
 impl Jsx<'_> {
+    fn mark(&mut self, indent: usize) -> usize {
+        let span = self
+            .tokens
+            .get(self.at)
+            .map_or(self.span.shrink_to_hi(), TokenTree::span);
+        self.layout.as_mut().map_or(indent, |layout| layout.mark(span, indent))
+    }
     fn error(&self, message: &str) -> ErrorGuaranteed {
         self.sess.dcx().span_err(
             self.tokens
@@ -74,9 +98,13 @@ impl Jsx<'_> {
         }
     }
 
-    fn value(&mut self) -> R<TokenStream> {
+    fn value(&mut self, indent: usize) -> R<TokenStream> {
+        self.mark(indent);
         match self.tokens.get(self.at).cloned() {
             Some(TokenTree::Delimited(span, spacing, Delimiter::Brace, value)) => {
+                if let Some(layout) = &mut self.layout {
+                    layout.value(self.sess, span, &value, indent)?;
+                }
                 self.at += 1;
                 // JSX braces delimit an expression; they are not necessarily a
                 // Rust block. Keep a block only when it actually has statements.
@@ -105,11 +133,12 @@ impl Jsx<'_> {
         }
     }
 
-    fn element(&mut self, depth: usize) -> R<TokenStream> {
+    fn element(&mut self, depth: usize, indent: usize) -> R<TokenStream> {
         if depth > 128 {
             return Err(self.error("JSX nesting exceeds 128 elements"));
         }
         let span = self.tokens.get(self.at).map_or(self.span, TokenTree::span);
+        let indent = self.mark(indent);
         self.need(TokenKind::Lt, "expected <tag> or <>fragment</>")?;
         let mut name = String::new();
         if !self.is(TokenKind::Gt) {
@@ -130,12 +159,18 @@ impl Jsx<'_> {
         let mut attrs: Vec<(String, TokenStream, Span)> = Vec::new();
         let mut spread = None;
         while !self.is(TokenKind::Gt) && !self.is(TokenKind::Slash) {
+            self.mark(indent + 4);
             let attr_span = self.tokens.get(self.at).map_or(span, TokenTree::span);
             if let Some(TokenTree::Delimited(_, _, Delimiter::Brace, tokens)) = self.tokens.get(self.at)
                 && matches!(tokens.get(0), Some(TokenTree::Token(t, _)) if matches!(t.kind, TokenKind::DotDot | TokenKind::DotDotDot))
             {
                 if spread.is_some() {
                     return Err(self.error("only one props spread is supported"));
+                }
+                if let Some(layout) = &mut self.layout
+                    && let Some(TokenTree::Delimited(span, _, _, tokens)) = self.tokens.get(self.at)
+                {
+                    layout.value(self.sess, *span, tokens, indent + 4)?;
                 }
                 spread = Some(rust_expression(
                     self.sess,
@@ -156,12 +191,13 @@ impl Jsx<'_> {
                 return Err(self.error("duplicate attribute"));
             }
             let value = if self.eat(TokenKind::Eq) {
-                self.value()?
+                self.value(indent + 4)?
             } else {
                 template(self.sess, "true".into(), attr_span)
             };
             attrs.push((attr, value, attr_span));
         }
+        self.mark(indent);
         let closed = self.eat(TokenKind::Slash);
         self.need(TokenKind::Gt, "expected > or />")?;
         let mut children = Vec::new();
@@ -170,6 +206,7 @@ impl Jsx<'_> {
                 if self.is(TokenKind::Lt)
                     && matches!(self.tokens.get(self.at + 1), Some(TokenTree::Token(t, _)) if t.kind == TokenKind::Slash)
                 {
+                    self.mark(indent);
                     self.at += 2;
                     let mut closing = String::new();
                     if !self.is(TokenKind::Gt) {
@@ -189,12 +226,13 @@ impl Jsx<'_> {
                     return Err(self.error(&format!("missing closing tag </{name}>")));
                 }
                 if self.is(TokenKind::Lt) {
-                    children.push(self.element(depth + 1)?);
+                    children.push(self.element(depth + 1, indent + 4)?);
                 } else if matches!(self.tokens.get(self.at), Some(TokenTree::Delimited(_, _, Delimiter::Brace, ts)) if ts.is_empty())
                 {
+                    self.mark(indent + 4);
                     self.at += 1; // JSX comment: {/* ... */}
                 } else {
-                    children.push(self.value()?);
+                    children.push(self.value(indent + 4)?);
                 }
             }
         }

@@ -12,7 +12,14 @@ pub struct PaneProps {
     pub editor: Element,
 }
 
-pub fn Pane(PaneProps { title, label, explorer, editor }: PaneProps) -> Element {
+pub fn Pane(
+    PaneProps {
+        title,
+        label,
+        explorer,
+        editor,
+    }: PaneProps,
+) -> Element {
     jsx! {
         <section>
             <h2 className={HEADING}>{title}</h2>

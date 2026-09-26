@@ -22,7 +22,11 @@ unsafe extern "Rust" {
     safe fn encode_uri_component(text: &str) -> String;
     /// `text.replace(pattern, (match, a, b) => ..)`: a closure for each match.
     #[link_name = "replace"]
-    safe fn replace_matches(this: &str, pattern: &RegExp, with: Box<dyn Fn(String, String, String) -> String>) -> String;
+    safe fn replace_matches(
+        this: &str,
+        pattern: &RegExp,
+        with: Box<dyn Fn(String, String, String) -> String>,
+    ) -> String;
     #[link_name = "replace"]
     safe fn replace_pattern(this: &str, pattern: &RegExp, with: &str) -> String;
     #[link_name = "matchAll"]
@@ -107,7 +111,11 @@ pub fn link(files: &JsMap) -> String {
         let body = replace_pattern(&body, source_map, "");
         let specifier = json_string(&format!("rust-js:{path}"));
         // Identical module bodies must still have separate state.
-        let url = json_string(&format!("data:text/javascript,{}#{}", encode_uri_component(&body), encode_uri_component(&path)));
+        let url = json_string(&format!(
+            "data:text/javascript,{}#{}",
+            encode_uri_component(&body),
+            encode_uri_component(&path)
+        ));
         entries.push(format!("{specifier}: {url}"));
     }
     let entries = entries.join(",");
@@ -167,7 +175,9 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
     let runnable = if test {
         sources.iter().any(|(path, _)| *path == tests)
     } else {
-        sources.iter().any(|(path, code)| path == root_file && reg_exp::test(has_main, code))
+        sources
+            .iter()
+            .any(|(path, code)| path == root_file && reg_exp::test(has_main, code))
     };
     if !runnable {
         return Prepared::Nothing;

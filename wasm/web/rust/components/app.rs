@@ -20,7 +20,9 @@ use super::stats_table::StatsTable;
 use super::status_line::{Status, Tone};
 use super::toolbar::Toolbar;
 use crate::codemirror::{EditorView, editor_state, output_state, source_state};
-use crate::compiler::{Example, JsMap, Loaded, Stat, compile, load, load_example, mb, ms, set_last_result, text_entries};
+use crate::compiler::{
+    Example, JsMap, Loaded, Stat, compile, load, load_example, mb, ms, set_last_result, text_entries,
+};
 use crate::programs::{Outcome, Prepared, Program, prepare};
 use crate::projects::{Project, js_name};
 use crate::tree::build_tree;
@@ -29,7 +31,10 @@ use crate::tree::build_tree;
 pub enum Output {
     Nothing,
     /// What the last compile wrote, `path → text`, and which file is showing.
-    Files { files: Vec<(String, String)>, shown: String },
+    Files {
+        files: Vec<(String, String)>,
+        shown: String,
+    },
     /// Why it failed: rustc's errors.
     Diagnostics(String),
 }
@@ -46,7 +51,11 @@ fn appended(rows: &Vec<(String, String)>, label: &str, value: &str) -> Vec<(Stri
 
 fn tests_summary(passed: u32, failed: u32, ignored: u32) -> Status {
     let total = passed + failed;
-    let ignored_text = if ignored > 0 { format!(", {ignored} ignored") } else { String::new() };
+    let ignored_text = if ignored > 0 {
+        format!(", {ignored} ignored")
+    } else {
+        String::new()
+    };
     if total == 0 {
         say("No tests.".to_string(), Tone::Good)
     } else {
@@ -123,7 +132,10 @@ pub fn App() -> Element {
                 let names: Vec<String> = imports.iter().map(|s| format!("\"{s}\"")).collect();
                 let names = names.join(", ");
                 set_status.update(move |s| {
-                    let text = format!("{} Not run: it imports {names}, which the playground can't load. Bundle it with bun build.", s.text);
+                    let text = format!(
+                        "{} Not run: it imports {names}, which the playground can't load. Bundle it with bun build.",
+                        s.text
+                    );
                     say(text, Tone::Bad)
                 });
             }
@@ -147,7 +159,10 @@ pub fn App() -> Element {
             Output::Files { shown, .. } => shown.clone(),
             _ => String::new(),
         };
-        set_status.set(say(if test { "Compiling the tests…" } else { "Compiling…" }.to_string(), Tone::Plain));
+        set_status.set(say(
+            if test { "Compiling the tests…" } else { "Compiling…" }.to_string(),
+            Tone::Plain,
+        ));
         // A Transition: `compiling` is true until it's done.
         start_transition.start(move || async move {
             let r = compile(loaded, sources, &root, test).await;
@@ -157,11 +172,22 @@ pub fn App() -> Element {
                 let files = text_entries(r.files);
                 let count = files.len();
                 let root_jsx = format!("{root_js}x");
-                let root_js = if files.iter().any(|(path, _)| *path == root_jsx) { root_jsx } else { root_js };
+                let root_js = if files.iter().any(|(path, _)| *path == root_jsx) {
+                    root_jsx
+                } else {
+                    root_js
+                };
                 // Keep showing the same file if it's still there; otherwise the root's.
-                let shown = if files.iter().any(|(path, _)| *path == shown) { shown } else { root_js.clone() };
+                let shown = if files.iter().any(|(path, _)| *path == shown) {
+                    shown
+                } else {
+                    root_js.clone()
+                };
                 set_output.set(Output::Files { files, shown });
-                set_status.set(say(format!("Compiled: {count} JS file{}.", if count == 1 { "" } else { "s" }), Tone::Good));
+                set_status.set(say(
+                    format!("Compiled: {count} JS file{}.", if count == 1 { "" } else { "s" }),
+                    Tone::Good,
+                ));
                 run(r.files, &root_js, test);
             } else {
                 set_output.set(Output::Diagnostics(r.stderr.clone()));
@@ -169,7 +195,12 @@ pub fn App() -> Element {
                 set_status.set(say(format!("Failed: exit {}.", r.exit), Tone::Bad));
             }
             let result = if r.ok { "ok" } else { "error" };
-            let times = format!("instantiate {}, run {}, memory {}, {result}", ms(r.instantiate), ms(r.run), mb(r.memory as f64));
+            let times = format!(
+                "instantiate {}, run {}, memory {}, {result}",
+                ms(r.instantiate),
+                ms(r.run),
+                mb(r.memory as f64)
+            );
             let label = format!("compile #{n}");
             set_stats.update(move |rows| appended(rows, &label, &times));
             // For automated checks.
@@ -321,7 +352,7 @@ pub fn App() -> Element {
                         <Editor
                             state={current}
                             view={Some(source)}
-                        onSubmit={Some(Rc::new(move || submit(false)))}
+                            onSubmit={Some(Rc::new(move || submit(false)))}
                         />
                     }}
                 />

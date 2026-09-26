@@ -100,7 +100,10 @@ fn output(language: Option<&'static Extension>) -> &'static Extension {
     }
     extensions.push(compartment_of(THEME.with(|theme| *theme), theme_for(false)));
     extensions.push(read_only(true));
-    extensions.push(content_attributes(object_of(vec![("aria-label".to_string(), "Generated JavaScript".to_string())])));
+    extensions.push(content_attributes(object_of(vec![(
+        "aria-label".to_string(),
+        "Generated JavaScript".to_string(),
+    )])));
     together(extensions)
 }
 
@@ -111,13 +114,23 @@ fn theme_for(dark: bool) -> &'static Extension {
 /// A Rust file's editor state. Each file keeps its own, so its undo history
 /// survives switching.
 pub fn source_state(text: &str) -> &'static EditorState {
-    create_state(&StateConfig { doc: text.to_string(), extensions: SOURCE.with(|e| *e) })
+    create_state(&StateConfig {
+        doc: text.to_string(),
+        extensions: SOURCE.with(|e| *e),
+    })
 }
 
 /// A generated file's, highlighted as JS; or rustc's diagnostics, as text.
 pub fn output_state(text: &str, js: bool) -> &'static EditorState {
-    let extensions = if js { JS_OUTPUT.with(|e| *e) } else { PLAIN_OUTPUT.with(|e| *e) };
-    create_state(&StateConfig { doc: text.to_string(), extensions })
+    let extensions = if js {
+        JS_OUTPUT.with(|e| *e)
+    } else {
+        PLAIN_OUTPUT.with(|e| *e)
+    };
+    create_state(&StateConfig {
+        doc: text.to_string(),
+        extensions,
+    })
 }
 
 pub fn text_of(state: &EditorState) -> String {
@@ -141,5 +154,10 @@ pub fn show(view: &EditorView, state: &EditorState) {
 /// made with, so this runs after `show` too.
 pub fn set_theme(view: &EditorView, dark: bool) {
     let theme = THEME.with(|theme| *theme);
-    dispatch(view, &Transaction { effects: reconfigure(theme, theme_for(dark)) });
+    dispatch(
+        view,
+        &Transaction {
+            effects: reconfigure(theme, theme_for(dark)),
+        },
+    );
 }

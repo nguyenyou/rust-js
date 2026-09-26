@@ -14,7 +14,12 @@ pub fn use_dark_mode() -> bool {
     *use_sync_external_store(
         |notify: Notify| {
             let controller = abort_controller::new();
-            listen(DARK.with(|dark| *dark), "change", Box::new(move |_| notify.call()), controller);
+            listen(
+                DARK.with(|dark| *dark),
+                "change",
+                Box::new(move |_| notify.call()),
+                controller,
+            );
             move || abort_controller::abort(controller)
         },
         || media_query_list::matches(DARK.with(|dark| *dark)),

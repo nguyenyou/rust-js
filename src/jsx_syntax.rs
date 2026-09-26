@@ -2,6 +2,7 @@
 //! Expand into typed React bindings before name resolution. Original tokens
 //! keep their spans; there are no intermediate source files to map through.
 
+pub mod formatting;
 mod parser;
 
 use std::collections::BTreeMap;

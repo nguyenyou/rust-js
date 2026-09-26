@@ -20,7 +20,13 @@ pub struct Project {
 }
 
 fn copy(files: &[SourceFile]) -> Vec<SourceFile> {
-    files.iter().map(|f| SourceFile { path: f.path.clone(), state: f.state }).collect()
+    files
+        .iter()
+        .map(|f| SourceFile {
+            path: f.path.clone(),
+            state: f.state,
+        })
+        .collect()
 }
 
 /// The file that becomes the root module's JS, `lib.rs` → `lib.js`.
@@ -34,13 +40,27 @@ pub fn js_name(path: &str) -> String {
 impl Project {
     /// Before an example has loaded.
     pub fn empty() -> Project {
-        Project { root: "lib.rs".to_string(), files: Vec::new(), current: String::new() }
+        Project {
+            root: "lib.rs".to_string(),
+            files: Vec::new(),
+            current: String::new(),
+        }
     }
 
     /// An example's files, with its root open.
     pub fn of(root: String, texts: Vec<(String, String)>) -> Project {
-        let files = texts.iter().map(|(path, text)| SourceFile { path: path.clone(), state: source_state(text) }).collect();
-        Project { current: root.clone(), root, files }
+        let files = texts
+            .iter()
+            .map(|(path, text)| SourceFile {
+                path: path.clone(),
+                state: source_state(text),
+            })
+            .collect();
+        Project {
+            current: root.clone(),
+            root,
+            files,
+        }
     }
 
     pub fn has(&self, path: &str) -> bool {
@@ -74,21 +94,48 @@ impl Project {
 
     /// `path` open instead.
     pub fn opening(&self, path: &str, live: Option<&'static EditorState>) -> Project {
-        Project { root: self.root.clone(), files: self.keeping(live), current: path.to_string() }
+        Project {
+            root: self.root.clone(),
+            files: self.keeping(live),
+            current: path.to_string(),
+        }
     }
 
     /// With a new, empty file at `path`, open.
     pub fn adding(&self, path: &str, live: Option<&'static EditorState>) -> Project {
         let mut files = self.keeping(live);
-        files.push(SourceFile { path: path.to_string(), state: source_state("") });
-        Project { root: self.root.clone(), files, current: path.to_string() }
+        files.push(SourceFile {
+            path: path.to_string(),
+            state: source_state(""),
+        });
+        Project {
+            root: self.root.clone(),
+            files,
+            current: path.to_string(),
+        }
     }
 
     /// Without `path`; if it was open, the root is.
     pub fn removing(&self, path: &str) -> Project {
-        let files = self.files.iter().filter(|f| f.path != path).map(|f| SourceFile { path: f.path.clone(), state: f.state }).collect();
-        let current = if self.current == path { self.root.clone() } else { self.current.clone() };
-        Project { root: self.root.clone(), files, current }
+        let files = self
+            .files
+            .iter()
+            .filter(|f| f.path != path)
+            .map(|f| SourceFile {
+                path: f.path.clone(),
+                state: f.state,
+            })
+            .collect();
+        let current = if self.current == path {
+            self.root.clone()
+        } else {
+            self.current.clone()
+        };
+        Project {
+            root: self.root.clone(),
+            files,
+            current,
+        }
     }
 
     /// The crate as text, `path → text`, with the open file's `live` edits.

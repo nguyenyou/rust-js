@@ -14,6 +14,8 @@
     "setup": "bun install && bunx --bun playwright install chromium",
     "build": "cargo build && react/build.sh -o \"$PWD/target/libreact.rmeta\"",
     "test": "bun test",
+    "fmt": "bun scripts/format.ts",
+    "fmt:check": "bun scripts/format.ts --check",
     "generate": "bun web/generate.ts",
     "generate:react": "bun react/generate.ts",
     "react-example": "bun run --cwd examples/vite-react dev",

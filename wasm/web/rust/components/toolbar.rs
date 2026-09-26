@@ -20,7 +20,16 @@ pub struct ToolbarProps {
     pub status: &'static Status,
 }
 
-pub fn Toolbar(ToolbarProps { examples, example, on_example, ready, on_compile, status }: ToolbarProps) -> Element {
+pub fn Toolbar(
+    ToolbarProps {
+        examples,
+        example,
+        on_example,
+        ready,
+        on_compile,
+        status,
+    }: ToolbarProps,
+) -> Element {
     let on_test = on_compile.clone();
     jsx! {
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">

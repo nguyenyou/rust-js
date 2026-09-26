@@ -85,6 +85,28 @@ impl Callbacks for RustJs {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "--format-jsx") {
+        let input = match args.as_slice() {
+            [_] => "-",
+            [_, input] => input.as_str(),
+            _ => {
+                eprintln!("usage: rust-js --format-jsx [input.rs] (defaults to stdin; writes stdout)");
+                return ExitCode::FAILURE;
+            }
+        };
+        let mut formatter = jsx_syntax::formatting::Formatter::default();
+        let args = vec![
+            "rust-js".into(),
+            input.into(),
+            "--crate-type=lib".into(),
+            "--edition=2024".into(),
+        ];
+        let result = rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&args, &mut formatter));
+        if let Some(output) = formatter.output {
+            print!("{output}");
+        }
+        return result;
+    }
     // Anything after `--` goes to rustc as-is, e.g. `-- --sysroot /sysroot`.
     let (ours, to_rustc) = match args.iter().position(|a| a == "--") {
         Some(i) => (&args[..i], &args[i + 1..]),

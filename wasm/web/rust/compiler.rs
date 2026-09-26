@@ -101,7 +101,12 @@ unsafe extern "Rust" {
     #[link_name = "get dir"]
     safe fn preopen_dir(this: &PreopenDirectory) -> &'static WasiDirectory;
     #[link_name = "new @bjorn3/browser_wasi_shim#WASI"]
-    safe fn new_wasi(args: Vec<String>, env: Vec<String>, fds: Vec<&'static Fd>, options: &dyn std::any::Any) -> &'static Wasi;
+    safe fn new_wasi(
+        args: Vec<String>,
+        env: Vec<String>,
+        fds: Vec<&'static Fd>,
+        options: &dyn std::any::Any,
+    ) -> &'static Wasi;
     #[link_name = "get wasiImport"]
     safe fn wasi_import(this: &Wasi) -> &'static JsObject;
     /// Runs the program. A failed compile ends in a trap: panics can't unwind
@@ -164,7 +169,13 @@ pub async fn load(stat: Stat) -> Loaded {
     let web_crate = load_binding_crate("web", start, stat.clone());
     let react_crate = load_binding_crate("react", start, stat.clone());
     let examples = load_examples();
-    let loaded = Loaded { module: module.await, sysroot: sysroot.await, web_crate: web_crate.await, react_crate: react_crate.await, examples: examples.await };
+    let loaded = Loaded {
+        module: module.await,
+        sysroot: sysroot.await,
+        web_crate: web_crate.await,
+        react_crate: react_crate.await,
+        examples: examples.await,
+    };
     stat("ready after".to_string(), ms(now() - start));
     loaded
 }
@@ -189,7 +200,10 @@ async fn load_sysroot(start: f64, stat: Stat) -> &'static JsMap {
         size += uint8_array::length(file_data(entry.1));
         entries.push(entry);
     }
-    stat("download sysroot".to_string(), format!("{} ({} files, {})", ms(now() - start), entries.len(), mb(size as f64)));
+    stat(
+        "download sysroot".to_string(),
+        format!("{} ({} files, {})", ms(now() - start), entries.len(), mb(size as f64)),
+    );
     new_map(entries)
 }
 
@@ -201,7 +215,14 @@ async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
 
 async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {
     let bytes = response::array_buffer(window::fetch_with_str(window, &format!("./web/lib{name}.rmeta")).await).await;
-    stat(format!("download {name} crate"), format!("{} ({})", ms(now() - start), mb(array_buffer::byte_length(bytes) as f64)));
+    stat(
+        format!("download {name} crate"),
+        format!(
+            "{} ({})",
+            ms(now() - start),
+            mb(array_buffer::byte_length(bytes) as f64)
+        ),
+    );
     new_file(uint8_array::new(bytes), &FileOptions { readonly: true })
 }
 
@@ -312,12 +333,18 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
         preopen_fd(out_dir),
         preopen_fd(new_preopen(
             "/sysroot",
-            new_inode_map(vec![("lib".to_string(), dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysroot_dir))))]),
+            new_inode_map(vec![(
+                "lib".to_string(),
+                dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysroot_dir))),
+            )]),
         )),
-        preopen_fd(new_preopen("/web", new_inode_map(vec![
-            ("libweb.rmeta".to_string(), file_inode(loaded.web_crate)),
-            ("libreact.rmeta".to_string(), file_inode(loaded.react_crate)),
-        ]))),
+        preopen_fd(new_preopen(
+            "/web",
+            new_inode_map(vec![
+                ("libweb.rmeta".to_string(), file_inode(loaded.web_crate)),
+                ("libreact.rmeta".to_string(), file_inode(loaded.react_crate)),
+            ]),
+        )),
     ];
     let out_file = match root_file.strip_suffix(".rs") {
         Some(stem) => format!("/out/{stem}.js"),
@@ -347,10 +374,17 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     }
     // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI
     // has none). Without options, the shim logs every call it handles.
-    let wasi = new_wasi(args, vec!["RUSTC_ICE=0".to_string()], fds, &WasiOptions { debug: false });
+    let wasi = new_wasi(
+        args,
+        vec!["RUSTC_ICE=0".to_string()],
+        fds,
+        &WasiOptions { debug: false },
+    );
 
     let t0 = now();
-    let imports = Imports { wasi_snapshot_preview1: wasi_import(wasi) };
+    let imports = Imports {
+        wasi_snapshot_preview1: wasi_import(wasi),
+    };
     let instance = web_assembly::instantiate_with_web_assembly_module_and_import_object(loaded.module, &imports).await;
     let t1 = now();
     let started = run_wasi(wasi, instance);
@@ -358,7 +392,14 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     let ok = matches!(started, Ok(0));
     let exit = match started {
         Ok(code) => code.to_string(),
-        Err(e) => format!("trap ({})", if is_error(e) { error_message(e) } else { js_error::to_string(e) }),
+        Err(e) => format!(
+            "trap ({})",
+            if is_error(e) {
+                error_message(e)
+            } else {
+                js_error::to_string(e)
+            }
+        ),
     };
 
     let mut files = Vec::new();

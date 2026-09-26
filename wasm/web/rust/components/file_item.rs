@@ -17,7 +17,17 @@ pub struct FileItemProps {
     pub on_delete: Option<Rc<dyn Fn(String)>>,
 }
 
-pub fn FileItem(FileItemProps { name, path, depth, open, root, on_open, on_delete }: FileItemProps) -> Element {
+pub fn FileItem(
+    FileItemProps {
+        name,
+        path,
+        depth,
+        open,
+        root,
+        on_open,
+        on_delete,
+    }: FileItemProps,
+) -> Element {
     let opened = path.clone();
     let end = match on_delete {
         Some(_) if root => Some(jsx! { <span className="text-[11px] text-muted">{"root "}</span> }),
