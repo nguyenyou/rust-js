@@ -45,6 +45,7 @@ mod ordering;
 mod representation;
 mod std_impls;
 mod stdlib;
+mod text;
 mod traits;
 
 use crate::runtime::Helper;
@@ -1722,6 +1723,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let a = self.expr(arg, out)?;
                 self.unary(op, a, ty, span)
             }
+            // `n as char`, of a `u8` (ADR 0063).
+            ExprKind::Cast { source } if ty.is_char() => {
+                let v = self.expr(source, out)?;
+                Ok(Expr::call(Expr::member(Expr::var("String"), "fromCharCode"), vec![v]))
+            }
             ExprKind::Cast { source } => {
                 let v = self.expr(source, out)?;
                 self.cast(v, self.thir[source].ty, ty, span)
@@ -2023,6 +2029,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if from.is_bool() && target != Num::F64 {
             return Ok(Expr::cond(v, Expr::num(1), Expr::num(0)));
         }
+        // A `char` is its code point (ADR 0063), and a `u8` as a `char` its
+        // character.
+        if from.is_char() {
+            let code = Expr::call(Expr::member(v, "codePointAt"), vec![Expr::int(0)]);
+            let (lo, hi) = target.range();
+            return Ok(if target == Num::F64 || (lo <= 0 && hi >= 0x10ffff) {
+                code
+            } else {
+                target.wrap(code)
+            });
+        }
         // An `Ordering` is -1, 0 or 1 already (ADR 0036).
         let (v, source) = if self.is_lang_adt(from, LangItem::OrderingEnum) {
             (v, Num::I8)
@@ -2097,6 +2114,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let n = n.get() as i128;
                 Ok(Expr::int(if neg { -n } else { n }))
             }
+            LitKind::Byte(b) => Ok(Expr::int(b.into())),
             LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F64) => {
                 let x: f64 = sym
                     .as_str()

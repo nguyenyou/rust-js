@@ -40,7 +40,8 @@ fn prints_on_lines(value: &Expr) -> bool {
         | ExprKind::Str(_)
         | ExprKind::Undefined
         | ExprKind::Null
-        | ExprKind::Var(_) => false,
+        | ExprKind::Var(_)
+        | ExprKind::Regex(_) => false,
     }
 }
 

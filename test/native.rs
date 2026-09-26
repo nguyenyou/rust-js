@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/text.rs"]
+#[allow(dead_code)]
+mod text;
+
 #[path = "../examples/std_traits.rs"]
 #[allow(dead_code)]
 mod std_traits;
@@ -199,6 +203,11 @@ fn main() {
     case("combinators.report", &[], combinators::report);
     for i in [0, 1, 5] {
         case("combinators.panics", &[i as i64], || combinators::panics(i));
+    }
+    // Every `char` question, `parse` and slice, as `{:?}` shows them.
+    case("text.report", &[], text::report);
+    for (start, end) in [(0, 2), (2, 1), (1, 5)] {
+        case("text.slice_panics", &[start as i64, end as i64], || text::slice_panics(start, end));
     }
     case("std_traits.defaults", &[], std_traits::defaults);
     case("std_traits.vec_clones", &[], std_traits::vec_clones);

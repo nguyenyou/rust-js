@@ -21,6 +21,7 @@ const cases: [string, string, Crate[]][] = [
   ["generic_options", "examples/generic_options.rs", []],
   ["std_traits", "examples/std_traits.rs", []],
   ["combinators", "examples/combinators.rs", []],
+  ["text", "examples/text.rs", []],
   ["traits", "examples/traits.rs", []],
   ["consts", "examples/consts.rs", []],
   ["enums", "examples/enums.rs", []],

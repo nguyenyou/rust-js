@@ -150,8 +150,19 @@ function $debugF64(value) {
   return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
 }
 
-function $debugChar(c) {
-  return "'" + (c === "'" ? "\\'" : c === '"' ? '"' : JSON.stringify(c).slice(1, -1)) + "'";
+function $debugStr(s, quote = '"') {
+  let out = quote;
+  for (const c of s) {
+    if (c === quote || c === "\\") out += "\\" + c;
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (c === "\0") out += "\\0";
+    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+      out += "\\u{" + c.codePointAt(0).toString(16) + "}";
+    else out += c;
+  }
+  return out + quote;
 }
 
 function $debugFields(name, fields, values) {
@@ -662,13 +673,13 @@ export function debugs(n) {
       e: 5,
       f: "x"
     }),
-    boxedDebug_fmt({ item: p }, posDebug()) + " " + boxedDebug_fmt({ item: "s" }, { fmt: (value) => value == null ? "None" : "Some(" + JSON.stringify(value) + ")" }),
-    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " " + ((tuple) => "(" + String(tuple[0]) + ", " + JSON.stringify(tuple[1]) + ", " + $debugChar(tuple[2]) + ")")([
+    boxedDebug_fmt({ item: p }, posDebug()) + " " + boxedDebug_fmt({ item: "s" }, { fmt: (value) => value == null ? "None" : "Some(" + $debugStr(value) + ")" }),
+    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " " + ((tuple) => "(" + String(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + $debugStr(tuple[2], "'") + ")")([
       n,
       "a",
       "'"
     ]) + " " + ((tuple) => "(" + String(tuple[0]) + ",)")([5]),
-    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "]" + " " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + JSON.stringify(r._0) + ")") + " " + [
+    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "]" + " " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") + " " + [
       "Less",
       "Equal",
       "Greater"
@@ -862,7 +873,7 @@ function sixDebug_fmt(six) {
     String(six.c),
     String(six.d),
     String(six.e),
-    $debugChar(six.f)
+    $debugStr(six.f, "'")
   ];
   return $debugFields("Six", names, values);
 }

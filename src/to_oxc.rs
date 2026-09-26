@@ -612,6 +612,8 @@ impl<'a> Cx<'a> {
                 Expression::new_object_expression(sp, ArenaVec::from_iter_in(props, b), b)
             }),
             ExprKind::Jsx(jsx) => self.jsx(sp, jsx),
+            // Printed as written, as `number` prints an integer.
+            ExprKind::Regex(literal) => Expression::new_identifier(sp, self.name(literal), b),
             ExprKind::Unary(op, arg) => {
                 let op = match op {
                     UnaryOp::Neg => UnaryOperator::UnaryNegation,

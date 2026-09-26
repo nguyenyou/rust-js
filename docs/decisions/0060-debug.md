@@ -24,7 +24,8 @@ function, derived or not.**
 
 - **Std's types are shown in place:**
   - numbers are `String(n)`, and an `f64` is `$debugF64(x)`;
-  - strings are `JSON.stringify(s)`, and a `char` is `$debugChar(c)`, `'c'`;
+  - strings are `$debugStr(s)`, and a `char` is `$debugStr(c, "'")`, `'c'`,
+    escaped as Rust escapes them (ADR 0063);
   - an `Option` is `Some(..)` or `None`, a tuple `(a, b)` (and `(a,)`), a
     `Vec` `[..]`, a map `{k: v}`, a `Result` `Ok(..)` or `Err(..)`, and an
     `Ordering` `Less`, `Equal` or `Greater`.

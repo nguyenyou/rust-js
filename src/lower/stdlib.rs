@@ -4,6 +4,7 @@ use super::combinators::{self, Comb, IterComb};
 use super::format_spec::{Radix, Spec};
 use super::maps::{MapOp, Part};
 use super::representation::Num;
+use super::text::{self, TextOp};
 use super::{FnCx, R};
 use crate::js;
 use crate::js::{Expr, Op, Stmt, StmtKind};
@@ -67,6 +68,8 @@ pub(super) enum Std {
     FmtUsize,
     /// A `HashMap` or `HashSet` method (ADR 0059).
     Map(MapOp),
+    /// A `char` or `str` method, `parse`, or slicing by a range (ADR 0063).
+    Text(TextOp),
     /// An `Option`, `Result` or `Vec` method (ADR 0062).
     Comb(Comb),
     /// An iterator adapter or consumer (ADR 0062).
@@ -290,6 +293,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if tcx.is_lang_item(trait_, LangItem::Index) && self.is_map(ty) && !self.is_set(ty) {
                 return Some(Std::Map(MapOp::Index));
             }
+            // `&v[a..b]` of a slice, an array or a `Vec` (ADR 0063).
+            if tcx.is_lang_item(trait_, LangItem::Index)
+                && let Some(range) = args.types().nth(1)
+                && ["Range", "RangeFrom", "RangeTo", "RangeFull"].iter().any(|name| {
+                    matches!(range.kind(), ty::Adt(adt, _) if tcx.item_name(adt.did()).as_str() == *name
+                        && tcx.crate_name(adt.did().krate) == sym::core)
+                })
+                && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_std_adt(ty.peel_refs(), sym::Vec))
+            {
+                return Some(Std::Text(TextOp::Slice));
+            }
             // `v[i]` of a `Vec` is a slice's, checked the same way.
             if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
                 && self.is_std_adt(ty.peel_refs(), sym::Vec)
@@ -368,6 +382,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let set = self.is_set(ty);
                 return Some(Std::Map(MapOp::From { set }));
             }
+            // std's own conversions that change nothing in JS (ADR 0063): to a
+            // `String` from a `&str` or a `char`, and between numbers, which
+            // only widen.
+            let (from_ty, to_ty) = if tcx.is_diagnostic_item(sym::Into, trait_) {
+                (Some(ty), args.types().nth(1))
+            } else if tcx.is_diagnostic_item(sym::From, trait_) {
+                (args.types().nth(1), Some(ty))
+            } else {
+                (None, None)
+            };
+            if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty)
+                && ((self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty))
+                    || (Num::of(to_ty).is_some() && Num::of(from_ty.peel_refs()).is_some()))
+            {
+                return Some(Std::Same);
+            }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
             return (from_str || to_owned).then_some(Std::Same);
@@ -384,6 +414,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (map, set) = (adt("HashMap") || adt("BTreeMap"), adt("HashSet") || adt("BTreeSet"));
         let entry = adt("HashMapEntry") || adt("BTreeEntry");
         let name = tcx.item_name(def_id);
+        if let Some(op) = text::classify(name.as_str(), owner.is_char(), owner.is_str()) {
+            return Some(Std::Text(op));
+        }
         if let Some(comb) = combinators::classify(
             name.as_str(),
             option,

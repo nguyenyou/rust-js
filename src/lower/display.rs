@@ -229,7 +229,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => args.type_at(0).peel_refs(),
             _ => ty,
         };
-        if self.is_string_like(ty) {
+        if self.is_string_like(ty) || self.is_parse_error(ty) {
             return Ok(value);
         }
         if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
@@ -253,6 +253,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.impl_call(fmt, args, vec![value], span);
         }
         Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")))
+    }
+
+    /// `ParseIntError` and the like, which rust-js holds as their message
+    /// (ADR 0063): `e.to_string()` is the message itself.
+    pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
+            && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError"]
+                .contains(&self.tcx.item_name(adt.did()).as_str()))
     }
 
     pub(super) fn debug_trait(&self) -> DefId {
@@ -289,11 +297,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::str("()"));
         }
         if ty.is_char() {
-            self.runtime.insert(Helper::DebugChar);
-            return Ok(Expr::call(Expr::var("$debugChar"), vec![value]));
+            self.runtime.insert(Helper::DebugStr);
+            return Ok(Expr::call(Expr::var("$debugStr"), vec![value, Expr::str("'")]));
         }
         if self.is_string_like(ty) {
-            return Ok(Expr::call(Expr::member(Expr::var("JSON"), "stringify"), vec![value]));
+            self.runtime.insert(Helper::DebugStr);
+            return Ok(Expr::call(Expr::var("$debugStr"), vec![value]));
         }
         if self.is_lang_adt(ty, LangItem::OrderingEnum) {
             let names = ["Less", "Equal", "Greater"];

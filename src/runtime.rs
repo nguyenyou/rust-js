@@ -27,6 +27,13 @@ pub enum Helper {
     OrInsert,
     OrInsertWith,
     SortedEntries,
+    ToDigit,
+    Lines,
+    ParseInt,
+    ParseF64,
+    ParseBool,
+    ParseChar,
+    SliceRange,
     Extend,
     InsertAt,
     RemoveAt,
@@ -52,7 +59,7 @@ pub enum Helper {
     PartialCmp,
     ToFixed,
     DebugF64,
-    DebugChar,
+    DebugStr,
     DebugFields,
     Plus,
     ZeroPad,
@@ -230,11 +237,24 @@ function $debugF64(value) {
 }
 "#
             }
-            // `{:?}` of a `char`: in single quotes, escaped as Rust escapes it.
-            Helper::DebugChar => {
+            // `{:?}` of a string, or of a `char` in `'`: quoted, with what Rust
+            // doesn't print as it is escaped: controls, formats, private use,
+            // separators, combining marks, and spaces other than `" "`.
+            Helper::DebugStr => {
                 r#"
-function $debugChar(c) {
-  return "'" + (c === "'" ? "\\'" : c === '"' ? '"' : JSON.stringify(c).slice(1, -1)) + "'";
+function $debugStr(s, quote = '"') {
+  let out = quote;
+  for (const c of s) {
+    if (c === quote || c === "\\") out += "\\" + c;
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (c === "\0") out += "\\0";
+    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+      out += "\\u{" + c.codePointAt(0).toString(16) + "}";
+    else out += c;
+  }
+  return out + quote;
 }
 "#
             }
@@ -632,6 +652,86 @@ function $partition(items, keep) {
     (keep(item) ? yes : no).push(item);
   }
   return [yes, no];
+}
+"#
+            }
+            // `c.to_digit(radix)`: the digit, or `None`.
+            Helper::ToDigit => {
+                r#"
+function $toDigit(c, radix) {
+  const digit = parseInt(c, 36);
+  return digit < radix ? digit : undefined;
+}
+"#
+            }
+            // `s.lines()`: without a last empty line, and each without its `\r`.
+            Helper::Lines => {
+                r#"
+function $lines(s) {
+  const lines = s.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
+"#
+            }
+            // `s.parse::<u32>()` and the other integers: a `Result`, whose `Err` is
+            // what the error's `to_string()` would be.
+            Helper::ParseInt => {
+                r#"
+function $parseInt(s, min, max) {
+  const error = (message) => ({ TAG: "Err", _0: message });
+  if (s === "") return error("cannot parse integer from empty string");
+  if (!(min < 0 ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s)) return error("invalid digit found in string");
+  const n = Number(s);
+  if (n > max) return error("number too large to fit in target type");
+  if (n < min) return error("number too small to fit in target type");
+  return { TAG: "Ok", _0: n };
+}
+"#
+            }
+            // `s.parse::<f64>()`: what Rust reads as a float, and no more (JS's
+            // `Number` also takes `""`, `" 1"` and `"0x10"`).
+            Helper::ParseF64 => {
+                r#"
+function $parseF64(s) {
+  if (s === "") return { TAG: "Err", _0: "cannot parse float from empty string" };
+  const lower = s.toLowerCase();
+  const sign = lower.startsWith("-") ? -1 : 1;
+  const rest = lower.replace(/^[+-]/, "");
+  if (rest === "inf" || rest === "infinity") return { TAG: "Ok", _0: sign * Infinity };
+  if (rest === "nan") return { TAG: "Ok", _0: NaN };
+  if (!/^([0-9]+\.?[0-9]*|\.[0-9]+)(e[+-]?[0-9]+)?$/.test(rest)) return { TAG: "Err", _0: "invalid float literal" };
+  return { TAG: "Ok", _0: sign * Number(rest) };
+}
+"#
+            }
+            Helper::ParseBool => {
+                r#"
+function $parseBool(s) {
+  return s === "true" || s === "false"
+    ? { TAG: "Ok", _0: s === "true" }
+    : { TAG: "Err", _0: "provided string was not `true` or `false`" };
+}
+"#
+            }
+            Helper::ParseChar => {
+                r#"
+function $parseChar(s) {
+  const chars = [...s];
+  if (chars.length === 1) return { TAG: "Ok", _0: s };
+  return { TAG: "Err", _0: chars.length === 0 ? "cannot parse char from empty string" : "too many characters in string" };
+}
+"#
+            }
+            // `&v[a..b]`: a copy, and Rust's panic out of bounds.
+            Helper::SliceRange => {
+                r#"
+function $slice(items, start, end = items.length) {
+  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
+  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
+  return items.slice(start, end);
 }
 "#
             }

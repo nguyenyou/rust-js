@@ -6,7 +6,7 @@
 use super::{FnCx, R, representation::Num};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
 use crate::runtime::Helper;
-use rustc_middle::thir::ExprId;
+use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::{Span, Symbol};
 
@@ -113,6 +113,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "this method of an `Option` of a generic type"));
         }
         let mut values = self.operands(args, out)?;
+        // `map_err(|e| e.to_string())` of a parse error, whose message is
+        // already a string: the same `Result`. Only one just made, so no
+        // other variable is left sharing it.
+        if matches!(comb, Comb::ResultMap | Comb::MapErr)
+            && values[1].is_identity()
+            && matches!(self.thir[self.strip(args[0])].kind, ExprKind::Call { .. })
+        {
+            return Ok(values.remove(0));
+        }
         let subject = values.remove(0);
         // The subject is read more than once.
         let subject = if subject.reads_same() {
@@ -240,8 +249,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let which = if comb == Comb::IsOkAnd { "Ok" } else { "Err" };
                 Expr::bin(Op::And, tag(which), holds)
             }
-            // `v.contains(&x)`: JS's `includes` for what \`===\` compares, and
-            // \`==\` item by item for the rest (ADR 0053).
+            // `v.contains(&x)`: JS's `includes` for what `===` compares, and
+            // `==` item by item for the rest (ADR 0053).
             Comb::Contains => {
                 let x = next();
                 let item = self
@@ -333,7 +342,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let item_ty = || self.iterator_item(receiver_ty);
         Ok(match comb {
-            // `Some`s only: \`.map(f).filter((item) => item != null)\`.
+            // `Some`s only: `.map(f).filter((item) => item != null)`.
             IterComb::FilterMap => method(method(items, "map", vec![next()]), "filter", vec![present()]),
             IterComb::FindMap => method(method(items, "map", vec![next()]), "find", vec![present()]),
             IterComb::FlatMap => {

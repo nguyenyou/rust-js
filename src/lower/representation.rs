@@ -35,6 +35,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "std::slice::Iter",
                     "std::vec::IntoIter",
                     "std::str::Chars",
+                    "std::str::SplitWhitespace",
+                    "std::str::Lines",
                     "std::array::IntoIter",
                 ]
                 .contains(&path.as_str())

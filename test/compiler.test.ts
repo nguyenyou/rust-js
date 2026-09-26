@@ -21,6 +21,7 @@ let methods: Record<string, (...args: any[]) => unknown>;
 let genericOptions: Record<string, (...args: any[]) => unknown>;
 let stdTraits: Record<string, (...args: any[]) => unknown>;
 let combinators: Record<string, (...args: any[]) => unknown>;
+let text: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -60,6 +61,8 @@ beforeAll(async () => {
   stdTraits = await import(join(target, "std_traits.js"));
   run([join(target, "debug", "rust-js"), "examples/combinators.rs", "-o", join(target, "combinators.js")]);
   combinators = await import(join(target, "combinators.js"));
+  run([join(target, "debug", "rust-js"), "examples/text.rs", "-o", join(target, "text.js")]);
+  text = await import(join(target, "text.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -148,6 +151,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "combinators") {
         return combinators[path[1]](...c.args);
+      }
+      if (path[0] === "text") {
+        return text[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -890,6 +896,19 @@ test("a derived Debug is a function, left out unless something shows the type", 
   expect(js).toContain("export function debugged(x, TDebug) {\n  return TDebug.fmt(x);");
   // Derived, and never shown: not in the JS at all.
   expect(js).not.toContain("neverShown");
+});
+
+// ADR 0063: a `char`'s questions are regular expressions of the Unicode
+// properties Rust uses, and `parse` is a `Result` whose `Err` is Rust's message.
+test("chars, parse and slices are plain JS with Rust's answers", async () => {
+  const js = await Bun.file(join(target, "text.js")).text();
+  expect(js).toContain("/^\\p{White_Space}$/u.test(c),\n    /^\\p{Alphabetic}$/u.test(c),");
+  expect(js).toContain("const code = c.codePointAt(0);");
+  expect(js).toContain("String.fromCharCode(65)");
+  // `map_err(|e| e.to_string())` of a fresh `Result`: the message already is one.
+  expect(js).toContain("const n = $parseInt(s, 0, 4294967295);");
+  expect(js).toContain('text.split(/\\p{White_Space}+/u).filter((word) => word !== "")');
+  expect(js).toContain("$slice(v, 1, 3)");
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

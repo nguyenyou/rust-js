@@ -88,8 +88,19 @@ function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function $debugChar(c) {
-  return "'" + (c === "'" ? "\\'" : c === '"' ? '"' : JSON.stringify(c).slice(1, -1)) + "'";
+function $debugStr(s, quote = '"') {
+  let out = quote;
+  for (const c of s) {
+    if (c === quote || c === "\\") out += "\\" + c;
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (c === "\0") out += "\\0";
+    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+      out += "\\u{" + c.codePointAt(0).toString(16) + "}";
+    else out += c;
+  }
+  return out + quote;
 }
 
 function $maxBy(items, cmp, boxed = false) {
@@ -164,8 +175,8 @@ export function more_options(n) {
     _0: "odd " + String(n)
   };
   return [
-    r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + JSON.stringify(r._0) + ")",
-    s.TAG === "Ok" ? "Ok(" + String(s._0) + ")" : "Err(" + JSON.stringify(s._0) + ")",
+    r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")",
+    s.TAG === "Ok" ? "Ok(" + String(s._0) + ")" : "Err(" + $debugStr(s._0) + ")",
     h ?? 0,
     h == null || h > 1,
     h != null ? h + 1 >>> 0 : 1000
@@ -189,7 +200,7 @@ export function results(c) {
   };
   const result = r.TAG === "Ok" ? then(r._0) : r;
   return [
-    ((result) => result.TAG === "Ok" ? "Ok(" + String(result._0) + ")" : "Err(" + JSON.stringify(result._0) + ")")(r.TAG === "Ok" ? {
+    ((result) => result.TAG === "Ok" ? "Ok(" + String(result._0) + ")" : "Err(" + $debugStr(result._0) + ")")(r.TAG === "Ok" ? {
       TAG: "Ok",
       _0: Math.imul(r._0, 10) >>> 0
     } : r),
@@ -286,17 +297,17 @@ export function report() {
     5,
     8
   ]) {
-    out += ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(options(n)) + " " + ((tuple) => "(" + JSON.stringify(tuple[0]) + ", " + JSON.stringify(tuple[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[2]) + ", " + String(tuple[3]) + ", " + String(tuple[4]) + ")")(more_options(n)) + "\n";
+    out += ((tuple) => "(" + String(tuple[0]) + ", " + String(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(options(n)) + " " + ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[2]) + ", " + String(tuple[3]) + ", " + String(tuple[4]) + ")")(more_options(n)) + "\n";
   }
   for (const c of [
     "1",
     "2",
     "x"
   ]) {
-    out += ((tuple) => "(" + JSON.stringify(tuple[0]) + ", " + JSON.stringify(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + JSON.stringify(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(results(c)) + "\n";
+    out += ((tuple) => "(" + $debugStr(tuple[0]) + ", " + $debugStr(tuple[1]) + ", " + String(tuple[2]) + ", " + String(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(tuple[4]) + ", " + String(tuple[5]) + ")")(results(c)) + "\n";
   }
   for (const n$1 of [0, 5]) {
-    out += ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[2].map((item) => "(" + String(item[0]) + ", " + $debugChar(item[1]) + ")").join(", ") + "]") + ", " + ("[" + tuple[3].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(iters(n$1)) + " " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ")")(tuple[5]) + ")")(consumers(n$1)) + " " + ((tuple) => "(" + String(tuple[0]) + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + String(tuple[2]) + ", " + ("[" + tuple[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(vecs(n$1)) + "\n";
+    out += ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "]") + ", " + ("[" + tuple[3].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(iters(n$1)) + " " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "(" + ("[" + tuple[0].map((item) => String(item)).join(", ") + "]") + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ")")(tuple[5]) + ")")(consumers(n$1)) + " " + ((tuple) => "(" + String(tuple[0]) + ", " + ("[" + tuple[1].map((item) => String(item)).join(", ") + "]") + ", " + String(tuple[2]) + ", " + ("[" + tuple[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "]") + ", " + ("[" + tuple[5].map((item) => String(item)).join(", ") + "]") + ")")(vecs(n$1)) + "\n";
   }
   return out;
 }

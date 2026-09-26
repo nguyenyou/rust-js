@@ -103,5 +103,6 @@ one by a range, say that JS counts differently. `is_empty()` works.
   orders a few characters above U+FFFF differently than Rust does.
 - `{}` takes strings, `char`s, integers, `bool`s and floats, and formatting
   options (`{:>8}`, `{:.2}`, `{:#x}`) are ADR 0058's.
-- Not yet: `lines`, `find`, `chars`, `char_indices`, `parse`, `split` beyond
-  those uses, and patterns that are closures.
+- `lines`, `split_whitespace`, `parse` and `char`'s questions are ADR 0063's.
+- Not yet: `find`, `chars`, `char_indices`, `split` beyond those uses, and
+  patterns that are closures.

@@ -201,6 +201,8 @@ pub enum ExprKind {
     Await(Box<Expr>),
     /// `<div className="hero">..</div>`, `<Counter initial={1} />` or `<>..</>` (ADR 0040).
     Jsx(Box<Jsx>),
+    /// A regular expression literal, as written: `/^\p{White_Space}$/u` (ADR 0063).
+    Regex(String),
 }
 
 /// A JSX element (ADR 0040).
@@ -288,6 +290,11 @@ impl Expr {
 
     pub fn str(s: impl Into<String>) -> Expr {
         Expr::new(ExprKind::Str(s.into()))
+    }
+
+    /// A regular expression literal, as written: `/^[0-9]$/`.
+    pub fn regex(literal: &str) -> Expr {
+        Expr::new(ExprKind::Regex(literal.to_string()))
     }
 
     pub fn undefined() -> Expr {
@@ -416,7 +423,8 @@ impl Expr {
             | ExprKind::Str(_)
             | ExprKind::Undefined
             | ExprKind::Null
-            | ExprKind::Var(_) => false,
+            | ExprKind::Var(_)
+            | ExprKind::Regex(_) => false,
         }
     }
 
@@ -459,11 +467,26 @@ impl Expr {
                 props: props(&jsx.props)?,
                 children: all(&jsx.children)?,
             })),
-            ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null => {
-                self.kind.clone()
-            }
+            ExprKind::Num(_)
+            | ExprKind::Bool(_)
+            | ExprKind::Str(_)
+            | ExprKind::Undefined
+            | ExprKind::Null
+            | ExprKind::Regex(_) => self.kind.clone(),
         };
         Some(Expr { kind, span: self.span })
+    }
+
+    /// Is this `(x) => x`?
+    pub fn is_identity(&self) -> bool {
+        let ExprKind::Arrow(params, body) = &self.kind else {
+            return false;
+        };
+        let [Pattern::Name(param)] = params.as_slice() else {
+            return false;
+        };
+        matches!(body.as_slice(), [Stmt { kind: StmtKind::Return(Some(value)), .. }]
+            if matches!(&value.kind, ExprKind::Var(name) if name == param))
     }
 
     /// Is this the same value, cheaply, however often it's read? A variable,
@@ -485,6 +508,7 @@ impl Expr {
             | ExprKind::Undefined
             | ExprKind::Null
             | ExprKind::Var(_)
+            | ExprKind::Regex(_)
             | ExprKind::Arrow(..)
             | ExprKind::AsyncArrow(..) => false,
             // It lets other code run meanwhile.
