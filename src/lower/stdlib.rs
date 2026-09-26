@@ -16,10 +16,13 @@ use rustc_span::{ErrorGuaranteed, Span, Symbol, sym};
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Std {
-    /// The argument itself: `Box::new(x)`, `Rc::new(x)`, `rc.clone()`,
+    /// The argument itself: `Box::new(x)`, `Rc::new(x)`,
     /// `s.to_owned()`, `String::from(s)`, `v.iter()`, and `Deref` of
     /// `String`, `Rc`, `Vec`, `Ref`, `RefMut` and JS objects.
     Same,
+    /// An iterator's `cloned()` and `copied()`: its items, each cloned if
+    /// that could be told apart from sharing it (ADR 0052).
+    Cloned,
     /// `Cell::new(x)` and `RefCell::new(x)`: `{ value: x }`.
     CellNew,
     CellGet,
@@ -150,6 +153,7 @@ impl Std {
                 | Std::Position
                 | Std::Extreme(_)
                 | Std::Last
+                | Std::Cloned
         )
     }
 }
@@ -298,7 +302,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     "min" => Std::Extreme(false),
                     "last" => Std::Last,
                     "count" => Std::Len,
-                    "copied" | "cloned" => Std::Same,
+                    "copied" | "cloned" => Std::Cloned,
                     "collect" if collects_string() => Std::CollectString,
                     "collect" => Std::Collect,
                     _ => return None,
@@ -323,11 +327,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
-            // A clone of what's never changed in place can be the value itself:
-            // nothing can tell them apart.
-            let rc_clone = tcx.is_lang_item(def_id, LangItem::CloneFn)
-                && (self.is_std_adt(ty, sym::Rc) || self.is_string_like(ty) || !self.contains_mutated(ty.peel_refs()));
-            return (from_str || to_owned || rc_clone).then_some(Std::Same);
+            return (from_str || to_owned).then_some(Std::Same);
         }
         let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
@@ -585,6 +585,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var(if max { "$max" } else { "$min" }), vec![items])
             }
             Std::Last => method(items, "at", vec![Expr::int(-1)]),
+            Std::Cloned => {
+                let item = generic_args.types().nth(1).expect("`cloned` names its item");
+                if self.needs_clone(item) {
+                    method(items, "map", vec![self.clone_fn("item", item, span)?])
+                } else {
+                    items
+                }
+            }
             // Sorting, in place (ADR 0036). JS's `sort()` compares as strings:
             // right for strings and `bool`s, and numbers need `a - b`.
             Std::Sort => {

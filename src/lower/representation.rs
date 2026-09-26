@@ -199,12 +199,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Param(_))
-            || self.krate.mutated.iter().any(|&mutated| self.instance_of(ty, mutated))
+            || self.mutated_itself(ty)
             || match self.shape(ty) {
                 Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
                 Shape::Array(tys) => tys.iter().any(|&t| self.contains_mutated(t)),
                 Shape::Other => false,
             }
+    }
+
+    /// Is `ty` itself changed in place somewhere, not just a part of it?
+    pub(super) fn mutated_itself(&self, ty: Ty<'tcx>) -> bool {
+        self.krate.mutated.iter().any(|&mutated| self.instance_of(ty, mutated))
+    }
+
+    /// Is `ty` a `Vec` type something may change (ADR 0052)?
+    pub(super) fn vec_changed(&self, ty: Ty<'tcx>) -> bool {
+        self.krate
+            .changed_vecs
+            .iter()
+            .any(|&changed| self.instance_of(ty, changed))
     }
 
     /// Is `ty` one of the types `general` stands for? A type mutated in a

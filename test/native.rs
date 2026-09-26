@@ -24,6 +24,10 @@ mod structs;
 #[allow(dead_code)]
 mod generic_options;
 
+#[path = "../examples/std_traits.rs"]
+#[allow(dead_code)]
+mod std_traits;
+
 #[path = "../examples/methods.rs"]
 #[allow(dead_code)]
 mod methods;
@@ -177,6 +181,12 @@ fn main() {
     case("generic_options.inner_values", &[], generic_options::inner_values);
     case("generic_options.mapped_values", &[], generic_options::mapped_values);
     case("generic_options.std_values", &[], generic_options::std_values);
+    case("std_traits.defaults", &[], std_traits::defaults);
+    case("std_traits.vec_clones", &[], std_traits::vec_clones);
+    case("std_traits.struct_clones", &[], std_traits::struct_clones);
+    case("std_traits.hand_written", &[], std_traits::hand_written);
+    case("std_traits.enum_clones", &[], std_traits::enum_clones);
+    case("std_traits.conversions", &[], std_traits::conversions);
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

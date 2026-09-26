@@ -38,6 +38,7 @@ mod bindings;
 mod calls;
 mod jsx;
 mod representation;
+mod std_impls;
 mod stdlib;
 mod traits;
 
@@ -190,6 +191,7 @@ struct Loop {
 /// Crate facts and dependencies recorded while lowering function bodies.
 struct CrateFacts<'a, 'tcx> {
     mutated: &'a HashSet<Ty<'tcx>>,
+    changed_vecs: &'a HashSet<Ty<'tcx>>,
     closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
     bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,

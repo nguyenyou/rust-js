@@ -2,7 +2,6 @@
 //! lazy dictionaries for impls, and `{ value, impl }` for trait objects.
 
 use super::bindings;
-use super::representation::Num;
 use super::{Dest, FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
 use crate::runtime::Helper;
@@ -14,8 +13,19 @@ use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 
+/// A trait whose bounds take dictionaries (ADR 0049): the crate's own, and
+/// the std ones rust-js has dictionaries for (ADR 0052).
 pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    id.is_local() || tcx.is_lang_item(id, LangItem::Copy) || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+    id.is_local()
+        || tcx.is_lang_item(id, LangItem::Copy)
+        || tcx.is_lang_item(id, LangItem::Clone)
+        || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+}
+
+/// A trait the crate may implement. `From` has no dictionaries: its impls
+/// are only called where the types are known (ADR 0052).
+pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    operational(tcx, id) || tcx.is_diagnostic_item(sym::From, id)
 }
 
 pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
@@ -105,13 +115,26 @@ pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tc
     result
 }
 
+/// The type, then the trait, then the trait's arguments: `circleShape`,
+/// `metersFromF64` for `impl From<f64> for Meters` (ADR 0052).
 pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
     let tr = tcx.impl_trait_ref(id).instantiate_identity();
-    let name = match tr.self_ty().kind() {
+    let word = |ty: Ty<'_>| match ty.kind() {
         ty::Adt(adt, _) => tcx.item_name(adt.did()).to_string(),
-        _ => tr.self_ty().to_string(),
+        _ => ty.to_string(),
     };
-    format!("{}{}", lower_first(&js_word(&name)), tcx.item_name(tr.def_id))
+    let mut name = format!(
+        "{}{}",
+        lower_first(&js_word(&word(tr.self_ty()))),
+        tcx.item_name(tr.def_id)
+    );
+    for arg in tr.args.types().skip(1) {
+        let arg = js_word(&word(arg.peel_refs()));
+        let mut chars = arg.chars();
+        name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
+        name.extend(chars);
+    }
+    name
 }
 
 /// A type's name as part of a JS name: what isn't a letter or a digit is
@@ -138,6 +161,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.erase_and_anonymize_regions(from) == self.tcx.erase_and_anonymize_regions(to) {
             return Some(value);
         }
+        // A std trait's dictionary, like `Copy`'s, has no supertraits in it.
+        if !from.def_id.is_local() {
+            return None;
+        }
         for (clause, _) in self
             .tcx
             .explicit_super_predicates_of(from.def_id)
@@ -157,35 +184,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         None
     }
 
+    /// The dictionary for `tr` among those this function was given, or
+    /// a supertrait's of one.
+    pub(super) fn evidence_for(&self, tr: ty::TraitRef<'tcx>) -> Option<Expr> {
+        self.evidence
+            .iter()
+            .find_map(|(bound, value)| self.super_evidence(*bound, tr, value.clone()))
+    }
+
     pub(super) fn dictionary(&mut self, tr: ty::TraitRef<'tcx>, span: Span) -> R<Expr> {
-        for (bound, value) in &self.evidence {
-            if let Some(found) = self.super_evidence(*bound, tr, value.clone()) {
-                return Ok(found);
-            }
+        if let Some(found) = self.evidence_for(tr) {
+            return Ok(found);
         }
-        if self.tcx.is_diagnostic_item(Symbol::intern("Default"), tr.def_id) {
-            let ty = tr.self_ty();
-            let value = if Num::of(ty).is_some() {
-                Some(Expr::int(0))
-            } else if ty.is_bool() {
-                Some(Expr::bool(false))
-            } else if ty.is_char() {
-                Some(Expr::str("\0"))
-            } else if ty.is_unit() || self.option_of(ty).is_some() {
-                Some(Expr::undefined())
-            } else if self.is_lang_adt(ty, LangItem::String) {
-                Some(Expr::str(""))
-            } else if self.is_std_adt(ty, sym::Vec) {
-                Some(Expr::array(Vec::new()))
-            } else {
-                None
-            };
-            if let Some(value) = value {
-                self.check_value_ty(ty, span)?;
+        // Derived and std impls of `Default` and `Clone` (ADR 0052).
+        let ty = tr.self_ty();
+        let default = self.tcx.is_diagnostic_item(Symbol::intern("Default"), tr.def_id);
+        let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
+        if (default || clone) && !self.has_user_impl(tr.def_id, ty) {
+            if default {
+                let value = self.default_value(ty, span)?;
                 return Ok(Expr::object(vec![Prop::Field(
                     "default".into(),
                     Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(js::Span::NONE)]),
                 )]));
+            }
+            if clone {
+                let clone = self.clone_fn("value", ty, span)?;
+                return Ok(Expr::object(vec![Prop::Field("clone".into(), clone)]));
             }
         }
         if self.tcx.is_lang_item(tr.def_id, LangItem::Copy) {
@@ -275,6 +300,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut values = values;
             values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
             return Ok(Some(Expr::call(self.fn_ref(instance.def_id()), values)));
+        }
+        // What rust-js writes itself, in place: `c.clone()` of a struct is a
+        // copy of it, not a dictionary's `clone` (ADR 0052).
+        if self.tcx.is_lang_item(id, LangItem::CloneFn) {
+            let mut values = values;
+            return Ok(Some(self.clone_value(values.remove(0), tr.self_ty(), span, out)?));
+        }
+        if self.tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) {
+            return Ok(Some(self.default_value(tr.self_ty(), span)?));
+        }
+        // A std trait's dictionary has only its required methods.
+        if operational(self.tcx, trait_id) && !trait_id.is_local() && self.tcx.defaultness(id).has_value() {
+            let what = format!("calling `{}`", self.tcx.def_path_str(id));
+            return Err(self.unsupported(span, &what));
         }
         if operational(self.tcx, trait_id) {
             let dictionary = self.dictionary(tr, span)?;
@@ -385,6 +424,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         for item in self.tcx.associated_items(tr.def_id).in_definition_order() {
             if self.tcx.def_kind(item.def_id) != DefKind::AssocFn {
+                continue;
+            }
+            // A std trait's provided methods, like `Clone::clone_from`,
+            // aren't in its dictionary: nothing calls them through it.
+            if !tr.def_id.is_local() && self.tcx.defaultness(item.def_id).has_value() {
                 continue;
             }
             if self

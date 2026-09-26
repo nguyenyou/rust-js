@@ -19,6 +19,7 @@ let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
 let methods: Record<string, (...args: any[]) => unknown>;
 let genericOptions: Record<string, (...args: any[]) => unknown>;
+let stdTraits: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -54,6 +55,8 @@ beforeAll(async () => {
   methods = await import(join(target, "methods.js"));
   run([join(target, "debug", "rust-js"), "examples/generic_options.rs", "-o", join(target, "generic_options.js")]);
   genericOptions = await import(join(target, "generic_options.js"));
+  run([join(target, "debug", "rust-js"), "examples/std_traits.rs", "-o", join(target, "std_traits.js")]);
+  stdTraits = await import(join(target, "std_traits.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -139,6 +142,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "generic_options") {
         return JSON.parse(JSON.stringify(genericOptions[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+      }
+      if (path[0] === "std_traits") {
+        return stdTraits[path[1]](...c.args);
       }
       if (path[0] === "methods") {
         return methods[path[1]](...c.args);
@@ -739,4 +745,36 @@ test("an Option of a generic T is its value, boxed only when that looks like Non
   expect(genericOptions.pick("a", true)).toBe("a");
   expect(genericOptions.pick(undefined, true)).toEqual({ $someNone: 0 });
   expect(genericOptions.pick(undefined, false)).toBeUndefined();
+});
+
+// ADR 0052: the crate's own `Default`, `From` and `Clone`. A clone is a copy
+// only of what could be told apart, and a hand-written one is called.
+test("std trait impls are direct calls, and a clone copies only what changes", async () => {
+  const js = await Bun.file(join(target, "std_traits.js")).text();
+  // Hand-written: called where the type is known, a dictionary for a generic.
+  expect(js).toContain("const b = trackedClone_clone(a);");
+  expect(js).toContain("const both = twice(copy.tracked, trackedClone());");
+  expect(js).toContain("export function twice(x, TClone) {\n  return [TClone.clone(x), TClone.clone(x)];");
+  // Derived: written in place, copying only the `Vec` that's pushed to.
+  expect(js).toContain("  let t = {\n    ...s,\n    tags: s.tags.slice()\n  };");
+  expect(js).toContain("  const dot = \"Dot\";");
+  // `From`, once per argument type, and `into()` is the same call.
+  expect(js).toContain("const b = metersFromU32_from(3);");
+  expect(js).toContain("const c = metersFromF64_from(1.5);");
+
+  const { fixture, compiler } = await import("./support");
+  const { writeFileSync } = await import("node:fs");
+  const dir = fixture("clones");
+  writeFileSync(join(dir, "lib.rs"), `#[derive(Clone)]
+pub struct Point {
+    pub x: u32,
+}
+
+pub fn read_only(v: &Vec<u32>, p: &Point) -> (Vec<u32>, Point) {
+    (v.clone(), p.clone())
+}
+`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  // Nothing changes a `Vec<u32>` or a `Point`: a clone is the value itself.
+  expect(await Bun.file(join(dir, "lib.js")).text()).toContain("  return [v, p];");
 });

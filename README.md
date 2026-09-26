@@ -58,6 +58,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
   `Counter::new(1)` is `Counter.new(1)`, and `counter.tick()` is `Counter.tick(counter)`.
 - Trait impls have lazy dictionary accessors: `circleShape()`. Concrete calls resolve directly;
   generics receive dictionaries, and `dyn` values are `{ value, impl }`.
+- `.clone()` is the value itself unless the two could be told apart: then `{ ...s, tags: s.tags.slice() }`,
+  or a call of a hand-written `clone` ([ADR 0052](docs/decisions/0052-std-trait-impls.md)).
 - JS is declared in `unsafe extern "Rust"` blocks: `type` for a JS value, `static` for a global,
   `fn` for a function, and a first parameter named `this` for a method.
   `#[link_name = "node:path#join"]` imports from a JS module: `import { join } from "node:path"`.
@@ -76,7 +78,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `while`, `loop` (with `break value` and labels), `match` on constants, enum variants,
 struct and tuple patterns, `_`, bindings, `|` and guards; field reads and writes,
 struct update syntax; inherent methods, local traits with defaults and supertraits,
-generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
+generic functions with explicit dictionaries, read-only trait objects ([ADR 0049](docs/decisions/0049-traits-and-generics.md)),
+`Default`, `Clone` and `From` impls, hand-written and derived ([ADR 0052](docs/decisions/0052-std-trait-impls.md)); closures, `&T`, `&mut` to objects, `&str`/`String`, `Box`, `Rc`, `Cell`,
 `RefCell`, `Vec`, `for` loops over sequences and ranges, iterator chains, sorting, `usize`, `to_string()`;
 JS functions, methods and globals, generic bindings, and imports from JS modules; `async`/`.await`;
 calls between functions, across modules and files, and functions as values; React components, as JSX.

@@ -176,6 +176,9 @@ for (const [name, source, diagnostic] of [
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   ["const generic", `pub fn f<const N: usize>() -> usize { N }`, "const generics"],
   ["Drop", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} }`, "user implementations"],
+  // `Clone`, `Default` and `From` are supported (ADR 0052), but not all of them.
+  ["clone_from", `#[derive(Clone)] pub struct P { pub v: Vec<u32> } pub fn f(a: &mut P, b: &P) { a.clone_from(b); }`, "calling \`std::clone::Clone::clone_from\`"],
+  ["generic From", `pub fn f<T: From<u32>>() -> T { T::from(1) }`, "calling \`std::convert::From::from\`"],
   ["colliding methods", `#![rust_js::camel_case] pub trait T { fn first_name(&self); fn firstName(&self); }`, "dictionary names collide"],
   ["reserved method", `pub trait T { fn __proto__(&self); }`, "reserved"],
 ]) {

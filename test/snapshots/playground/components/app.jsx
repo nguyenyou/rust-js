@@ -81,7 +81,7 @@ export function App() {
         first = [
           match.name,
           match.root,
-          match.files
+          match.files.slice()
         ];
       } else {
         first = undefined;
@@ -198,7 +198,7 @@ export function App() {
       chosen = undefined;
     }
     if (chosen != null) {
-      const [root, files] = [chosen.root, chosen.files];
+      const [root, files] = [chosen.root, chosen.files.slice()];
       setExample(name);
       (async () => {
         const texts = await compiler.loadExample(name, files);

@@ -12,6 +12,7 @@ use crate::js::{Expr, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::find_attr;
+use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
@@ -105,6 +106,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         })
         .map(|id| id.to_def_id())
         .collect();
+    // The impls that get a dictionary: not `From`'s (ADR 0052).
+    let dictionaries: Vec<DefId> = trait_impls
+        .iter()
+        .copied()
+        .filter(|&id| traits::operational(tcx, tcx.impl_trait_ref(id).instantiate_identity().def_id))
+        .collect();
 
     // Closures are lowered inside the function that creates them.
     let (bodies, closures): (Vec<&Body<'tcx>>, Vec<&Body<'tcx>>) = all_bodies
@@ -133,12 +140,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .filter(|&d| matches!(tcx.def_kind(d), DefKind::Const { .. }) && !markers.iter().any(|&(m, _)| m == d))
         .collect();
 
-    // What gets a JS name: functions and methods, `const`s, and trait impls.
+    // What gets a JS name: functions and methods, `const`s, and dictionaries.
     let items: Vec<LocalDefId> = bodies
         .iter()
         .map(|body| body.def_id)
         .chain(consts.iter().copied())
-        .chain(trait_impls.iter().map(|id| id.expect_local()))
+        .chain(dictionaries.iter().map(|id| id.expect_local()))
         .collect();
     // The modules that get a JS file: the root, then every module with one of
     // those, in the order the first one appears.
@@ -182,6 +189,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     };
 
     let mutated = mutated_types(all_bodies);
+    let changed_vecs = changed_vecs(tcx, all_bodies);
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
     for &def_id in consts.iter().filter(|&&d| !is_thread_local(tcx, d)) {
@@ -221,6 +229,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         let mut pass = Pass::default();
         let crate_facts = CrateFacts {
             mutated: &mutated,
+            changed_vecs: &changed_vecs,
             closures: &closures,
             bodies: &function_bodies,
             fns: &fns,
@@ -233,7 +242,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             .iter()
             .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
             .map(|b| (b.def_id.to_def_id(), Some(*b)))
-            .chain(trait_impls.iter().map(|id| (*id, None)))
+            .chain(dictionaries.iter().map(|id| (*id, None)))
         {
             let module = fns[&def_id].module;
             let file = module_file(tcx, module);
@@ -490,7 +499,7 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
             DefKind::AssocTy => "associated types",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())
-                    && !traits::operational(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) =>
+                    && !traits::implementable(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) =>
             {
                 "user implementations of this standard or external trait"
             }
@@ -734,4 +743,25 @@ fn mutated_types<'tcx>(all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
         }
     }
     mutated
+}
+
+/// The `Vec` types something takes `&mut` of: `push`, `sort`, `v[i] = x`
+/// and every other change to one does. A clone of any other `Vec` can be
+/// the same array (ADR 0052).
+fn changed_vecs<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
+    let mut changed = HashSet::new();
+    for body in all_bodies {
+        for expr in body.thir.exprs.iter() {
+            if let ExprKind::Borrow {
+                borrow_kind: BorrowKind::Mut { .. },
+                arg,
+            } = expr.kind
+                && let ty = body.thir[arg].ty
+                && matches!(ty.kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(sym::Vec, adt.did()))
+            {
+                changed.insert(ty);
+            }
+        }
+    }
+    changed
 }

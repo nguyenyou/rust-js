@@ -30,6 +30,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Err(self.unsupported(f.span, "calling this"));
         };
+        // `x.into()` is the `From::from(x)` it calls, when that's the crate's
+        // own (ADR 0052).
+        let (def_id, generic_args) = self
+            .resolve_into(def_id, generic_args)
+            .unwrap_or((def_id, generic_args));
         if self.krate.fns.contains_key(&def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
             let mut args = self.operands(args, out)?;
@@ -274,6 +279,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var(name), vec![arg(), arg()])
             }
             Std::Last
+            | Std::Cloned
             | Std::ArrayMethod(_)
             | Std::Enumerate
             | Std::Rev
@@ -563,6 +569,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
         })
+    }
+
+    /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, if that's a
+    /// hand-written impl.
+    fn resolve_into(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(DefId, ty::GenericArgsRef<'tcx>)> {
+        let into = self.tcx.trait_of_assoc(def_id)?;
+        if !self.tcx.is_diagnostic_item(sym::Into, into) {
+            return None;
+        }
+        let from = self.tcx.get_diagnostic_item(sym::From)?;
+        let method = self.tcx.associated_item_def_ids(from)[0];
+        let args = self.tcx.mk_args(&[args[1], args[0]]);
+        let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
+        self.krate
+            .fns
+            .contains_key(&instance.def_id())
+            .then_some((method, args))
     }
 
     /// A JS global or a path from one (`console.log`), or from an import

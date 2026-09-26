@@ -190,12 +190,12 @@ function values, and read-only dyn calls and upcasts. Trait lifetime
 parameters erase as other lifetimes do.
 
 `Default` is also supported for handwritten local impls and the supported
-primitive, String, Vec, and Option representations. This does not add
-`#[derive(Default)]`. Existing supported derives keep their existing paths.
+primitive, String, Vec, and Option representations. [0052](0052-std-trait-impls.md)
+adds derived `Default`, `Clone` and `From`.
 
 Associated types and constants, type-generic traits, generic trait methods,
 const generics, and user implementations of other external/standard traits
-remain errors. A generic `Option<T>` boxes a `Some` that would look like
+remain errors ([0052](0052-std-trait-impls.md) allows `Default`, `Clone` and `From`). A generic `Option<T>` boxes a `Some` that would look like
 `None` ([0051](0051-generic-options.md)); that doesn't change the Option ABI
 of code that isn't generic. General writable references, runtime
 type reification, user destructors, and arbitrary standard-library traits
