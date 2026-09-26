@@ -97,3 +97,10 @@ pub fn compare(a: i32, b: i32) -> i32 {
 pub fn bigger(a: u32, b: u32) -> (u32, u32) {
     (a.max(b), a.min(b))
 }
+
+/// `-x` and `!b` of references, which rustc writes as calls of `Neg::neg`
+/// and `Not::not`: in JS, the operators.
+pub fn negated(v: &[i32]) -> (Vec<i32>, Vec<bool>) {
+    let positive: Vec<bool> = v.iter().map(|x| *x > 0).collect();
+    (v.iter().map(|x| -x).collect(), positive.iter().map(|p| !p).collect())
+}

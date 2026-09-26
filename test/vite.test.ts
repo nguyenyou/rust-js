@@ -201,3 +201,67 @@ pub fn App() -> Element { p().children("Committed") }
   unlinkSync(join(dir, "src/App.jsx"));
   await expect(build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], logLevel: "silent" })).rejects.toThrow("no rust-js at");
 }, 60_000);
+
+// Fast Refresh keeps state under a context and in a memoized component
+// (ADR 0041). Saving a module runs it again, so a context made in it is a new
+// one, and React remounts what's under its provider: hand-written React does
+// the same. A context in a module of its own, as React advises, is untouched
+// when a component's module changes: rust-js leaves unchanged files alone.
+test("Fast Refresh keeps state under a context from its own module, and in memo", async () => {
+  buildReact();
+  const dir = fixture("vite-context");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
+  writeFileSync(join(dir, "src/theme.rs"), `use react::{Context, create_context};
+thread_local! {
+    pub static THEME: Context<&'static str> = create_context("light");
+}
+`);
+  const app = (label: string) => `#![allow(non_snake_case)]
+use react::{Element, Memo, Provider, component, memo, use_context, use_state};
+use react::html::button;
+mod theme;
+use theme::THEME;
+thread_local! {
+    static FAST_LABEL: Memo<LabelProps> = memo(Label);
+}
+pub struct LabelProps { pub text: &'static str }
+pub fn Label(LabelProps { text }: LabelProps) -> Element {
+    let theme = use_context(&THEME);
+    let (n, set_n) = use_state(0);
+    button().class_name(*theme).on_click(move |_| set_n.update(|n| n + 1)).children((text, " ", n))
+}
+pub fn App() -> Element {
+    component(&THEME, Provider { value: "dark", children: component(&FAST_LABEL, LabelProps { text: "${label}" }) })
+}
+`;
+  writeFileSync(join(dir, "src/App.rs"), app("Count"));
+  const server = await createServer({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent", server: { port: 0 } });
+  let browser;
+  try {
+    await server.listen();
+    const theme = readFileSync(join(dir, "src/theme.js"), "utf8");
+    expect(theme).toContain('export const THEME = createContext("light");');
+    expect(readFileSync(join(dir, "src/App.jsx"), "utf8")).toContain('<theme.THEME value="dark">');
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(server.resolvedUrls.local[0]);
+    const button = page.getByRole("button");
+    await button.filter({ hasText: "Count 0" }).waitFor();
+    await button.click();
+    await button.filter({ hasText: "Count 1" }).waitFor();
+    await page.evaluate(() => { (window as any).sameDocument = true; });
+
+    writeFileSync(join(dir, "src/App.rs"), app("Clicks"));
+    await button.filter({ hasText: /^Clicks/ }).waitFor();
+    // The state, the context's value, and the page are all still there.
+    expect(await button.textContent()).toBe("Clicks 1");
+    expect(await button.getAttribute("class")).toBe("dark");
+    expect(await page.evaluate(() => (window as any).sameDocument)).toBe(true);
+    expect(readFileSync(join(dir, "src/theme.js"), "utf8")).toBe(theme);
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+}, 60_000);

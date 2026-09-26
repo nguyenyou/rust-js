@@ -37,6 +37,7 @@
 
 use core::marker::PhantomData;
 use core::ops::Deref;
+use std::thread::LocalKey;
 
 use web::JsObject;
 
@@ -437,6 +438,73 @@ impl<T> Ref<T> {
 pub fn use_id() -> String {
     unreachable!()
 }
+
+// ── Context and memo ────────────────────────────────────────────────────
+//
+// JS makes a context or a memoized component once, at a module's top level.
+// Rust keeps such a value in a `thread_local!`, which rust-js compiles to
+// just that, a `const` of its module (ADR 0037):
+//
+//     thread_local! {
+//         static THEME: Context<&'static str> = create_context("light");
+//         static FAST_CARD: Memo<CardProps> = memo(Card);
+//     }
+//
+//     const THEME = createContext("light");
+//     const FAST_CARD = memo(Card);
+//
+// The rest take the key: `use_context(&THEME)`, `component(&FAST_CARD, props)`.
+
+/// A [context](https://react.dev/reference/react/createContext): a value that
+/// a component's descendants read with [`use_context`], from the nearest
+/// provider above them, or `default` without one.
+pub struct Context<T>(PhantomData<JsObject>, PhantomData<T>);
+
+/// [`createContext`](https://react.dev/reference/react/createContext), in a `thread_local!`.
+#[rust_js::link_name = "react#createContext"]
+pub fn create_context<T>(default: T) -> Context<T> {
+    unreachable!()
+}
+
+/// [`useContext`](https://react.dev/reference/react/useContext): the value of
+/// the nearest provider above, or the context's default.
+#[rust_js::link_name = "react#useContext"]
+pub fn use_context<T>(context: &'static LocalKey<Context<T>>) -> &'static T {
+    unreachable!()
+}
+
+/// A context's provider's props: `component(&THEME, Provider { value: "dark",
+/// children })` is `<THEME value="dark">{children}</THEME>`, as React 19
+/// writes a provider.
+pub struct Provider<T> {
+    pub value: T,
+    pub children: Element,
+}
+
+pub struct ProvidesContext;
+
+impl<T> Component<Provider<T>, ProvidesContext> for &'static LocalKey<Context<T>> {}
+
+/// A component that [`memo`] made: React skips rendering it again while its
+/// props are the same as last time.
+pub struct Memo<P>(PhantomData<JsObject>, PhantomData<P>);
+
+/// [`memo`](https://react.dev/reference/react/memo), in a `thread_local!`.
+/// Props are the same when each field is (`Object.is`).
+#[rust_js::link_name = "react#memo"]
+pub fn memo<P, M>(component: impl Component<P, M>) -> Memo<P> {
+    unreachable!()
+}
+
+/// `memo(component, arePropsEqual)`: the props are the same when `are_equal` says so.
+#[rust_js::link_name = "react#memo"]
+pub fn memo_with<P, M>(component: impl Component<P, M>, are_equal: impl Fn(&P, &P) -> bool + 'static) -> Memo<P> {
+    unreachable!()
+}
+
+pub struct Memoized;
+
+impl<P> Component<P, Memoized> for &'static LocalKey<Memo<P>> {}
 
 // ── Elements ────────────────────────────────────────────────────────────
 

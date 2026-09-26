@@ -14,7 +14,7 @@ test("React components are hand-written JSX, and React runs them", () => {
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   // A module with JSX is a `.jsx` file.
   const js = require("node:fs").readFileSync(join(out, "components.jsx"), "utf8");
-  expect(js).toContain('import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";');
+  expect(js).toContain('import { createContext, memo, useContext, useEffect, useId, useMemo, useReducer, useRef, useState } from "react";');
   // Props taken apart, as a component takes them; `children` as JSX children.
   expect(js).toContain("export function Card({ title, children }) {\n  return <div className=\"card\">\n    <h2>{title}</h2>\n    {children}\n  </div>;\n}");
   expect(js).toContain('const [draft, setDraft] = useState("");');
@@ -28,11 +28,18 @@ test("React components are hand-written JSX, and React runs them", () => {
   // `()` as an effect's dependencies is `[]`, and its cleanup is a function it returns.
   expect(js).toContain("useEffect(() => {\n    setTicks((t) => t + 10 | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
   // Components by name, as JSX tags.
-  expect(js).toContain("<Todos />\n    <Clock />");
+  expect(js).toContain("<Todos />\n    <Clock />\n    <Themed />");
+  // A context and memoized components, made once, as `const`s of the module
+  // (from `thread_local!`); a provider is the context as a tag, as in React 19.
+  expect(js).toContain('const THEME = createContext("light");\nconst BADGE = memo(Badge);\nconst LOOSE_BADGE = memo(Badge, (a, b) => ');
+  expect(js).toContain("const theme = useContext(THEME);");
+  expect(js).toContain('<BADGE label="outside" />\n    <THEME value={dark ? "dark" : "light"}>');
+  // `!` of a `&bool`, which rustc writes as `Not::not`.
+  expect(js).toContain("setDark((d) => !d)");
   copyFileSync(join(root, "test", "react_app.jsx"), join(out, "react_app.test.jsx"));
   const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", join(out, "react_app.test.jsx")], { cwd: root, stderr: "pipe" });
   const output = p.stdout.toString() + p.stderr.toString();
-  expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "2"]);
+  expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "3"]);
 }, 60_000);
 
 test("JSX preparation preserves evaluation order, conditional execution and text", async () => {

@@ -6,7 +6,8 @@
 use react::event::{Change, Keyboard};
 use react::html::{button, div, h2, input, li, p, span, ul};
 use react::{
-    Element, component, fragment, use_effect, use_id, use_memo, use_reducer, use_ref, use_state,
+    Context, Element, Memo, Provider, component, create_context, fragment, memo, memo_with, use_context, use_effect,
+    use_id, use_memo, use_reducer, use_ref, use_state,
 };
 
 /// Props are a struct; `children` is the element's children.
@@ -103,6 +104,48 @@ pub fn Clock() -> Element {
     ))
 }
 
+thread_local! {
+    /// A context and memoized components: each a `const` of the module.
+    static THEME: Context<&'static str> = create_context("light");
+    static BADGE: Memo<BadgeProps> = memo(Badge);
+    /// Any two labels that aren't empty count as the same props.
+    static LOOSE_BADGE: Memo<BadgeProps> = memo_with(Badge, |a, b| a.label.is_empty() == b.label.is_empty());
+}
+
+unsafe extern "Rust" {
+    /// Counts renders, for the test.
+    #[link_name = "globalThis.rendered"]
+    safe fn rendered(label: &str);
+}
+
+pub struct BadgeProps {
+    pub label: &'static str,
+}
+
+pub fn Badge(BadgeProps { label }: BadgeProps) -> Element {
+    rendered(label);
+    let theme = use_context(&THEME);
+    span().class_name(format!("badge {theme}")).children(label)
+}
+
+/// Context from a provider, or its default outside one; `memo` skipping renders.
+pub fn Themed() -> Element {
+    let (dark, set_dark) = use_state(false);
+    let (clicks, set_clicks) = use_state(0);
+    fragment((
+        component(&BADGE, BadgeProps { label: "outside" }),
+        component(&THEME, Provider {
+            value: if *dark { "dark" } else { "light" },
+            children: fragment((
+                component(&BADGE, BadgeProps { label: "inside" }),
+                component(&LOOSE_BADGE, BadgeProps { label: if clicks % 2 == 0 { "even" } else { "odd!" } }),
+            )),
+        }),
+        button().class_name("theme").on_click(move |_| set_dark.update(|d| !d)).children("theme"),
+        button().class_name("click").on_click(move |_| set_clicks.update(|c| c + 1)).children(clicks),
+    ))
+}
+
 pub fn App() -> Element {
-    div().id("app").children((component(Todos, ()), component(Clock, ())))
+    div().id("app").children((component(Todos, ()), component(Clock, ()), component(Themed, ())))
 }

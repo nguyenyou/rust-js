@@ -176,6 +176,7 @@ fn main() {
         case_with("iterators.sorted_copy", &[&arg], || iterators::sorted_copy(v.to_vec()));
         case_with("iterators.descending", &[&arg], || iterators::descending(v));
         case_with("iterators.by_last_digit", &[&arg], || iterators::by_last_digit(v));
+        case_with("iterators.negated", &[&arg], || iterators::negated(v));
     }
     let word_lists: [&[&str]; 3] = [&[], &["pear", "", "fig"], &["b", "a", "", "cc", "b"]];
     for words in word_lists {

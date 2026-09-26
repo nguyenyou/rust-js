@@ -47,6 +47,17 @@ generic bindings:
   - `use_memo`, `use_callback`
   - `use_ref`, with `Element::ref`
   - `use_id`
+- **Context and `memo`**, which JS makes once at a module's top level. In
+  Rust, such a value lives in a `thread_local!`, which rust-js already
+  compiles to a `const` of its module (ADR 0037):
+  `static THEME: Context<&str> = create_context("light")` is
+  `const THEME = createContext("light");`, and `static FAST: Memo<P> =
+  memo(Card)` (or `memo_with(Card, are_equal)`) is `const FAST = memo(Card);`.
+  The key stands for the value: `use_context(&THEME)` is `useContext(THEME)`,
+  and `component(&FAST, props)` is `<FAST .. />`. A provider is
+  `component(&THEME, Provider { value, children })`, which is React 19's
+  `<THEME value={..}>`. Like rescript-react's `Context.provider` and
+  `memo`, these are plain bindings: nothing in the compiler knows about them.
 - **`dom::create_root(..).render(..)`** is React DOM's client.
 - Traits say what goes where: `Node` for a child, `Text` for a text
   attribute, `Key`, `Deps`, and `Cleanup`, meaning an effect returns nothing
@@ -148,8 +159,18 @@ own guides do, with nothing specific to rust-js:
   snake-case prop, `initial_count={1}`.
 - An `i32` state keeps Rust's arithmetic: `count + 1 | 0`, as ReScript has.
   An `f64` is plain `+`.
-- Not yet: context, `memo`, `forwardRef`, `style` objects, portals and
-  Suspense. The playground can't run React, since its Result frame has no
+- A context's name is its `static`'s, `THEME` rather than `ThemeContext`,
+  unless it's written `#[allow(non_upper_case_globals)]`. As in React, a
+  module that exports a context as well as components isn't a Fast Refresh
+  boundary. A `static` in a `thread_local!` is private unless it's `pub`.
+- A save runs its module again, so a context made in a component's module
+  is a new object, and React remounts what's under its provider: its state
+  is lost, as in hand-written React (both were measured). As React advises, a
+  context goes in a module of its own. rust-js doesn't rewrite an unchanged
+  file, so Vite doesn't run that module again, and the context survives. A
+  `memo` component keeps its state in its own module.
+- Not yet: `forwardRef` (a plain `ref` prop in React 19), `style` objects,
+  portals, Suspense, and React 19's `use`, `useActionState` and `useOptimistic`. The playground can't run React, since its Result frame has no
   module loader.
 - The plugin compiles with the rust-js binary in this repository
   (`bun run build`). Publishing rust-js and the crates is a later step.

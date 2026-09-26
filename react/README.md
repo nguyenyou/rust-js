@@ -58,6 +58,50 @@ whose items need keys, and `None` renders nothing.
   and `()` is `[]`.
 - An effect's closure returns nothing, or the closure that cleans it up.
 
+**Context and `memo`** are made once, as JS makes them at a module's top
+level. In Rust that's a `thread_local!`, which rust-js compiles to just that:
+
+```rust
+thread_local! {
+    static THEME: Context<&'static str> = create_context("light");
+    static FAST_CARD: Memo<CardProps> = memo(Card);
+}
+
+pub fn Toolbar() -> Element {
+    let theme = use_context(&THEME);
+    component(&FAST_CARD, CardProps { title: theme })
+}
+
+pub fn App() -> Element {
+    component(&THEME, Provider { value: "dark", children: component(Toolbar, ()) })
+}
+```
+
+```jsx
+const THEME = createContext("light");
+const FAST_CARD = memo(Card);
+
+export function Toolbar() {
+  const theme = useContext(THEME);
+  return <FAST_CARD title={theme} />;
+}
+
+export function App() {
+  return <THEME value="dark">
+    <Toolbar />
+  </THEME>;
+}
+```
+
+`memo_with(Card, |a, b| ..)` is `memo(Card, arePropsEqual)`.
+
+Put a context in a module of its own, `mod theme;`, as React advises. Saving
+a file runs its module again, and a context made there is a new one, so
+React remounts everything under its provider and its state is lost. That's
+the same in hand-written React. rust-js leaves an unchanged `theme.js` alone
+when `App.rs` changes, so Fast Refresh keeps the state. `memo` needs nothing
+like this.
+
 **React DOM**: `react::dom::create_root(element).render(app)`.
 
 ## Build it

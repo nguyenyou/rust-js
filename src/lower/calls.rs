@@ -235,6 +235,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (l, r) = (arg(), arg());
                 self.binary(op, l, r, None, ty, span)?
             }
+            Std::UnaryOperator(op) => {
+                let ty = generic_args.types().next().expect("an operator's trait has a type").peel_refs();
+                let a = arg();
+                self.unary(op, a, ty, span)?
+            }
             Std::LocalWith => {
                 let (key, f) = (arg(), arg());
                 Expr::call(f, vec![key])

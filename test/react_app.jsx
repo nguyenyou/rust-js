@@ -8,9 +8,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { App } from "./components.jsx";
+import { App, Themed } from "./components.jsx";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+// What a badge calls on each render; the context test counts them.
+globalThis.rendered = () => {};
 
 test("renders on the server", () => {
   const html = renderToStaticMarkup(<App />);
@@ -56,4 +58,33 @@ test("state, reducers, effects and events work in the DOM", async () => {
   // Unmounting runs the effect's cleanup, which sets the state one last time.
   await act(() => root.unmount());
   expect(container.innerHTML).toBe("");
+});
+
+test("context and memo", async () => {
+  const renders = [];
+  globalThis.rendered = (label) => renders.push(label);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(() => root.render(<Themed />));
+  const badges = () => [...container.querySelectorAll(".badge")].map((b) => `${b.className}: ${b.textContent}`);
+  // Outside the provider, the context's default; inside, its value.
+  expect(badges()).toEqual(["badge light: outside", "badge light: inside", "badge light: even"]);
+  expect(renders).toEqual(["outside", "inside", "even"]);
+
+  // Themed renders again, but no badge does: their props are the same, and
+  // "odd!" counts as "even" for memo_with's comparison.
+  renders.length = 0;
+  await act(() => container.querySelector(".click").click());
+  expect(container.querySelector(".click").textContent).toBe("1");
+  expect(renders).toEqual([]);
+  expect(badges()).toEqual(["badge light: outside", "badge light: inside", "badge light: even"]);
+
+  // A new context value renders what reads it, memo or not; the badge
+  // outside the provider doesn't read it. The loose badge keeps the props
+  // its comparison accepted, "even".
+  await act(() => container.querySelector(".theme").click());
+  expect(renders).toEqual(["inside", "even"]);
+  expect(badges()).toEqual(["badge light: outside", "badge dark: inside", "badge dark: even"]);
+  await act(() => root.unmount());
 });

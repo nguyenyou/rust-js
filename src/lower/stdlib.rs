@@ -6,7 +6,7 @@ use crate::js;
 use crate::js::{Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
-use rustc_middle::mir::BinOp;
+use rustc_middle::mir::{BinOp, UnOp};
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty;
 use rustc_middle::ty::Ty;
@@ -119,6 +119,8 @@ pub(super) enum Std {
     /// An operator on references to numbers, `x % 10` with `x: &i32`,
     /// which rustc writes as a call of the operator's trait.
     Operator(BinOp),
+    /// `-x` or `!b` of a reference to a number or a `bool`, likewise.
+    UnaryOperator(UnOp),
     /// A thread-local's `with(f)`: `f(key)`; and `with_borrow(f)`,
     /// `with_borrow_mut(f)` of a `RefCell` one: `f(key.value)`.
     LocalWith,
@@ -202,6 +204,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(trait_) = tcx.trait_of_assoc(def_id) {
             let ty = self_ty?;
+            if Num::of(ty.peel_refs()).is_some() || ty.peel_refs().is_bool() {
+                let operators = [(LangItem::Neg, UnOp::Neg), (LangItem::Not, UnOp::Not)];
+                if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                    return Some(Std::UnaryOperator(op));
+                }
+            }
             if Num::of(ty.peel_refs()).is_some() {
                 let operators = [
                     (LangItem::Add, BinOp::Add),
