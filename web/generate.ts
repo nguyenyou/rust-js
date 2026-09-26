@@ -30,7 +30,7 @@ const INTERFACES = [
   // cssom
   "CSSStyleDeclaration", "CSSStyleProperties",
   // cssom-view, geometry: where things are on the page
-  "DOMRectReadOnly", "DOMRect",
+  "DOMRectReadOnly", "DOMRect", "MediaQueryList", "MediaQueryListEvent",
   // fetch: `window::fetch`, and what it gives back
   "Headers", "Request", "Response",
   // encoding: text to bytes and back

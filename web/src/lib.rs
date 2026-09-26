@@ -4483,6 +4483,10 @@ pub mod window {
         #[link_name = "getComputedStyle"]
         pub safe fn get_computed_style_with_pseudo_elt(this: &Window, elt: &Element, pseudo_elt: &str) -> &'static CssStyleProperties;
 
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/matchMedia)
+        #[link_name = "matchMedia"]
+        pub safe fn match_media(this: &Window, query: &str) -> &'static MediaQueryList;
+
         /// [MDN](https://developer.mozilla.org/docs/Web/API/Window/moveTo)
         #[link_name = "moveTo"]
         pub safe fn move_to(this: &Window, x: i32, y: i32);
@@ -5416,6 +5420,78 @@ pub mod dom_rect {
         /// Treats `this` as `DomRect` without checking that it is one.
         #[link_name = "this"]
         pub safe fn unchecked_from(this: &DomRectReadOnly) -> &'static DomRect;
+    }
+}
+
+/// [`MediaQueryList`](https://developer.mozilla.org/docs/Web/API/MediaQueryList)
+pub struct MediaQueryList(PhantomData<JsObject>);
+
+impl Deref for MediaQueryList {
+    type Target = EventTarget;
+
+    fn deref(&self) -> &EventTarget {
+        // Never runs: rust-js compiles this `Deref` to the object itself.
+        unsafe { &*(self as *const Self as *const EventTarget) }
+    }
+}
+
+pub mod media_query_list {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryList/media)
+        #[link_name = "get media"]
+        pub safe fn media(this: &MediaQueryList) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryList/matches)
+        #[link_name = "get matches"]
+        pub safe fn matches(this: &MediaQueryList) -> bool;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryList/addListener)
+        #[link_name = "addListener"]
+        pub safe fn add_listener(this: &MediaQueryList, callback: Box<dyn FnMut(&Event)>);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryList/removeListener)
+        #[link_name = "removeListener"]
+        pub safe fn remove_listener(this: &MediaQueryList, callback: Box<dyn FnMut(&Event)>);
+
+        /// Treats `this` as `MediaQueryList` without checking that it is one.
+        #[link_name = "this"]
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static MediaQueryList;
+    }
+}
+
+/// [`MediaQueryListEvent`](https://developer.mozilla.org/docs/Web/API/MediaQueryListEvent)
+pub struct MediaQueryListEvent(PhantomData<JsObject>);
+
+impl Deref for MediaQueryListEvent {
+    type Target = Event;
+
+    fn deref(&self) -> &Event {
+        // Never runs: rust-js compiles this `Deref` to the object itself.
+        unsafe { &*(self as *const Self as *const Event) }
+    }
+}
+
+pub mod media_query_list_event {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryListEvent/MediaQueryListEvent)
+        #[link_name = "new MediaQueryListEvent"]
+        pub safe fn new(type_: &str) -> &'static MediaQueryListEvent;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryListEvent/media)
+        #[link_name = "get media"]
+        pub safe fn media(this: &MediaQueryListEvent) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/MediaQueryListEvent/matches)
+        #[link_name = "get matches"]
+        pub safe fn matches(this: &MediaQueryListEvent) -> bool;
+
+        /// Treats `this` as `MediaQueryListEvent` without checking that it is one.
+        #[link_name = "this"]
+        pub safe fn unchecked_from(this: &Event) -> &'static MediaQueryListEvent;
     }
 }
 

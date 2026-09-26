@@ -13,6 +13,8 @@ bun test                                     # native vs. JS, source maps, Rust 
 
 **Try it in your browser: https://nguyenyou.github.io/rust-js/**. That page runs rustc's front end
 and rust-js as WebAssembly, so nothing is compiled on a server (see [wasm/](wasm/README.md)).
+The page itself is written in Rust and compiled by rust-js: [wasm/web/rust/lib.rs](wasm/web/rust/lib.rs)
+([ADR 0032](docs/decisions/0032-dogfooding-the-playground.md)).
 
 JS is printed by [oxc](https://oxc.rs). The source map points back into the
 `.rs` file, so a debugger can show the Rust source.

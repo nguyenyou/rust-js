@@ -894,6 +894,9 @@ enum Std {
     PushStr,
     /// `.last()` of a `split`: `.at(-1)`.
     Last,
+    /// A slice's `first()` and `last()`: `v[0]` and `v.at(-1)`.
+    First,
+    SliceLast,
     /// `Result` (ADR 0035): `r.TAG === "Ok"` (true) or `"Err"` (false).
     IsOk(bool),
     /// `r.ok()`: the value, or `undefined`.
@@ -2435,6 +2438,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 unreachable!("handled above")
             }
             Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
+            Std::First => Expr::index(arg(), Expr::int(0)),
+            Std::SliceLast => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
             Std::ToVec => Expr::call(Expr::member(arg(), "slice"), vec![]),
             Std::SortBy => {
                 let (v, compare) = (arg(), arg());
@@ -2790,6 +2795,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "sort_by" | "sort_unstable_by" if owner.is_slice() => Std::SortBy,
             "sort_by_key" | "sort_unstable_by_key" if owner.is_slice() => Std::SortByKey,
             "reverse" if owner.is_slice() => Std::Method("reverse"),
+            // `v[0]` and `v.at(-1)` are `undefined` when `v` is empty: `None`.
+            "first" if owner.is_slice() => Std::First,
+            "last" if owner.is_slice() => Std::SliceLast,
             // `includes` compares strings and numbers by value, as `==` does,
             // but objects by identity: only for those.
             "contains" if owner.is_slice() && self_ty.is_some_and(|t| self.is_string_like(t) || Num::of(t).is_some() || t.is_bool()) => {

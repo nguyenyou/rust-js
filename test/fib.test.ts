@@ -347,14 +347,15 @@ test("async code becomes async functions and await", async () => {
 });
 
 // ADR 0032: the playground is written in Rust in part, compiled by rust-js.
-test("the playground's own Rust compiles to the JS main.ts imports", async () => {
+test("the playground is Rust, compiled to the JS main.ts starts", async () => {
   const js = await Bun.file(join(target, "playground", "lib.js")).text();
   expect(js).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve", "run_program", "set_status"]) {
+  for (const name of ["start", "load", "stat", "ms", "mb", "compile", "render_tree", "link", "resolve", "run_program", "set_status"]) {
     expect(js).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
-  expect(js).toContain("  const module = load_compiler(start);\n  const sysroot = load_sysroot(start);");
+  // (`start` is also the page's entry, so `load`'s own `start` is `start$1`.)
+  expect(js).toContain("  const module = load_compiler(start$1);\n  const sysroot = load_sysroot(start$1);");
   expect(js).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
   // A `format!` value with effects is computed first, once.
   expect(js).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');
@@ -368,6 +369,9 @@ test("the playground's own Rust compiles to the JS main.ts imports", async () =>
   // Linking: a `RegExp`, and `replace` with a closure, for every kind of export.
   expect(js).toContain('  const exports = new RegExp("^export (async function|function|const) (\\\\w+)", "gm");');
   expect(js).toContain("    const body$1 = body.replace(exports, (_, declared, name) => {");
+  // CodeMirror, through imports (ADR 0028), and its key binding a Rust closure.
+  expect(js).toContain('import { EditorView, basicSetup } from "codemirror";');
+  expect(js).toContain("keymap.of([{");
   // The Result frame's state is thread-locals (ADR 0037).
   expect(js).toContain('const PROGRAM_RUNS = { value: 0 };\nconst REPORTED = { value: false };\nconst RESULT_FRAME = { value: frame_by_id("result") };');
 });

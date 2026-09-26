@@ -1,11 +1,17 @@
-// The playground's own code, in Rust. When the site is built, rust-js
+// The playground, in Rust (ADR 0032). When the site is built, rust-js
 // compiles it to lib.js beside it, running as WebAssembly, the same compiler
-// the page runs (see ../compile-rust.ts), and main.ts imports it. More of
-// main.ts moves here, a part at a time.
+// the page runs (see ../compile-rust.ts), and main.ts calls `start`.
 //
-// So far: loading what the page needs, the stats table and the status line,
-// the file trees, running rust-js.wasm on a crate under the WASI shim, and
-// running what it wrote in the Result frame.
+// A Rust crate in (a few files), one JS file per module out (ADR 0019).
+// rust-js.wasm runs on an in-memory WASI filesystem:
+//
+//   /in/lib.rs, /in/stats.rs, ...   the crate, from the Rust editor
+//   /out/lib.js, /out/stats.js, ... what rust-js writes (plus .js.map files)
+//   /sysroot/...                    the std metadata rustc type-checks against
+//   /web/libweb.rmeta               the web crate's metadata (ADR 0024)
+//
+// Each compile gets a fresh instance of the (compiled once) module: rustc
+// keeps global state, and a failed compile ends in a trap.
 
 #![feature(extern_types)]
 
@@ -14,10 +20,12 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use web::{
-    Element, Event, HtmlIFrameElement, JsError, JsObject, Promise, RegExp, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
+    Element, Event, HtmlButtonElement, HtmlIFrameElement, HtmlSelectElement, JsError, JsObject, MediaQueryList, Promise,
+    RegExp, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory,
     WebAssemblyModule, array_buffer, css_style_declaration, document, element, event_target, html_element,
-    html_i_frame_element, html_table_element, html_table_row_element, js_error, node, reg_exp, response, text_decoder,
-    text_encoder, uint8_array,
+    html_button_element, html_i_frame_element, html_option_element, html_select_element, html_table_element,
+    html_table_row_element, js_error, media_query_list, media_query_list_event, node, reg_exp, response, spawn,
+    text_decoder, text_encoder, uint8_array,
     web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
@@ -108,7 +116,7 @@ unsafe extern "Rust" {
     /// Runs the program. A failed compile ends in a trap: panics can't unwind
     /// on wasm32-wasip1.
     #[link_name = "start"]
-    safe fn start(this: &Wasi, instance: &WebAssemblyInstance) -> Result<i32, &'static JsError>;
+    safe fn run_wasi(this: &Wasi, instance: &WebAssemblyInstance) -> Result<i32, &'static JsError>;
     #[link_name = "get memory"]
     safe fn exported_memory(this: &JsObject) -> &'static WebAssemblyMemory;
     #[link_name = "instanceof Error"]
@@ -435,7 +443,7 @@ pub async fn compile(
     let imports = Imports { wasi_snapshot_preview1: wasi_import(wasi) };
     let instance = web_assembly::instantiate_with_web_assembly_module_and_import_object(module, &imports).await;
     let t1 = now();
-    let started = start(wasi, instance);
+    let started = run_wasi(wasi, instance);
     let t2 = now();
     let ok = matches!(started, Ok(0));
     let exit = match started {
@@ -761,4 +769,475 @@ pub fn listen_for_reports() {
             set_status(&summary, if tested.failed > 0 { "bad" } else { "good" });
         }
     }));
+}
+
+// ── Editors ─────────────────────────────────────────────────────────────
+// Rust in, JavaScript out, both CodeMirror, through bindings (ADR 0028).
+// Both follow the system's light or dark setting.
+
+#[allow(clashing_extern_declarations)]
+unsafe extern "Rust" {
+    /// Anything CodeMirror takes as an extension, an array of them too.
+    pub type Extension;
+    pub type Compartment;
+    /// A change to an editor's configuration: a compartment's new contents.
+    pub type Effect;
+    pub type EditorState;
+    pub type EditorView;
+    /// A document's text.
+    pub type Text;
+
+    #[link_name = "codemirror#basicSetup"]
+    safe static basic_setup: &'static Extension;
+    #[link_name = "@codemirror/theme-one-dark#oneDark"]
+    safe static one_dark: &'static Extension;
+    #[link_name = "@codemirror/lang-rust#rust"]
+    safe fn rust_language() -> &'static Extension;
+    #[link_name = "@codemirror/lang-javascript#javascript"]
+    safe fn javascript_language() -> &'static Extension;
+    /// Extensions together are one.
+    #[link_name = "this"]
+    safe fn together(this: Vec<&'static Extension>) -> &'static Extension;
+    #[link_name = "new @codemirror/state#Compartment"]
+    safe fn new_compartment() -> &'static Compartment;
+    #[link_name = "of"]
+    safe fn compartment_of(this: &Compartment, content: &Extension) -> &'static Extension;
+    #[link_name = "reconfigure"]
+    safe fn reconfigure(this: &Compartment, content: &Extension) -> &'static Effect;
+    #[link_name = "@codemirror/state#Prec.highest"]
+    safe fn highest(extension: &Extension) -> &'static Extension;
+    #[link_name = "@codemirror/view#keymap.of"]
+    safe fn keymap_of(bindings: Vec<KeyBinding>) -> &'static Extension;
+    #[link_name = "codemirror#EditorView.contentAttributes.of"]
+    safe fn content_attributes(attributes: &JsObject) -> &'static Extension;
+    #[link_name = "@codemirror/state#EditorState.readOnly.of"]
+    safe fn read_only(value: bool) -> &'static Extension;
+    #[link_name = "Object.fromEntries"]
+    safe fn object_of(entries: Vec<(String, String)>) -> &'static JsObject;
+    #[link_name = "@codemirror/state#EditorState.create"]
+    safe fn create_state(config: &StateConfig) -> &'static EditorState;
+    #[link_name = "new codemirror#EditorView"]
+    safe fn new_editor(config: &EditorConfig) -> &'static EditorView;
+    #[link_name = "get state"]
+    safe fn editor_state(this: &EditorView) -> &'static EditorState;
+    #[link_name = "setState"]
+    safe fn set_editor_state(this: &EditorView, state: &EditorState);
+    #[link_name = "dispatch"]
+    safe fn dispatch(this: &EditorView, transaction: &Transaction);
+    #[link_name = "get doc"]
+    safe fn doc(this: &EditorState) -> &'static Text;
+    #[link_name = "get length"]
+    safe fn text_length(this: &Text) -> u32;
+    #[link_name = "toString"]
+    safe fn text_string(this: &Text) -> String;
+    #[link_name = "set lastResult"]
+    safe fn set_last_result(this: &web::Window, result: &Compiled);
+}
+
+// CodeMirror's configurations: JS objects that only CodeMirror reads.
+#[allow(dead_code)]
+pub struct KeyBinding {
+    key: String,
+    run: Box<dyn Fn() -> bool>,
+}
+
+#[allow(dead_code)]
+struct StateConfig {
+    doc: String,
+    extensions: &'static Extension,
+}
+
+#[allow(dead_code)]
+struct EditorConfig {
+    parent: &'static Element,
+    extensions: &'static Extension,
+}
+
+#[allow(dead_code)]
+struct Transaction {
+    changes: Option<Change>,
+    effects: Option<&'static Effect>,
+}
+
+#[allow(dead_code)]
+struct Change {
+    from: u32,
+    to: u32,
+    insert: String,
+}
+
+fn by_id(id: &str) -> &'static Element {
+    document::get_element_by_id(document, id).expect("the page has this element")
+}
+
+fn button_by_id(id: &str) -> &'static HtmlButtonElement {
+    html_button_element::unchecked_from(by_id(id))
+}
+
+fn theme_for(dark: bool) -> &'static Extension {
+    if dark { one_dark } else { together(Vec::new()) }
+}
+
+fn is_dark() -> bool {
+    media_query_list::matches(DARK_MODE.get())
+}
+
+/// A change to a compartment: a new theme, or a new language.
+fn effect(effect: &'static Effect) -> Transaction {
+    Transaction { changes: None, effects: Some(effect) }
+}
+
+/// Replace an editor's whole text.
+fn replace_text(editor: &EditorView, text: &str, effects: Option<&'static Effect>) {
+    let to = text_length(doc(editor_state(editor)));
+    dispatch(editor, &Transaction { changes: Some(Change { from: 0, to, insert: text.to_string() }), effects });
+}
+
+fn source_extensions() -> &'static Extension {
+    together(vec![
+        basic_setup,
+        rust_language(),
+        compartment_of(SOURCE_THEME.get(), theme_for(is_dark())),
+        // basicSetup binds Mod-Enter to "insert blank line": outrank it.
+        highest(keymap_of(vec![KeyBinding {
+            key: "Mod-Enter".to_string(),
+            run: Box::new(|| {
+                spawn(Box::new(on_compile(false)));
+                true
+            }),
+        }])),
+        content_attributes(object_of(vec![("aria-label".to_string(), "Rust source".to_string())])),
+    ])
+}
+
+/// Read-only, but still selectable and copyable. Highlighted as JS for a
+/// generated file, plain text when it shows rustc's diagnostics.
+fn output_extensions() -> &'static Extension {
+    together(vec![
+        basic_setup,
+        compartment_of(OUTPUT_LANGUAGE.get(), javascript_language()),
+        compartment_of(OUTPUT_THEME.get(), theme_for(is_dark())),
+        read_only(true),
+        content_attributes(object_of(vec![("aria-label".to_string(), "Generated JavaScript".to_string())])),
+    ])
+}
+
+// What the page keeps, as the module loads (ADR 0037).
+thread_local! {
+    static DARK_MODE: Cell<&'static MediaQueryList> = Cell::new(window::match_media(window, "(prefers-color-scheme: dark)"));
+    static SOURCE_THEME: Cell<&'static Compartment> = Cell::new(new_compartment());
+    static OUTPUT_THEME: Cell<&'static Compartment> = Cell::new(new_compartment());
+    static OUTPUT_LANGUAGE: Cell<&'static Compartment> = Cell::new(new_compartment());
+    static SOURCE_EXTENSIONS: Cell<&'static Extension> = Cell::new(source_extensions());
+    static SOURCE: Cell<&'static EditorView> =
+        Cell::new(new_editor(&EditorConfig { parent: by_id("source"), extensions: SOURCE_EXTENSIONS.get() }));
+    static OUTPUT: Cell<&'static EditorView> =
+        Cell::new(new_editor(&EditorConfig { parent: by_id("output"), extensions: output_extensions() }));
+
+    // The crate being edited. Each file keeps its own editor state, so undo
+    // history survives switching. In the order they came, as a JS `Map`.
+    static ROOT: RefCell<String> = RefCell::new("lib.rs".to_string());
+    static FILES: RefCell<Vec<(String, &'static EditorState)>> = RefCell::new(Vec::new());
+    static CURRENT: RefCell<String> = RefCell::new(String::new());
+
+    // What the last compile wrote, and which of it is showing.
+    static OUTPUTS: RefCell<Vec<(String, String)>> = RefCell::new(Vec::new());
+    static SHOWN_OUTPUT: RefCell<String> = RefCell::new(String::new());
+
+    // What `load` brought, and the compiles so far.
+    static MODULE: Cell<Option<&'static WebAssemblyModule>> = Cell::new(None);
+    static SYSROOT: Cell<Option<&'static JsMap>> = Cell::new(None);
+    static WEB_CRATE: Cell<Option<&'static WasiFile>> = Cell::new(None);
+    static EXAMPLES: RefCell<Vec<Example>> = RefCell::new(Vec::new());
+    static RUNS: Cell<u32> = Cell::new(0);
+    static COMPILING: Cell<bool> = Cell::new(false);
+}
+
+// ── The crate being edited ──────────────────────────────────────────────
+
+fn root() -> String {
+    ROOT.with_borrow(|root| root.clone())
+}
+
+fn current() -> String {
+    CURRENT.with_borrow(|current| current.clone())
+}
+
+fn new_state(text: &str) -> &'static EditorState {
+    create_state(&StateConfig { doc: text.to_string(), extensions: SOURCE_EXTENSIONS.get() })
+}
+
+/// `files.set(path, state)`: in its place if it's there, else at the end.
+fn set_file(path: &str, state: &'static EditorState) {
+    FILES.with_borrow_mut(|files| match files.iter_mut().find(|(p, _)| p == path) {
+        Some(file) => file.1 = state,
+        None => files.push((path.to_string(), state)),
+    });
+}
+
+fn has_file(path: &str) -> bool {
+    FILES.with_borrow(|files| files.iter().any(|(p, _)| p == path))
+}
+
+fn file_state(path: &str) -> Option<&'static EditorState> {
+    FILES.with_borrow(|files| match files.iter().find(|(p, _)| p == path) {
+        Some((_, state)) => Some(*state),
+        None => None,
+    })
+}
+
+fn open_file(path: &str) {
+    let open = current();
+    if !open.is_empty() && has_file(&open) {
+        set_file(&open, editor_state(SOURCE.get()));
+    }
+    CURRENT.set(path.to_string());
+    set_editor_state(SOURCE.get(), file_state(path).expect("an open file"));
+    // A stored state has the theme from when it was created: bring it up to date.
+    dispatch(SOURCE.get(), &effect(reconfigure(SOURCE_THEME.get(), theme_for(is_dark()))));
+    render_source_files();
+}
+
+fn render_source_files() {
+    let paths = FILES.with_borrow(|files| files.iter().map(|(p, _)| p.clone()).collect());
+    render_tree(
+        by_id("source-files"),
+        paths,
+        TreeOptions {
+            selected: current(),
+            first: Some(root()),
+            on_open: Rc::new(|path| open_file(&path)),
+            decorate: Some(Rc::new(|li, path| {
+                if path == root() {
+                    let note = document::create_element(document, "span");
+                    element::set_class_name(note, "note");
+                    node::set_text_content(note, "root ");
+                    element::append(li, note);
+                    return;
+                }
+                let remove = document::create_element(document, "button");
+                element::set_class_name(remove, "delete");
+                node::set_text_content(remove, "×");
+                element::set_attribute(remove, "aria-label", &format!("Delete {path}"));
+                let deleted = path.clone();
+                event_target::add_event_listener(remove, "click", Box::new(move |_| {
+                    if !window::confirm_with_message(window, &format!("Delete {deleted}?")) {
+                        return;
+                    }
+                    FILES.with_borrow_mut(|files| files.retain(|(p, _)| *p != deleted));
+                    if current() == deleted {
+                        CURRENT.set(String::new());
+                        open_file(&root());
+                    } else {
+                        render_source_files();
+                    }
+                }));
+                element::append(li, remove);
+            })),
+        },
+    );
+}
+
+fn create_file() {
+    let answer = match window::prompt_with_message(window, "New file, e.g. math.rs or geometry/shape.rs:") {
+        Some(answer) => answer,
+        None => return,
+    };
+    let path = answer.trim().to_string();
+    if path.is_empty() {
+        return;
+    }
+    let module_path = reg_exp::new(r"^([a-z_][a-z0-9_]*/)*[a-z_][a-z0-9_]*\.rs$", "");
+    if !reg_exp::test(module_path, &path) {
+        set_status(&format!("\"{path}\" isn't a Rust module file name, like math.rs or geometry/shape.rs."), "bad");
+        return;
+    }
+    if has_file(&path) {
+        set_status(&format!("{path} already exists."), "bad");
+        return;
+    }
+    set_file(&path, new_state(""));
+    open_file(&path);
+    let file = match path.rsplit_once('/') {
+        Some((_, file)) => file,
+        None => path.as_str(),
+    };
+    let module = file.strip_suffix(".rs").unwrap_or(file);
+    set_status(&format!("Created {path}. Declare it with `mod {module};` in its parent, or rustc won't include it."), "");
+}
+
+/// The crate's files as text, including unsaved edits in the open file.
+fn crate_sources() -> &'static JsMap {
+    set_file(&current(), editor_state(SOURCE.get()));
+    let texts = FILES.with_borrow(|files| files.iter().map(|(path, state)| (path.clone(), text_string(doc(state)))).collect());
+    new_text_map(texts)
+}
+
+// ── Generated JS ────────────────────────────────────────────────────────
+
+fn root_js() -> String {
+    let root = root();
+    match root.strip_suffix(".rs") {
+        Some(stem) => format!("{stem}.js"),
+        None => root.clone(),
+    }
+}
+
+fn output_text(path: &str) -> Option<String> {
+    OUTPUTS.with_borrow(|outputs| match outputs.iter().find(|(p, _)| p == path) {
+        Some((_, text)) => Some(text.clone()),
+        None => None,
+    })
+}
+
+fn open_output(path: &str) {
+    SHOWN_OUTPUT.set(path.to_string());
+    let text = output_text(path).expect("a file the compile wrote");
+    replace_text(OUTPUT.get(), &text, Some(reconfigure(OUTPUT_LANGUAGE.get(), javascript_language())));
+    render_output_files();
+}
+
+fn render_output_files() {
+    let list = by_id("output-files");
+    let paths: Vec<String> = OUTPUTS.with_borrow(|outputs| outputs.iter().map(|(p, _)| p.clone()).collect());
+    if paths.is_empty() {
+        let empty = document::create_element(document, "li");
+        element::set_class_name(empty, "empty");
+        node::set_text_content(empty, "(none)");
+        element::replace_children(list, empty);
+        return;
+    }
+    let shown = SHOWN_OUTPUT.with_borrow(|shown| shown.clone());
+    render_tree(list, paths, TreeOptions { selected: shown, first: Some(root_js()), on_open: Rc::new(|path| open_output(&path)), decorate: None });
+}
+
+fn show_diagnostics(text: &str) {
+    OUTPUTS.set(Vec::new());
+    SHOWN_OUTPUT.set(String::new());
+    replace_text(OUTPUT.get(), text, Some(reconfigure(OUTPUT_LANGUAGE.get(), together(Vec::new()))));
+    render_output_files();
+}
+
+// ── Loading ─────────────────────────────────────────────────────────────
+
+async fn fetch_example_file(name: String, path: String) -> (String, String) {
+    let response = window::fetch_with_str(window, &format!("./examples/{name}/{path}")).await;
+    (path, response::text(response).await)
+}
+
+async fn load_example(name: String, root: String, paths: Vec<String>) {
+    // All at once: each download starts as it's made (ADR 0029).
+    let mut downloads = Vec::new();
+    for path in paths {
+        downloads.push(fetch_example_file(name.clone(), path));
+    }
+    let mut texts = Vec::new();
+    for download in downloads {
+        texts.push(download.await);
+    }
+    FILES.with_borrow_mut(|files| files.clear());
+    for (path, text) in texts {
+        set_file(&path, new_state(&text));
+    }
+    ROOT.set(root);
+    CURRENT.set(String::new());
+    open_file(&self::root());
+    OUTPUTS.set(Vec::new());
+    SHOWN_OUTPUT.set(String::new());
+    replace_text(OUTPUT.get(), "", None);
+    render_output_files();
+    run_program(new_text_map(Vec::new()), &root_js(), false);
+}
+
+/// The example called `name`: its name, root and files.
+fn example_named(name: &str) -> Option<(String, String, Vec<String>)> {
+    EXAMPLES.with_borrow(|examples| match examples.iter().find(|e| e.name == name) {
+        Some(e) => Some((e.name.clone(), e.root.clone(), e.files.clone())),
+        None => None,
+    })
+}
+
+/// Start the page: listen, load, and show the first example.
+pub async fn start() {
+    listen_for_reports();
+    event_target::add_event_listener(DARK_MODE.get(), "change", Box::new(|e| {
+        let dark = media_query_list_event::matches(media_query_list_event::unchecked_from(e));
+        dispatch(SOURCE.get(), &effect(reconfigure(SOURCE_THEME.get(), theme_for(dark))));
+        dispatch(OUTPUT.get(), &effect(reconfigure(OUTPUT_THEME.get(), theme_for(dark))));
+    }));
+    event_target::add_event_listener(by_id("new-file"), "click", Box::new(|_| create_file()));
+
+    let loaded = load().await;
+    MODULE.set(Some(loaded.module));
+    SYSROOT.set(Some(loaded.sysroot));
+    WEB_CRATE.set(Some(loaded.web_crate));
+    let select: &HtmlSelectElement = html_select_element::unchecked_from(by_id("example"));
+    for example in &loaded.examples {
+        let option = html_option_element::unchecked_from(document::create_element(document, "option"));
+        html_option_element::set_text(option, &example.title);
+        html_option_element::set_value(option, &example.name);
+        html_select_element::add(select, option);
+    }
+    let first = match loaded.examples.first() {
+        Some(e) => (e.name.clone(), e.root.clone(), e.files.clone()),
+        None => return,
+    };
+    EXAMPLES.set(loaded.examples);
+    event_target::add_event_listener(select, "change", Box::new(move |_| {
+        let chosen = html_select_element::value(select);
+        spawn(Box::new(async move {
+            if let Some((name, root, files)) = example_named(&chosen) {
+                load_example(name, root, files).await;
+            }
+            set_status("Ready.", "");
+        }));
+    }));
+    let (name, root, files) = first;
+    load_example(name, root, files).await;
+    let (compile_button, test_button) = (button_by_id("compile"), button_by_id("test"));
+    event_target::add_event_listener(compile_button, "click", Box::new(|_| spawn(Box::new(on_compile(false)))));
+    event_target::add_event_listener(test_button, "click", Box::new(|_| spawn(Box::new(on_compile(true)))));
+    html_button_element::set_disabled(compile_button, false);
+    html_button_element::set_disabled(test_button, false);
+    set_status("Ready.", "");
+}
+
+async fn on_compile(test: bool) {
+    let compile_button = button_by_id("compile");
+    let test_button = button_by_id("test");
+    if COMPILING.get() || html_button_element::disabled(compile_button) {
+        return;
+    }
+    COMPILING.set(true);
+    html_button_element::set_disabled(compile_button, true);
+    html_button_element::set_disabled(test_button, true);
+    set_status(if test { "Compiling the tests…" } else { "Compiling…" }, "");
+    let (module, sysroot, web_crate) = match (MODULE.get(), SYSROOT.get(), WEB_CRATE.get()) {
+        (Some(module), Some(sysroot), Some(web_crate)) => (module, sysroot, web_crate),
+        _ => unreachable!("the buttons are enabled once everything's loaded"),
+    };
+    let r = compile(module, sysroot, web_crate, crate_sources(), &root(), test).await;
+    RUNS.set(RUNS.get() + 1);
+    if r.ok {
+        OUTPUTS.set(text_entries(r.files));
+        // Keep showing the same file if it's still there; otherwise the root's.
+        let shown = SHOWN_OUTPUT.with_borrow(|shown| shown.clone());
+        let show = if output_text(&shown).is_some() { shown } else { root_js() };
+        open_output(&show);
+        let count = OUTPUTS.with_borrow(|outputs| outputs.len());
+        set_status(&format!("Compiled: {count} JS file{}.", if count == 1 { "" } else { "s" }), "good");
+        run_program(r.files, &root_js(), test);
+    } else {
+        show_diagnostics(&r.stderr);
+        run_program(new_text_map(Vec::new()), &root_js(), false);
+        set_status(&format!("Failed: exit {}.", r.exit), "bad");
+    }
+    let result = if r.ok { "ok" } else { "error" };
+    let times = format!("instantiate {}, run {}, memory {}, {result}", ms(r.instantiate), ms(r.run), mb(r.memory as f64));
+    stat(&format!("compile #{}", RUNS.get()), &times);
+    COMPILING.set(false);
+    html_button_element::set_disabled(compile_button, false);
+    html_button_element::set_disabled(test_button, false);
+    // For automated checks.
+    set_last_result(window, &r);
 }

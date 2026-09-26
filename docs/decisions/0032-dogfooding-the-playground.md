@@ -1,6 +1,7 @@
 # 0032. The playground is written in Rust, compiled by rust-js, a part at a time
 
-Status: Accepted.
+Status: Accepted, and done: the whole playground is Rust now. `main.ts` only
+calls its `start`.
 
 ## Context
 
@@ -39,7 +40,17 @@ closure. Porting it found that the TypeScript linker only unwrapped
 `export function`, so a program with a `pub const` or a `pub async fn` didn't
 run there. The Rust one unwraps all three. The fifth is running the program:
 `run_program`, the Result frame's page, and the listener for its reports, with
-the frame's state in thread-locals (ADR 0037), and the status line.
+the frame's state in thread-locals (ADR 0037), and the status line. The last
+is the page itself: the two CodeMirror editors, through bindings to its API
+(its configurations Rust structs, the Mod-Enter binding a Rust closure), the
+crate's files, the new-file and delete buttons, the example menu, and the
+Compile and Test buttons. `main.ts` is now:
+
+```ts
+import { start } from "./rust/lib.js";
+
+await start();
+```
 
 **It's compiled by `rust-js.wasm`**, the compiler the page runs, under the
 same WASI shim, in Bun (`wasm/web/compile-rust.ts`). `serve.ts` and
@@ -80,5 +91,8 @@ plainly.
 - The loading's downloads keep running together, as `Promise.all` had them:
   each starts as it's made, and they're awaited afterwards (ADR 0029).
 - What's next to move is what rust-js can express next. A JS `Map` is a type
-  in the bindings, with the methods the code uses. What's left in `main.ts` is
-  the editors (CodeMirror) and the handlers that tie the page together.
+  in the bindings, with the methods the code uses, and CodeMirror is a set of
+  bindings in the crate, typed for what the page does with it.
+- Porting found two bugs, `collect` sharing the array it came from, and a
+  linker that ran neither `pub const` nor `pub async fn`, and drove the
+  features of ADRs 0028 to 0037.
