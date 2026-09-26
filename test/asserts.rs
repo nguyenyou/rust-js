@@ -1,5 +1,5 @@
 //! What `#[test]` and the assertion macros become (ADR 0026). Some of these
-//! tests fail on purpose: test/fib.test.ts checks each failure's message.
+//! tests fail on purpose: test/browser.test.ts checks each failure's message.
 
 #[derive(PartialEq, Debug)]
 pub struct Point {

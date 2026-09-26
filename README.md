@@ -136,3 +136,13 @@ browser mode, both on Bun ([browser/](browser/README.md), [ADR 0027](docs/decisi
 A test that needs one is marked `#[cfg_attr(not(browser), ignore)]`.
 
 Design decisions are recorded in [docs/](docs/README.md).
+
+The suites can also run independently: `bun run test:compiler`,
+`bun run test:react`, `bun run test:browser`, and `bun run test:vite`.
+The Vite suite uses a real Chromium browser to check Fast Refresh, dependency
+rebuilds, error recovery and JS/JSX extension transitions.
+
+Build tools can pass `--manifest path.json` before `--` to get source
+dependencies and final artifact paths. On successful rebuilds, the compiler
+removes obsolete artifacts only if that manifest owns them and they have not
+been edited. See [the compiler boundaries and manifest contract](docs/decisions/0042-compiler-boundaries-and-build-contract.md).

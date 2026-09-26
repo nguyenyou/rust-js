@@ -1,0 +1,17 @@
+name: Check
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps
+      - run: cargo test --locked
+      - run: bun test
+      - run: bun run --cwd examples/vite-react build

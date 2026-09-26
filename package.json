@@ -20,15 +20,21 @@
     "site": "bun wasm/web/build.ts",
     "preview": "bun wasm/web/preview.ts",
     "deploy": "gh workflow run deploy-playground.yml",
-    "ship": "bun run wasm && wasm/prebuilt.sh publish && bun run deploy"
+    "ship": "bun run wasm && wasm/prebuilt.sh publish && bun run deploy",
+    "test:compiler": "bun test test/compiler.test.ts test/diagnostics.test.ts test/emission.test.ts",
+    "test:react": "bun test test/react.test.ts",
+    "test:browser": "bun test test/browser.test.ts",
+    "test:vite": "bun test test/vite.test.ts"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.5",
     "@playwright/test": "1.63.0",
+    "@vitejs/plugin-react": "6.1.1",
     "@vitest/browser-playwright": "5.0.2",
     "playwright": "1.63.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "vite": "8.3.0",
     "vitest": "5.0.2"
   }
 }

@@ -1702,6 +1702,7 @@ dependencies = [
  "rustc_interface",
  "rustc_middle",
  "rustc_span",
+ "serde_json",
 ]
 
 [[package]]

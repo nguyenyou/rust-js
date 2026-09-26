@@ -1,6 +1,6 @@
 //! JS that throws (ADR 0035): an `extern` function whose result is a
 //! `Result` is called in a `try`, and a `Promise<Result<..>>` settles either
-//! way. For the test in fib.test.ts; it can't run as native Rust.
+//! way. For the test in compiler.test.ts; it can't run as native Rust.
 
 use web::{JsError, Promise, js_error};
 

@@ -7,16 +7,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync } from "node:fs";
 import { join } from "node:path";
 
-const root = join(import.meta.dir, "..");
-const target = join(root, "target");
-
-function run(cmd: string[]): string {
-  const p = Bun.spawnSync(cmd, { cwd: root, stderr: "pipe" });
-  if (p.exitCode !== 0) {
-    throw new Error(`${cmd.join(" ")} failed:\n${p.stderr.toString()}`);
-  }
-  return p.stdout.toString();
-}
+import { root, target, run, buildCompiler, buildWeb } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -40,7 +31,7 @@ let imports: Record<string, Record<string, () => unknown>>;
 let asyncs: Record<string, (...args: any[]) => any>;
 
 beforeAll(async () => {
-  run(["cargo", "build", "--quiet"]);
+  buildCompiler();
   run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
   // Same semantics rust-js targets: the release profile, where arithmetic wraps.
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--crate-name=modules",
@@ -70,7 +61,7 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
   threadLocals = await import(join(target, "thread_locals.js"));
   // The web crate is used from its metadata (ADR 0024).
-  run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
+  buildWeb();
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
   run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
@@ -83,19 +74,6 @@ beforeAll(async () => {
   run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"), ...withWeb]);
   run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
   asyncs = await import(join(target, "async.js"));
-  // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
-  const tests = (rs: string, name: string, flags: string[] = []) =>
-    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "rust-tests", name, `${name}.js`), ...flags]);
-  tests("examples/counter.rs", "counter", withWeb);
-  tests("examples/todo.rs", "todo", withWeb);
-  tests("examples/countdown.rs", "countdown", withWeb);
-  tests("test/asserts.rs", "asserts");
-  // For real browsers (ADR 0027): `--cfg browser` turns on tests that need one.
-  const forBrowser = (rs: string, name: string, flags: string[] = []) =>
-    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "browser-tests", name, `${name}.js`), ...flags, "--cfg=browser"]);
-  forBrowser("examples/counter.rs", "counter", withWeb);
-  forBrowser("examples/todo.rs", "todo", withWeb);
-  forBrowser("test/asserts.rs", "asserts", ["--"]);
   run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
@@ -171,50 +149,6 @@ test("generated JS matches native Rust on every case", () => {
     } else {
       expect([label, call(c)]).toEqual([label, c.value]);
     }
-  }
-});
-
-// Source map: generated JS positions must point at the Rust that produced them.
-test("source map points from fib.js back into fib.rs", async () => {
-  const { decodeMappings, lookup } = await import("./sourcemap.ts");
-  const js = (await Bun.file(join(target, "fib.js")).text()).split("\n");
-  const map = await Bun.file(join(target, "fib.js.map")).json();
-  const rustSource = await Bun.file(join(root, "examples/fib.rs")).text();
-  const rs = rustSource.split("\n");
-  const segments = decodeMappings(map.mappings);
-
-  // The map sits in target/, so it names the source relative to there,
-  // and embeds the Rust source so a debugger can show it.
-  expect(map.sources).toEqual(["../examples/fib.rs"]);
-  expect(map.sourcesContent).toEqual([rustSource]);
-
-  // Nothing in the header or runtime helpers maps to Rust.
-  const firstFunction = js.findIndex((l) => l.startsWith("export function"));
-  expect(Math.min(...segments.map((s) => s.jsLine))).toBe(firstFunction);
-
-  // Every mapping lands inside the Rust file.
-  for (const s of segments) {
-    expect(s.srcLine).toBeLessThan(rs.length);
-    expect(s.srcCol).toBeLessThanOrEqual(rs[s.srcLine].length);
-  }
-
-  // JS snippet  →  the Rust text its position maps to.
-  const probes: [string, string][] = [
-    ["export function fib(", "pub fn fib("],
-    ["fib(n - 1 >>> 0)", "fib(n - 1)"],
-    ["while (i < n)", "while i < n"],
-    ["if (i === n)", "if i == n"],
-    ["Math.imul(x, 3) - 7 | 0", "x * 3 - 7"],
-    ["$div(a, b, -2147483648) | 0", "a / b"],
-    ['order === "Ascending"', "Order::Ascending"],
-    ["fib_iter(20 - n >>> 0)", "fib_iter(20 - n)"],
-  ];
-  for (const [jsText, rustText] of probes) {
-    const line = js.findIndex((l, i) => i >= firstFunction && l.includes(jsText));
-    const col = js[line].indexOf(jsText);
-    const hit = lookup(segments, line, col);
-    const mapped = hit ? rs[hit.srcLine].slice(hit.srcCol) : "(no mapping)";
-    expect([jsText, mapped.startsWith(rustText) ? rustText : mapped]).toEqual([jsText, rustText]);
   }
 });
 
@@ -518,68 +452,6 @@ test("structs and tuples are plain objects and arrays", async () => {
   expect(js).toContain("export function classify([a, b]) {\n  if (a === 0 && b === 0) {");
 });
 
-// ADR 0026: `#[test]` functions, in Rust, compiled by `rust-js --test` and
-// run by `bun test` in happy-dom's DOM.
-function rustTests(files: string[]): { exit: number; output: string } {
-  const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", ...files.map((f) => `./${f}`)], {
-    cwd: root,
-    stderr: "pipe",
-  });
-  return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
-}
-
-test("the example apps' own tests pass, in a DOM", () => {
-  const apps = ["counter", "todo", "countdown"].map((app) => `target/rust-tests/${app}/${app}.test.js`);
-  const { exit, output } = rustTests(apps);
-  expect([exit, output.match(/(\d+) pass/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual([0, "8", "0"]);
-});
-
-test("a failing test fails the way Rust's would", () => {
-  const { exit, output } = rustTests(["target/rust-tests/asserts/asserts.test.js"]);
-  expect(exit).toBe(1);
-  expect([output.match(/(\d+) pass/)?.[1], output.match(/(\d+) skip/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual(["3", "1", "4"]);
-  // `assert!` with a message; `assert_eq!` showing both sides, as Rust does.
-  expect(output).toContain("error: n was 3");
-  expect(output).toContain("error: assertion `left == right` failed\n  left: { x: 1, y: 2 }\n right: { x: 1, y: 3 }");
-  // `#[should_panic]`: the wrong message, and no panic at all.
-  expect(output).toContain('panic message: "\\"something\\" happened"\n expected substring: "nope"');
-  expect(output).toContain("error: test did not panic as expected");
-  for (const name of ["fails_an_assert", "fails_an_assert_eq", "panics_with_the_wrong_message", "does_not_panic"]) {
-    expect(output).toContain(`(fail) tests::${name}`);
-  }
-});
-
-// ADR 0027: the same tests in real browsers, Chromium, Firefox and WebKit,
-// through Playwright Test and through Vitest's browser mode, both on Bun.
-const browserTests = ["target/browser-tests/counter/counter.test.js", "target/browser-tests/todo/todo.test.js"];
-
-function inBrowsers(runner: "playwright" | "vitest", files: string[]): { exit: number; output: string } {
-  const command =
-    runner === "playwright"
-      ? ["bunx", "--bun", "playwright", "test", "-c", "browser/playwright.config.ts", "--reporter=line"]
-      : ["bunx", "--bun", "vitest", "run", "-c", "browser/vitest.config.ts"];
-  const p = Bun.spawnSync(command, { cwd: root, env: { ...process.env, RUST_JS_TESTS: files.join(" ") }, stderr: "pipe" });
-  return { exit: p.exitCode ?? -1, output: p.stdout.toString() + p.stderr.toString() };
-}
-
-test("in real browsers, with Playwright Test on Bun", () => {
-  const { exit, output } = inBrowsers("playwright", browserTests);
-  // 8 tests, the layout one included, on 3 engines.
-  expect([exit, output.match(/(\d+) passed/)?.[1]]).toEqual([0, "24"]);
-  const failing = inBrowsers("playwright", ["target/browser-tests/asserts/asserts.test.js"]);
-  expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "12", "3"]);
-  expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: { x: 1, y: 2 }");
-}, 120_000);
-
-test("in real browsers, with Vitest's browser mode", () => {
-  const { exit, output } = inBrowsers("vitest", browserTests);
-  expect([exit, output.match(/Tests\s+(\d+) passed/)?.[1]]).toEqual([0, "24"]);
-  const failing = inBrowsers("vitest", ["target/browser-tests/asserts/asserts.test.js"]);
-  expect([failing.exit, failing.output.match(/Tests\s+(\d+) failed/)?.[1]]).toEqual([1, "12"]);
-  // Vitest follows the source map back into the Rust.
-  expect(failing.output).toContain("fails_an_assert test/asserts.rs:");
-}, 120_000);
-
 // The counter's JS reads like the Rust: methods, properties, globals, and one
 // shared `{ value }`. No wrappers from the web crate.
 test("the counter's JS is plain DOM code", async () => {
@@ -618,32 +490,3 @@ test("the web crate's bindings become plain JS", async () => {
   expect(round_trip("héllo")).toEqual([6, "héllo"]);
 });
 
-// ADR 0041: React components, written in Rust with the react crate, are the
-// JSX you'd write by hand (ADR 0040), and React runs them.
-test("React components are hand-written JSX, and React runs them", () => {
-  run(["react/build.sh", "-o", join(target, "libreact.rmeta")]);
-  const out = join(target, "react-test");
-  run([join(target, "debug", "rust-js"), "test/components.rs", "-o", join(out, "components.js"),
-    "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
-  // A module with JSX is a `.jsx` file.
-  const js = require("node:fs").readFileSync(join(out, "components.jsx"), "utf8");
-  expect(js).toContain('import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";');
-  // Props taken apart, as a component takes them; `children` as JSX children.
-  expect(js).toContain("export function Card({ title, children }) {\n  return <div className=\"card\">\n    <h2>{title}</h2>\n    {children}\n  </div>;\n}");
-  expect(js).toContain('const [draft, setDraft] = useState("");');
-  expect(js).toContain("const left = useMemo(() => todos.filter((t) => !t.done).length, [todos]);");
-  // A handler of one call stays in the JSX; one with statements is named first.
-  expect(js).toContain("onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />");
-  expect(js).toContain("const onKeyDown = (e) => {");
-  // A list, with its keys.
-  expect(js).toContain('return <li key={t.id} className={t.done ? "done" : ""} onClick={onClick}>{t.text}</li>;');
-  expect(js).toContain("<ul>{items}</ul>");
-  // `()` as an effect's dependencies is `[]`, and its cleanup is a function it returns.
-  expect(js).toContain("useEffect(() => {\n    setTicks((t) => t + 10 | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
-  // Components by name, as JSX tags.
-  expect(js).toContain("<Todos />\n    <Clock />");
-  copyFileSync(join(root, "test", "react_app.jsx"), join(out, "react_app.test.jsx"));
-  const p = Bun.spawnSync(["bun", "test", "--preload", "./test/happydom.ts", join(out, "react_app.test.jsx")], { cwd: root, stderr: "pipe" });
-  const output = p.stdout.toString() + p.stderr.toString();
-  expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "2"]);
-}, 60_000);

@@ -28,6 +28,9 @@ This folder is where we write those choices down.
  Compilation::Stop               lower.rs: THIR ──► JS AST, with spans  (0008–0015)
  (no rustc codegen)                    │
                                        ▼
+                                 prepare.rs: readability preparation
+                                       |
+                                       v
                                  to_oxc.rs: JS AST ──► oxc AST           (0018)
                                        │
                                        ▼
@@ -38,16 +41,23 @@ This folder is where we write those choices down.
 
 | File | Job |
 |---|---|
-| `src/main.rs` | Hooks into rustc's driver, runs analysis, writes the files |
-| `src/lower.rs` | Turns THIR into the JS AST: the actual compiler |
+| `src/main.rs` | CLI, rustc callbacks, analysis and the diagnostic gate |
+| `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
+| `src/runtime.rs` | Runtime helpers emitted on demand |
+| `src/prepare.rs` | JSX readability preparation after lowering |
+| `src/output.rs` | Filename validation, manifests and artifact publication |
 | `src/js.rs` | Our small JS AST; every node carries a Rust span |
 | `src/to_oxc.rs` | The only oxc code: converts, prints, builds the source map |
-| `test/native.rs`, `test/fib.test.ts` | Differential test: native Rust vs. generated JS, plus source map checks |
+| `test/native.rs`, `test/compiler.test.ts` | Differential test: native Rust vs. generated JS |
+| `test/emission.test.ts`, `test/diagnostics.test.ts` | Source maps, manifests, output ownership and compiler rejections |
+| `test/react.test.ts`, `test/browser.test.ts`, `test/vite.test.ts` | React behavior, browser runners, and real Vite/Fast Refresh |
 | `test/sourcemap.ts` | A tiny source map decoder for the tests |
 
 ## Decisions
 
 Each record says what we decided, why, what we rejected, and what it costs.
+
+- [0042 Compiler boundaries and build-tool manifest](decisions/0042-compiler-boundaries-and-build-contract.md)
 
 **Foundation**
 

@@ -1,6 +1,7 @@
 //! A tiny JavaScript AST: exactly the constructs rust-js emits.
 //!
-//! `lower.rs` builds it; `to_oxc.rs` converts it to oxc's AST, which prints
+//! `lower.rs` builds it; `prepare.rs` prepares readable JSX; `to_oxc.rs`
+//! converts it to oxc's AST, which prints
 //! it (with correct parentheses) and builds the source map. Keeping our own
 //! small tree means the lowering never touches oxc's large, fast-changing API.
 //!
@@ -353,40 +354,6 @@ impl Expr {
             self.kind,
             ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null
         )
-    }
-
-    /// Does oxc print this on several lines: an array of 3 or more items, an
-    /// object of 2 or more fields, or a function with statements? JSX is laid
-    /// out by us (ADR 0040), so it doesn't count, but what's in it does.
-    pub fn prints_on_lines(&self) -> bool {
-        match &self.kind {
-            ExprKind::Array(items) => items.len() > 2 || items.iter().any(Expr::prints_on_lines),
-            ExprKind::Object(props) => {
-                props.len() > 1
-                    || props.iter().any(|p| match p {
-                        Prop::Field(_, value) | Prop::Spread(value) => value.prints_on_lines(),
-                    })
-            }
-            ExprKind::Arrow(_, body) | ExprKind::AsyncArrow(_, body) => match body.as_slice() {
-                [Stmt { kind: StmtKind::Return(Some(value)), .. }] => value.prints_on_lines(),
-                _ => true,
-            },
-            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.prints_on_lines(),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.prints_on_lines() || b.prints_on_lines(),
-            ExprKind::Cond(a, b, c) => a.prints_on_lines() || b.prints_on_lines() || c.prints_on_lines(),
-            ExprKind::Call(f, args) | ExprKind::New(f, args) => f.prints_on_lines() || args.iter().any(Expr::prints_on_lines),
-            ExprKind::Jsx(jsx) => {
-                jsx.props.iter().any(|p| match p {
-                    Prop::Field(_, value) | Prop::Spread(value) => value.prints_on_lines(),
-                }) || jsx.children.iter().any(Expr::prints_on_lines)
-            }
-            ExprKind::Num(_)
-            | ExprKind::Bool(_)
-            | ExprKind::Str(_)
-            | ExprKind::Undefined
-            | ExprKind::Null
-            | ExprKind::Var(_) => false,
-        }
     }
 
     /// Is there JSX in this, like `items.map((t) => <li>..</li>)`?

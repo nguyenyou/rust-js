@@ -1,5 +1,5 @@
 // React components (ADR 0041), compiled to JSX (ADR 0040) and rendered by
-// React itself in test/fib.test.ts.
+// React itself in test/react.test.ts.
 
 #![allow(non_snake_case)]
 
