@@ -68,7 +68,7 @@ function inBrowsers(runner: "playwright" | "vitest", files: string[]): { exit: n
 test("in real browsers, with Playwright Test on Bun", () => {
   const { exit, output } = inBrowsers("playwright", browserTests);
   // 8 tests, the layout one included, on 3 engines.
-  expect([exit, output.match(/(\d+) passed/)?.[1]]).toEqual([0, "24"]);
+  expect([exit, output.match(/(\d+) passed/)?.[1]], output).toEqual([0, "24"]);
   const failing = inBrowsers("playwright", ["target/browser-tests/asserts/asserts.test.js"]);
   expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "12", "3"]);
   expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: { x: 1, y: 2 }");
@@ -76,10 +76,9 @@ test("in real browsers, with Playwright Test on Bun", () => {
 
 test("in real browsers, with Vitest's browser mode", () => {
   const { exit, output } = inBrowsers("vitest", browserTests);
-  expect([exit, output.match(/Tests\s+(\d+) passed/)?.[1]]).toEqual([0, "24"]);
+  expect([exit, output.match(/Tests\s+(\d+) passed/)?.[1]], output).toEqual([0, "24"]);
   const failing = inBrowsers("vitest", ["target/browser-tests/asserts/asserts.test.js"]);
   expect([failing.exit, failing.output.match(/Tests\s+(\d+) failed/)?.[1]]).toEqual([1, "12"]);
   // Vitest follows the source map back into the Rust.
   expect(failing.output).toContain("fails_an_assert test/asserts.rs:");
 }, 120_000);
-
