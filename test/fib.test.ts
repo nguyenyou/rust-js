@@ -26,6 +26,7 @@ let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
+let consts: Record<string, (...args: any[]) => unknown>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -50,6 +51,8 @@ beforeAll(async () => {
   collections = await import(join(target, "collections.js"));
   run([join(target, "debug", "rust-js"), "examples/options.rs", "-o", join(target, "options.js")]);
   options = await import(join(target, "options.js"));
+  run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
+  consts = await import(join(target, "consts.js"));
   // The web crate is used from its metadata (ADR 0024).
   run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -106,6 +109,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "collections") {
         return collections[path[1]](...c.args);
+      }
+      if (path[0] === "consts") {
+        return JSON.parse(JSON.stringify(consts[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
       }
       if (path[0] === "options") {
         // `None` is `undefined` in JS, and `null` in the JSON: compare them as one.
@@ -186,7 +192,7 @@ test("a crate split across files becomes one JS file per module", async () => {
 
   // Exported: \`pub\` functions, plus private ones another file calls
   // (\`clamp\`, called from child modules). Private and local: not exported.
-  expect(Object.keys(modules.lib).sort()).toEqual(["clamp", "doubled_mean", "mixed", "shadowed", "summary"]);
+  expect(Object.keys(modules.lib).sort()).toEqual(["HALVES", "clamp", "doubled_mean", "mixed", "shadowed", "summary"]);
   expect(Object.keys(modules.stats)).toEqual(["mean"]);
 
   const area = await Bun.file(join(out, "geometry/area.js")).text();
@@ -198,7 +204,10 @@ test("a crate split across files becomes one JS file per module", async () => {
   expect(area).toContain("const util$2 = x + 1 >>> 0;");
   expect(area).toContain("return util$1.double(util$2);");
   // lib ↔ stats import each other: a cycle, which Rust and ES modules allow.
-  expect(await Bun.file(join(out, "stats.js")).text()).toContain('import * as lib from "./lib.js";');
+  const stats = await Bun.file(join(out, "stats.js")).text();
+  expect(stats).toContain('import * as lib from "./lib.js";');
+  // A `const` of another module, by its name there.
+  expect(stats).toContain("return x / lib.HALVES >>> 0;");
 
   // Each file's source map points into the .rs file its module lives in.
   const sources = async (f: string) => (await Bun.file(join(out, `${f}.map`)).json()).sources;
@@ -296,9 +305,27 @@ test("async code becomes async functions and await", async () => {
   const fetchJs = await Bun.file(join(target, "fetch.js")).text();
   expect(fetchJs).toContain("  const response = await window.fetch(url);\n  const text = await response.text();\n");
   // `spawn(Box::new(load(..)))`: the call is the promise.
-  expect(fetchJs).toContain('    load("data:text/plain,Hello from a fetch!", output);\n');
+  expect(fetchJs).toContain('const URL = "data:text/plain,Hello from a fetch!";');
+  expect(fetchJs).toContain("    load(URL, output);\n");
   // `spawn(Box::new(async move { .. }))` is the promise, unawaited.
   expect(countdown).toContain("    (async () => {\n      await count_down(output, 3);\n      running$1.value = false;\n    })();");
+});
+
+// ADR 0031: a `const` is the value rustc computed, under its own name.
+test("constants are the values rustc computed, by name", async () => {
+  const js = await Bun.file(join(target, "consts.js")).text();
+  expect(js).toContain("export const SIZE = 4096;\nconst GREETING = \"hello\";\nconst RATIO = .25;\nconst ON = true;");
+  expect(js).toContain('const NOTHING = undefined;\nconst LEVEL = "High";');
+  // A `const` inside a function goes beside it.
+  expect(js).toContain("const STEP = 3;");
+  // Each use is a value of its own: copied where it's changed.
+  expect(js).toContain("  let p = { ...ORIGIN };\n");
+  expect(js).toContain("  return [{ ...p }, { ...ORIGIN }];");
+  // A known divisor needs no check for zero.
+  expect(js).toContain("  return SIZE / 1024 >>> 0;");
+  // std's are written in place.
+  expect(js).toContain("  return [4294967295, -2147483648];");
+  expect(js).toContain("  for (const p of PRIMES) {");
 });
 
 // ADR 0030: `Some(x)` is `x`, `None` is `undefined`, and `null` counts as `None`.

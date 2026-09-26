@@ -21,6 +21,7 @@ use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, DefKind};
 use rustc_hir::{BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, CoroutineSource, HirId, LangItem, find_attr};
 use rustc_middle::middle::region;
+use rustc_middle::mir::interpret::GlobalId;
 use rustc_middle::mir::{AssignOp, BinOp, BorrowKind, UnOp};
 use rustc_middle::thir::{
     self as thir, AdtExprBase, ArmId, BlockId, BodyTy, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind,
@@ -77,6 +78,7 @@ pub struct LoweredModule {
     pub packages: Vec<js::Package>,
     /// The modules this one calls into, as `(alias, path)`.
     pub imports: Vec<(String, Vec<String>)>,
+    pub consts: Vec<js::Const>,
     pub functions: Vec<js::Function>,
     /// Runtime helpers its functions use.
     pub runtime: Vec<Helper>,
@@ -100,7 +102,8 @@ pub struct Lowered {
     pub tests: Vec<TestFn>,
 }
 
-/// Where a function ends up in the JS: its module's file, under this name.
+/// Where a function or a `const` ends up in the JS: its module's file,
+/// under this name.
 struct FnInfo {
     module: LocalModDefId,
     name: String,
@@ -131,7 +134,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             // `#[derive(Clone, Copy)]` and friends write impls we never call.
             DefKind::AssocFn if tcx.is_automatically_derived(tcx.parent(def_id.to_def_id())) => continue,
             DefKind::AssocFn => "methods",
-            DefKind::Const { .. } | DefKind::AssocConst { .. } => "constants",
+            DefKind::AssocConst { .. } => "associated constants",
             DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
             DefKind::Static { .. } => "statics",
             _ => continue,
@@ -193,11 +196,19 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .collect();
     let globals = reserved;
 
+    // `const` items (ADR 0031), with the values rustc has computed. One in a
+    // function goes beside it, in its module.
+    let consts: Vec<LocalDefId> = tcx
+        .hir_crate_items(())
+        .definitions()
+        .filter(|&d| matches!(tcx.def_kind(d), DefKind::Const { .. }) && !markers.iter().any(|&(m, _)| m == d))
+        .collect();
+
     // The modules that get a JS file: the root, then every module with a
-    // function, in the order their first function appears.
+    // function or a `const`, in the order the first one appears.
     let mut modules = vec![LocalModDefId::CRATE_DEF_ID];
-    for body in &bodies {
-        let module = tcx.parent_module_from_def_id(body.def_id);
+    for def_id in bodies.iter().map(|body| body.def_id).chain(consts.iter().copied()) {
+        let module = tcx.parent_module_from_def_id(def_id);
         if !modules.contains(&module) {
             modules.push(module);
         }
@@ -209,11 +220,13 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         modules.iter().map(|&m| (m, globals.clone())).collect();
     let fns: HashMap<DefId, FnInfo> = bodies
         .iter()
-        .map(|body| {
-            let module = tcx.parent_module_from_def_id(body.def_id);
+        .map(|body| body.def_id)
+        .chain(consts.iter().copied())
+        .map(|def_id| {
+            let module = tcx.parent_module_from_def_id(def_id);
             let names = taken.entry(module).or_default();
-            let name = fresh_in(names, tcx.item_name(body.def_id.to_def_id()).as_str());
-            (body.def_id.to_def_id(), FnInfo { module, name })
+            let name = fresh_in(names, tcx.item_name(def_id.to_def_id()).as_str());
+            (def_id.to_def_id(), FnInfo { module, name })
         })
         .collect();
 
@@ -225,8 +238,11 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     for body in all_bodies {
         let from = tcx.parent_module_from_def_id(body.def_id);
         for expr in body.thir.exprs.iter() {
-            if let (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) = (&expr.kind, expr.ty.kind())
-                && let Some(target) = fns.get(def_id)
+            let def_id = match (&expr.kind, expr.ty.kind()) {
+                (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) | (ExprKind::NamedConst { def_id, .. }, _) => def_id,
+                _ => continue,
+            };
+            if let Some(target) = fns.get(def_id)
                 && target.module != from
             {
                 called_from_elsewhere.insert(*def_id);
@@ -291,6 +307,28 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 mutated.insert(body.thir[object].ty);
             }
         }
+    }
+
+    let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
+    for &def_id in &consts {
+        let span = tcx.def_span(def_id);
+        let typing_env = ty::TypingEnv::fully_monomorphized();
+        let args = ty::GenericArgs::identity_for_item(tcx, def_id);
+        let Some(value) = eval_const(tcx, typing_env, def_id.to_def_id(), args, span).and_then(|v| const_js(tcx, v)) else {
+            let ty = tcx.type_of(def_id).instantiate_identity();
+            tcx.dcx().span_err(span, format!("rust-js does not support constants of type `{ty}` yet"));
+            failed = true;
+            continue;
+        };
+        let info = &fns[&def_id.to_def_id()];
+        let file = module_file(tcx, info.module);
+        let span = span.source_callsite();
+        const_items.entry(info.module).or_default().push(js::Const {
+            name: info.name.clone(),
+            value,
+            export: tcx.visibility(def_id).is_public() || called_from_elsewhere.contains(&def_id.to_def_id()),
+            span: js::Span { lo: (span.lo() - file.start_pos).0, hi: (span.hi() - file.start_pos).0 },
+        });
     }
 
     let mut functions: HashMap<LocalModDefId, Vec<js::Function>> = HashMap::new();
@@ -364,6 +402,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
                 file: module_file(tcx, module),
                 packages: packages.into_values().collect(),
                 imports,
+                consts: const_items.remove(&module).unwrap_or_default(),
                 functions: functions.remove(&module).unwrap_or_default(),
                 runtime: helpers,
             }
@@ -966,7 +1005,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let target = self.assignee(lhs)?;
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
-                let value = self.binary(assign_op(op), current, rhs_js, ty, expr.span)?.or_at(span);
+                let known = self.known_int(rhs);
+                let value = self.binary(assign_op(op), current, rhs_js, known, ty, expr.span)?.or_at(span);
                 out.push(StmtKind::Assign(target, value).at(span));
                 Ok(())
             }
@@ -1537,7 +1577,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Adt(ref adt) => self.adt(adt, ty, span, out),
             ExprKind::Binary { op, lhs, rhs } => {
                 let [l, r] = self.operands(&[lhs, rhs], out)?.try_into().ok().unwrap();
-                self.binary(op, l, r, self.thir[lhs].ty, span)
+                self.binary(op, l, r, self.known_int(rhs), self.thir[lhs].ty, span)
             }
             ExprKind::LogicalOp { op, lhs, rhs } => {
                 let l = self.expr(lhs, out)?;
@@ -1570,6 +1610,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.cast(v, self.thir[source].ty, ty, span)
             }
             ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
+            ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => Ok(Expr::await_(self.expr(awaited, out)?)),
             ExprKind::If { cond, then, else_opt: Some(els), .. }
                 if self.is_simple(then) && self.is_simple(els) =>
@@ -1662,6 +1703,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::VarRef { .. }
             | ExprKind::UpvarRef { .. }
             | ExprKind::StaticRef { .. }
+            | ExprKind::NamedConst { .. }
             | ExprKind::ZstLiteral { .. } => true,
             ExprKind::Field { lhs, .. } => self.is_simple(lhs),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => self.is_simple(awaited),
@@ -1702,7 +1744,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     // ── Operators ───────────────────────────────────────────────────────
 
-    fn binary(&mut self, op: BinOp, l: Expr, r: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+    /// `known` is `r`'s value, when rustc knows it and the JS doesn't show
+    /// it: a named `const` (ADR 0031).
+    fn binary(&mut self, op: BinOp, l: Expr, r: Expr, known: Option<i128>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let comparison = match op {
             BinOp::Eq => Some(Op::Eq),
             BinOp::Ne => Some(Op::Ne),
@@ -1755,7 +1799,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => (Op::Rem, Helper::Rem, "$rem"),
                 };
                 // A literal divisor that can't panic stays inline: `a / 3 | 0`.
-                let safe = r.as_int().is_some_and(|d| d != 0 && !(num.signed() && d == -1));
+                let safe = known.or_else(|| r.as_int()).is_some_and(|d| d != 0 && !(num.signed() && d == -1));
                 let quotient = if safe {
                     Expr::bin(js_op, l, r)
                 } else {
@@ -2824,6 +2868,30 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// A `const` (ADR 0031). One of ours is its name, `SIZE` or `util.SIZE`,
+    /// copied where a use might change it: each use is a value of its own.
+    /// Anyone else's, like `u32::MAX`, is its value, written in place.
+    fn named_const(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        if let Some(target) = self.fns.get(&def_id) {
+            let place = if target.module == self.module {
+                Expr::var(&target.name)
+            } else {
+                Expr::member(Expr::var(&self.aliases[&target.module]), target.name.clone())
+            };
+            return Ok(if self.contains_mutated(ty) { self.copy(place, ty) } else { place });
+        }
+        eval_const(self.tcx, self.typing_env, def_id, args, span)
+            .and_then(|value| const_js(self.tcx, value))
+            .ok_or_else(|| self.unsupported(span, "this constant"))
+    }
+
+    /// An integer `const`'s value: `x / SIZE` can't divide by zero.
+    fn known_int(&self, e: ExprId) -> Option<i128> {
+        let ExprKind::NamedConst { def_id, args, .. } = self.thir[self.strip(e)].kind else { return None };
+        let value = eval_const(self.tcx, self.typing_env, def_id, args, self.thir[e].span)?;
+        const_js(self.tcx, value)?.as_int()
+    }
+
     /// `const <base> = value;`, so it's evaluated here, then its name.
     fn spill(&mut self, base: &str, value: Expr, out: &mut Vec<Stmt>) -> Expr {
         let name = self.fresh(base);
@@ -2863,6 +2931,71 @@ fn is_fieldless_enum(adt: ty::AdtDef<'_>) -> bool {
 }
 
 /// Turn raw constant bits into a JS number literal.
+/// What rustc computed for a `const`, as a value tree (ADR 0031).
+fn eval_const<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    def_id: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+    span: Span,
+) -> Option<ty::Value<'tcx>> {
+    let instance = ty::Instance::try_resolve(tcx, typing_env, def_id, args).ok()??;
+    let valtree = tcx.const_eval_global_id_for_typeck(typing_env, GlobalId { instance, promoted: None }, span).ok()?.ok()?;
+    let ty = tcx.type_of(def_id).instantiate(tcx, args);
+    Some(ty::Value { ty: tcx.normalize_erasing_regions(typing_env, ty), valtree })
+}
+
+/// A constant value as a JS literal, in the shapes of ADRs 0011, 0013, 0020
+/// and 0030: numbers, strings, `{ x: 0, y: 0 }`, `[a, b]`, `"High"`,
+/// `undefined` for `None`.
+fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Option<Expr> {
+    let ty = value.ty;
+    if ty.is_bool() {
+        return value.try_to_bool().map(Expr::bool);
+    }
+    if let Some(num) = Num::of(ty) {
+        return Some(num_literal(value.try_to_leaf()?.to_bits_unchecked(), num));
+    }
+    // An enum's value tree starts with its variant's index, then its fields.
+    let children = || -> Option<Vec<ty::Value<'tcx>>> {
+        match &**value.valtree {
+            ty::ValTreeKind::Branch(items) => items.iter().map(|c| c.try_to_value()).collect(),
+            ty::ValTreeKind::Leaf(_) => None,
+        }
+    };
+    let all = |values: &[ty::Value<'tcx>]| values.iter().map(|&v| const_js(tcx, v)).collect::<Option<Vec<_>>>();
+    match ty.kind() {
+        ty::Ref(_, inner, _) if inner.is_str() => Some(Expr::str(std::str::from_utf8(value.try_to_raw_bytes(tcx)?).ok()?)),
+        ty::Ref(_, inner, _) => const_js(tcx, ty::Value { ty: *inner, valtree: value.valtree }),
+        ty::Tuple(items) if items.is_empty() => Some(Expr::undefined()),
+        ty::Tuple(_) | ty::Array(..) | ty::Slice(_) => Some(Expr::array(all(&children()?)?)),
+        ty::Adt(adt, _) if adt.is_enum() => {
+            let items = children()?;
+            let (index, fields) = items.split_first()?;
+            let variant = adt.variant(index.try_to_leaf()?.to_u32().into());
+            if tcx.is_lang_item(adt.did(), LangItem::Option) {
+                return match fields.first() {
+                    Some(&inner) => const_js(tcx, inner),
+                    None => Some(Expr::undefined()),
+                };
+            }
+            is_fieldless_enum(*adt).then(|| Expr::str(variant.name.to_string()))
+        }
+        ty::Adt(adt, _) if adt.is_struct() => {
+            let variant = adt.non_enum_variant();
+            let values = all(&children()?)?;
+            match variant.ctor_kind() {
+                Some(CtorKind::Const) => Some(Expr::undefined()),
+                Some(CtorKind::Fn) => Some(Expr::array(values)),
+                None => Some(Expr::object(
+                    variant.fields.iter().zip(values).map(|(f, v)| Prop::Field(f.name.to_string(), v)).collect(),
+                )),
+            }
+        }
+        _ => None,
+    }
+}
+
 fn num_literal(bits: u128, num: Num) -> Expr {
     if num == Num::F64 {
         return Expr::num(f64::from_bits(bits as u64));

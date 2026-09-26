@@ -5,5 +5,5 @@ pub fn mean(a: u32, b: u32) -> u32 {
 
 /// Private and only used here: stays unexported.
 fn half(x: u32) -> u32 {
-    x / 2
+    x / crate::HALVES
 }

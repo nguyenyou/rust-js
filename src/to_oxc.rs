@@ -50,7 +50,8 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
     let cx = Cx { b: AstBuilder::new(&allocator), allocator: &allocator };
     let b = &cx.b;
 
-    let body = ArenaVec::from_iter_in(module.functions.iter().map(|f| cx.function(f)), b);
+    let consts = module.consts.iter().map(|c| cx.constant(c));
+    let body = ArenaVec::from_iter_in(consts.chain(module.functions.iter().map(|f| cx.function(f))), b);
     let program = Program::new(
         Span::new(0, rust_source.len() as u32),
         SourceType::mjs(),
@@ -180,6 +181,15 @@ impl<'a> Cx<'a> {
             b,
         );
         if f.export { Statement::new_export_declaration(span(f.span), decl, b) } else { decl.into() }
+    }
+
+    fn constant(&self, c: &js::Const) -> Statement<'a> {
+        let b = &self.b;
+        let sp = span(c.span);
+        let id = BindingPattern::new_binding_identifier(SPAN, self.name(&c.name), b);
+        let declarator = VariableDeclarator::new(sp, id, None, Some(self.expr(&c.value)), false, b);
+        let decl = Declaration::new_variable_declaration(sp, VariableDeclarationKind::Const, ArenaVec::from_iter_in([declarator], b), false, b);
+        if c.export { Statement::new_export_declaration(sp, decl, b) } else { decl.into() }
     }
 
     fn stmts(&self, stmts: &[js::Stmt]) -> ArenaVec<'a, Statement<'a>> {

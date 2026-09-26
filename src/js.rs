@@ -31,7 +31,18 @@ pub struct Module {
     pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
     pub runtime: Vec<&'static str>,
+    /// `const` items, with the values rustc computed (ADR 0031).
+    pub consts: Vec<Const>,
     pub functions: Vec<Function>,
+}
+
+/// `const SIZE = 4096;`, maybe exported.
+pub struct Const {
+    pub name: String,
+    pub value: Expr,
+    pub export: bool,
+    /// The whole `const` item.
+    pub span: Span,
 }
 
 pub struct Import {

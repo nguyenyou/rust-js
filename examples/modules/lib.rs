@@ -14,6 +14,9 @@ pub fn summary(a: u32, b: u32) -> u32 {
     stats::mean(a, b) + geometry::area::square(a)
 }
 
+/// A private `const` that a child module uses: exported too (ADR 0031).
+const HALVES: u32 = 2;
+
 /// Private in Rust, but child modules call it, so its JS file must export it.
 fn clamp(x: u32) -> u32 {
     if x > 1000 { 1000 } else { x }

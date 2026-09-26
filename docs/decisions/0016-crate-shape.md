@@ -2,7 +2,9 @@
 
 Status: Accepted (temporary scope limit). **Partly superseded by
 [0019](0019-one-js-file-per-module.md):** functions inside modules are now
-supported, each module becoming its own JS file. The other limits stand.
+supported, each module becoming its own JS file. Closures came with
+[0022](0022-closures.md), and `const` items with [0031](0031-consts.md).
+The other limits stand.
 
 ## Context
 

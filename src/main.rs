@@ -94,6 +94,7 @@ impl RustJs {
                 packages,
                 imports,
                 runtime: module.runtime.iter().map(|helper| helper.source()).collect(),
+                consts: module.consts,
                 functions: module.functions,
             };
 

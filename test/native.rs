@@ -24,6 +24,10 @@ mod structs;
 #[allow(dead_code)]
 mod options;
 
+#[path = "../examples/consts.rs"]
+#[allow(dead_code)]
+mod consts;
+
 // `modules`: examples/modules/lib.rs, a crate split across files, linked
 // with `--extern`. (It can't be pulled in with `#[path]` like fib.rs: its
 // `crate::` paths must mean its own root.)
@@ -129,6 +133,21 @@ fn main() {
         case("options.label", &[n], || options::label(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+    }
+    case("consts.size_in_kb", &[], consts::size_in_kb);
+    case("consts.greeting", &[], consts::greeting);
+    case("consts.on", &[], consts::on);
+    case("consts.pair", &[], consts::pair);
+    case("consts.prime_sum", &[], consts::prime_sum);
+    case("consts.nothing", &[], consts::nothing);
+    case("consts.high", &[], consts::high);
+    case("consts.limits", &[], consts::limits);
+    case("consts.local", &[], consts::local);
+    for dx in [0, 5, -2] {
+        case("consts.moved", &[dx], || consts::moved(dx as i32));
+    }
+    for x in [0, 1, 10] {
+        case("consts.quarter", &[x], || consts::quarter(x as f64));
     }
     let some_none = [None, Some(0), Some(-4), Some(3)];
     for o in some_none {
@@ -249,6 +268,18 @@ impl<T: Json> Json for Option<T> {
 impl Json for Slot {
     fn json(&self) -> String {
         format!("{{\"id\":{},\"value\":{}}}", self.id, self.value.json())
+    }
+}
+
+impl Json for f64 {
+    fn json(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl Json for consts::Point {
+    fn json(&self) -> String {
+        format!("{{\"x\":{},\"y\":{}}}", self.x, self.y)
     }
 }
 
