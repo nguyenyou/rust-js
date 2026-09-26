@@ -28,6 +28,7 @@ let inventory: Record<string, (...args: any[]) => unknown>;
 let queues: Record<string, (...args: any[]) => unknown>;
 let report: Record<string, (...args: any[]) => unknown>;
 let lexer: Record<string, (...args: any[]) => unknown>;
+let values: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -81,6 +82,8 @@ beforeAll(async () => {
   report = await import(join(target, "report.js"));
   run([join(target, "debug", "rust-js"), "examples/lexer.rs", "-o", join(target, "lexer.js")]);
   lexer = await import(join(target, "lexer.js"));
+  run([join(target, "debug", "rust-js"), "examples/values.rs", "-o", join(target, "values.js")]);
+  values = await import(join(target, "values.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -190,6 +193,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "lexer") {
         return lexer[path[1]](...c.args);
+      }
+      if (path[0] === "values") {
+        return values[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -1027,6 +1033,18 @@ test("the lexer's JS steps through its source with $next and $peek", async () =>
   expect(js).toContain("let it = $iter(v);");
   expect(js).toContain("const rest = $rest(it);");
   expect(js).toContain("return match.toUpperCase() + $restStr(chars);");
+});
+
+// ADR 0074: a `&mut` to a string or a number is a box the caller copies
+// back, and a recursive type's clone is a function that calls itself.
+test("values' JS: boxes for &mut to primitives, and recursive clones", async () => {
+  const js = await Bun.file(join(target, "values.js")).text();
+  expect(js).toContain("out.value += \"[\\n\";");
+  expect(js).toContain("const out$1 = { value: p };\n  Value.pretty(v, 0, out$1);\n  p = out$1.value;");
+  expect(js).toContain("count.value = (count.value + by) >>> 0;");
+  expect(js).toContain("const count$3 = { value: stats.hits };");
+  expect(js).toContain("stats.hits = count$3.value;");
+  expect(js).toContain("const cloneValue = (value) =>");
 });
 
 // ADR 0061: `impl Iterator` is the type it hides, and a generic iterator is

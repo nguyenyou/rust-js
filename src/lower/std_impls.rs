@@ -4,7 +4,7 @@
 
 use super::bindings::variant_name;
 use super::representation::Num;
-use super::{FnCx, R, Shape, is_fieldless_enum};
+use super::{FnCx, R, Shape, is_fieldless_enum, lower_first};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 use crate::runtime::Helper;
 use rustc_hir as hir;
@@ -157,6 +157,60 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_copy(ty) {
             return Ok(self.copy(place, ty));
         }
+        // A type inside itself, `Value` in `Obj(BTreeMap<String, Value>)`: its
+        // clone is a function, which calls itself for the ones inside.
+        if self.is_recursive(ty) {
+            if let Some((_, name)) = self.cloning.iter().find(|(t, _)| *t == ty) {
+                return Ok(Expr::call(Expr::var(name), vec![place]));
+            }
+            let type_name = match ty.kind() {
+                ty::Adt(adt, _) => self.tcx.item_name(adt.did()).to_string(),
+                _ => "Value".to_string(),
+            };
+            let name = self.fresh(&format!("clone{type_name}"));
+            let param = self.fresh(&lower_first(&type_name));
+            self.cloning.push((ty, name.clone()));
+            let mut body = Vec::new();
+            let value = self.clone_parts(Expr::var(&param), ty, span, &mut body);
+            self.cloning.pop();
+            body.push(StmtKind::Return(Some(value?)).at(js::Span::NONE));
+            let f = Expr::arrow(vec![param.into()], body);
+            out.push(StmtKind::Const(name.clone(), f).at(js::Span::NONE));
+            return Ok(Expr::call(Expr::var(&name), vec![place]));
+        }
+        self.clone_parts(place, ty, span, out)
+    }
+
+    /// Is `ty`, one of the crate's own, inside itself, through its fields or
+    /// what a std type holds? A std type that holds one is cloned in place.
+    fn is_recursive(&self, ty: Ty<'tcx>) -> bool {
+        let mut seen = Vec::new();
+        matches!(ty.kind(), ty::Adt(adt, _) if adt.did().is_local()) && self.holds(ty, ty, &mut seen)
+    }
+
+    /// Does `outer` hold `target` anywhere inside it?
+    fn holds(&self, outer: Ty<'tcx>, target: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+        let parts: Vec<Ty<'tcx>> = match outer.kind() {
+            ty::Adt(adt, args) if adt.did().is_local() => adt.all_fields().map(|f| f.ty(self.tcx, args)).collect(),
+            ty::Adt(_, args) => args.types().collect(),
+            ty::Tuple(tys) => tys.to_vec(),
+            ty::Array(item, _) | ty::Slice(item) | ty::Ref(_, item, _) => vec![*item],
+            _ => Vec::new(),
+        };
+        parts.into_iter().any(|part| {
+            if part == target {
+                return true;
+            }
+            if seen.contains(&part) {
+                return false;
+            }
+            seen.push(part);
+            self.holds(part, target, seen)
+        })
+    }
+
+    /// `clone_value` of a `ty` that needs a copy, part by part.
+    fn clone_parts(&mut self, place: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         // Read more than once below.
         let place = if !place.reads_same() {
             self.spill("value", place, out)

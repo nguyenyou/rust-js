@@ -114,6 +114,8 @@ pub(super) enum Std {
     /// A slice's `first()` and `last()`: `v[0]` and `v.at(-1)`.
     First,
     SliceLast,
+    /// `v.get(i)`: `v[i]`, which is `undefined` past the end.
+    SliceGet,
     /// `Result` (ADR 0035): `r.TAG === "Ok"` (true) or `"Err"` (false).
     IsOk(bool),
     /// `r.ok()`: the value, or `undefined`.
@@ -596,6 +598,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             "reverse" if owner.is_slice() => Std::Method("reverse"),
             // `v[0]` and `v.at(-1)` are `undefined` when `v` is empty: `None`.
             "first" if owner.is_slice() => Std::First,
+            "get" if owner.is_slice() && args.types().nth(1).is_some_and(|i| i.is_usize()) => Std::SliceGet,
             "last" if owner.is_slice() => Std::SliceLast,
             // `includes` compares strings and numbers by value, as `==` does,
             // but objects by identity: only for those.
@@ -858,6 +861,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let in_order = self.in_order(&f, span);
         let shown = self.shown(&f, span).unwrap_or_default();
         let mut values = self.operands(&f.values, out)?;
+        // `{}` of a box parameter (ADR 0072): what's in it.
+        for (value, &e) in values.iter_mut().zip(&f.values) {
+            let e = match self.thir[self.strip(e)].kind {
+                ExprKind::Borrow { arg, .. } => self.strip(arg),
+                _ => self.strip(e),
+            };
+            if let ExprKind::VarRef { id } = self.thir[e].kind
+                && self.boxes.contains(&id)
+            {
+                *value = Expr::member(std::mem::replace(value, Expr::undefined()), "value");
+            }
+        }
         let effects = values.iter().any(Expr::has_effects);
         let named: Vec<bool> = (0..values.len())
             .map(|i| {

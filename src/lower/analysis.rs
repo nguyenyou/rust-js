@@ -243,6 +243,8 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
             slots: HashMap::new(),
             stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
             iterators: HashSet::new(),
+            boxes: HashSet::new(),
+            cloning: Vec::new(),
             discarded: false,
             item: def_id,
         };

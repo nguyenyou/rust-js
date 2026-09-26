@@ -196,6 +196,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is a `ty` value a JS object? Then a reference to it, even `&mut`, can
     /// be the object itself: changes through it change the one object (ADR 0025).
+    /// A value that a `&mut` to must be a box to change (ADR 0072): one that
+    /// isn't a JS object, as a `String`, a number or a fieldless enum is.
+    pub(super) fn is_boxable(&self, ty: Ty<'tcx>) -> bool {
+        !ty.is_ref() && !matches!(ty.kind(), ty::Param(_)) && !self.is_object(ty) && self.unsupported_part(ty).is_none()
+    }
+
     pub(super) fn is_object(&self, ty: Ty<'tcx>) -> bool {
         matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
             || self.is_js_object(ty)

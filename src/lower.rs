@@ -266,6 +266,12 @@ struct FnCx<'a, 'tcx> {
     stepped: HashSet<LocalVarId>,
     /// Those of them bound as a `$iter`, which `next()` can step.
     iterators: HashSet<LocalVarId>,
+    /// Parameters that are a `&mut` to a value JS can't change in place, a
+    /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
+    boxes: HashSet<LocalVarId>,
+    /// The recursive types being cloned, and the function each one's clone
+    /// is (`clone_value`), which a clone inside it calls.
+    cloning: Vec<(Ty<'tcx>, String)>,
     /// The call being lowered is a statement of its own: its value isn't used,
     /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
     discarded: bool,
@@ -336,6 +342,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut names = Vec::new();
         for param in params {
             let span = param.ty_span.unwrap_or(span);
+            // `out: &mut String`: a box, `out.value` (ADR 0072).
+            if let ty::Ref(_, inner, Mutability::Mut) = *param.ty.kind()
+                && self.is_boxable(inner)
+                && let Some(Pat {
+                    kind:
+                        PatKind::Binding {
+                            name,
+                            var,
+                            mode: BindingMode(ByRef::No, _),
+                            subpattern: None,
+                            ..
+                        },
+                    ..
+                }) = param.pat.as_deref()
+            {
+                let name = self.bind(*var, name.as_str(), false);
+                self.boxes.insert(*var);
+                names.push(js::Pattern::Name(name));
+                continue;
+            }
             self.check_value_ty(param.ty, span)?;
             // `|&x|`: a reference is the value (ADR 0023), so the parameter is `x`.
             let mut inner = param.pat.as_deref();
@@ -1856,6 +1882,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some((place, _)) => Ok(place),
                 None => self.referent(arg, out),
             },
+            // `&mut *out` of a box, handed on: the box (ADR 0072).
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Mut { .. },
+                arg,
+            } if let ExprKind::Deref { arg: inner } = self.thir[self.strip(arg)].kind
+                && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
+                && self.boxes.contains(&id) =>
+            {
+                Ok(self.vars[&id].place.clone())
+            }
             // `&mut` to a JS object is the object (ADR 0025).
             ExprKind::Borrow {
                 borrow_kind: BorrowKind::Mut { .. },
@@ -2736,6 +2772,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (base, mutable) = self.place(lhs)?;
                 Some((self.project(base, self.thir[lhs].ty, name.as_usize()), mutable))
             }
+            // `*out` of a box (ADR 0072): what's in it.
+            ExprKind::Deref { arg }
+                if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
+                    && self.boxes.contains(&id) =>
+            {
+                Some((Expr::member(self.vars[&id].place.clone(), "value"), true))
+            }
             // A reference is the value it points to, so `*r` is where `r` is.
             // (A static is reached through a pointer to it.)
             ExprKind::Deref { arg }
@@ -2912,10 +2955,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `*r = v` with a `&mut` variable `r` would only rebind the JS variable.
         // One that names a place, as a `ref mut` binding does, writes it.
         let names_place = |arg: ExprId| match self.thir[self.strip(arg)].kind {
-            ExprKind::VarRef { id } => self
-                .vars
-                .get(&id)
-                .is_some_and(|v| matches!(v.place.kind, js::ExprKind::Member(..) | js::ExprKind::Index(..))),
+            ExprKind::VarRef { id } => {
+                self.boxes.contains(&id)
+                    || self
+                        .vars
+                        .get(&id)
+                        .is_some_and(|v| matches!(v.place.kind, js::ExprKind::Member(..) | js::ExprKind::Index(..)))
+            }
             _ => false,
         };
         if let ExprKind::Deref { arg } = self.thir[self.strip(e)].kind

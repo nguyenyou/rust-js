@@ -5,7 +5,7 @@ use super::numbers::NumOp;
 use super::representation::Num;
 use super::stdlib::Std;
 use super::text::TextOp;
-use super::{FnCx, R, global};
+use super::{FnCx, R, camel_case, global};
 use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 use crate::runtime::Helper;
@@ -39,6 +39,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (def_id, generic_args) = self
             .resolve_into(def_id, generic_args)
             .unwrap_or((def_id, generic_args));
+        if self.krate.fns.contains_key(&def_id)
+            && self.tcx.trait_of_assoc(def_id).is_none()
+            && args.iter().any(|&a| self.boxed_arg(a).is_some())
+        {
+            return self.call_with_boxes(def_id, generic_args, args, discarded, span, out);
+        }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(written);
         }
@@ -412,6 +418,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.some_at(items, last)
             }
             Std::First => Expr::index(arg(), Expr::int(0)),
+            Std::SliceGet => {
+                let items = arg();
+                Expr::index(items, arg())
+            }
             Std::SliceLast => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
             // A copy, unless it's an array just written: `vec![3, 4].into()`.
             Std::ToVec => match arg() {
@@ -691,6 +701,100 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
         })
+    }
+
+    /// `&mut p` of a value that must be boxed (ADR 0072): `p`, the place.
+    fn boxed_arg(&self, arg: ExprId) -> Option<ExprId> {
+        let ExprKind::Borrow {
+            borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
+            arg: mut place,
+        } = self.thir[self.strip(arg)].kind
+        else {
+            return None;
+        };
+        // `&mut *&mut v[0]`, a reborrow: the place is `v[0]`.
+        while let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
+            && let ExprKind::Borrow {
+                borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
+                arg: reborrowed,
+            } = self.thir[self.strip(inner)].kind
+        {
+            place = reborrowed;
+        }
+        // `&mut *out` of a box is the box itself.
+        if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
+            && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
+            && self.boxes.contains(&id)
+        {
+            return None;
+        }
+        self.is_boxable(self.thir[place].ty).then_some(place)
+    }
+
+    /// `f(&mut p)` with `p` a `String` or a number: `p` goes in a box named as
+    /// `f`'s parameter, and back out after the call. That's exact: while `f`
+    /// has the `&mut`, nothing else can read or write `p`.
+    fn call_with_boxes(
+        &mut self,
+        def_id: DefId,
+        generic_args: ty::GenericArgsRef<'tcx>,
+        args: &[ExprId],
+        discarded: bool,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let callee = self.fn_ref(def_id);
+        let names: Vec<String> = self
+            .tcx
+            .fn_arg_idents(def_id)
+            .iter()
+            .map(|ident| ident.map_or("value".to_string(), |i| i.name.to_string()))
+            .collect();
+        let js_span = self.js_span(span);
+        let (mut values, mut backs) = (Vec::new(), Vec::new());
+        for (i, &arg) in args.iter().enumerate() {
+            match self.boxed_arg(arg) {
+                Some(place) => {
+                    let current = self.expr(place, out)?;
+                    let target = match self.element(place) {
+                        Some(_) => self.element_target(place, out)?,
+                        None => self.assignee(place)?,
+                    };
+                    let name = self.fresh(&camel_case(names.get(i).map_or("value", String::as_str)));
+                    let boxed = Expr::object(vec![Prop::Field("value".into(), current)]);
+                    out.push(StmtKind::Const(name.clone(), boxed).at(js_span));
+                    backs.push((target, name.clone()));
+                    values.push(Expr::var(&name));
+                }
+                None => {
+                    let value = self.expr(arg, out)?;
+                    let value = if value.reads_same() {
+                        value
+                    } else {
+                        self.spill("arg", value, out)
+                    };
+                    values.push(value);
+                }
+            }
+        }
+        values.extend(self.evidence_args(def_id, generic_args, span)?);
+        let call = Expr::call(callee, values);
+        let output = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate(self.tcx, generic_args)
+            .skip_binder()
+            .output();
+        let result = if discarded || output.is_unit() {
+            out.push(StmtKind::Expr(call).at(js_span));
+            Expr::undefined()
+        } else {
+            self.spill("result", call, out)
+        };
+        for (target, name) in backs {
+            out.push(StmtKind::Assign(target, Expr::member(Expr::var(&name), "value")).at(js_span));
+        }
+        Ok(result)
     }
 
     /// A std function taken as a value, `str::trim` in `.map(str::trim)`:
