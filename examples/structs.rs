@@ -86,6 +86,39 @@ pub fn bound_before_move(x: i32) -> (i32, i32) {
     (before, s.origin.x)
 }
 
+/// Returned through a reference, a `Copy` field is a copy: the caller's
+/// struct still has its own.
+fn origin_of(r: &Rect) -> Point {
+    r.origin
+}
+
+pub fn returned_copy_is_separate(x: i32) -> (i32, i32) {
+    let r = rect(x, x, 1, 1);
+    let mut p = origin_of(&r);
+    p.x += 1;
+    (r.origin.x, p.x)
+}
+
+/// An `Option` of a `Copy` struct is copied like the struct.
+pub struct Marker {
+    pub at: Option<Point>,
+}
+
+fn marked(m: &Marker) -> Option<Point> {
+    m.at
+}
+
+pub fn option_copy_is_separate(x: i32) -> (i32, i32) {
+    let m = Marker { at: Some(point(x, 0)) };
+    let mut p = marked(&m).unwrap_or(point(0, 0));
+    p.x += 1;
+    let kept = match m.at {
+        Some(q) => q.x,
+        None => 0,
+    };
+    (kept, p.x)
+}
+
 /// Struct update syntax: fields not written come from `base`.
 pub fn with_x(x: i32, y: i32) -> Point {
     let base = point(0, y);

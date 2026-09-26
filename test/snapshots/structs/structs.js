@@ -92,6 +92,37 @@ export function bound_before_move(x) {
   return [before, s.origin.x];
 }
 
+function origin_of(r) {
+  return { ...r.origin };
+}
+
+export function returned_copy_is_separate(x) {
+  const r = rect(x, x, 1, 1);
+  let p = origin_of(r);
+  p.x = p.x + 1 | 0;
+  return [r.origin.x, p.x];
+}
+
+function marked(m) {
+  return m.at == null ? m.at : { ...m.at };
+}
+
+export function option_copy_is_separate(x) {
+  const m = { at: point(x, 0) };
+  const option = marked(m);
+  const fallback = point(0, 0);
+  let p = option ?? fallback;
+  p.x = p.x + 1 | 0;
+  let kept;
+  if (m.at != null) {
+    const q = { ...m.at };
+    kept = q.x;
+  } else {
+    kept = 0;
+  }
+  return [kept, p.x];
+}
+
 export function with_x(x, y) {
   const base = point(0, y);
   return {

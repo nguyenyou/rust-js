@@ -203,8 +203,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || match self.shape(ty) {
                 Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
                 Shape::Array(tys) => tys.iter().any(|&t| self.contains_mutated(t)),
-                Shape::Other => false,
+                // `Some(x)` is `x` (ADR 0030), and a variant's fields are
+                // its object's (ADR 0033).
+                Shape::Other => match ty.kind() {
+                    _ if let Some(inner) = self.option_of(ty) => self.contains_mutated(inner),
+                    ty::Adt(adt, args) if self.is_copy_enum(ty) => adt.variants().iter().any(|v| {
+                        self.variant_fields(v, args)
+                            .iter()
+                            .any(|&(_, t)| self.contains_mutated(t))
+                    }),
+                    _ => false,
+                },
             }
+    }
+
+    /// An enum rust-js writes as ADR 0033 says, that's `Copy`: one of the
+    /// crate's own, or `Result`.
+    fn is_copy_enum(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()
+            && (adt.did().is_local() || self.is_std_adt(ty, sym::Result)))
+            && self.is_copy(ty)
     }
 
     /// Is `ty` itself changed in place somewhere, not just a part of it?
@@ -282,7 +300,60 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     })
                     .collect(),
             ),
-            Shape::Other => place,
+            Shape::Other => {
+                // Read more than once: a value that isn't a place is taken once.
+                let once = |place: Expr, copy: &dyn Fn(Expr) -> Expr| {
+                    if place.reads_same() {
+                        copy(place)
+                    } else {
+                        let body = copy(Expr::var("value"));
+                        Expr::call(
+                            Expr::arrow(
+                                vec!["value".into()],
+                                vec![js::StmtKind::Return(Some(body)).at(js::Span::NONE)],
+                            ),
+                            vec![place],
+                        )
+                    }
+                };
+                if let Some(inner) = self.option_of(ty) {
+                    if !self.contains_mutated(inner) {
+                        return place;
+                    }
+                    return once(place, &|o| {
+                        let none = Expr::bin(Op::LooseEq, o.clone(), Expr::null());
+                        Expr::cond(none, o.clone(), self.copy(o, inner))
+                    });
+                }
+                let ty::Adt(adt, args) = ty.kind() else { return place };
+                if !self.is_copy_enum(ty) {
+                    return place;
+                }
+                // `{ TAG: "Line", _0: .. }`: a variant with a part that changes
+                // gets a copy, and every other value is itself.
+                once(place, &|e| {
+                    let mut value = e.clone();
+                    for variant in adt.variants().iter().rev() {
+                        let fields = self.variant_fields(variant, args);
+                        if !fields.iter().any(|&(_, t)| self.contains_mutated(t)) {
+                            continue;
+                        }
+                        let mut props = vec![Prop::Spread(e.clone())];
+                        for (name, t) in fields {
+                            if self.contains_mutated(t) {
+                                props.push(Prop::Field(name.clone(), self.copy(Expr::member(e.clone(), name), t)));
+                            }
+                        }
+                        let tag = Expr::bin(
+                            Op::Eq,
+                            Expr::member(e.clone(), "TAG"),
+                            Expr::str(super::bindings::variant_name(self.tcx, variant)),
+                        );
+                        value = Expr::cond(tag, Expr::object(props), value);
+                    }
+                    value
+                })
+            }
         }
     }
 

@@ -76,10 +76,14 @@ explicit, but only where they would be visible:
    objects are changed in place somewhere in the crate.** `a.b.c = ..`
    changes the object `a.b`, so it's `a.b`'s type that counts. Every other
    type's objects never change after they're built, so sharing them is
-   the same as copying them.
-3. **Returning a place doesn't copy it**, because every local dies at
-   `return`. (`return (p, p)` still copies: that builds a new tuple from
-   two reads.)
+   the same as copying them. The type can be inside an `Option`, since
+   `Some(p)` is `p` (`o == null ? o : { ...o }`), or inside a `Copy` enum's
+   variant (`e.TAG === "At" ? { ...e, _0: { ...e._0 } } : e`).
+3. **Returning a local variable, or a field of one, doesn't copy it**,
+   because every local dies at `return`. (`return (p, p)` still copies:
+   that builds a new tuple from two reads.) A place reached through a
+   reference, like `r.origin` for `r: &Rect`, or a closure's capture,
+   outlives the call, so returning it is a read like any other.
 
 Why this is enough: an object can only be changed through a `mut`
 variable, and every path by which a value of a changed type reaches one (a

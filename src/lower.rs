@@ -558,9 +558,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => {
                 let value = match (dest, self.place(e)) {
-                    // Returning a place hands its value over without a copy:
-                    // every local dies here, so nothing is left to share it.
-                    (Dest::Return, Some((place, _))) => place.or_at(span),
+                    // Returning a place of this function's own hands its value
+                    // over without a copy: every local dies here, so nothing is
+                    // left to share it. One reached through a reference, or a
+                    // closure's capture, outlives the call, so it's copied.
+                    (Dest::Return, Some((place, _))) if self.is_local_place(e) => place.or_at(span),
                     _ => self.expr(e, out)?,
                 };
                 match dest {
@@ -2384,6 +2386,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => None,
             },
             _ => None,
+        }
+    }
+
+    /// A local variable of this function, or a field of one: not reached
+    /// through a reference, nor captured by a closure.
+    fn is_local_place(&self, e: ExprId) -> bool {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::VarRef { .. } => true,
+            ExprKind::Field { lhs, .. } => self.is_local_place(lhs),
+            _ => false,
         }
     }
 

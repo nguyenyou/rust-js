@@ -118,6 +118,8 @@ fn main() {
         case("structs.caller_keeps_its_point", &[x as i64], || structs::caller_keeps_its_point(x));
         case("structs.moves_share_nothing", &[x as i64], || structs::moves_share_nothing(x));
         case("structs.bound_before_move", &[x as i64], || structs::bound_before_move(x));
+        case("structs.returned_copy_is_separate", &[x as i64], || structs::returned_copy_is_separate(x));
+        case("structs.option_copy_is_separate", &[x as i64], || structs::option_copy_is_separate(x));
     }
     for (w, h) in [(0, 0), (3, 4), (65_536, 65_536), (u32::MAX, 2)] {
         case("structs.rect", &[-1, 2, w as i64, h as i64], || structs::rect(-1, 2, w, h));
