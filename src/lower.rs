@@ -2649,6 +2649,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return None;
             }
+            // `&dyn Any` is any JS value, as the web crate's `object`
+            // parameters take: a struct, say, which is a JS object already.
+            ty::Dynamic(traits, ..) if traits.principal_def_id().is_some_and(|t| self.tcx.is_diagnostic_item(Symbol::intern("Any"), t)) => {
+                return None;
+            }
             ty::Adt(..) if self.is_js_object(ty) => return None,
             ty::Dynamic(traits, ..)
                 if traits.principal_def_id().is_some_and(|t| self.tcx.fn_trait_kind_from_def_id(t).is_some()) =>

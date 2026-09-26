@@ -11,7 +11,7 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding"];
+const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
@@ -34,8 +34,13 @@ const INTERFACES = [
   "Headers", "Request", "Response",
   // encoding: text to bytes and back
   "TextEncoder", "TextDecoder",
+  // wasm-js-api: `WebAssembly.Module` and friends
+  "Module", "Instance", "Memory",
 ];
 const known = new Set(INTERFACES);
+
+// Namespaces: a module of functions, like `web_assembly::compile`.
+const NAMESPACES = ["WebAssembly"];
 
 // JS's own types that WebIDL uses, declared by hand at the crate root.
 const BUILTINS = new Set(["ArrayBuffer", "Uint8Array"]);
@@ -55,6 +60,7 @@ type Member = {
   idlType?: IdlType;
   arguments?: Arg[];
   extAttrs?: { name: string }[];
+  required?: boolean;
 };
 type Def = {
   type: string;
@@ -65,7 +71,7 @@ type Def = {
   target?: string;
   includes?: string;
   idlType?: IdlType;
-  extAttrs?: { name: string }[];
+  extAttrs?: { name: string; rhs?: { value: string } }[];
 };
 
 const all: Record<string, Def[]> = await idl.parseAll();
@@ -75,9 +81,20 @@ const everywhere: Def[] = Object.values(all).flat();
 // Names that are strings (enums) or other types (typedefs), from any spec.
 const enums = new Set(everywhere.filter((d) => d.type === "enum").map((d) => d.name));
 const typedefs = new Map(everywhere.filter((d) => d.type === "typedef").map((d) => [d.name, d.idlType!]));
+const dictionaries = new Map(everywhere.filter((d) => d.type === "dictionary" && !d.partial).map((d) => [d.name, d]));
 
-type Interface = { name: string; parent?: string; members: { member: Member; from: string }[]; constructible: boolean };
+type Interface = {
+  name: string;
+  parent?: string;
+  members: { member: Member; from: string }[];
+  constructible: boolean;
+  /** `[LegacyNamespace=WebAssembly]`: JS calls it `WebAssembly.Module`. */
+  legacyNamespace?: string;
+  /** A `namespace`: functions, and no type. */
+  isNamespace?: boolean;
+};
 const interfaces = new Map<string, Interface>();
+const namespaces = new Map<string, Interface>();
 const mixins = new Map<string, Member[]>();
 const includes = new Map<string, string[]>();
 
@@ -88,9 +105,14 @@ for (const d of read) {
       i.parent = d.inheritance ?? undefined;
       // `[HTMLConstructor]` elements can't be made with `new`.
       i.constructible = !(d.extAttrs ?? []).some((a) => a.name === "HTMLConstructor");
+      i.legacyNamespace = (d.extAttrs ?? []).find((a) => a.name === "LegacyNamespace")?.rhs?.value;
     }
     i.members.push(...(d.members ?? []).map((member) => ({ member, from: d.name })));
     interfaces.set(d.name, i);
+  } else if (d.type === "namespace" && NAMESPACES.includes(d.name)) {
+    const n = namespaces.get(d.name) ?? { name: d.name, members: [], constructible: false, isNamespace: true };
+    n.members.push(...(d.members ?? []).map((member) => ({ member, from: d.name })));
+    namespaces.set(d.name, n);
   } else if (d.type === "interface mixin") {
     mixins.set(d.name, [...(mixins.get(d.name) ?? []), ...(d.members ?? [])]);
   } else if (d.type === "includes") {
@@ -109,8 +131,14 @@ if (missing.length) throw new Error(`not in ${SPECS.join(", ")}: ${missing.join(
 /** `HTMLInputElement` → `["HTML", "Input", "Element"]`, `innerHTML` → `["inner", "HTML"]`. */
 const words = (name: string) => name.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+/g) ?? [name];
 
-/** Types, web-sys style: `HTMLInputElement` → `HtmlInputElement`. */
-const typeName = (name: string) => words(name).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join("");
+/** An interface's name with its namespace, if it has one: `WebAssemblyModule`. */
+const qualified = (name: string) => (interfaces.get(name)?.legacyNamespace ?? "") + name;
+
+/** What JS calls an interface: `WebAssembly.Module`, `Element`. */
+const jsName = (i: Interface) => (i.legacyNamespace ? `${i.legacyNamespace}.${i.name}` : i.name);
+
+/** Types, web-sys style: `HTMLInputElement` → `HtmlInputElement`, `Module` → `WebAssemblyModule`. */
+const typeName = (name: string) => words(qualified(name)).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join("");
 
 const KEYWORDS = new Set(
   ("as async await box break const continue crate do dyn else enum extern false final fn for gen if impl in " +
@@ -154,8 +182,31 @@ function rustType(t: IdlType, at: Position): string | { skip: string } {
   if (NUMBERS[name]) return NUMBERS[name];
   if (STRINGS.has(name) || enums.has(name)) return at === "param" ? "&str" : "String";
   if (name === "EventListener" && at === "param") return "Box<dyn FnMut(&Event)>";
+  // Any JS object: a Rust value of any type in, an opaque object out.
+  if (name === "object") return at === "param" ? "&dyn core::any::Any" : "&'static JsObject";
+  const dictionary = dictionaries.get(name);
+  if (dictionary && at === "result") return dictionaryType(dictionary);
   if (known.has(name) || BUILTINS.has(name)) return at === "param" ? `&${typeName(name)}` : `&'static ${typeName(name)}`;
   return { skip: name };
+}
+
+/** The fields of each dictionary a result uses, as `(name, type)`. */
+const usedDictionaries = new Map<string, [string, string][]>();
+
+/**
+ * A dictionary a function returns is a Rust struct, which rust-js makes a
+ * plain JS object (ADR 0020): its fields are read as they are. Only when
+ * every field is required, of a supported type, and named the same in Rust.
+ */
+function dictionaryType(d: Def): string | { skip: string } {
+  const fields: [string, string][] = [];
+  for (const m of (d.members ?? []) as Member[]) {
+    const rust = rustType(m.idlType!, "result");
+    if (d.inheritance || !m.required || snake(m.name!) !== m.name || typeof rust !== "string") return { skip: d.name };
+    fields.push([m.name!, rust]);
+  }
+  usedDictionaries.set(d.name, fields);
+  return typeName(d.name);
 }
 
 /** The Rust types a parameter can take: one per supported member of a union. */
@@ -192,12 +243,16 @@ function root(name: string): string {
 }
 
 function mdn(iface: string, member?: string) {
-  return `https://developer.mozilla.org/docs/Web/API/${iface}${member ? `/${member}` : ""}`;
+  const ns = interfaces.get(iface)?.legacyNamespace;
+  const page = ns ? `JavaScript/Reference/Global_Objects/${ns}/${iface}` : NAMESPACES.includes(iface) ? `JavaScript/Reference/Global_Objects/${iface}` : `API/${iface}`;
+  return `https://developer.mozilla.org/docs/Web/${page}${member ? `/${member}` : ""}`;
 }
 
 function functionsOf(i: Interface): Fn[] {
   const fns: Fn[] = [];
-  const self = `this: &${typeName(i.name)}`;
+  // A namespace's functions are called on it: `WebAssembly.compile(bytes)`.
+  const self = i.isNamespace ? [] : [`this: &${typeName(i.name)}`];
+  const member = (name: string) => (i.isNamespace ? `${i.name}.${name}` : name);
   const nullable = (t: IdlType) => t.nullable || typedefs.get(t.idlType as string)?.nullable;
   const nullNote = "May be `null` in JS, which this binding doesn't say yet (ADR 0024).";
 
@@ -225,7 +280,7 @@ function functionsOf(i: Interface): Fn[] {
   // required ones: `encode_with_input(this, input)`. One that's a union
   // gives a form per member, named after its type: `decode_with_uint8_array`.
   // Later ones add `_and_<name>`. The first unsupported one ends them.
-  const optionalForms = (base: string, sig: { names: string[]; options: string[][] }, args: Arg[]) => {
+  const optionalForms = (base: string, lead: string[], sig: { names: string[]; options: string[][] }, args: Arg[]) => {
     const forms: { name: string; params: string[] }[] = [];
     const params = sig.options.map((o, j) => `${sig.names[j]}: ${o[0]}`);
     const words: string[] = [];
@@ -235,7 +290,7 @@ function functionsOf(i: Interface): Fn[] {
       const union = isUnion(a.idlType);
       const word = (alt: string) => (union ? suffix(alt) : snakeWords(a.name));
       for (const alt of union ? alts : alts.slice(0, 1)) {
-        forms.push({ name: `${base}_with_${[...words, word(alt)].join("_and_")}`, params: [...params, `${snake(a.name)}: ${alt}`] });
+        forms.push({ name: `${base}_with_${[...lead, ...words, word(alt)].join("_and_")}`, params: [...params, `${snake(a.name)}: ${alt}`] });
       }
       words.push(word(alts[0]));
       params.push(`${snake(a.name)}: ${alts[0]}`);
@@ -253,7 +308,7 @@ function functionsOf(i: Interface): Fn[] {
     }));
   };
 
-  for (const { member: m } of i.members) {
+  for (const [index, { member: m }] of i.members.entries()) {
     if (m.type === "constructor") {
       if (!i.constructible) continue;
       const sig = signatures(m.arguments ?? []);
@@ -261,12 +316,12 @@ function functionsOf(i: Interface): Fn[] {
         skip(sig.skip);
         continue;
       }
-      for (const v of [...variants("new", sig), ...optionalForms("new", sig, m.arguments ?? [])]) {
-        fns.push({ name: v.name, jsName: `new ${i.name}`, params: v.params, result: `&'static ${typeName(i.name)}`, doc: [`[MDN](${mdn(i.name, i.name)})`] });
+      for (const v of [...variants("new", sig), ...optionalForms("new", [], sig, m.arguments ?? [])]) {
+        fns.push({ name: v.name, jsName: `new ${jsName(i)}`, params: v.params, result: `&'static ${typeName(i.name)}`, doc: [`[MDN](${mdn(i.name, i.name)})`] });
       }
     } else if (m.type === "attribute") {
-      if (m.special === "static") {
-        skip("static");
+      if (m.special === "static" || i.isNamespace) {
+        skip(m.special || "namespace attribute");
         continue;
       }
       const result = rustType(m.idlType!, "result");
@@ -275,11 +330,11 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
-      fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: [self], result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
+      fns.push({ name: snake(m.name!), jsName: `get ${m.name}`, params: self, result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
       const forwards = (m.extAttrs ?? []).some((a) => a.name === "PutForwards" || a.name === "Replaceable");
       const value = alternatives(m.idlType!)[0];
       if (!m.readonly && !forwards && value) {
-        fns.push({ name: `set_${snakeWords(m.name!)}`, jsName: `set ${m.name}`, params: [self, `value: ${value}`], result: "()", doc });
+        fns.push({ name: `set_${snakeWords(m.name!)}`, jsName: `set ${m.name}`, params: [...self, `value: ${value}`], result: "()", doc });
       }
     } else if (m.type === "operation") {
       if (!m.name || m.special === "static") {
@@ -293,14 +348,28 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
-      for (const v of [...variants(snake(m.name), sig), ...optionalForms(snake(m.name), sig, m.arguments ?? [])]) {
-        fns.push({ name: v.name, jsName: m.name, params: [self, ...v.params], result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
+      // A later overload is named, as web-sys does, after the required
+      // arguments that set it apart from the first: by name where the first
+      // has none there (`set_range_text_with_start_and_end`), by type where
+      // the types differ (`instantiate_with_web_assembly_module`).
+      const first = i.members.slice(0, index).find(({ member: o }) => o.type === "operation" && o.name === m.name && o.special !== "static");
+      const firstRequired = (first?.member.arguments ?? []).filter((a) => !a.optional);
+      const required = (m.arguments ?? []).filter((a) => !a.optional);
+      const key = (a: Arg) => JSON.stringify(a.idlType.idlType);
+      const lead = !first
+        ? []
+        : required.flatMap((a, j) =>
+            !firstRequired[j] ? [snake(a.name)] : key(firstRequired[j]) !== key(a) ? [suffix(sig.options[j][0])] : [],
+          );
+      const base = lead.length > 0 ? `${snake(m.name)}_with_${lead.join("_and_")}` : snake(m.name);
+      for (const v of [...variants(base, sig), ...optionalForms(snake(m.name), lead, sig, m.arguments ?? [])]) {
+        fns.push({ name: v.name, jsName: member(m.name), params: [...self, ...v.params], result, doc: nullable(m.idlType!) ? [...doc, nullNote] : doc });
       }
     }
   }
 
   // An unchecked cast from the root of the chain: `html_input_element::unchecked_from(e)`.
-  if (root(i.name) !== i.name) {
+  if (!i.isNamespace && root(i.name) !== i.name) {
     fns.push({
       name: "unchecked_from",
       jsName: "this",
@@ -409,29 +478,13 @@ pub mod uint8_array {
 }`);
 
 let count = 0;
-for (const name of INTERFACES) {
-  const i = interfaces.get(name)!;
-  const type = typeName(name);
-  line();
-  line(`/// [\`${name}\`](${mdn(name)})`);
-  line(`pub struct ${type}(PhantomData<JsObject>);`);
-  if (i.parent && known.has(i.parent)) {
-    const parent = typeName(i.parent);
-    line();
-    line(`impl Deref for ${type} {`);
-    line(`    type Target = ${parent};`);
-    line();
-    line(`    fn deref(&self) -> &${parent} {`);
-    line(`        // Never runs: rust-js compiles this \`Deref\` to the object itself.`);
-    line(`        unsafe { &*(self as *const Self as *const ${parent}) }`);
-    line(`    }`);
-    line(`}`);
-  }
-  const fns = functionsOf(i);
-  if (fns.length === 0) continue;
+
+/** `pub mod <name> { .. }`, holding a type's or a namespace's functions. */
+function module(name: string, fns: Fn[]) {
+  if (fns.length === 0) return;
   count += fns.length;
   line();
-  line(`pub mod ${snake(name)} {`);
+  line(`pub mod ${name} {`);
   line(`    use super::*;`);
   line();
   line(`    unsafe extern "Rust" {`);
@@ -446,7 +499,43 @@ for (const name of INTERFACES) {
   line(`}`);
 }
 
+for (const name of INTERFACES) {
+  const i = interfaces.get(name)!;
+  const type = typeName(name);
+  line();
+  line(`/// [\`${jsName(i)}\`](${mdn(name)})`);
+  line(`pub struct ${type}(PhantomData<JsObject>);`);
+  if (i.parent && known.has(i.parent)) {
+    const parent = typeName(i.parent);
+    line();
+    line(`impl Deref for ${type} {`);
+    line(`    type Target = ${parent};`);
+    line();
+    line(`    fn deref(&self) -> &${parent} {`);
+    line(`        // Never runs: rust-js compiles this \`Deref\` to the object itself.`);
+    line(`        unsafe { &*(self as *const Self as *const ${parent}) }`);
+    line(`    }`);
+    line(`}`);
+  }
+  module(snake(qualified(name)), functionsOf(i));
+}
+
+for (const name of NAMESPACES) {
+  line();
+  line(`/// The [\`${name}\`](${mdn(name)}) namespace.`);
+  module(snake(name), functionsOf(namespaces.get(name)!));
+}
+
+// The dictionaries results use, as plain structs: JS objects (ADR 0020).
+for (const [name, fields] of usedDictionaries) {
+  line();
+  line(`/// The \`${name}\` dictionary: a JS object with these fields.`);
+  line(`pub struct ${typeName(name)} {`);
+  for (const [field, type] of fields) line(`    pub ${field}: ${type},`);
+  line(`}`);
+}
+
 await Bun.write(new URL("./src/lib.rs", import.meta.url), `${out.join("\n")}\n`);
 const reasons = [...skipped].sort((a, b) => b[1] - a[1]).map(([why, n]) => `${why} ${n}`);
-console.log(`src/lib.rs: ${INTERFACES.length} interfaces, ${count} functions`);
+console.log(`src/lib.rs: ${INTERFACES.length} interfaces, ${NAMESPACES.length} namespaces, ${count} functions`);
 console.log(`skipped: ${reasons.slice(0, 12).join(", ")}${reasons.length > 12 ? ", ..." : ""}`);

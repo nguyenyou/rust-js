@@ -73,6 +73,13 @@ holding an `unsafe extern "Rust"` block (ADR 0021). A first parameter named
 Mixins (`Element includes ParentNode`) are copied into every interface that
 includes them. `document` and `window` are globals at the crate root.
 
+A **namespace** is a module of functions with no type, and each one calls a
+path from a global: `web_assembly::compile(bytes)` is
+`WebAssembly.compile(bytes)`. An interface in a namespace
+(`[LegacyNamespace=WebAssembly] interface Module`) is named with it, as
+`WebAssemblyModule` in `web_assembly_module`, and constructed as
+`new WebAssembly.Module(..)`.
+
 **Types across the boundary.**
 
 | WebIDL | parameter | result |
@@ -85,11 +92,13 @@ includes them. `document` and `window` are globals at the crate root.
 | `ArrayBuffer`, `Uint8Array` (JS's own) | `&T` | `&'static T` |
 | `Promise<T>` | – | `Promise<T>` |
 | `EventListener` | `Box<dyn FnMut(&Event)>` | – |
+| `object` | `&dyn Any`: any Rust value, a struct say | `&'static JsObject` |
+| a dictionary | – | a struct with its fields |
 | `undefined` | – | `()` |
 
 A member is generated only if all its types are in this table. So far that
-leaves out `long long`, `float`, `any`, `object`, sequences, promises
-as parameters, dictionaries and most callbacks. As rust-js grows, rerunning
+leaves out `long long`, `float`, `any`, sequences, promises and
+dictionaries as parameters, and most callbacks. As rust-js grows, rerunning
 the generator picks more up: promise results came with ADR 0029, as
 `Promise<T>`.
 
@@ -115,13 +124,24 @@ with the few members programs need so far: `uint8_array::new(buffer)`,
   `fetch(this, &Request)` and `fetch_with_str(this, &str)` come from
   `RequestInfo`, and a union inside a union counts as its members
   (`BufferSource` includes `ArrayBufferView`, which includes `Uint8Array`).
+- **Overloads:** the first keeps the name. A later one is named, as web-sys
+  does, after the required arguments that set it apart from the first: by
+  name where the first has none there (`set_range_text_with_start_and_end`,
+  `alert_with_message`), by type where the types differ
+  (`instantiate_with_web_assembly_module`).
+- **Dictionaries** a function returns are Rust structs, which rust-js makes
+  plain objects (ADR 0020), so their fields are read as they are:
+  `source.instance`. Only those whose fields are all required, supported,
+  and named the same in Rust; for now that's `WebAssemblyInstantiatedSource`.
 - **Names:** snake_case of the IDL names, and web-sys-style type names
   (`HTMLInputElement` is `HtmlInputElement`). A Rust keyword gets a `_`.
 
 **Which interfaces:** a list in `generate.ts`, the everyday DOM, grown as
 programs need more. The Fetch Standard's `Request`, `Response` and
 `Headers` came with async code (ADR 0029), for `window::fetch`, and the
-Encoding Standard's `TextEncoder` and `TextDecoder` with binary data. It isn't the whole platform (334 specs).
+Encoding Standard's `TextEncoder` and `TextDecoder` with binary data, and the
+WebAssembly JS API (`WebAssembly`, `Module`, `Instance`, `Memory`). It isn't
+the whole platform (334 specs).
 
 **Building:** `rustc --emit=metadata` produces `libweb.rmeta`, once per
 target: the host for the tests, `wasm32-unknown-unknown` for the playground,

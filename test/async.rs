@@ -1,10 +1,10 @@
 //! `async fn`, `.await`, `async` blocks and closures, and `spawn` (ADR 0029),
-//! and the web crate's promises: `fetch` and binary data.
+//! and the web crate's promises: `fetch`, binary data and WebAssembly.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{Promise, array_buffer, response, spawn, uint8_array, window};
+use web::{JsObject, Promise, Uint8Array, array_buffer, response, spawn, uint8_array, web_assembly, web_assembly_instance, window};
 
 unsafe extern "Rust" {
     /// Resolves with `value` after `ms` milliseconds.
@@ -78,4 +78,38 @@ pub async fn load_bytes(url: &str) -> (u32, u32, u32) {
     let buffer = response::array_buffer(copy).await;
     let view = uint8_array::new(buffer);
     (uint8_array::length(bytes), array_buffer::byte_length(buffer), uint8_array::length(view))
+}
+
+/// What a WebAssembly module imports: `{ env: { double } }`. The module
+/// reads the fields; Rust never does.
+#[allow(dead_code)]
+struct Imports {
+    env: Env,
+}
+
+#[allow(dead_code)]
+struct Env {
+    double: Box<dyn Fn(i32) -> i32>,
+}
+
+unsafe extern "Rust" {
+    /// The module's export, called on its `exports` object.
+    #[link_name = "add"]
+    safe fn wasm_add(this: &JsObject, a: i32, b: i32) -> i32;
+}
+
+/// WebAssembly: compile a module, instantiate it with imports from Rust
+/// (a struct, which is a JS object), and call its export, which calls back.
+pub async fn run_wasm(bytes: &Uint8Array, a: i32, b: i32) -> i32 {
+    let module = web_assembly::compile_with_uint8_array(bytes).await;
+    let imports = Imports { env: Env { double: Box::new(|x| x * 2) } };
+    let instance = web_assembly::instantiate_with_web_assembly_module_and_import_object(module, &imports).await;
+    wasm_add(web_assembly_instance::exports(instance), a, b)
+}
+
+/// The other `instantiate`: from bytes, to a `{ module, instance }` dictionary.
+pub async fn instantiate_bytes(bytes: &Uint8Array) -> bool {
+    let imports = Imports { env: Env { double: Box::new(|x| x) } };
+    let source = web_assembly::instantiate_with_import_object(uint8_array::buffer(bytes), &imports).await;
+    web_assembly::validate_with_uint8_array(bytes) && wasm_add(web_assembly_instance::exports(source.instance), 1, 2) == 3
 }
