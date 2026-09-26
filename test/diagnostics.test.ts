@@ -11,6 +11,7 @@ for (const [name, source, message] of [
   ["unsupported type", 'pub fn f(x: u64) -> u64 { x }', "does not support"],
   ["camelCase fields that collide", '#![rust_js::camel_case]\n#![allow(non_snake_case)]\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["associated constant", "pub trait Area { const UNIT: u32; }", "does not support associated constants"],
+  ["option of a reference to unit", "pub fn f(x: &()) -> bool { Some(x).is_some() }", "does not support values of type"],
   ["map to a nullish type", 'pub fn f(o: Option<i32>) -> bool { o.map(|_| ()).is_some() }', "`map` to a `()`"],
   ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],

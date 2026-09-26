@@ -172,7 +172,8 @@ for (const [name, source, diagnostic] of [
   ["generic trait", `pub trait Convert<T> { fn convert(&self) -> T; }`, "generic trait parameters"],
   ["generic method", `pub trait Shape { fn f<T>(&self, value: T); }`, "generic trait methods"],
   ["associated type", `pub trait Source { type Item; }`, "associated types"],
-  ["generic Option", `pub fn f<T>(x: T) -> Option<T> { Some(x) }`, "does not support"],
+  // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
+  ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   ["const generic", `pub fn f<const N: usize>() -> usize { N }`, "const generics"],
   ["Drop", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} }`, "user implementations"],
   ["colliding methods", `#![rust_js::camel_case] pub trait T { fn first_name(&self); fn firstName(&self); }`, "dictionary names collide"],

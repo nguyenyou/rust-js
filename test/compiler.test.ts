@@ -18,6 +18,7 @@ let closures: Record<string, (...args: any[]) => unknown>;
 let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
 let methods: Record<string, (...args: any[]) => unknown>;
+let genericOptions: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -51,6 +52,8 @@ beforeAll(async () => {
   options = await import(join(target, "options.js"));
   run([join(target, "debug", "rust-js"), "examples/methods.rs", "-o", join(target, "methods.js")]);
   methods = await import(join(target, "methods.js"));
+  run([join(target, "debug", "rust-js"), "examples/generic_options.rs", "-o", join(target, "generic_options.js")]);
+  genericOptions = await import(join(target, "generic_options.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -133,6 +136,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "consts") {
         return JSON.parse(JSON.stringify(consts[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+      }
+      if (path[0] === "generic_options") {
+        return JSON.parse(JSON.stringify(genericOptions[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
       }
       if (path[0] === "methods") {
         return methods[path[1]](...c.args);
@@ -717,4 +723,20 @@ pub fn both(h: Holder<bool>) -> (Holder<bool>, Holder<bool>) {
   expect(module.bumped({ a: 1, b: 2 })).toEqual([{ a: 1, b: 2 }, { a: 2, b: 2 }]);
   expect(module.twice({ a: true, b: false })).toEqual([{ a: true, b: false }, { a: true, b: false }]);
   expect(module.both({ value: true })).toEqual([{ value: true }, { value: false }]);
+});
+
+// ADR 0051: `Option<T>` in generic code boxes only what could look like `None`.
+test("an Option of a generic T is its value, boxed only when that looks like None", async () => {
+  const js = await Bun.file(join(target, "generic_options.js")).text();
+  expect(js).toContain("export function pick(x, keep) {\n  if (keep) {\n    return $some(x);");
+  expect(js).toContain("  return $someValue(pick(x, keep) ?? $some(fallback));");
+  expect(js).toContain("  return option != null ? $some(f($someValue(option))) : undefined;");
+  expect(js).toContain("  return $pop(xs);");
+  // Code that isn't generic keeps `Some(x)` as `x`.
+  expect(await Bun.file(join(target, "options.js")).text()).not.toContain("$some");
+  // A JS caller gets plain values, and a box only for what's `None`-like.
+  expect(genericOptions.pick(5, true)).toBe(5);
+  expect(genericOptions.pick("a", true)).toBe("a");
+  expect(genericOptions.pick(undefined, true)).toEqual({ $someNone: 0 });
+  expect(genericOptions.pick(undefined, false)).toBeUndefined();
 });

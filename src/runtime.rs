@@ -15,6 +15,10 @@ pub enum Helper {
     Eq,
     AssertFailed,
     Unwrap,
+    Some,
+    SomeValue,
+    SomeAt,
+    Pop,
     StripPrefix,
     StripSuffix,
     SplitOnce,
@@ -215,6 +219,44 @@ function $stripPrefix(s, prefix) {
                 r#"
 function $stripSuffix(s, suffix) {
   return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
+}
+"#
+            }
+            Helper::Some => {
+                r#"
+// `Some(x)` of a generic `T` (ADR 0051): `x`, unless it looks like `None`,
+// as `undefined`, `null` or such a box does. Then it's a box one deeper.
+function $some(x) {
+  if (x == null) return { $someNone: 0 };
+  if (typeof x === "object" && "$someNone" in x) return { $someNone: x.$someNone + 1 };
+  return x;
+}
+"#
+            }
+            Helper::SomeValue => {
+                r#"
+// What's in a `$some`: the box one level shallower.
+function $someValue(x) {
+  if (x != null && typeof x === "object" && "$someNone" in x) {
+    return x.$someNone === 0 ? undefined : { $someNone: x.$someNone - 1 };
+  }
+  return x;
+}
+"#
+            }
+            Helper::SomeAt => {
+                r#"
+// `Some` of the item at `index`, or `None` when there's none there.
+function $someAt(items, index) {
+  return index >= 0 && index < items.length ? $some(items[index]) : undefined;
+}
+"#
+            }
+            Helper::Pop => {
+                r#"
+// `Vec::pop` of a generic `T`: `None` for an empty one, else `Some` of the last.
+function $pop(items) {
+  return items.length === 0 ? undefined : $some(items.pop());
 }
 "#
             }

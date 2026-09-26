@@ -20,6 +20,10 @@ mod closures;
 #[allow(dead_code)]
 mod structs;
 
+#[path = "../examples/generic_options.rs"]
+#[allow(dead_code)]
+mod generic_options;
+
 #[path = "../examples/methods.rs"]
 #[allow(dead_code)]
 mod methods;
@@ -168,6 +172,11 @@ fn main() {
         let slot = Slot { id: 1, value: Some(5) };
         case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
     }
+    case("generic_options.units", &[], generic_options::units);
+    case("generic_options.nones", &[], generic_options::nones);
+    case("generic_options.inner_values", &[], generic_options::inner_values);
+    case("generic_options.mapped_values", &[], generic_options::mapped_values);
+    case("generic_options.std_values", &[], generic_options::std_values);
     // Each call sees what the one before left, natively and in JS.
     for _ in 0..3 {
         case("thread_locals.bump", &[], thread_locals::bump);

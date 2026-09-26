@@ -55,9 +55,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// What an `Option<T>`'s `T` is in JS: through references, `Box` and `Rc`,
+    /// which are the value itself (ADR 0023).
+    fn payload(&self, mut ty: Ty<'tcx>) -> Ty<'tcx> {
+        loop {
+            ty = match ty.kind() {
+                ty::Ref(_, inner, _) => *inner,
+                ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => args.type_at(0),
+                _ => return ty,
+            };
+        }
+    }
+
+    /// An `Option<T>` whose `T` might look like `None` only because it's a
+    /// type parameter: `Some` of it is boxed when it does (ADR 0051).
+    pub(super) fn boxed_payload(&self, ty: Ty<'tcx>) -> bool {
+        matches!(self.payload(ty).kind(), ty::Param(_))
+    }
+
     /// Can a `T` be `undefined` or `null` in JS? Then `Option<T>` can't be
     /// `T` itself: `Some(())` and `None` would be the same value.
     pub(super) fn can_be_nullish(&self, ty: Ty<'tcx>) -> bool {
+        let ty = self.payload(ty);
         ty.is_unit()
             || matches!(ty.kind(), ty::Param(_) | ty::Alias(..))
             || self.option_of(ty).is_some()
@@ -336,7 +355,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // An `Option` is its value or `undefined` (ADR 0030), so the value
             // itself mustn't be able to look like `None`.
             ty::Adt(..) if let Some(inner) = self.option_of(ty) => {
-                return if self.can_be_nullish(inner) {
+                return if self.can_be_nullish(inner) && !self.boxed_payload(inner) {
                     Some(ty)
                 } else {
                     self.unsupported_in(inner, seen)

@@ -47,7 +47,8 @@ JS is printed by [oxc](https://oxc.rs). The source map points back into the
 - `thread_local!` is a variable of its module: `const COUNT = { value: 0 };`.
 - A JS call whose binding returns a `Result` runs in a `try`: a throw is an `Err`. `?` returns
   an `Err` or a `None` early.
-- `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too.
+- `Some(x)` is `x` and `None` is `undefined`; a JS `null` counts as `None` too. In generic code,
+  a `Some` of a value that would look like `None` is a box, `$some(x)` ([ADR 0051](docs/decisions/0051-generic-options.md)).
 - A `const` is the value rustc computed, declared once: `const SIZE = 4096;`.
 - Variables are camelCase and taken apart as JS does it: `let (count, set_count) = f();` is
   `const [count, setCount] = f();`.

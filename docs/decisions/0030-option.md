@@ -44,8 +44,9 @@ conversion:
   one".
 - **`Option<T>` needs a `T` that's never `undefined` or `null` itself**, or
   `Some(x)` and `None` would be the same value. `Option<()>`, `Option` of a
-  unit struct, and `Option<Option<T>>` are errors for now. ReScript boxes
-  them. rust-js can do the same once a program needs it.
+  unit struct, and `Option<Option<T>>` are errors for now, looking through
+  references (`Option<&()>` too). ReScript boxes them. In generic code, where
+  `T` might be one, rust-js does too ([0051](0051-generic-options.md)).
 - **`unwrap_or`'s argument runs even when it isn't needed**, as in Rust. `??`
   skips it, so an argument with effects is computed first, in order:
   `const option = half(n); const fallback = bump(); option ?? fallback`.

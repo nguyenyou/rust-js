@@ -806,7 +806,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// holding their own value.
     fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
         for b in bindings {
-            if stable && !b.mutable {
+            // A place that's computed, like `$someValue(o)`, goes in a `const`.
+            if stable && !b.mutable && !b.place.has_effects() {
                 self.vars.insert(
                     b.var,
                     Var {
@@ -1160,10 +1161,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Fold into `if (..) {..} else if (..) {..} else {..}`.
         let mut rest: Option<Vec<Stmt>> = None;
         for (test, body, span) in chain.into_iter().rev() {
-            rest = Some(match test {
-                Some(t) => vec![StmtKind::If(t, body, rest).at(span)],
-                None => body,
-            });
+            rest = match test {
+                Some(t) => Some(vec![StmtKind::If(t, body, rest).at(span)]),
+                // A last arm that does nothing, `None => {}`: no `else {}`.
+                None if body.is_empty() => None,
+                None => Some(body),
+            };
         }
         out.extend(rest.unwrap_or_default());
         Ok(())
@@ -1371,7 +1374,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     self.tcx
                         .is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome)
                 );
-                let inner = self.pattern_test(&field.pattern, subject, bindings)?;
+                // A generic `T`'s value may be boxed (ADR 0051): the pattern is on what's inside.
+                let value = match self.option_of(pat.ty) {
+                    Some(inner) if self.boxed_payload(inner) => self.some_value(subject.clone()),
+                    _ => subject.clone(),
+                };
+                let inner = self.pattern_test(&field.pattern, &value, bindings)?;
                 let present = Expr::bin(Op::LooseNe, subject.clone(), Expr::null());
                 let mut value = &field.pattern;
                 while let PatKind::Deref { subpattern, .. } = &value.kind {
@@ -2174,8 +2182,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn adt(&mut self, adt: &thir::AdtExpr<'tcx>, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let variant = adt.adt_def.variant(adt.variant_index);
         // `Some(x)` is `x`, and `None` is `undefined` (ADR 0030).
-        if self.option_of(ty).is_some() {
+        if let Some(inner) = self.option_of(ty) {
+            // `Some(x)` of a `()`, or an `Option`, would be `None` (ADR 0030):
+            // checked where it's made, since a temporary has no type check of its own.
+            if !adt.fields.is_empty() && self.can_be_nullish(inner) && !self.boxed_payload(inner) {
+                return Err(self.unsupported(span, &format!("values of type `{ty}`")));
+            }
             return match adt.fields.first() {
+                // Of a generic `T`, which might look like `None` (ADR 0051).
+                Some(field) if self.boxed_payload(inner) => {
+                    let value = self.expr(field.expr, out)?;
+                    Ok(self.some(value))
+                }
                 Some(field) => self.expr(field.expr, out),
                 None => Ok(Expr::undefined()),
             };
@@ -2502,17 +2520,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (subject, _) = self.subject(tried, base.unwrap_or(if is_option { "value" } else { "result" }), out)?;
         let js_span = self.js_span(span);
         let (failed, ret, value) = if is_option {
-            (
-                Expr::bin(Op::LooseEq, subject.clone(), Expr::null()),
-                Expr::undefined(),
-                subject,
-            )
+            let boxed = self.option_of(ty).is_some_and(|inner| self.boxed_payload(inner));
+            let value = if boxed {
+                self.some_value(subject.clone())
+            } else {
+                subject.clone()
+            };
+            (Expr::bin(Op::LooseEq, subject, Expr::null()), Expr::undefined(), value)
         } else {
             let failed = Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str("Err"));
             (failed, subject.clone(), Expr::member(subject, "_0"))
         };
         out.push(StmtKind::If(failed, vec![StmtKind::Return(Some(ret)).at(js_span)], None).at(js_span));
         Ok(value)
+    }
+
+    /// `Some(value)` of a generic `T` (ADR 0051): `$some(value)`.
+    fn some(&mut self, value: Expr) -> Expr {
+        self.runtime.insert(Helper::Some);
+        Expr::call(Expr::var("$some"), vec![value])
+    }
+
+    /// What's in an `Option` of a generic `T` (ADR 0051): `$someValue(option)`.
+    fn some_value(&mut self, option: Expr) -> Expr {
+        self.runtime.insert(Helper::SomeValue);
+        Expr::call(Expr::var("$someValue"), vec![option])
     }
 
     /// `const <base> = value;`, so it's evaluated here, then its name.

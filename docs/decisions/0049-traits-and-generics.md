@@ -195,8 +195,9 @@ primitive, String, Vec, and Option representations. This does not add
 
 Associated types and constants, type-generic traits, generic trait methods,
 const generics, and user implementations of other external/standard traits
-remain errors. Generic `Option<T>` is rejected when T could itself be nullish;
-this does not change the Option ABI. General writable references, runtime
+remain errors. A generic `Option<T>` boxes a `Some` that would look like
+`None` ([0051](0051-generic-options.md)); that doesn't change the Option ABI
+of code that isn't generic. General writable references, runtime
 type reification, user destructors, and arbitrary standard-library traits
 are future work, not approximate implementations.
 

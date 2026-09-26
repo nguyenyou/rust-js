@@ -138,6 +138,43 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
         };
+        // A std function that makes an `Option` of a generic `T` must box it
+        // (ADR 0051); these do, and others aren't supported.
+        // Normalized, so an iterator's `Self::Item` is the item's type.
+        let output = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate(self.tcx, generic_args)
+            .skip_binder()
+            .output();
+        let output = self
+            .tcx
+            .try_normalize_erasing_regions(self.typing_env, output)
+            .unwrap_or(output);
+        let boxed = self.option_of(output).is_some_and(|inner| self.boxed_payload(inner));
+        // And one of a `()` or an `Option`, which would be `None` (ADR 0030).
+        // `map` says so in its own words.
+        if known != Std::OptionMap
+            && self
+                .option_of(output)
+                .is_some_and(|inner| self.can_be_nullish(inner) && !self.boxed_payload(inner))
+        {
+            return Err(self.unsupported(span, &format!("values of type `{output}`")));
+        }
+        if boxed
+            && !matches!(
+                known,
+                Std::Same
+                    | Std::OptionMap
+                    | Std::Method("pop")
+                    | Std::First
+                    | Std::SliceLast
+                    | Std::ResultOk
+                    | Std::ArrayMethod("find")
+            )
+        {
+            return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));
+        }
         // `vec![a, b]` is `box_assume_init_into_vec_unsafe(write_box_via_move(<box>, [a, b]))`.
         if known == Std::VecMacro {
             let ExprKind::Call { args: ref inner, .. } = self.thir[self.strip(args[0])].kind else {
@@ -146,7 +183,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.expr(inner[1], out);
         }
         if known.takes_iterator() || matches!(known, Std::Sort | Std::SortByKey) {
-            return self.iterator_call(known, args, generic_args, span, out);
+            let value = self.iterator_call(known, args, generic_args, span, out)?;
+            // `items.find(f)` can't tell a found `None` from none found.
+            if boxed
+                && let js::ExprKind::Call(callee, found) = &value.kind
+                && let js::ExprKind::Member(items, name) = &callee.kind
+                && name == "find"
+            {
+                let items = if items.has_effects() {
+                    self.spill("items", (**items).clone(), out)
+                } else {
+                    (**items).clone()
+                };
+                let index = Expr::call(Expr::member(items.clone(), "findIndex"), found.clone());
+                return Ok(self.some_at(items, index));
+            }
+            return Ok(value);
         }
         // `s.push_str(t)`: JS strings don't change, so `s` gets a new one.
         if known == Std::PushStr {
@@ -202,6 +254,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
             Std::Eq(eq) => Expr::bin(if eq { Op::Eq } else { Op::Ne }, arg(), arg()),
             Std::LooseEq(eq) => Expr::bin(if eq { Op::LooseEq } else { Op::LooseNe }, arg(), arg()),
+            Std::Method("pop") if boxed => {
+                self.runtime.extend([Helper::Pop, Helper::Some]);
+                Expr::call(Expr::var("$pop"), vec![arg()])
+            }
             Std::Method(name) => {
                 let this = arg();
                 let rest = (1..args.len()).map(|_| arg()).collect();
@@ -234,6 +290,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 unreachable!("handled above")
             }
             Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
+            Std::First if boxed => {
+                let items = arg();
+                self.some_at(items, Expr::int(0))
+            }
+            Std::SliceLast if boxed => {
+                let mut items = arg();
+                if items.has_effects() {
+                    items = self.spill("items", items, out);
+                }
+                let last = Expr::bin(Op::Sub, Expr::member(items.clone(), "length"), Expr::int(1));
+                self.some_at(items, last)
+            }
             Std::First => Expr::index(arg(), Expr::int(0)),
             Std::SliceLast => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
             Std::ToVec => Expr::call(Expr::member(arg(), "slice"), vec![]),
@@ -329,7 +397,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => Expr::undefined(),
                 };
                 let ok = Expr::bin(Op::Eq, Expr::member(result.clone(), "TAG"), Expr::str("Ok"));
-                Expr::cond(ok, Expr::member(result, "_0"), otherwise)
+                let value = Expr::member(result, "_0");
+                let value = if boxed { self.some(value) } else { value };
+                Expr::cond(ok, value, otherwise)
             }
             Std::PushStr => unreachable!("handled above"),
             Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
@@ -338,7 +408,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::Unwrap);
                 // `expect` has a message too.
                 let list = (0..args.len()).map(|_| arg()).collect();
-                Expr::call(Expr::var("$unwrap"), list)
+                let unwrapped = Expr::call(Expr::var("$unwrap"), list);
+                if self.boxed_payload(generic_args.type_at(0)) {
+                    self.some_value(unwrapped)
+                } else {
+                    unwrapped
+                }
             }
             // `??` skips its right side when it isn't needed, and Rust
             // evaluates it either way: one with effects runs first, in order.
@@ -350,7 +425,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     }
                     default = self.spill("fallback", default, out);
                 }
-                Expr::bin(Op::Coalesce, option, default)
+                // Of a generic `T` (ADR 0051): `$someValue(o ?? $some(d))`.
+                if self.boxed_payload(generic_args.type_at(0)) {
+                    let default = self.some(default);
+                    self.some_value(Expr::bin(Op::Coalesce, option, default))
+                } else {
+                    Expr::bin(Op::Coalesce, option, default)
+                }
             }
             // `o.map(|x| value)` is `o != null ? value : undefined`, with the
             // option for `x`, read once: `const h = half(n); h != null ? h + 1 : undefined`.
@@ -358,7 +439,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::OptionMap => {
                 let (option, f) = (arg(), arg());
                 let mapped = generic_args.type_at(1);
-                if self.can_be_nullish(mapped) {
+                if self.can_be_nullish(mapped) && !self.boxed_payload(mapped) {
                     let what = format!("`map` to a `{mapped}`, whose `Some` would be `None` in JS");
                     return Err(self.unsupported(span, &what));
                 }
@@ -387,6 +468,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     js::ExprKind::Var(_) => option,
                     _ => self.spill(&base, option, out),
                 };
+                // Of a generic `T`, the closure gets what's inside (ADR 0051).
+                let present = Expr::bin(Op::LooseNe, option.clone(), Expr::null());
+                let option = if self.boxed_payload(generic_args.type_at(0)) {
+                    self.some_value(option)
+                } else {
+                    option
+                };
                 let value = param.zip(body).and_then(|(param, body)| {
                     let with = |name: &str| match &param {
                         None => None,
@@ -411,7 +499,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     }
                     None => Expr::call(f, vec![option.clone()]),
                 };
-                Expr::cond(Expr::bin(Op::LooseNe, option, Expr::null()), value, Expr::undefined())
+                let value = if self.boxed_payload(mapped) {
+                    self.some(value)
+                } else {
+                    value
+                };
+                Expr::cond(present, value, Expr::undefined())
             }
             Std::StringNew => Expr::str(""),
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
@@ -475,6 +568,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A JS global or a path from one (`console.log`), or from an import
     /// (`node:path#posix.join` is `posix.join`, ADR 0028).
     /// One of our functions: `f`, or `alias.f` in another module.
+    /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
+    fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
+        self.runtime.extend([Helper::SomeAt, Helper::Some]);
+        Expr::call(Expr::var("$someAt"), vec![items, index])
+    }
+
     /// `f`, or `util.f` in another module; a method, `Counter.tick` or
     /// `util.Counter.tick` (ADR 0047).
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
