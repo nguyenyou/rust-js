@@ -1027,7 +1027,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     });
                 }
                 for field in subpatterns {
-                    let part = Expr::member(subject.clone(), variant_field(variant, field.field.as_usize()));
+                    let part = Expr::member(subject.clone(), variant_field(self.tcx, variant, field.field.as_usize()));
                     tests.extend(self.pattern_test(&field.pattern, &part, bindings)?);
                 }
                 Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))

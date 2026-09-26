@@ -8,7 +8,7 @@ use react::html::div;
 use react::{Element, Ref, use_effect, use_ref};
 
 use crate::codemirror::{EditorState, EditorView, destroy, open_view, set_theme, show};
-use crate::dark_mode::useDarkMode;
+use crate::dark_mode::use_dark_mode;
 
 pub struct EditorProps {
     /// What it shows: a file's state, with its text and undo history.
@@ -22,7 +22,7 @@ pub struct EditorProps {
 pub fn Editor(EditorProps { state, view, on_submit }: EditorProps) -> Element {
     let parent = use_ref(None::<&'static web::Element>);
     let made = use_ref(None::<&'static EditorView>);
-    let dark = useDarkMode();
+    let dark = use_dark_mode();
     use_effect(
         move || {
             let editor = open_view(parent.current().expect("the editor's element is mounted"), state);

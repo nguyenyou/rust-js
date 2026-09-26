@@ -74,9 +74,10 @@ up as callbacks** (`on_compile`, `on_open`, `on_outcome`) that set it:
   gets a new frame. It listens for the frame's report in an effect, and an
   `AbortController` in the cleanup removes the listener and the timeout's
   report.
-- **`useDarkMode` is a hook**, over `use_sync_external_store` and
-  `matchMedia`. It's named `useDarkMode` because React finds hooks by
-  their `use` prefix, as it finds components by their capital letter.
+- **`use_dark_mode` is a hook**, over `use_sync_external_store` and
+  `matchMedia`. It's `useDarkMode` in JS, the name React finds a hook by,
+  since the crate is `#![rust_js::camel_case]` (ADR 0046). So are the
+  props: `on_open` is `onOpen`.
 - **`StrictMode`** is on. In development it runs each effect twice, so the
   loading effect drops its first run's results.
 
@@ -108,6 +109,6 @@ site and serves it as GitHub Pages does. It:
   around:
   - Filled: `match` on string literals, `Option::map`, and `with` closures
     put in place.
-  - Worked around: methods (`projects.rs` has functions instead), let
-    chains (nested `if`s), and names. Props keep their Rust names
-    (`on_open={..}`), and a hook needs its JS name spelled in Rust.
+  - Filled next: names, with `#![rust_js::camel_case]` (ADR 0046).
+  - Worked around: methods (`projects.rs` has functions instead), and let
+    chains (nested `if`s).

@@ -1,5 +1,6 @@
 //! Rust value representations, copying, and supported-type validation.
 
+use super::bindings::field_key;
 use super::{FnCx, R, Shape};
 use crate::js;
 use crate::js::{Expr, Op, Prop};
@@ -122,7 +123,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .fields
             .iter()
             .enumerate()
-            .map(|(i, f)| (variant_field(variant, i), f.ty(self.tcx, args)))
+            .map(|(i, f)| (variant_field(self.tcx, variant, i), f.ty(self.tcx, args)))
             .collect()
     }
 
@@ -138,7 +139,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let fields = variant
                     .fields
                     .iter()
-                    .map(|f| (f.name.to_string(), f.ty(self.tcx, args)));
+                    .map(|f| (field_key(self.tcx, f), f.ty(self.tcx, args)));
                 match variant.ctor_kind() {
                     None => Shape::Object(fields.collect()),
                     Some(CtorKind::Fn) => Shape::Array(fields.map(|(_, ty)| ty).collect()),
@@ -507,7 +508,7 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
             let props = values
                 .into_iter()
                 .enumerate()
-                .map(|(i, v)| Prop::Field(variant_field(variant, i), v));
+                .map(|(i, v)| Prop::Field(variant_field(tcx, variant, i), v));
             Some(Expr::object(
                 std::iter::once(Prop::Field("TAG".into(), Expr::str(variant.name.to_string())))
                     .chain(props)
@@ -525,7 +526,7 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
                         .fields
                         .iter()
                         .zip(values)
-                        .map(|(f, v)| Prop::Field(f.name.to_string(), v))
+                        .map(|(f, v)| Prop::Field(field_key(tcx, f), v))
                         .collect(),
                 )),
             }
@@ -536,16 +537,10 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
 
 /// The JS property for field `i` of an enum variant (ADR 0033): `_0` in a
 /// tuple variant, as in ReScript, and its name in a struct variant.
-pub(super) fn variant_field(variant: &ty::VariantDef, i: usize) -> String {
+pub(super) fn variant_field(tcx: TyCtxt<'_>, variant: &ty::VariantDef, i: usize) -> String {
     match variant.ctor_kind() {
         Some(CtorKind::Fn) => format!("_{i}"),
-        _ => variant
-            .fields
-            .iter()
-            .nth(i)
-            .expect("a field of this variant")
-            .name
-            .to_string(),
+        _ => field_key(tcx, variant.fields.iter().nth(i).expect("a field of this variant")),
     }
 }
 

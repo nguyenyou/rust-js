@@ -1,8 +1,8 @@
 //! Decode the binding language independently of call lowering.
 
 use rustc_hir::def::DefKind;
-use rustc_middle::ty::TyCtxt;
-use rustc_span::def_id::DefId;
+use rustc_middle::ty::{FieldDef, TyCtxt, VariantDef};
+use rustc_span::def_id::{CRATE_DEF_ID, DefId};
 use rustc_span::{Symbol, sym};
 
 /// Validate tool bindings even if no function calls them. A malformed binding
@@ -23,6 +23,21 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
                     "rust-js: a binding needs one `#[rust_js::link_name = \"...\"]` on a function or method",
                 );
                 valid = false;
+            }
+        }
+        // Two fields that are one JS property would overwrite each other.
+        if matches!(tcx.def_kind(def), DefKind::Struct | DefKind::Enum) {
+            for variant in tcx.adt_def(def).variants() {
+                let mut keys: Vec<(String, Symbol)> = Vec::new();
+                for field in variant.fields.iter() {
+                    let key = field_key(tcx, field);
+                    if let Some((_, other)) = keys.iter().find(|(k, _)| *k == key) {
+                        let message = format!("rust-js: fields `{other}` and `{}` are both `{key}` in JS", field.name);
+                        tcx.dcx().span_err(tcx.def_span(field.did), message);
+                        valid = false;
+                    }
+                    keys.push((key, field.name));
+                }
             }
         }
     }
@@ -148,14 +163,45 @@ pub(super) fn js_path(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
     }
 }
 
+/// `#[rust_js::name = ".."]`: what an item is in JS, as written.
+fn given_name(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
+    let attr = tcx.get_attrs_by_path(def_id, &[Symbol::intern("rust_js"), sym::name]).next()?;
+    attr.value_str().map(|s| s.to_string())
+}
+
 /// What a variant without fields is in JS: its name, or its
 /// `#[rust_js::name = ".."]`, for a string that isn't a Rust name, as in
 /// `enum Mode { #[rust_js::name = "hidden"] Hidden, .. }` (ADR 0039).
-pub(super) fn variant_name(tcx: TyCtxt<'_>, variant: &rustc_middle::ty::VariantDef) -> String {
-    match tcx.get_attrs_by_path(variant.def_id, &[Symbol::intern("rust_js"), sym::name]).next() {
-        Some(attr) => attr.value_str().map_or_else(|| variant.name.to_string(), |s| s.to_string()),
-        None => variant.name.to_string(),
+pub(super) fn variant_name(tcx: TyCtxt<'_>, variant: &VariantDef) -> String {
+    given_name(tcx, variant.def_id).unwrap_or_else(|| variant.name.to_string())
+}
+
+/// `#![rust_js::camel_case]`: the crate's own functions and fields are
+/// camelCase in JS, as its variables are (ADR 0046).
+pub(super) fn camel_case_crate(tcx: TyCtxt<'_>) -> bool {
+    tcx.get_attrs_by_path(CRATE_DEF_ID.to_def_id(), &[Symbol::intern("rust_js"), Symbol::intern("camel_case")])
+        .next()
+        .is_some()
+}
+
+/// What an item of this crate is called in JS: its `#[rust_js::name]`, or
+/// its Rust name, camelCase in a `camel_case` crate.
+fn name_in_js(tcx: TyCtxt<'_>, def_id: DefId, name: &str) -> String {
+    match given_name(tcx, def_id) {
+        Some(given) => given,
+        None if def_id.is_local() && camel_case_crate(tcx) => super::camel_case(name),
+        None => name.to_string(),
     }
+}
+
+/// A function's or `const`'s JS name.
+pub(super) fn fn_name(tcx: TyCtxt<'_>, def_id: DefId) -> String {
+    name_in_js(tcx, def_id, tcx.item_name(def_id).as_str())
+}
+
+/// A struct's or a variant's field, as a JS property.
+pub(super) fn field_key(tcx: TyCtxt<'_>, field: &FieldDef) -> String {
+    name_in_js(tcx, field.did, field.name.as_str())
 }
 
 /// What a JS module exports under a name, `("node:path", "join")`, or

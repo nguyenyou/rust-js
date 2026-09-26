@@ -214,7 +214,7 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .map(|def_id| {
             let module = tcx.parent_module_from_def_id(def_id);
             let names = taken.entry(module).or_default();
-            let name = fresh_in(names, tcx.item_name(def_id.to_def_id()).as_str());
+            let name = fresh_in(names, &bindings::fn_name(tcx, def_id.to_def_id()));
             (def_id.to_def_id(), FnInfo { module, name })
         })
         .collect();

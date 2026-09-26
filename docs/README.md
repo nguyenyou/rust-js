@@ -104,6 +104,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0031 A `const` is the value rustc computed, under its own name](decisions/0031-consts.md)
 - [0038 Variables have JS's names and shapes: `const [count, setCount] = ..`](decisions/0038-js-names-and-destructuring.md)
 - [0039 Generic bindings: `#[rust_js::link_name]` on an ordinary function](decisions/0039-generic-bindings.md)
+- [0046 `#![rust_js::camel_case]`: a crate's own names, the JS way](decisions/0046-camel-case-crates.md)
 
 **React**
 

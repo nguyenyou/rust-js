@@ -248,6 +248,8 @@ struct WasiOptions {
 
 #[allow(dead_code)]
 struct Imports {
+    /// WASI's own name for its imports.
+    #[rust_js::name = "wasi_snapshot_preview1"]
     wasi_snapshot_preview1: &'static JsObject,
 }
 

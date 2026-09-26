@@ -29,7 +29,9 @@ you wrote, and its `let (a, b) = ..` is also `tmp[0]`.
 `setCount`, `any_negative` is `anyNegative`. Leading and trailing
 underscores stay (`_unused`, `type_`), and so does a name with no lowercase
 letter. Only variables and parameters are renamed. Functions, fields and
-exports keep their Rust names, because other JS code uses them by name.
+exports keep their Rust names, because other JS code uses them by name. A
+crate can choose camelCase for those too, with `#![rust_js::camel_case]`
+([0046](0046-camel-case-crates.md)).
 
 **A tuple or struct pattern of plain variables is JS destructuring**, in a
 `let` of a computed value and in a parameter:

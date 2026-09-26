@@ -5,6 +5,9 @@
 
 #![feature(extern_types)]
 #![allow(non_snake_case)]
+// Functions and fields are camelCase in JS, as React code names them:
+// `use_dark_mode` is `useDarkMode`, a prop `on_open` is `onOpen` (ADR 0046).
+#![rust_js::camel_case]
 
 mod components;
 

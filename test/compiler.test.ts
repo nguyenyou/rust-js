@@ -304,18 +304,19 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   }
   // A folder's entries are a FileTree inside it: the component is recursive.
   expect(await read("components/file_tree.jsx")).toContain("<FileTree tree={param[1]._0} depth={depth + 1 >>> 0}");
+  expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {");
   // The editor's view is made in an effect, and destroyed in its cleanup.
   expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");
-  // A hook, found by its name.
+  // A hook, found by its name, and props as React code names them (ADR 0046).
   expect(await read("dark_mode.js")).toContain("export function useDarkMode() {\n  return useSyncExternalStore(");
 
   const compiler = await read("compiler.js");
   expect(compiler).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
-  for (const name of ["load", "load_example", "ms", "mb", "compile"]) {
+  for (const name of ["load", "loadExample", "ms", "mb", "compile"]) {
     expect(compiler).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
   // The downloads all start before any is awaited.
-  expect(compiler).toContain("  const module = load_compiler(start, stat);\n  const sysroot = load_sysroot(start, stat);");
+  expect(compiler).toContain("  const module = loadCompiler(start, stat);\n  const sysroot = loadSysroot(start, stat);");
   expect(compiler).toContain('  const module = await WebAssembly.compileStreaming(window.fetch("./rust-js.wasm"));');
   // A `format!` value with effects is computed first, once.
   expect(compiler).toContain('  const arg = t.toFixed(0);\n  return arg + " ms";');

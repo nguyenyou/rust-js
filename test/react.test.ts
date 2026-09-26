@@ -129,3 +129,97 @@ test("React's and React DOM's APIs are hand-written React, and they run", () => 
   const output = p.stdout.toString() + p.stderr.toString();
   expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "7"]);
 }, 120_000);
+
+// ADR 0046: with `#![rust_js::camel_case]`, a crate's own functions and
+// fields are camelCase in JS too, as its variables already are.
+test("a camel_case crate names its functions, fields and props the JS way", async () => {
+  const { fixture, compiler } = await import("./support");
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  buildReact();
+  const dir = fixture("camel-case");
+  writeFileSync(join(dir, "lib.rs"), `#![rust_js::camel_case]
+#![allow(non_snake_case)]
+
+mod people;
+
+use react::html::button;
+use react::{Element, component, use_state};
+
+pub fn greet(first_name: &str) -> String {
+    people::full_name(&people::make_person(first_name))
+}
+
+pub enum Shape {
+    Rect { top_left: u32, bottom_right: u32 },
+}
+
+pub fn rect_width(shape: &Shape) -> u32 {
+    match shape {
+        Shape::Rect { top_left, bottom_right } => bottom_right - top_left,
+    }
+}
+
+pub fn wide_rect() -> Shape {
+    Shape::Rect { top_left: 1, bottom_right: 4 }
+}
+
+pub fn use_clicks() -> u32 {
+    let (clicks, _) = use_state(0u32);
+    *clicks
+}
+
+pub struct FancyButtonProps {
+    pub label_text: String,
+    pub on_press: Box<dyn Fn()>,
+}
+
+pub fn FancyButton(FancyButtonProps { label_text, on_press }: FancyButtonProps) -> Element {
+    button().on_click(move |_| on_press()).children(label_text)
+}
+
+pub fn App() -> Element {
+    let clicks = use_clicks();
+    component(FancyButton, FancyButtonProps { label_text: format!("{clicks} clicks"), on_press: Box::new(|| ()) })
+}
+
+#[rust_js::name = "keep_me"]
+pub fn keep_me() -> u32 {
+    1
+}
+`);
+  writeFileSync(join(dir, "people.rs"), `pub struct Person {
+    pub first_name: String,
+    pub last_name: String,
+    #[rust_js::name = "user_id"]
+    pub user_id: u32,
+}
+
+pub fn make_person(first_name: &str) -> Person {
+    Person { first_name: first_name.to_string(), last_name: "Doe".to_string(), user_id: 7 }
+}
+
+pub fn full_name(person: &Person) -> String {
+    format!("{} {}", person.first_name, person.last_name)
+}
+`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
+  const lib = await Bun.file(join(dir, "lib.jsx")).text();
+  const people = await Bun.file(join(dir, "people.js")).text();
+  // Functions, across modules.
+  expect(lib).toContain("export function greet(firstName) {\n  return people.fullName(people.makePerson(firstName));");
+  expect(people).toContain("export function makePerson(firstName) {");
+  // Fields: of a struct, of an enum's variant, and one kept by its `#[rust_js::name]`.
+  expect(people).toContain('    firstName,\n    lastName: "Doe",\n    user_id: 7');
+  expect(people).toContain('person.firstName + " " + person.lastName');
+  expect(lib).toContain("export function rectWidth(shape) {\n  return shape.bottomRight - shape.topLeft");
+  // A hook React finds by its name, and props as React code names them.
+  expect(lib).toContain("export function useClicks() {");
+  expect(lib).toContain("export function FancyButton({ labelText, onPress }) {");
+  expect(lib).toContain("<FancyButton labelText={");
+  expect(lib).toContain(" onPress={");
+  expect(lib).toContain("export function keep_me() {");
+  const module = await import(join(dir, "lib.jsx"));
+  expect(module.greet("Ada")).toBe("Ada Doe");
+  expect(module.rectWidth(module.wideRect())).toBe(3);
+  expect((await import(join(dir, "people.js"))).makePerson("Ada")).toEqual({ firstName: "Ada", lastName: "Doe", user_id: 7 });
+});

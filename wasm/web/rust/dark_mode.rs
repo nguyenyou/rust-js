@@ -1,7 +1,5 @@
 // A hook: whether the system is in dark mode, rendering again when it changes.
-//
-// React finds hooks by their names, `useX`, as it finds components by their
-// capital letter, so this one is named the JS way.
+// In JS it's `useDarkMode`, the name React finds a hook by (ADR 0046).
 
 use react::{Notify, use_sync_external_store};
 use web::{MediaQueryList, abort_controller, media_query_list, window};
@@ -12,7 +10,7 @@ thread_local! {
     static DARK: &'static MediaQueryList = window::match_media(window, "(prefers-color-scheme: dark)");
 }
 
-pub fn useDarkMode() -> bool {
+pub fn use_dark_mode() -> bool {
     *use_sync_external_store(
         |notify: Notify| {
             let controller = abort_controller::new();

@@ -61,6 +61,11 @@ Its props, if it has any, are a struct, and a field named `children` holds
 its children. A tuple of children is several of them, a `Vec` is a list
 whose items need keys, and `None` renders nothing.
 
+With `#![rust_js::camel_case]` in the crate root, props and custom hooks get
+React's names: a field `on_press` is the prop `onPress`, and `pub fn use_clicks()`
+is the hook `useClicks`, which React's rules and React Compiler find by that
+name ([ADR 0046](../docs/decisions/0046-camel-case-crates.md)).
+
 **Hooks** are React's, in snake case, with a `_with` variant for an optional
 argument: `use_state`, `use_reducer`, `use_context`, `use_ref`,
 `use_imperative_handle`, `use_effect`, `use_layout_effect`,
