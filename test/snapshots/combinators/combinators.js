@@ -22,7 +22,9 @@ function $removeAt(v, index) {
 
 function $swap(v, a, b) {
   if (a >= v.length || b >= v.length) {
-    throw new Error(`index out of bounds: the len is ${v.length} but the index is ${Math.max(a, b)}`);
+    throw new Error(
+      `index out of bounds: the len is ${v.length} but the index is ${Math.max(a, b)}`,
+    );
   }
   [v[a], v[b]] = [v[b], v[a]];
 }
@@ -54,7 +56,9 @@ function $chunks(v, size) {
   if (size === 0) {
     throw new Error("chunk size must be non-zero");
   }
-  return Array.from({ length: Math.ceil(v.length / size) }, (_, i) => v.slice(i * size, i * size + size));
+  return Array.from({ length: Math.ceil(v.length / size) }, (_, i) =>
+    v.slice(i * size, i * size + size),
+  );
 }
 
 function $zip(a, b) {
@@ -96,7 +100,10 @@ function $debugStr(s, quote = '"') {
     else if (c === "\r") out += "\\r";
     else if (c === "\t") out += "\\t";
     else if (c === "\0") out += "\\0";
-    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+    else if (
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) ||
+      (c !== " " && /\p{Zs}/u.test(c))
+    )
       out += "\\u{" + c.codePointAt(0).toString(16) + "}";
     else out += c;
   }
@@ -121,7 +128,7 @@ function $minBy(items, cmp, boxed = false) {
 
 function half(n) {
   if (n % 2 === 0) {
-    return n / 2 >>> 0;
+    return (n / 2) >>> 0;
   } else {
     return undefined;
   }
@@ -129,20 +136,11 @@ function half(n) {
 
 function parse(c) {
   if (c === "1") {
-    return {
-      TAG: "Ok",
-      _0: 1
-    };
+    return { TAG: "Ok", _0: 1 };
   } else if (c === "2") {
-    return {
-      TAG: "Ok",
-      _0: 2
-    };
+    return { TAG: "Ok", _0: 2 };
   } else {
-    return {
-      TAG: "Err",
-      _0: "bad " + c
-    };
+    return { TAG: "Err", _0: "bad " + c };
   }
 }
 
@@ -154,56 +152,32 @@ export function options(n) {
     h != null ? Math.imul(h, 3) >>> 0 : 7,
     h != null ? half(h) : undefined,
     h != null && h > 2 ? h : undefined,
-    h != null && h < 5
+    h != null && h < 5,
   ];
 }
 
 export function more_options(n) {
   const h = half(n);
-  const r = h != null ? {
-    TAG: "Ok",
-    _0: h
-  } : {
-    TAG: "Err",
-    _0: "odd"
-  };
-  const s = h != null ? {
-    TAG: "Ok",
-    _0: h
-  } : {
-    TAG: "Err",
-    _0: "odd " + String(n)
-  };
+  const r = h != null ? { TAG: "Ok", _0: h } : { TAG: "Err", _0: "odd" };
+  const s = h != null ? { TAG: "Ok", _0: h } : { TAG: "Err", _0: "odd " + String(n) };
   return [
     r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")",
     s.TAG === "Ok" ? "Ok(" + String(s._0) + ")" : "Err(" + $debugStr(s._0) + ")",
     h ?? 0,
     h == null || h > 1,
-    h != null ? h + 1 >>> 0 : 1000
+    h != null ? (h + 1) >>> 0 : 1000,
   ];
 }
 
 export function results(c) {
   const r = parse(c);
-  const arg = r.TAG === "Ok" ? {
-    TAG: "Ok",
-    _0: Math.imul(r._0, 10) >>> 0
-  } : r;
-  const arg$1 = r.TAG === "Err" ? {
-    TAG: "Err",
-    _0: Array.from(r._0).length
-  } : r;
+  const arg = r.TAG === "Ok" ? { TAG: "Ok", _0: Math.imul(r._0, 10) >>> 0 } : r;
+  const arg$1 = r.TAG === "Err" ? { TAG: "Err", _0: Array.from(r._0).length } : r;
   const then = (x) => {
     if (x > 1) {
-      return {
-        TAG: "Ok",
-        _0: x
-      };
+      return { TAG: "Ok", _0: x };
     } else {
-      return {
-        TAG: "Err",
-        _0: "small"
-      };
+      return { TAG: "Err", _0: "small" };
     }
   };
   const result = r.TAG === "Ok" ? then(r._0) : r;
@@ -213,7 +187,7 @@ export function results(c) {
     result.TAG === "Ok" ? result._0 : 0,
     r.TAG === "Ok" ? r._0 : Array.from(r._0).length,
     r.TAG === "Err" ? r._0 : undefined,
-    r.TAG === "Ok" && r._0 === 2
+    r.TAG === "Ok" && r._0 === 2,
   ];
 }
 
@@ -222,19 +196,15 @@ export function iters(n) {
   return [
     v.map((x) => half(x)).filter((item) => item != null),
     v.flatMap((x) => [x, x]),
-    $zip(v, [
-      "a",
-      "b",
-      "c"
-    ]),
+    $zip(v, ["a", "b", "c"]),
     v.concat([100, 200]),
     $takeWhile(v, (x) => x < 3),
-    $skipWhile(v, (x) => x < 3).filter((_, i) => i % 2 === 0)
+    $skipWhile(v, (x) => x < 3).filter((_, i) => i % 2 === 0),
   ];
 }
 
 export function consumers(n) {
-  const v = $range(1, n + 1 >>> 0);
+  const v = $range(1, (n + 1) >>> 0);
   const key = (x) => [x % 3, x];
   return [
     $maxBy(v, (a, b) => {
@@ -245,27 +215,21 @@ export function consumers(n) {
     $minBy(v, (a, b) => $cmp(b, a)),
     v.reduce((a, b) => Math.imul(a, b) >>> 0, 1),
     v[2],
-    v.map((x) => {
-      if (x > 2) {
-        return Math.imul(x, 100) >>> 0;
-      } else {
-        return undefined;
-      }
-    }).find((item) => item != null),
-    $partition(v, (x) => x % 2 === 0)
+    v
+      .map((x) => {
+        if (x > 2) {
+          return Math.imul(x, 100) >>> 0;
+        } else {
+          return undefined;
+        }
+      })
+      .find((item) => item != null),
+    $partition(v, (x) => x % 2 === 0),
   ];
 }
 
 export function vecs(n) {
-  let v = [
-    1,
-    1,
-    2,
-    3,
-    3,
-    3,
-    4
-  ];
+  let v = [1, 1, 2, 3, 3, 3, 4];
   const has = v.includes(n);
   $dedup(v);
   $insertAt(v, 1, 50);
@@ -276,14 +240,7 @@ export function vecs(n) {
   const w = $windows(v, 2).map((w) => w.slice());
   const c = $chunks(v, 4).map((c) => c.slice());
   const result = [[1, 2], [3]];
-  return [
-    has,
-    v,
-    removed,
-    w,
-    c,
-    result.flat()
-  ];
+  return [has, v, removed, w, c, result.flat()];
 }
 
 export function panics(i) {
@@ -293,29 +250,103 @@ export function panics(i) {
 
 export function report() {
   let out = "";
-  for (const n of [
-    0,
-    4,
-    5,
-    8
-  ]) {
+  for (const n of [0, 4, 5, 8]) {
     const arg = options(n);
     const arg$1 = more_options(n);
-    out += "(" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg[4]) + ", " + String(arg[5]) + ") (" + $debugStr(arg$1[0]) + ", " + $debugStr(arg$1[1]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg$1[2]) + ", " + String(arg$1[3]) + ", " + String(arg$1[4]) + ")\n";
+    out +=
+      "(" +
+      String(arg[0]) +
+      ", " +
+      String(arg[1]) +
+      ", " +
+      String(arg[2]) +
+      ", " +
+      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg[3]) +
+      ", " +
+      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg[4]) +
+      ", " +
+      String(arg[5]) +
+      ") (" +
+      $debugStr(arg$1[0]) +
+      ", " +
+      $debugStr(arg$1[1]) +
+      ", " +
+      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg$1[2]) +
+      ", " +
+      String(arg$1[3]) +
+      ", " +
+      String(arg$1[4]) +
+      ")\n";
   }
-  for (const c of [
-    "1",
-    "2",
-    "x"
-  ]) {
+  for (const c of ["1", "2", "x"]) {
     const arg$2 = results(c);
-    out += "(" + $debugStr(arg$2[0]) + ", " + $debugStr(arg$2[1]) + ", " + String(arg$2[2]) + ", " + String(arg$2[3]) + ", " + ((value) => value == null ? "None" : "Some(" + $debugStr(value) + ")")(arg$2[4]) + ", " + String(arg$2[5]) + ")\n";
+    out +=
+      "(" +
+      $debugStr(arg$2[0]) +
+      ", " +
+      $debugStr(arg$2[1]) +
+      ", " +
+      String(arg$2[2]) +
+      ", " +
+      String(arg$2[3]) +
+      ", " +
+      ((value) => (value == null ? "None" : "Some(" + $debugStr(value) + ")"))(arg$2[4]) +
+      ", " +
+      String(arg$2[5]) +
+      ")\n";
   }
   for (const n$1 of [0, 5]) {
     const arg$3 = iters(n$1);
     const arg$4 = consumers(n$1);
     const arg$5 = vecs(n$1);
-    out += "([" + arg$3[0].map((item) => String(item)).join(", ") + "], [" + arg$3[1].map((item) => String(item)).join(", ") + "], [" + arg$3[2].map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")").join(", ") + "], [" + arg$3[3].map((item) => String(item)).join(", ") + "], [" + arg$3[4].map((item) => String(item)).join(", ") + "], [" + arg$3[5].map((item) => String(item)).join(", ") + "]) " + ((tuple) => "(" + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[0]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[1]) + ", " + String(tuple[2]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[3]) + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(tuple[4]) + ", " + ((tuple) => "([" + tuple[0].map((item) => String(item)).join(", ") + "], [" + tuple[1].map((item) => String(item)).join(", ") + "])")(tuple[5]) + ")")(arg$4) + " (" + String(arg$5[0]) + ", [" + arg$5[1].map((item) => String(item)).join(", ") + "], " + String(arg$5[2]) + ", [" + arg$5[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + arg$5[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") + "], [" + arg$5[5].map((item) => String(item)).join(", ") + "])\n";
+    out +=
+      "([" +
+      arg$3[0].map((item) => String(item)).join(", ") +
+      "], [" +
+      arg$3[1].map((item) => String(item)).join(", ") +
+      "], [" +
+      arg$3[2]
+        .map((item) => "(" + String(item[0]) + ", " + $debugStr(item[1], "'") + ")")
+        .join(", ") +
+      "], [" +
+      arg$3[3].map((item) => String(item)).join(", ") +
+      "], [" +
+      arg$3[4].map((item) => String(item)).join(", ") +
+      "], [" +
+      arg$3[5].map((item) => String(item)).join(", ") +
+      "]) " +
+      ((tuple) =>
+        "(" +
+        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[0]) +
+        ", " +
+        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[1]) +
+        ", " +
+        String(tuple[2]) +
+        ", " +
+        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[3]) +
+        ", " +
+        ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(tuple[4]) +
+        ", " +
+        ((tuple) =>
+          "([" +
+          tuple[0].map((item) => String(item)).join(", ") +
+          "], [" +
+          tuple[1].map((item) => String(item)).join(", ") +
+          "])")(tuple[5]) +
+        ")")(arg$4) +
+      " (" +
+      String(arg$5[0]) +
+      ", [" +
+      arg$5[1].map((item) => String(item)).join(", ") +
+      "], " +
+      String(arg$5[2]) +
+      ", [" +
+      arg$5[3].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") +
+      "], [" +
+      arg$5[4].map((item) => "[" + item.map((item) => String(item)).join(", ") + "]").join(", ") +
+      "], [" +
+      arg$5[5].map((item) => String(item)).join(", ") +
+      "])\n";
   }
   return out;
 }

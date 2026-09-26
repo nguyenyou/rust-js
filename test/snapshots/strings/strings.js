@@ -6,12 +6,12 @@
 // equally close, JS takes the even one (1888570120608320.2), and Rust the
 // larger (1888570120608320.3).
 function $displayF64(value) {
-  if (Number.isNaN(value)) return 'NaN';
-  if (value === Infinity) return 'inf';
-  if (value === -Infinity) return '-inf';
-  const sign = value < 0 || Object.is(value, -0) ? '-' : '';
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
   const x = Math.abs(value);
-  if (x === 0) return sign + '0';
+  if (x === 0) return sign + "0";
 
   const bitsView = new DataView(new ArrayBuffer(8));
   bitsView.setFloat64(0, x);
@@ -25,9 +25,10 @@ function $displayF64(value) {
 
   // The floating-point logarithm is only an estimate; correct it exactly.
   let exponent = Math.floor(Math.log10(x));
-  const atLeastPowerOfTen = e => e >= 0
-    ? numerator >= denominator * 10n ** BigInt(e)
-    : numerator * 10n ** BigInt(-e) >= denominator;
+  const atLeastPowerOfTen = (e) =>
+    e >= 0
+      ? numerator >= denominator * 10n ** BigInt(e)
+      : numerator * 10n ** BigInt(-e) >= denominator;
   while (!atLeastPowerOfTen(exponent)) exponent--;
   while (atLeastPowerOfTen(exponent + 1)) exponent++;
 
@@ -44,7 +45,11 @@ function $displayF64(value) {
       if (candidate > 0n && Number(`${candidate}e${power}`) === x) {
         const delta = candidate * d - n;
         const distance = delta < 0n ? -delta : delta;
-        if (best === undefined || distance < bestDistance || (distance === bestDistance && candidate > best)) {
+        if (
+          best === undefined ||
+          distance < bestDistance ||
+          (distance === bestDistance && candidate > best)
+        ) {
           best = candidate;
           bestDistance = distance;
         }
@@ -53,18 +58,21 @@ function $displayF64(value) {
     if (best !== undefined) {
       let digits = best.toString();
       let decimalPower = power;
-      while (digits.endsWith('0')) {
+      while (digits.endsWith("0")) {
         digits = digits.slice(0, -1);
         decimalPower++;
       }
       const point = digits.length + decimalPower;
-      const body = point <= 0 ? '0.' + '0'.repeat(-point) + digits
-        : point >= digits.length ? digits + '0'.repeat(point - digits.length)
-        : digits.slice(0, point) + '.' + digits.slice(point);
+      const body =
+        point <= 0
+          ? "0." + "0".repeat(-point) + digits
+          : point >= digits.length
+            ? digits + "0".repeat(point - digits.length)
+            : digits.slice(0, point) + "." + digits.slice(point);
       return sign + body;
     }
   }
-  throw new Error('No f64 round-trip decimal found');
+  throw new Error("No f64 round-trip decimal found");
 }
 
 function $stripPrefix(s, prefix) {
@@ -139,12 +147,7 @@ export function labeled(name, n) {
 }
 
 export function tests(s) {
-  return [
-    s.startsWith("ab"),
-    s.endsWith("c"),
-    s.includes("b/"),
-    s.includes("/")
-  ];
+  return [s.startsWith("ab"), s.endsWith("c"), s.includes("b/"), s.includes("/")];
 }
 
 export function cases(s) {
@@ -175,17 +178,13 @@ export function parts(path) {
   let empty = 0;
   for (const part of path.split("/")) {
     if (part.length === 0) {
-      empty = empty + 1 >>> 0;
+      empty = (empty + 1) >>> 0;
     } else {
       kept.push(part);
     }
   }
   const last = path.split("/").at(-1) ?? "";
-  return [
-    kept,
-    empty,
-    last
-  ];
+  return [kept, empty, last];
 }
 
 export function rejoined(path) {
@@ -263,7 +262,7 @@ export function tagged(s) {
 }
 
 function tick(c) {
-  c.value = c.value + 1 >>> 0;
+  c.value = (c.value + 1) >>> 0;
   return c.value;
 }
 
@@ -276,11 +275,37 @@ export function format_order(start) {
 }
 
 export function padded(n, name) {
-  return "[" + String(n).padStart(6) + "] [" + String(n).padEnd(6) + "] [" + $pad(name, 9, "^") + "] [" + $pad(name, 9, ">", "*") + "] [" + $zeroPad(String(n), 6) + "] [" + $plus(String(n)) + "] [0x" + (n >>> 0).toString(16) + "] [" + $zeroPad("0b" + (n >>> 0).toString(2), 10) + "] [" + (n >>> 0).toString(16).toUpperCase() + "] [" + $toFixed(n / 8, 2) + "] [" + Array.from(name).slice(0, 3).join("") + "]";
+  return (
+    "[" +
+    String(n).padStart(6) +
+    "] [" +
+    String(n).padEnd(6) +
+    "] [" +
+    $pad(name, 9, "^") +
+    "] [" +
+    $pad(name, 9, ">", "*") +
+    "] [" +
+    $zeroPad(String(n), 6) +
+    "] [" +
+    $plus(String(n)) +
+    "] [0x" +
+    (n >>> 0).toString(16) +
+    "] [" +
+    $zeroPad("0b" + (n >>> 0).toString(2), 10) +
+    "] [" +
+    (n >>> 0).toString(16).toUpperCase() +
+    "] [" +
+    $toFixed(n / 8, 2) +
+    "] [" +
+    Array.from(name).slice(0, 3).join("") +
+    "]"
+  );
 }
 
 export function rounded(quarters) {
   const x = quarters / 4;
-  return $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x);
+  return (
+    $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x)
+  );
 }
 //# sourceMappingURL=strings.js.map

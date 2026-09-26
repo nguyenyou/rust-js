@@ -18,10 +18,7 @@ export function buildTree(paths) {
     if (match != null) {
       for (const part of match[0].split("/")) {
         if (!folder.some((param) => param[0] === part)) {
-          folder.push([part, {
-            TAG: "Folder",
-            _0: []
-          }]);
+          folder.push([part, { TAG: "Folder", _0: [] }]);
         }
         let tmp;
         const match$1 = folder.find((param) => param[0] === part);
@@ -36,10 +33,7 @@ export function buildTree(paths) {
     } else {
       name = path;
     }
-    folder.push([name, {
-      TAG: "File",
-      _0: path
-    }]);
+    folder.push([name, { TAG: "File", _0: path }]);
   }
   return tree;
 }

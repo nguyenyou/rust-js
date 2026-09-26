@@ -7,14 +7,14 @@ async function double(x) {
 }
 
 export async function sum(a, b) {
-  return await double(a) + await double(b) >>> 0;
+  return ((await double(a)) + (await double(b))) >>> 0;
 }
 
 export async function countdown(n) {
   let steps = 0;
   while (n > 0) {
-    n = await setTimeout(0, n - 1 >>> 0);
-    steps = steps + 1 >>> 0;
+    n = await setTimeout(0, (n - 1) >>> 0);
+    steps = (steps + 1) >>> 0;
   }
   return steps;
 }
@@ -26,15 +26,15 @@ export async function swap(param) {
 }
 
 export async function blocks(x) {
-  const block = (async () => await double(x) + 1 >>> 0)();
-  const add = async (y) => await setTimeout(0, y) + x >>> 0;
-  return await block + await add(10) >>> 0;
+  const block = (async () => ((await double(x)) + 1) >>> 0)();
+  const add = async (y) => ((await setTimeout(0, y)) + x) >>> 0;
+  return ((await block) + (await add(10))) >>> 0;
 }
 
 export async function held() {
   const first = setTimeout(5, 1);
   const second = double(2);
-  return await first + await second >>> 0;
+  return ((await first) + (await second)) >>> 0;
 }
 
 export function spawned() {
@@ -52,11 +52,7 @@ export function spawned() {
 export async function load(url) {
   const response = await window.fetch(url);
   const body = await response.text();
-  return [
-    response.status,
-    response.ok,
-    body
-  ];
+  return [response.status, response.ok, body];
 }
 
 export async function load_bytes(url) {
@@ -65,11 +61,7 @@ export async function load_bytes(url) {
   const bytes = await response.bytes();
   const buffer = await copy.arrayBuffer();
   const view = new Uint8Array(buffer);
-  return [
-    bytes.length,
-    buffer.byteLength,
-    view.length
-  ];
+  return [bytes.length, buffer.byteLength, view.length];
 }
 
 export async function run_wasm(bytes, a, b) {

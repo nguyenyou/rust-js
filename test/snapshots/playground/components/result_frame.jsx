@@ -21,27 +21,32 @@ export function ResultFrame({ program, onOutcome }) {
       const reported = { value: false };
       const heard = reported;
       const told = onOutcome;
-      listen.listen(window, "message", (e) => {
-        let fromFrame;
-        const match = frame.current;
-        if (match != null) {
-          fromFrame = Object.is(e.source, match.contentWindow);
-        } else {
-          fromFrame = false;
-        }
-        let report;
-        const match$1 = e.data;
-        if (match$1 != null && fromFrame && match$1.run == tmp$1[0]) {
-          report = match$1;
-        } else {
-          return;
-        }
-        heard.value = true;
-        const outcome = programs.outcome(report);
-        if (outcome != null) {
-          told(outcome);
-        }
-      }, controller);
+      listen.listen(
+        window,
+        "message",
+        (e) => {
+          let fromFrame;
+          const match = frame.current;
+          if (match != null) {
+            fromFrame = Object.is(e.source, match.contentWindow);
+          } else {
+            fromFrame = false;
+          }
+          let report;
+          const match$1 = e.data;
+          if (match$1 != null && fromFrame && match$1.run == tmp$1[0]) {
+            report = match$1;
+          } else {
+            return;
+          }
+          heard.value = true;
+          const outcome = programs.outcome(report);
+          if (outcome != null) {
+            told(outcome);
+          }
+        },
+        controller,
+      );
       const signal = controller.signal;
       const silent = onOutcome;
       setTimeout(() => {
@@ -54,9 +59,24 @@ export function ResultFrame({ program, onOutcome }) {
       controller.abort();
     };
   }, [tmp$1[0]]);
-  return <section id="result-section" className="mt-3" hidden={program == null}>
-    <h2 className={styles.HEADING}>Result <span className="font-normal">the root module's <code>main()</code>, or with Test its <code>#[test]</code>s, in a frame of their own</span></h2>
-    <iframe key={tmp$1[0]} ref={frame} id="result" className="block h-[280px] w-full rounded-md border border-line bg-page" title="Result" srcDoc={tmp$1[1]} />
-  </section>;
+  return (
+    <section id="result-section" className="mt-3" hidden={program == null}>
+      <h2 className={styles.HEADING}>
+        Result{" "}
+        <span className="font-normal">
+          the root module's <code>main()</code>, or with Test its <code>#[test]</code>s, in a frame
+          of their own
+        </span>
+      </h2>
+      <iframe
+        key={tmp$1[0]}
+        ref={frame}
+        id="result"
+        className="block h-[280px] w-full rounded-md border border-line bg-page"
+        title="Result"
+        srcDoc={tmp$1[1]}
+      />
+    </section>
+  );
 }
 //# sourceMappingURL=result_frame.jsx.map

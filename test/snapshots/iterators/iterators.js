@@ -31,19 +31,12 @@ export function evens(v) {
 
 export function stats(v) {
   const positive = v.filter((x) => x > 0).length;
-  const sum = v.reduce((a, b) => a + b | 0, 0);
+  const sum = v.reduce((a, b) => (a + b) | 0, 0);
   const anyNegative = v.some((x) => x < 0);
   const noZero = v.every((x) => x !== 0);
   const big = v.find((x) => x > 10);
   const three = $position(v, (x) => x === 3);
-  return [
-    positive,
-    sum,
-    anyNegative,
-    noZero,
-    big,
-    three
-  ];
+  return [positive, sum, anyNegative, noZero, big, three];
 }
 
 export function extremes(v) {
@@ -63,7 +56,7 @@ export function non_empty(words) {
     if (w.length === 0) {
       return count;
     } else {
-      return count + 1 >>> 0;
+      return (count + 1) >>> 0;
     }
   }, 0);
 }
@@ -137,13 +130,15 @@ export function negated(v) {
 export function inclusive(n) {
   let total = 0;
   for (let i = 1; i <= n; i++) {
-    total = total + i >>> 0;
+    total = (total + i) >>> 0;
   }
   const down = $range(0, n + 1).toReversed();
   return [
     total,
     down,
-    $range(1, n + 1).map((x) => Math.imul(x, x) >>> 0).reduce((a, b) => a + b >>> 0, 0)
+    $range(1, n + 1)
+      .map((x) => Math.imul(x, x) >>> 0)
+      .reduce((a, b) => (a + b) >>> 0, 0),
   ];
 }
 

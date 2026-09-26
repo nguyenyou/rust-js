@@ -25,18 +25,11 @@ function $eq(a, b) {
 }
 
 export function circle(r) {
-  return {
-    TAG: "Circle",
-    _0: r
-  };
+  return { TAG: "Circle", _0: r };
 }
 
 export function rect(w, h) {
-  return {
-    TAG: "Rect",
-    w,
-    h
-  };
+  return { TAG: "Rect", w, h };
 }
 
 export function empty() {
@@ -58,7 +51,7 @@ export function classify(s) {
     return 3;
   } else if (s.TAG === "Circle") {
     return 2;
-  } else if (s.TAG === "Rect" && s.w === 0 || s === "Empty") {
+  } else if ((s.TAG === "Rect" && s.w === 0) || s === "Empty") {
     return 0;
   } else {
     return 1;
@@ -83,19 +76,9 @@ export function same(a, b) {
 
 function build(depth) {
   if (depth === 0) {
-    return {
-      TAG: "Leaf",
-      _0: 1
-    };
+    return { TAG: "Leaf", _0: 1 };
   } else {
-    return {
-      TAG: "Node",
-      _0: build(depth - 1 >>> 0),
-      _1: {
-        TAG: "Leaf",
-        _0: depth | 0
-      }
-    };
+    return { TAG: "Node", _0: build((depth - 1) >>> 0), _1: { TAG: "Leaf", _0: depth | 0 } };
   }
 }
 
@@ -103,7 +86,7 @@ function sum(t) {
   if (t.TAG === "Leaf") {
     return t._0;
   } else {
-    return sum(t._0) + sum(t._1) | 0;
+    return (sum(t._0) + sum(t._1)) | 0;
   }
 }
 
@@ -113,15 +96,9 @@ export function tree_sum(depth) {
 
 export function checked_div(a, b) {
   if (b === 0) {
-    return {
-      TAG: "Err",
-      _0: "divide by zero"
-    };
+    return { TAG: "Err", _0: "divide by zero" };
   } else {
-    return {
-      TAG: "Ok",
-      _0: $div(a, b, -2147483648) | 0
-    };
+    return { TAG: "Ok", _0: $div(a, b, -2147483648) | 0 };
   }
 }
 
@@ -154,21 +131,9 @@ export function discriminants(i) {
     status = "Teapot";
   }
   return [
-    [
-      "Low",
-      "Mid",
-      "High"
-    ].indexOf(level),
-    {
-      Ok: 200,
-      NotFound: 404,
-      Teapot: 418
-    }[status],
-    418 - {
-      Ok: 200,
-      NotFound: 404,
-      Teapot: 418
-    }[status] | 0
+    ["Low", "Mid", "High"].indexOf(level),
+    { Ok: 200, NotFound: 404, Teapot: 418 }[status],
+    (418 - { Ok: 200, NotFound: 404, Teapot: 418 }[status]) | 0,
   ];
 }
 
@@ -191,19 +156,15 @@ function points(f) {
 }
 
 export function changed_in_place(r) {
-  let poly = {
-    TAG: "Poly",
-    _0: [1]
-  };
-  const before = poly.TAG === "Poly" ? {
-    ...poly,
-    _0: poly._0.slice()
-  } : poly.TAG === "Circle" ? { ...poly } : poly;
+  let poly = { TAG: "Poly", _0: [1] };
+  const before =
+    poly.TAG === "Poly"
+      ? { ...poly, _0: poly._0.slice() }
+      : poly.TAG === "Circle"
+        ? { ...poly }
+        : poly;
   grow(poly);
-  let circle$1 = {
-    TAG: "Circle",
-    r
-  };
+  let circle$1 = { TAG: "Circle", r };
   grow(circle$1);
   const value = circle$1;
   if (value.TAG === "Circle") {
@@ -218,11 +179,6 @@ export function changed_in_place(r) {
   } else {
     radius = 0;
   }
-  return [
-    points(poly),
-    points(before),
-    radius,
-    points(dot)
-  ];
+  return [points(poly), points(before), radius, points(dot)];
 }
 //# sourceMappingURL=enums.js.map

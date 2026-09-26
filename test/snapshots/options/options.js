@@ -23,7 +23,7 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
 
 export function half(n) {
   if (n % 2 === 0) {
-    return n / 2 | 0;
+    return (n / 2) | 0;
   } else {
     return undefined;
   }
@@ -59,7 +59,7 @@ export function halvings(n) {
         break;
       }
       n = h;
-      count = count + 1 >>> 0;
+      count = (count + 1) >>> 0;
     } else {
       break;
     }
@@ -69,11 +69,7 @@ export function halvings(n) {
 
 export function methods(n) {
   const h = half(n);
-  return [
-    h != null,
-    h == null,
-    h ?? -1
-  ];
+  return [h != null, h == null, h ?? -1];
 }
 
 export function unwrapped(n) {
@@ -87,7 +83,7 @@ export function expected(n) {
 export function eager(n) {
   const calls = { value: 0 };
   const bump = () => {
-    calls.value = calls.value + 1 | 0;
+    calls.value = (calls.value + 1) | 0;
     return 7;
   };
   const option = half(n);
@@ -97,10 +93,7 @@ export function eager(n) {
 }
 
 export function fill(slot, n) {
-  return {
-    id: slot.id,
-    value: half(n)
-  };
+  return { id: slot.id, value: half(n) };
 }
 
 export function same(a, b) {
@@ -126,7 +119,7 @@ function double(n) {
 
 function pair(n) {
   if (n > 0) {
-    return [n, n + 1 | 0];
+    return [n, (n + 1) | 0];
   } else {
     return undefined;
   }
@@ -136,12 +129,12 @@ export function mapped(n) {
   const h = half(n);
   const h$1 = half(n);
   const h$2 = half(n);
-  const x = h$2 != null ? h$2 + 1 | 0 : undefined;
+  const x = h$2 != null ? (h$2 + 1) | 0 : undefined;
   return [
-    h$1 != null ? h$1 + 1 | 0 : undefined,
+    h$1 != null ? (h$1 + 1) | 0 : undefined,
     h != null ? double(h) : undefined,
     h != null ? h > 2 : undefined,
-    x != null ? Math.imul(x, 3) : undefined
+    x != null ? Math.imul(x, 3) : undefined,
   ];
 }
 
@@ -149,8 +142,8 @@ export function mapped_more(n) {
   const calls = { value: 0 };
   const h = half(n);
   const map = (h) => {
-    calls.value = calls.value + 1 >>> 0;
-    return h - 1 | 0;
+    calls.value = (calls.value + 1) >>> 0;
+    return (h - 1) | 0;
   };
   const counted = h != null ? map(h) : undefined;
   const option = pair(n);
@@ -159,7 +152,7 @@ export function mapped_more(n) {
     option != null ? Math.imul(option[0], option[1]) : undefined,
     counted,
     calls.value,
-    option$1 != null ? 7 : undefined
+    option$1 != null ? 7 : undefined,
   ];
 }
 
@@ -175,7 +168,7 @@ export function chained(n) {
 export function chained_twice(n) {
   const calls = { value: 0 };
   const counted = (m) => {
-    calls.value = calls.value + 1 >>> 0;
+    calls.value = (calls.value + 1) >>> 0;
     return half(m);
   };
   let v;
@@ -197,9 +190,9 @@ export function chained_statement(n) {
   let total = 0;
   const h = half(n);
   if (h != null) {
-    const value = h > 0 ? [h, h + 1 | 0] : undefined;
+    const value = h > 0 ? [h, (h + 1) | 0] : undefined;
     if (value != null && value[0] < 10) {
-      total = value[0] + value[1] | 0;
+      total = (value[0] + value[1]) | 0;
     }
   }
   return total;
@@ -211,7 +204,7 @@ export function chained_loop(n) {
     const h = half(n);
     if (h != null && h !== 0) {
       n = h;
-      count = count + 1 >>> 0;
+      count = (count + 1) >>> 0;
     } else {
       break;
     }

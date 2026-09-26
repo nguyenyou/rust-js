@@ -34,13 +34,13 @@ test("source map points from fib.js back into fib.rs", async () => {
   // JS snippet  →  the Rust text its position maps to.
   const probes: [string, string][] = [
     ["export function fib(", "pub fn fib("],
-    ["fib(n - 1 >>> 0)", "fib(n - 1)"],
+    ["fib((n - 1) >>> 0)", "fib(n - 1)"],
     ["while (i < n)", "while i < n"],
     ["if (i === n)", "if i == n"],
-    ["Math.imul(x, 3) - 7 | 0", "x * 3 - 7"],
+    ["(Math.imul(x, 3) - 7) | 0", "x * 3 - 7"],
     ["$div(a, b, -2147483648) | 0", "a / b"],
     ['order === "Ascending"', "Order::Ascending"],
-    ["fib_iter(20 - n >>> 0)", "fib_iter(20 - n)"],
+    ["fib_iter((20 - n) >>> 0)", "fib_iter(20 - n)"],
   ];
   for (const [jsText, rustText] of probes) {
     const line = js.findIndex((l, i) => i >= firstFunction && l.includes(jsText));

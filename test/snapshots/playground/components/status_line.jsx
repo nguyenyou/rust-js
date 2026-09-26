@@ -9,6 +9,10 @@ export function StatusLine({ status }) {
   } else {
     color = "text-bad";
   }
-  return <span id="status" role="status" className={color}>{status.text}</span>;
+  return (
+    <span id="status" role="status" className={color}>
+      {status.text}
+    </span>
+  );
 }
 //# sourceMappingURL=status_line.jsx.map

@@ -14,8 +14,10 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
 
 export function start() {
   const root = createRoot($unwrap(document.getElementById("app"), "the page has an #app"));
-  root.render(<StrictMode>
-    <app.App />
-  </StrictMode>);
+  root.render(
+    <StrictMode>
+      <app.App />
+    </StrictMode>,
+  );
 }
 //# sourceMappingURL=lib.jsx.map

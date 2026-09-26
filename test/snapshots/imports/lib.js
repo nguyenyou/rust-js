@@ -19,10 +19,6 @@ export function urls() {
 }
 
 export function greetings() {
-  return [
-    greet("world"),
-    greet$1.polite("world"),
-    punctuation
-  ];
+  return [greet("world"), greet$1.polite("world"), punctuation];
 }
 //# sourceMappingURL=lib.js.map

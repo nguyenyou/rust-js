@@ -6,12 +6,12 @@
 // equally close, JS takes the even one (1888570120608320.2), and Rust the
 // larger (1888570120608320.3).
 function $displayF64(value) {
-  if (Number.isNaN(value)) return 'NaN';
-  if (value === Infinity) return 'inf';
-  if (value === -Infinity) return '-inf';
-  const sign = value < 0 || Object.is(value, -0) ? '-' : '';
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
   const x = Math.abs(value);
-  if (x === 0) return sign + '0';
+  if (x === 0) return sign + "0";
 
   const bitsView = new DataView(new ArrayBuffer(8));
   bitsView.setFloat64(0, x);
@@ -25,9 +25,10 @@ function $displayF64(value) {
 
   // The floating-point logarithm is only an estimate; correct it exactly.
   let exponent = Math.floor(Math.log10(x));
-  const atLeastPowerOfTen = e => e >= 0
-    ? numerator >= denominator * 10n ** BigInt(e)
-    : numerator * 10n ** BigInt(-e) >= denominator;
+  const atLeastPowerOfTen = (e) =>
+    e >= 0
+      ? numerator >= denominator * 10n ** BigInt(e)
+      : numerator * 10n ** BigInt(-e) >= denominator;
   while (!atLeastPowerOfTen(exponent)) exponent--;
   while (atLeastPowerOfTen(exponent + 1)) exponent++;
 
@@ -44,7 +45,11 @@ function $displayF64(value) {
       if (candidate > 0n && Number(`${candidate}e${power}`) === x) {
         const delta = candidate * d - n;
         const distance = delta < 0n ? -delta : delta;
-        if (best === undefined || distance < bestDistance || (distance === bestDistance && candidate > best)) {
+        if (
+          best === undefined ||
+          distance < bestDistance ||
+          (distance === bestDistance && candidate > best)
+        ) {
           best = candidate;
           bestDistance = distance;
         }
@@ -53,18 +58,21 @@ function $displayF64(value) {
     if (best !== undefined) {
       let digits = best.toString();
       let decimalPower = power;
-      while (digits.endsWith('0')) {
+      while (digits.endsWith("0")) {
         digits = digits.slice(0, -1);
         decimalPower++;
       }
       const point = digits.length + decimalPower;
-      const body = point <= 0 ? '0.' + '0'.repeat(-point) + digits
-        : point >= digits.length ? digits + '0'.repeat(point - digits.length)
-        : digits.slice(0, point) + '.' + digits.slice(point);
+      const body =
+        point <= 0
+          ? "0." + "0".repeat(-point) + digits
+          : point >= digits.length
+            ? digits + "0".repeat(point - digits.length)
+            : digits.slice(0, point) + "." + digits.slice(point);
       return sign + body;
     }
   }
-  throw new Error('No f64 round-trip decimal found');
+  throw new Error("No f64 round-trip decimal found");
 }
 
 function $debug(v) {
@@ -85,7 +93,13 @@ function $debug(v) {
     return "{" + [...v].map($debug).join(", ") + "}";
   }
   if (typeof v === "object" && v !== null) {
-    return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
+    return (
+      "{ " +
+      Object.entries(v)
+        .map(([k, x]) => k + ": " + $debug(x))
+        .join(", ") +
+      " }"
+    );
   }
   return String(v);
 }
@@ -120,7 +134,8 @@ function $splitBy(s, matches) {
 function $parseInt(s, min, max) {
   const error = (message) => ({ TAG: "Err", _0: message });
   if (s === "") return error("cannot parse integer from empty string");
-  if (!(min < 0 ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s)) return error("invalid digit found in string");
+  if (!(min < 0 ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s))
+    return error("invalid digit found in string");
   const n = Number(s);
   if (n > max) return error("number too large to fit in target type");
   if (n < min) return error("number too small to fit in target type");
@@ -134,7 +149,8 @@ function $parseF64(s) {
   const rest = lower.replace(/^[+-]/, "");
   if (rest === "inf" || rest === "infinity") return { TAG: "Ok", _0: sign * Infinity };
   if (rest === "nan") return { TAG: "Ok", _0: NaN };
-  if (!/^([0-9]+\.?[0-9]*|\.[0-9]+)(e[+-]?[0-9]+)?$/.test(rest)) return { TAG: "Err", _0: "invalid float literal" };
+  if (!/^([0-9]+\.?[0-9]*|\.[0-9]+)(e[+-]?[0-9]+)?$/.test(rest))
+    return { TAG: "Err", _0: "invalid float literal" };
   return { TAG: "Ok", _0: sign * Number(rest) };
 }
 
@@ -147,12 +163,17 @@ function $parseBool(s) {
 function $parseChar(s) {
   const chars = [...s];
   if (chars.length === 1) return { TAG: "Ok", _0: s };
-  return { TAG: "Err", _0: chars.length === 0 ? "cannot parse char from empty string" : "too many characters in string" };
+  return {
+    TAG: "Err",
+    _0:
+      chars.length === 0 ? "cannot parse char from empty string" : "too many characters in string",
+  };
 }
 
 function $slice(items, start, end = items.length) {
   if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
-  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
+  if (end > items.length)
+    throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
   return items.slice(start, end);
 }
 
@@ -180,7 +201,10 @@ function $debugStr(s, quote = '"') {
     else if (c === "\r") out += "\\r";
     else if (c === "\t") out += "\\t";
     else if (c === "\0") out += "\\0";
-    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+    else if (
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) ||
+      (c !== " " && /\p{Zs}/u.test(c))
+    )
       out += "\\u{" + c.codePointAt(0).toString(16) + "}";
     else out += c;
   }
@@ -196,7 +220,7 @@ export function chars(c) {
     /^\p{Uppercase}$/u.test(c),
     /^\p{Lowercase}$/u.test(c),
     /^\p{Cc}$/u.test(c),
-    c.charCodeAt(0) < 128
+    c.charCodeAt(0) < 128,
   ];
 }
 
@@ -209,7 +233,7 @@ export function ascii(c) {
     c.replace(/[a-z]/, (letter) => letter.toUpperCase()),
     c.replace(/[A-Z]/, (letter) => letter.toLowerCase()),
     $toDigit(c, 16),
-    $toDigit(c, 8) !== undefined
+    $toDigit(c, 8) !== undefined,
   ];
 }
 
@@ -220,8 +244,8 @@ export function casts(c) {
     code,
     c.codePointAt(0) & 255,
     String.fromCharCode(65),
-    String.fromCharCode(97 + (code % 26 & 255) & 255),
-    x
+    String.fromCharCode((97 + ((code % 26) & 255)) & 255),
+    x,
   ];
 }
 
@@ -231,15 +255,21 @@ export function parses(s) {
   const f = $parseF64(s);
   const b = $parseBool(s);
   const c = $parseChar(s);
-  const owned = $unwrapOk({
-    TAG: "Ok",
-    _0: s
-  });
-  const arg = i.TAG === "Err" ? {
-    TAG: "Err",
-    _0: i._0
-  } : i;
-  return (n.TAG === "Ok" ? "Ok(" + String(n._0) + ")" : "Err(" + $debugStr(n._0) + ")") + " " + (arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")") + " " + (f.TAG === "Ok" ? "Ok(" + $debugF64(f._0) + ")" : "Err(" + $debugStr(f._0) + ")") + " " + (b.TAG === "Ok" ? "Ok(" + String(b._0) + ")" : "Err(" + $debugStr(b._0) + ")") + " " + (c.TAG === "Ok" ? "Ok(" + $debugStr(c._0, "'") + ")" : "Err(" + $debugStr(c._0) + ")") + " " + $debugStr(owned);
+  const owned = $unwrapOk({ TAG: "Ok", _0: s });
+  const arg = i.TAG === "Err" ? { TAG: "Err", _0: i._0 } : i;
+  return (
+    (n.TAG === "Ok" ? "Ok(" + String(n._0) + ")" : "Err(" + $debugStr(n._0) + ")") +
+    " " +
+    (arg.TAG === "Ok" ? "Ok(" + String(arg._0) + ")" : "Err(" + $debugStr(arg._0) + ")") +
+    " " +
+    (f.TAG === "Ok" ? "Ok(" + $debugF64(f._0) + ")" : "Err(" + $debugStr(f._0) + ")") +
+    " " +
+    (b.TAG === "Ok" ? "Ok(" + String(b._0) + ")" : "Err(" + $debugStr(b._0) + ")") +
+    " " +
+    (c.TAG === "Ok" ? "Ok(" + $debugStr(c._0, "'") + ")" : "Err(" + $debugStr(c._0) + ")") +
+    " " +
+    $debugStr(owned)
+  );
 }
 
 function sum(text) {
@@ -249,16 +279,16 @@ function sum(text) {
     if (result.TAG === "Err") {
       return result;
     }
-    total = total + result._0 | 0;
+    total = (total + result._0) | 0;
   }
-  return {
-    TAG: "Ok",
-    _0: total
-  };
+  return { TAG: "Ok", _0: total };
 }
 
 export function words(text) {
-  const words$1 = text.split(/\p{White_Space}+/u).filter((word) => word !== "").map((w) => w);
+  const words$1 = text
+    .split(/\p{White_Space}+/u)
+    .filter((word) => word !== "")
+    .map((w) => w);
   const lines = $lines(text).map((l) => l);
   let total;
   const match = sum(text);
@@ -268,65 +298,91 @@ export function words(text) {
     total = "error: " + match._0;
   }
   const pieces = $splitBy(text, (c) => /^[0-9]$/.test(c) || c === "\r").map((p) => p);
-  return [
-    words$1,
-    lines,
-    total,
-    pieces,
-    Array.from(text).some((c) => /^\p{Uppercase}$/u.test(c))
-  ];
+  return [words$1, lines, total, pieces, Array.from(text).some((c) => /^\p{Uppercase}$/u.test(c))];
 }
 
 export function slices(v) {
-  const a = [
-    10,
-    20,
-    30
-  ];
-  const tail = $slice(a, 1).reduce((a, b) => a + b >>> 0, 0);
+  const a = [10, 20, 30];
+  const tail = $slice(a, 1).reduce((a, b) => (a + b) >>> 0, 0);
   return [
     $slice(v, 1, 3).slice(),
     $slice(v, 2).slice(),
     $slice(v, 0, 1).slice(),
     $slice(v, 0).slice(),
-    tail
+    tail,
   ];
 }
 
 export function slice_panics(start, end) {
-  const v = [
-    1,
-    2,
-    3
-  ];
+  const v = [1, 2, 3];
   return $slice(v, start, end).slice();
 }
 
 export function escapes() {
-  return $debugStr("a\"b\\c\n	\r\0\x1Bé　\xA0​\u2028́x􏿿") + " " + $debugStr("a", "'") + " " + $debugStr("'", "'") + " " + $debugStr("\"", "'") + " " + $debugStr("it's");
+  return (
+    $debugStr('a"b\\c\n	\r\0\x1Bé　\xA0​\u2028́x􏿿') +
+    " " +
+    $debugStr("a", "'") +
+    " " +
+    $debugStr("'", "'") +
+    " " +
+    $debugStr('"', "'") +
+    " " +
+    $debugStr("it's")
+  );
 }
 
 export function report() {
   let out = "";
-  for (const c of [
-    "a",
-    "Z",
-    "7",
-    " ",
-    "\n",
-    "　",
-    "é",
-    "ß",
-    "٣",
-    "Ⅻ",
-    "!",
-    "﻿",
-    ""
-  ]) {
+  for (const c of ["a", "Z", "7", " ", "\n", "　", "é", "ß", "٣", "Ⅻ", "!", "﻿", ""]) {
     const arg = chars(c);
     const arg$1 = ascii(c);
     const arg$2 = casts(c);
-    out += $debugStr(c, "'") + " (" + String(arg[0]) + ", " + String(arg[1]) + ", " + String(arg[2]) + ", " + String(arg[3]) + ", " + String(arg[4]) + ", " + String(arg[5]) + ", " + String(arg[6]) + ", " + String(arg[7]) + ") (" + String(arg$1[0]) + ", " + String(arg$1[1]) + ", " + String(arg$1[2]) + ", " + String(arg$1[3]) + ", " + $debugStr(arg$1[4], "'") + ", " + $debugStr(arg$1[5], "'") + ", " + ((value) => value == null ? "None" : "Some(" + String(value) + ")")(arg$1[6]) + ", " + String(arg$1[7]) + ") (" + String(arg$2[0]) + ", " + String(arg$2[1]) + ", " + $debugStr(arg$2[2], "'") + ", " + $debugStr(arg$2[3], "'") + ", " + String(arg$2[4]) + ")\n";
+    out +=
+      $debugStr(c, "'") +
+      " (" +
+      String(arg[0]) +
+      ", " +
+      String(arg[1]) +
+      ", " +
+      String(arg[2]) +
+      ", " +
+      String(arg[3]) +
+      ", " +
+      String(arg[4]) +
+      ", " +
+      String(arg[5]) +
+      ", " +
+      String(arg[6]) +
+      ", " +
+      String(arg[7]) +
+      ") (" +
+      String(arg$1[0]) +
+      ", " +
+      String(arg$1[1]) +
+      ", " +
+      String(arg$1[2]) +
+      ", " +
+      String(arg$1[3]) +
+      ", " +
+      $debugStr(arg$1[4], "'") +
+      ", " +
+      $debugStr(arg$1[5], "'") +
+      ", " +
+      ((value) => (value == null ? "None" : "Some(" + String(value) + ")"))(arg$1[6]) +
+      ", " +
+      String(arg$1[7]) +
+      ") (" +
+      String(arg$2[0]) +
+      ", " +
+      String(arg$2[1]) +
+      ", " +
+      $debugStr(arg$2[2], "'") +
+      ", " +
+      $debugStr(arg$2[3], "'") +
+      ", " +
+      String(arg$2[4]) +
+      ")\n";
   }
   for (const s of [
     "42",
@@ -342,19 +398,12 @@ export function report() {
     "NaN",
     "1e3",
     ".5",
-    " 1"
+    " 1",
   ]) {
     const arg$3 = parses(s);
     out += $debugStr(s) + " " + arg$3 + "\n";
   }
-  for (const s$1 of [
-    "true",
-    "false",
-    "True",
-    "x",
-    "é",
-    "ab"
-  ]) {
+  for (const s$1 of ["true", "false", "True", "x", "é", "ab"]) {
     const arg$4 = parses(s$1);
     out += $debugStr(s$1) + " " + arg$4 + "\n";
   }
@@ -367,18 +416,37 @@ export function report() {
     "foo\nBar\n\r\nbaz\r",
     "",
     "\n",
-    "\r"
+    "\r",
   ]) {
     const arg$5 = words(text);
-    out += "([" + arg$5[0].map((item) => $debugStr(item)).join(", ") + "], [" + arg$5[1].map((item) => $debugStr(item)).join(", ") + "], " + $debugStr(arg$5[2]) + ", [" + arg$5[3].map((item) => $debugStr(item)).join(", ") + "], " + String(arg$5[4]) + ")\n";
+    out +=
+      "([" +
+      arg$5[0].map((item) => $debugStr(item)).join(", ") +
+      "], [" +
+      arg$5[1].map((item) => $debugStr(item)).join(", ") +
+      "], " +
+      $debugStr(arg$5[2]) +
+      ", [" +
+      arg$5[3].map((item) => $debugStr(item)).join(", ") +
+      "], " +
+      String(arg$5[4]) +
+      ")\n";
   }
-  const arg$6 = slices([
-    1,
-    2,
-    3,
-    4
-  ]);
-  out += "([" + arg$6[0].map((item) => String(item)).join(", ") + "], [" + arg$6[1].map((item) => String(item)).join(", ") + "], [" + arg$6[2].map((item) => String(item)).join(", ") + "], [" + arg$6[3].map((item) => String(item)).join(", ") + "], " + String(arg$6[4]) + ")\n" + escapes() + "\n";
+  const arg$6 = slices([1, 2, 3, 4]);
+  out +=
+    "([" +
+    arg$6[0].map((item) => String(item)).join(", ") +
+    "], [" +
+    arg$6[1].map((item) => String(item)).join(", ") +
+    "], [" +
+    arg$6[2].map((item) => String(item)).join(", ") +
+    "], [" +
+    arg$6[3].map((item) => String(item)).join(", ") +
+    "], " +
+    String(arg$6[4]) +
+    ")\n" +
+    escapes() +
+    "\n";
   return out;
 }
 //# sourceMappingURL=text.js.map

@@ -8,13 +8,34 @@ export function FileItem({ name, path, depth, open, root, onOpen, onDelete }) {
   if (onDelete != null && root) {
     end = <span className="text-[11px] text-muted">root </span>;
   } else if (onDelete != null) {
-    end = <button className="invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible" aria-label={"Delete " + path} onClick={() => onDelete(path)}>×</button>;
+    end = (
+      <button
+        className="invisible cursor-pointer px-1.5 text-muted group-hover:visible focus:visible"
+        aria-label={"Delete " + path}
+        onClick={() => onDelete(path)}
+      >
+        ×
+      </button>
+    );
   } else {
     end = undefined;
   }
-  return <li className="group flex items-center">
-    <button className={"min-w-0 flex-1 cursor-pointer truncate " + styles.ROW + " text-left aria-[current=true]:bg-selected"} style={{ paddingLeft: 8 + (Math.imul(depth, 12) >>> 0) >>> 0 }} aria-current={open} onClick={() => onOpen(opened)}>{name}</button>
-    {end}
-  </li>;
+  return (
+    <li className="group flex items-center">
+      <button
+        className={
+          "min-w-0 flex-1 cursor-pointer truncate " +
+          styles.ROW +
+          " text-left aria-[current=true]:bg-selected"
+        }
+        style={{ paddingLeft: (8 + (Math.imul(depth, 12) >>> 0)) >>> 0 }}
+        aria-current={open}
+        onClick={() => onOpen(opened)}
+      >
+        {name}
+      </button>
+      {end}
+    </li>
+  );
 }
 //# sourceMappingURL=file_item.jsx.map

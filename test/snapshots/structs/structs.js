@@ -28,20 +28,11 @@ function $unwrap(value, message = "called `Option::unwrap()` on a `None` value")
 }
 
 export function point(x, y) {
-  return {
-    x,
-    y
-  };
+  return { x, y };
 }
 
 export function rect(x, y, w, h) {
-  return {
-    origin: {
-      x,
-      y
-    },
-    size: [w, h]
-  };
+  return { origin: { x, y }, size: [w, h] };
 }
 
 export function area(r) {
@@ -50,13 +41,13 @@ export function area(r) {
 
 export function moved(x, y, dx) {
   let p = point(x, y);
-  p.x = p.x + dx | 0;
+  p.x = (p.x + dx) | 0;
   return p;
 }
 
 export function grow(w, h, by) {
   let r = rect(0, 0, w, h);
-  r.size[0] = r.size[0] + by >>> 0;
+  r.size[0] = (r.size[0] + by) >>> 0;
   r.size[1] = Math.imul(r.size[1], 2) >>> 0;
   r.origin = point(-1, -1);
   return r;
@@ -65,12 +56,12 @@ export function grow(w, h, by) {
 export function copies_are_separate(x) {
   const a = point(x, 0);
   let b = { ...a };
-  b.x = b.x + 1 | 0;
+  b.x = (b.x + 1) | 0;
   return [a.x, b.x];
 }
 
 function bump(p) {
-  p.y = p.y + 10 | 0;
+  p.y = (p.y + 10) | 0;
   return p;
 }
 
@@ -82,10 +73,7 @@ export function caller_keeps_its_point(y) {
 
 export function moves_share_nothing(x) {
   const a = point(x, x);
-  const r = {
-    origin: { ...a },
-    size: [1, 1]
-  };
+  const r = { origin: { ...a }, size: [1, 1] };
   let s = r;
   s.origin.x = 0;
   return [a.x, s.origin.x];
@@ -106,7 +94,7 @@ function origin_of(r) {
 export function returned_copy_is_separate(x) {
   const r = rect(x, x, 1, 1);
   let p = origin_of(r);
-  p.x = p.x + 1 | 0;
+  p.x = (p.x + 1) | 0;
   return [r.origin.x, p.x];
 }
 
@@ -119,7 +107,7 @@ export function option_copy_is_separate(x) {
   const option = marked(m);
   const fallback = point(0, 0);
   let p = option ?? fallback;
-  p.x = p.x + 1 | 0;
+  p.x = (p.x + 1) | 0;
   let kept;
   if (m.at != null) {
     const q = { ...m.at };
@@ -133,25 +121,19 @@ export function option_copy_is_separate(x) {
 export function deref_copy_is_separate(x) {
   const points = [point(x, 0)];
   let p = { ...$unwrap(points[0]) };
-  p.x = p.x + 1 | 0;
+  p.x = (p.x + 1) | 0;
   return [$unwrap(points[0]).x, p.x];
 }
 
 export function with_x(x, y) {
   const base = point(0, y);
-  return {
-    x,
-    y: base.y
-  };
+  return { x, y: base.y };
 }
 
 export function written_order(a, b) {
   const y = $div(100, a, -2147483648) | 0;
   const x = $rem(100, b, -2147483648) | 0;
-  return {
-    x,
-    y
-  };
+  return { x, y };
 }
 
 export function divmod(a, b) {
@@ -160,7 +142,7 @@ export function divmod(a, b) {
 
 export function divmod_sum(a, b) {
   const [q, r] = divmod(a, b);
-  return q + r >>> 0;
+  return (q + r) >>> 0;
 }
 
 export function classify([a, b]) {
@@ -184,7 +166,7 @@ export function quadrant(x, y) {
   } else if (match.x > 0 && match.y > 0) {
     return 1;
   } else if (match.x < 0) {
-    return 2 + (y < 0 ? 1 : 0) | 0;
+    return (2 + (y < 0 ? 1 : 0)) | 0;
   } else {
     return Math.imul(match.y, 4);
   }

@@ -7,16 +7,41 @@ import * as tree from "../tree.js";
 export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {
   const rows = tree.inOrder(tree$1, first).map((param) => {
     if (param[1].TAG === "Folder") {
-      return <li key={param[0] + "/"} className="flex items-center">
-        <div className="w-full">
-          <span className={"block " + styles.ROW + " text-muted"} style={{ paddingLeft: 8 + (Math.imul(depth, 12) >>> 0) >>> 0 }}>{param[0] + "/"}</span>
-          <ul>
-            <FileTree tree={param[1]._0} depth={depth + 1 >>> 0} first={first} selected={selected} onOpen={onOpen} onDelete={onDelete} />
-          </ul>
-        </div>
-      </li>;
+      return (
+        <li key={param[0] + "/"} className="flex items-center">
+          <div className="w-full">
+            <span
+              className={"block " + styles.ROW + " text-muted"}
+              style={{ paddingLeft: (8 + (Math.imul(depth, 12) >>> 0)) >>> 0 }}
+            >
+              {param[0] + "/"}
+            </span>
+            <ul>
+              <FileTree
+                tree={param[1]._0}
+                depth={(depth + 1) >>> 0}
+                first={first}
+                selected={selected}
+                onOpen={onOpen}
+                onDelete={onDelete}
+              />
+            </ul>
+          </div>
+        </li>
+      );
     } else {
-      return <file_item.FileItem name={param[0]} path={param[1]._0} depth={depth} open={param[1]._0 === selected} root={param[1]._0 === first} onOpen={onOpen} onDelete={onDelete} key={param[1]._0} />;
+      return (
+        <file_item.FileItem
+          name={param[0]}
+          path={param[1]._0}
+          depth={depth}
+          open={param[1]._0 === selected}
+          root={param[1]._0 === first}
+          onOpen={onOpen}
+          onDelete={onDelete}
+          key={param[1]._0}
+        />
+      );
     }
   });
   return <>{rows}</>;

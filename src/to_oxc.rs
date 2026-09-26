@@ -1,7 +1,7 @@
 //! Our JS AST ──► oxc's AST ──► JS text + source map.
 //!
-//! This is the only file that uses oxc. oxc is pre-1.0 and its API changes
-//! often, so keeping it here means an oxc upgrade touches one file.
+//! This and `format.rs` are the only files that use oxc. oxc is pre-1.0 and
+//! its API changes often, so keeping it here means an oxc upgrade touches two.
 //!
 //! ```text
 //!   js::Module ──convert──► oxc Program ──oxc_codegen──► code + map
@@ -10,6 +10,7 @@
 //!   final .js  =  header, imports, helpers  (plain text, no mappings)
 //!              +  code, blank line between functions
 //!                                             (map shifted to match)
+//!   ──format.rs──► as oxfmt formats it, the map moved to match
 //!              +  //# sourceMappingURL=...
 //! ```
 //!
@@ -196,13 +197,18 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
         places.push(parts);
         previous = Some(line);
     }
-    code.push_str(&format!("//# sourceMappingURL={js_file_name}.map\n"));
-
     let map = generated.map.expect("a source map, since source_map_path is set");
-    Output {
-        code,
-        map: shift_lines(&map, &places, js_file_name),
+    let mut map = shift_lines(&map, &places, js_file_name);
+    // Laid out as oxfmt lays it out, the map moved to match.
+    let shifted = SourceMap::from_json_string(&map).expect("the map just built");
+    if let Some((formatted, formatted_map)) =
+        crate::format::formatted(&code, &shifted, js_file_name.ends_with(".jsx"), js_file_name)
+    {
+        code = formatted;
+        map = formatted_map;
     }
+    code.push_str(&format!("//# sourceMappingURL={js_file_name}.map\n"));
+    Output { code, map }
 }
 
 /// Where the part of a generated line from `from_col` on ends up: on output

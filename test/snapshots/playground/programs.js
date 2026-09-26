@@ -8,8 +8,10 @@ function $cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-const TEST_RUNNER = "\n    const results = registered.map(({ name, f }) => {\n      if (!f) return { name, outcome: \"skip\" };\n      try {\n        f();\n        return { name, outcome: \"pass\" };\n      } catch (e) {\n        return { name, outcome: \"fail\", message: e instanceof Error ? e.message : String(e) };\n      }\n    });\n    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {\n      const line = document.createElement(\"div\");\n      line.className = outcome;\n      line.textContent = { pass: \"✓ \", fail: \"✗ \", skip: \"– \" }[outcome] + name + (outcome === \"skip\" ? \" (ignored)\" : \"\");\n      if (message) {\n        const why = document.createElement(\"pre\");\n        why.textContent = message;\n        line.append(why);\n      }\n      return line;\n    }));\n    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;";
-const FRAME_HEAD = "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }\n  body { margin: 12px; }\n  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }\n  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }\n  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }\n  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }\n  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }\n</style>\n<div id=\"app\"></div>";
+const TEST_RUNNER =
+  '\n    const results = registered.map(({ name, f }) => {\n      if (!f) return { name, outcome: "skip" };\n      try {\n        f();\n        return { name, outcome: "pass" };\n      } catch (e) {\n        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };\n      }\n    });\n    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {\n      const line = document.createElement("div");\n      line.className = outcome;\n      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");\n      if (message) {\n        const why = document.createElement("pre");\n        why.textContent = message;\n        line.append(why);\n      }\n      return line;\n    }));\n    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;';
+const FRAME_HEAD =
+  '<!doctype html>\n<meta charset="utf-8">\n<style>\n  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }\n  body { margin: 12px; }\n  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }\n  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }\n  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }\n  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }\n  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }\n</style>\n<div id="app"></div>';
 
 export function resolve(from, specifier) {
   let parts = from.split("/");
@@ -33,7 +35,7 @@ export function link(files, start) {
   let ordered = files$1.slice();
   const key = (param) => param[0].endsWith(".test.js");
   ordered.sort((a, b) => $cmp(key(a), key(b)));
-  const imports = new RegExp("^import \\* as (\\S+) from \"([^\"]+)\";$", "gm");
+  const imports = new RegExp('^import \\* as (\\S+) from "([^"]+)";$', "gm");
   const exports = new RegExp("^export (async function|function|const) (\\w+)", "gm");
   const sourceMap = new RegExp("^//# sourceMappingURL=.*$", "m");
   for (const item$1 of ordered) {
@@ -51,7 +53,15 @@ export function link(files, start) {
     const body$2 = body$1.replace(sourceMap, "");
     const names$1 = exported.value.join(", ");
     const arg = JSON.stringify(item$1[0]);
-    parts.push("(function (exports) {\n" + body$2 + "\nObject.assign(exports, { " + names$1 + " });\n})(modules[" + arg + "]);");
+    parts.push(
+      "(function (exports) {\n" +
+        body$2 +
+        "\nObject.assign(exports, { " +
+        names$1 +
+        " });\n})(modules[" +
+        arg +
+        "]);",
+    );
   }
   parts.push(start);
   return parts.join("\n").replaceAll("<\/script", "<\\/script");
@@ -67,11 +77,13 @@ export function prepare(files, rootFile, test, run) {
     tests = rootFile;
   }
   const hasMain = new RegExp("^export (async )?function main\\(\\)", "m");
-  const runnable = test ? sources.some((param) => param[0] === tests) : sources.some((param) => param[0] === rootFile && hasMain.test(param[1]));
+  const runnable = test
+    ? sources.some((param) => param[0] === tests)
+    : sources.some((param) => param[0] === rootFile && hasMain.test(param[1]));
   if (!runnable) {
     return "Nothing";
   }
-  const imports = new RegExp("^import .* from \"([^\"]+)\";$", "gm");
+  const imports = new RegExp('^import .* from "([^"]+)";$', "gm");
   let external = [];
   for (const item of sources) {
     for (const [, specifier] of Array.from(item[1].matchAll(imports))) {
@@ -82,36 +94,44 @@ export function prepare(files, rootFile, test, run) {
     }
   }
   if (external.length !== 0) {
-    return {
-      TAG: "Blocked",
-      _0: external
-    };
+    return { TAG: "Blocked", _0: external };
   }
-  const report = (message) => "parent.postMessage({ run: " + String(run) + ", " + message + " }, \"*\")";
-  const linked = test ? link(files, TEST_RUNNER) : link(files, "modules[" + JSON.stringify(rootFile) + "].main();");
-  const finished = test ? report("tested: { passed: count(\"pass\"), failed: count(\"fail\"), ignored: count(\"skip\") }") : report("ran: true");
+  const report = (message) =>
+    "parent.postMessage({ run: " + String(run) + ", " + message + ' }, "*")';
+  const linked = test
+    ? link(files, TEST_RUNNER)
+    : link(files, "modules[" + JSON.stringify(rootFile) + "].main();");
+  const finished = test
+    ? report('tested: { passed: count("pass"), failed: count("fail"), ignored: count("skip") }')
+    : report("ran: true");
   const arg = report("error: String(e.message)");
   const arg$1 = report("error: String(e.reason)");
   const arg$2 = report("error: String(e)");
   return {
     TAG: "Page",
-    _0: FRAME_HEAD + "\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener(\"error\", (e) => " + arg + ");\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener(\"unhandledrejection\", (e) => " + arg$1 + ");\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script>\n  try {\n" + linked + "\n    " + finished + ";\n  } catch (e) {\n    " + arg$2 + ";\n  }\n<\/script>"
+    _0:
+      FRAME_HEAD +
+      '\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener("error", (e) => ' +
+      arg +
+      ');\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener("unhandledrejection", (e) => ' +
+      arg$1 +
+      ");\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script>\n  try {\n" +
+      linked +
+      "\n    " +
+      finished +
+      ";\n  } catch (e) {\n    " +
+      arg$2 +
+      ";\n  }\n<\/script>",
   };
 }
 
 export function outcome(report) {
   if (report.error != null) {
-    return {
-      TAG: "Failed",
-      _0: report.error
-    };
+    return { TAG: "Failed", _0: report.error };
   } else if (report.ran === true) {
     return "Ran";
   } else if (report.tested != null) {
-    return {
-      TAG: "Tested",
-      _0: report.tested
-    };
+    return { TAG: "Tested", _0: report.tested };
   } else {
     return undefined;
   }

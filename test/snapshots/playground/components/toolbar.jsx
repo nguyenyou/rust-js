@@ -6,12 +6,29 @@ import * as styles from "../styles.js";
 
 export function Toolbar({ examples, example, onExample, ready, onCompile, status }) {
   const onTest = onCompile;
-  return <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-    <example_picker.ExamplePicker examples={examples} chosen={example} onChoose={onExample} />
-    <button id="compile" className={styles.CONTROL} disabled={!ready} onClick={() => onCompile(false)}>Compile</button>
-    <button id="test" className={styles.CONTROL} disabled={!ready} title="Compile with --test and run the #[test] functions" onClick={() => onTest(true)}>Test</button>
-    <kbd className="font-mono text-xs text-muted">⌘/Ctrl-Enter</kbd>
-    <status_line.StatusLine status={status} />
-  </div>;
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <example_picker.ExamplePicker examples={examples} chosen={example} onChoose={onExample} />
+      <button
+        id="compile"
+        className={styles.CONTROL}
+        disabled={!ready}
+        onClick={() => onCompile(false)}
+      >
+        Compile
+      </button>
+      <button
+        id="test"
+        className={styles.CONTROL}
+        disabled={!ready}
+        title="Compile with --test and run the #[test] functions"
+        onClick={() => onTest(true)}
+      >
+        Test
+      </button>
+      <kbd className="font-mono text-xs text-muted">⌘/Ctrl-Enter</kbd>
+      <status_line.StatusLine status={status} />
+    </div>
+  );
 }
 //# sourceMappingURL=toolbar.jsx.map

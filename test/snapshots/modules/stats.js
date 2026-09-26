@@ -3,10 +3,10 @@
 import * as lib from "./lib.js";
 
 export function mean(a, b) {
-  return half(lib.clamp(a) + lib.clamp(b) >>> 0);
+  return half((lib.clamp(a) + lib.clamp(b)) >>> 0);
 }
 
 function half(x) {
-  return x / lib.HALVES >>> 0;
+  return (x / lib.HALVES) >>> 0;
 }
 //# sourceMappingURL=stats.js.map

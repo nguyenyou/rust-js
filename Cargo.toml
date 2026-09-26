@@ -9,13 +9,17 @@ description = "Compile Rust to readable JavaScript, in the spirit of ReScript"
 [package.metadata.rust-analyzer]
 rustc_private = true
 
-# oxc prints the JS and builds source maps. It is pre-1.0 and changes often:
-# pin exact versions, and keep every use of its API in src/to_oxc.rs.
+# oxc prints the JS, formats it as oxfmt does, and builds source maps. It is
+# pre-1.0 and changes often: pin one release, and keep every use of its API in
+# src/to_oxc.rs and src/format.rs. Its formatter isn't published to crates.io,
+# so every oxc crate comes from that release's tag, as one copy.
 [dependencies]
 serde_json = "1"
-oxc_allocator = "=0.151.0"
-oxc_ast = "=0.151.0"
-oxc_codegen = "=0.151.0"
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_ast = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_ast_visit = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_codegen = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_formatter = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
 oxc_sourcemap = "=8.1.2"
-oxc_span = "=0.151.0"
-oxc_syntax = "=0.151.0"
+oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }

@@ -18,7 +18,13 @@ function $debug(v) {
     return "{" + [...v].map($debug).join(", ") + "}";
   }
   if (typeof v === "object" && v !== null) {
-    return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
+    return (
+      "{ " +
+      Object.entries(v)
+        .map(([k, x]) => k + ": " + $debug(x))
+        .join(", ") +
+      " }"
+    );
   }
   return String(v);
 }
@@ -32,30 +38,15 @@ function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` valu
 
 export function parse_digit(c) {
   if (c === "0") {
-    return {
-      TAG: "Ok",
-      _0: 0
-    };
+    return { TAG: "Ok", _0: 0 };
   } else if (c === "1") {
-    return {
-      TAG: "Ok",
-      _0: 1
-    };
+    return { TAG: "Ok", _0: 1 };
   } else if (c === "2") {
-    return {
-      TAG: "Ok",
-      _0: 2
-    };
+    return { TAG: "Ok", _0: 2 };
   } else if (c === "3") {
-    return {
-      TAG: "Ok",
-      _0: 3
-    };
+    return { TAG: "Ok", _0: 3 };
   } else {
-    return {
-      TAG: "Err",
-      _0: c + " isn't a digit I know"
-    };
+    return { TAG: "Err", _0: c + " isn't a digit I know" };
   }
 }
 
@@ -70,10 +61,7 @@ export function sum_digits(a, b) {
     return result$1;
   }
   const y = result$1._0;
-  return {
-    TAG: "Ok",
-    _0: (Math.imul(x, 10) >>> 0) + y >>> 0
-  };
+  return { TAG: "Ok", _0: ((Math.imul(x, 10) >>> 0) + y) >>> 0 };
 }
 
 export function halves(n) {
@@ -90,7 +78,7 @@ export function halves(n) {
 
 function half(n) {
   if (n % 2 === 0) {
-    return n / 2 >>> 0;
+    return (n / 2) >>> 0;
   } else {
     return undefined;
   }
@@ -102,7 +90,7 @@ export function methods(c) {
     r.TAG === "Ok",
     r.TAG !== "Ok",
     r.TAG === "Ok" ? r._0 : 99,
-    r.TAG === "Ok" ? r._0 : undefined
+    r.TAG === "Ok" ? r._0 : undefined,
   ];
 }
 
@@ -117,33 +105,18 @@ export function expected(c) {
 function small_sum(a, b) {
   const result = parse_digit(a);
   if (result.TAG === "Err") {
-    return {
-      TAG: "Err",
-      _0: appErrorFromString_from(result._0)
-    };
+    return { TAG: "Err", _0: appErrorFromString_from(result._0) };
   }
   const x = result._0;
   const result$1 = parse_digit(b);
   if (result$1.TAG === "Err") {
-    return {
-      TAG: "Err",
-      _0: appErrorFromString_from(result$1._0)
-    };
+    return { TAG: "Err", _0: appErrorFromString_from(result$1._0) };
   }
   const y = result$1._0;
-  if (x + y >>> 0 > 4) {
-    return {
-      TAG: "Err",
-      _0: {
-        TAG: "TooBig",
-        _0: x + y >>> 0
-      }
-    };
+  if ((x + y) >>> 0 > 4) {
+    return { TAG: "Err", _0: { TAG: "TooBig", _0: (x + y) >>> 0 } };
   }
-  return {
-    TAG: "Ok",
-    _0: x + y >>> 0
-  };
+  return { TAG: "Ok", _0: (x + y) >>> 0 };
 }
 
 export function converted(a, b) {
@@ -158,9 +131,6 @@ export function converted(a, b) {
 }
 
 function appErrorFromString_from(message) {
-  return {
-    TAG: "Parse",
-    _0: message
-  };
+  return { TAG: "Parse", _0: message };
 }
 //# sourceMappingURL=results.js.map

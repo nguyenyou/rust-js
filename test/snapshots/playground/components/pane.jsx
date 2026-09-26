@@ -3,12 +3,19 @@
 import * as styles from "../styles.js";
 
 export function Pane({ title, label, explorer, editor }) {
-  return <section>
-    <h2 className={styles.HEADING}>{title}</h2>
-    <div className="grid h-[460px] grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-md border border-line">
-      <nav className="overflow-auto border-r border-line bg-panel py-1.5 font-mono text-[13px]" aria-label={label}>{explorer}</nav>
-      {editor}
-    </div>
-  </section>;
+  return (
+    <section>
+      <h2 className={styles.HEADING}>{title}</h2>
+      <div className="grid h-[460px] grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-md border border-line">
+        <nav
+          className="overflow-auto border-r border-line bg-panel py-1.5 font-mono text-[13px]"
+          aria-label={label}
+        >
+          {explorer}
+        </nav>
+        {editor}
+      </div>
+    </section>
+  );
 }
 //# sourceMappingURL=pane.jsx.map

@@ -4,24 +4,16 @@ export const SIZE = 4096;
 const GREETING = "hello";
 const RATIO = 0.25;
 const ON = true;
-const ORIGIN = {
-  x: 0,
-  y: 0
-};
+const ORIGIN = { x: 0, y: 0 };
 
 const PAIR = [-3, 2048];
-const PRIMES = [
-  2,
-  3,
-  5,
-  7
-];
+const PRIMES = [2, 3, 5, 7];
 const NOTHING = undefined;
 const LEVEL = "High";
 const STEP = 3;
 
 export function size_in_kb() {
-  return SIZE / 1024 >>> 0;
+  return (SIZE / 1024) >>> 0;
 }
 
 export function greeting() {
@@ -38,7 +30,7 @@ export function on() {
 
 export function moved(dx) {
   let p = { ...ORIGIN };
-  p.x = p.x + dx | 0;
+  p.x = (p.x + dx) | 0;
   return [{ ...p }, { ...ORIGIN }];
 }
 
@@ -49,7 +41,7 @@ export function pair() {
 export function prime_sum() {
   let sum = 0;
   for (const p of PRIMES) {
-    sum = sum + p >>> 0;
+    sum = (sum + p) >>> 0;
   }
   return sum;
 }

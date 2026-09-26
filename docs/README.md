@@ -47,7 +47,8 @@ This folder is where we write those choices down.
 | `src/prepare.rs` | JSX readability preparation after lowering |
 | `src/output.rs` | Filename validation, manifests and artifact publication |
 | `src/js.rs` | Our small JS AST; every node carries a Rust span |
-| `src/to_oxc.rs` | The only oxc code: converts, prints, builds the source map |
+| `src/to_oxc.rs` | Converts to oxc's AST, prints, builds the source map |
+| `src/format.rs` | Formats the printed JS as oxfmt does, and moves the source map to match |
 | `test/native.rs`, `test/compiler.test.ts` | Differential test: native Rust vs. generated JS |
 | `test/emission.test.ts`, `test/diagnostics.test.ts` | Source maps, manifests, output ownership and compiler rejections |
 | `test/react.test.ts`, `test/browser.test.ts`, `test/vite.test.ts` | React behavior, browser runners, and real Vite/Fast Refresh |
@@ -103,6 +104,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0062 Combinators and adapters: the closure's body in place](decisions/0062-combinators.md)
 - [0063 `char`'s questions are Unicode regular expressions; `parse` is a `Result` of Rust's message](decisions/0063-text.md)
 - [0064 Numbers' methods are `Math`'s, where JS agrees; operators call their impl](decisions/0064-numbers.md)
+- [0065 The JS is formatted as oxfmt formats it, and the source map follows](decisions/0065-format-with-oxfmt.md)
 - [0015 Loops: put `while` back, label only when needed](decisions/0015-loops.md)
 
 **Web programs**

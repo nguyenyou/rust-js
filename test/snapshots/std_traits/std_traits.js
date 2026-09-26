@@ -12,7 +12,8 @@ function $traitImpl(cache, keys, make) {
 }
 
 function $index(items, index) {
-  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);
+  if (index < 0 || index >= items.length)
+    throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);
   return items[index];
 }
 
@@ -22,12 +23,12 @@ function $index(items, index) {
 // equally close, JS takes the even one (1888570120608320.2), and Rust the
 // larger (1888570120608320.3).
 function $displayF64(value) {
-  if (Number.isNaN(value)) return 'NaN';
-  if (value === Infinity) return 'inf';
-  if (value === -Infinity) return '-inf';
-  const sign = value < 0 || Object.is(value, -0) ? '-' : '';
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
   const x = Math.abs(value);
-  if (x === 0) return sign + '0';
+  if (x === 0) return sign + "0";
 
   const bitsView = new DataView(new ArrayBuffer(8));
   bitsView.setFloat64(0, x);
@@ -41,9 +42,10 @@ function $displayF64(value) {
 
   // The floating-point logarithm is only an estimate; correct it exactly.
   let exponent = Math.floor(Math.log10(x));
-  const atLeastPowerOfTen = e => e >= 0
-    ? numerator >= denominator * 10n ** BigInt(e)
-    : numerator * 10n ** BigInt(-e) >= denominator;
+  const atLeastPowerOfTen = (e) =>
+    e >= 0
+      ? numerator >= denominator * 10n ** BigInt(e)
+      : numerator * 10n ** BigInt(-e) >= denominator;
   while (!atLeastPowerOfTen(exponent)) exponent--;
   while (atLeastPowerOfTen(exponent + 1)) exponent++;
 
@@ -60,7 +62,11 @@ function $displayF64(value) {
       if (candidate > 0n && Number(`${candidate}e${power}`) === x) {
         const delta = candidate * d - n;
         const distance = delta < 0n ? -delta : delta;
-        if (best === undefined || distance < bestDistance || (distance === bestDistance && candidate > best)) {
+        if (
+          best === undefined ||
+          distance < bestDistance ||
+          (distance === bestDistance && candidate > best)
+        ) {
           best = candidate;
           bestDistance = distance;
         }
@@ -69,18 +75,21 @@ function $displayF64(value) {
     if (best !== undefined) {
       let digits = best.toString();
       let decimalPower = power;
-      while (digits.endsWith('0')) {
+      while (digits.endsWith("0")) {
         digits = digits.slice(0, -1);
         decimalPower++;
       }
       const point = digits.length + decimalPower;
-      const body = point <= 0 ? '0.' + '0'.repeat(-point) + digits
-        : point >= digits.length ? digits + '0'.repeat(point - digits.length)
-        : digits.slice(0, point) + '.' + digits.slice(point);
+      const body =
+        point <= 0
+          ? "0." + "0".repeat(-point) + digits
+          : point >= digits.length
+            ? digits + "0".repeat(point - digits.length)
+            : digits.slice(0, point) + "." + digits.slice(point);
       return sign + body;
     }
   }
-  throw new Error('No f64 round-trip decimal found');
+  throw new Error("No f64 round-trip decimal found");
 }
 
 function $eq(a, b) {
@@ -125,7 +134,7 @@ function $iterator(iterator, next, boxed = false) {
         return { done: true, value: undefined };
       }
       return { done: false, value: boxed ? $someValue(item) : item };
-    }
+    },
   });
 }
 
@@ -158,7 +167,10 @@ function $debugStr(s, quote = '"') {
     else if (c === "\r") out += "\\r";
     else if (c === "\t") out += "\\t";
     else if (c === "\0") out += "\\0";
-    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
+    else if (
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) ||
+      (c !== " " && /\p{Zs}/u.test(c))
+    )
       out += "\\u{" + c.codePointAt(0).toString(16) + "}";
     else out += c;
   }
@@ -212,7 +224,19 @@ function $max(items) {
   return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
 }
 
-var $configDefault, $trackedClone, $figureClone, $versionPartialEq, $metersPartialEqF64, $pointDisplay, $routeDisplay, $figureDisplay, $labeledDisplay, $wordPartialOrd, $wordOrd, $posDebug, $hiddenDebug;
+var $configDefault,
+  $trackedClone,
+  $figureClone,
+  $versionPartialEq,
+  $metersPartialEqF64,
+  $pointDisplay,
+  $routeDisplay,
+  $figureDisplay,
+  $labeledDisplay,
+  $wordPartialOrd,
+  $wordOrd,
+  $posDebug,
+  $hiddenDebug;
 
 export function fresh(TDefault) {
   return TDefault.default();
@@ -227,21 +251,10 @@ export function copied(x, TCopy) {
 }
 
 export function defaults() {
-  const s = {
-    size: 0,
-    tags: [],
-    mode: "Off"
-  };
+  const s = { size: 0, tags: [], mode: "Off" };
   const c = fresh(configDefault());
   const n = fresh({ default: () => 0 });
-  return [
-    s.size,
-    c.retries,
-    s.mode === "Off",
-    n,
-    c.name,
-    s.tags.length
-  ];
+  return [s.size, c.retries, s.mode === "Off", n, c.name, s.tags.length];
 }
 
 export function vec_clones() {
@@ -252,44 +265,26 @@ export function vec_clones() {
 }
 
 export function struct_clones() {
-  const s = {
-    size: 1,
-    tags: ["a"],
-    mode: "On"
-  };
-  let t = {
-    ...s,
-    tags: s.tags.slice()
-  };
+  const s = { size: 1, tags: ["a"], mode: "On" };
+  let t = { ...s, tags: s.tags.slice() };
   t.tags.push("b");
   t.size = 2;
-  return [
-    s.tags.length,
-    t.tags.length,
-    s.size,
-    t.size
-  ];
+  return [s.tags.length, t.tags.length, s.size, t.size];
 }
 
 export function hand_written() {
   const a = { generation: 0 };
   const b = trackedClone_clone(a);
-  const holder = {
-    tracked: b,
-    label: "h"
-  };
-  const copy = {
-    ...holder,
-    tracked: trackedClone_clone(holder.tracked)
-  };
+  const holder = { tracked: b, label: "h" };
+  const copy = { ...holder, tracked: trackedClone_clone(holder.tracked) };
   const all = [{ generation: 5 }];
   const cloned = all.map((item) => trackedClone_clone(item));
   const both = twice(copy.tracked, trackedClone());
   return [
     copy.tracked.generation,
-    cloned.map((t) => t.generation).reduce((a, b) => a + b >>> 0, 0),
-    both.map((t) => t.generation).reduce((a, b) => a + b >>> 0, 0),
-    copied(7, { copy: (value) => value })
+    cloned.map((t) => t.generation).reduce((a, b) => (a + b) >>> 0, 0),
+    both.map((t) => t.generation).reduce((a, b) => (a + b) >>> 0, 0),
+    copied(7, { copy: (value) => value }),
   ];
 }
 
@@ -302,63 +297,36 @@ function points(s) {
 }
 
 export function enum_clones() {
-  const a = {
-    TAG: "Poly",
-    _0: [1]
-  };
+  const a = { TAG: "Poly", _0: [1] };
   let b;
-  const match = a.TAG === "Poly" ? {
-    ...a,
-    _0: a._0.slice()
-  } : a;
+  const match = a.TAG === "Poly" ? { ...a, _0: a._0.slice() } : a;
   if (match.TAG === "Poly") {
     let p = match._0;
     p.push(2);
-    b = {
-      TAG: "Poly",
-      _0: p
-    };
+    b = { TAG: "Poly", _0: p };
   } else {
     b = match;
   }
   const dot = "Dot";
-  const f = figureClone_clone({
-    TAG: "Poly",
-    _0: [
-      1,
-      2,
-      3
-    ]
-  });
+  const f = figureClone_clone({ TAG: "Poly", _0: [1, 2, 3] });
   let n;
   if (f === "Dot") {
     n = 0;
   } else {
     n = f._0.length;
   }
-  return [
-    points(a),
-    points(b),
-    points(dot) + n >>> 0
-  ];
+  return [points(a), points(b), (points(dot) + n) >>> 0];
 }
 
 export function conversions() {
   const a = metersFromF64_from(2.5);
   const b = metersFromU32_from(3);
   const c = metersFromF64_from(1.5);
-  return [
-    a[0],
-    b[0],
-    c[0]
-  ];
+  return [a[0], b[0], c[0]];
 }
 
 function version(major, label) {
-  return {
-    major,
-    label
-  };
+  return { major, label };
 }
 
 export function same(a, b, TPartialEq) {
@@ -370,62 +338,50 @@ export function count_equal(items, x, TPartialEq) {
 }
 
 export function equalities() {
-  const r1 = {
-    version: version(1, "a"),
-    notes: ["x"]
-  };
-  const r2 = {
-    version: version(1, "b"),
-    notes: ["x"]
-  };
-  const r3 = {
-    version: version(1, "c"),
-    notes: []
-  };
-  const left = {
-    TAG: "Bump",
-    _0: version(4, "a")
-  };
-  const right = {
-    TAG: "Bump",
-    _0: version(4, "b")
-  };
+  const r1 = { version: version(1, "a"), notes: ["x"] };
+  const r2 = { version: version(1, "b"), notes: ["x"] };
+  const r3 = { version: version(1, "c"), notes: [] };
+  const left = { TAG: "Bump", _0: version(4, "a") };
+  const right = { TAG: "Bump", _0: version(4, "b") };
   const left$1 = version(5, "a");
   const right$1 = version(5, "b");
   return [
     versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),
     !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),
     same(version(2, "a"), version(3, "a"), versionPartialEq()),
-    left.TAG === "Bump" ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0) : $eq(left, right),
-    {
-      TAG: "Note",
-      _0: "n"
-    } === "Nothing",
-    left$1 == null || right$1 == null ? left$1 == right$1 : versionPartialEq_eq(left$1, right$1)
+    left.TAG === "Bump"
+      ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0)
+      : $eq(left, right),
+    { TAG: "Note", _0: "n" } === "Nothing",
+    left$1 == null || right$1 == null ? left$1 == right$1 : versionPartialEq_eq(left$1, right$1),
   ];
 }
 
 export function generic_equalities() {
-  const all = [
-    version(1, "a"),
-    version(2, "b"),
-    version(1, "c")
+  const all = [version(1, "a"), version(2, "b"), version(1, "c")];
+  const pairs = [
+    [1, "a"],
+    [2, "b"],
   ];
-  const pairs = [[1, "a"], [2, "b"]];
   return [
     count_equal(all, version(1, "z"), versionPartialEq()),
-    same(pairs, [[1, "a"], [2, "b"]], { eq: $eq }),
-    same([version(1, "a")], [version(2, "a")], { eq: (a, b) => a.length === b.length && a.every((x, i) => versionPartialEq_eq(x, b[i])) })
+    same(
+      pairs,
+      [
+        [1, "a"],
+        [2, "b"],
+      ],
+      { eq: $eq },
+    ),
+    same([version(1, "a")], [version(2, "a")], {
+      eq: (a, b) => a.length === b.length && a.every((x, i) => versionPartialEq_eq(x, b[i])),
+    }),
   ];
 }
 
 export function compared() {
   const m = metersFromF64_from(2);
-  return [
-    metersPartialEqF64_eq(m, 2),
-    !metersPartialEqF64_eq(m, 3),
-    !metersPartialEqF64_eq(m, 2)
-  ];
+  return [metersPartialEqF64_eq(m, 2), !metersPartialEqF64_eq(m, 3), !metersPartialEqF64_eq(m, 2)];
 }
 
 function write_loop(stops) {
@@ -437,58 +393,34 @@ export function shown(x, TDisplay) {
 }
 
 export function displays() {
-  const p = {
-    x: 1,
-    y: -2
-  };
+  const p = { x: 1, y: -2 };
   const route = {
-    stops: [{
-      x: 0,
-      y: 0
-    }, {
-      x: 3,
-      y: 4
-    }],
-    closed: true
+    stops: [
+      { x: 0, y: 0 },
+      { x: 3, y: 4 },
+    ],
+    closed: true,
   };
-  const empty = {
-    stops: [],
-    closed: false
-  };
-  const labeled = {
-    label: "at",
-    value: {
-      x: 5,
-      y: 6
-    }
-  };
+  const empty = { stops: [], closed: false };
+  const labeled = { label: "at", value: { x: 5, y: 6 } };
   return [
     pointDisplay_fmt(p),
     routeDisplay_fmt(route) + " / " + routeDisplay_fmt(empty),
-    figureDisplay_fmt("Dot") + " and " + figureDisplay_fmt({
-      TAG: "Poly",
-      _0: [1, 2]
-    }),
+    figureDisplay_fmt("Dot") + " and " + figureDisplay_fmt({ TAG: "Poly", _0: [1, 2] }),
     labeledDisplay_fmt(labeled, pointDisplay()),
     shown(labeled, labeledDisplay(pointDisplay())),
-    shown({
-      label: "n",
-      value: 2.5
-    }, labeledDisplay({ fmt: $displayF64 }))
+    shown({ label: "n", value: 2.5 }, labeledDisplay({ fmt: $displayF64 })),
   ];
 }
 
 function fibonacci() {
-  return {
-    a: 0,
-    b: 1
-  };
+  return { a: 0, b: 1 };
 }
 
 export function iterations() {
   let total$1 = 0;
   for (const x of $iterator({ n: 3 }, countdownIterator_next)) {
-    total$1 = total$1 + x >>> 0;
+    total$1 = (total$1 + x) >>> 0;
   }
   let c = { n: 2 };
   const first = countdownIterator_next(c) ?? 0;
@@ -496,32 +428,49 @@ export function iterations() {
     total$1,
     first,
     $iterator(fibonacci(), fibonacciIterator_next).drop(1).take(6).toArray(),
-    $iterator(fibonacci(), fibonacciIterator_next).take(5).map((x) => Math.imul(x, 2) >>> 0).reduce((a, b) => a + b >>> 0, 0),
+    $iterator(fibonacci(), fibonacciIterator_next)
+      .take(5)
+      .map((x) => Math.imul(x, 2) >>> 0)
+      .reduce((a, b) => (a + b) >>> 0, 0),
     $iterator({ n: 4 }, countdownIterator_next).toArray().length,
-    $iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)
+    $iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50),
   ];
 }
 
 export function generic_iterations() {
   return [
-    $iterator({
-      item: undefined,
-      times: 3
-    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).toArray().length,
-    $iterator({
-      item: undefined,
-      times: 2
-    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).filter((o) => o == null).toArray().length,
-    $iterator({
-      item: 2,
-      times: 3
-    }, (iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true).toArray(),
-    $max($iterator({ n: 5 }, countdownIterator_next).map((x, i) => [i, x]).map(([i, x]) => Math.imul(i, x) >>> 0).toArray())
+    $iterator(
+      { item: undefined, times: 3 },
+      (iterator) => repeatIterator_next(iterator, { clone: (value) => value }),
+      true,
+    ).toArray().length,
+    $iterator(
+      { item: undefined, times: 2 },
+      (iterator) => repeatIterator_next(iterator, { clone: (value) => value }),
+      true,
+    )
+      .filter((o) => o == null)
+      .toArray().length,
+    $iterator(
+      { item: 2, times: 3 },
+      (iterator) => repeatIterator_next(iterator, { clone: (value) => value }),
+      true,
+    ).toArray(),
+    $max(
+      $iterator({ n: 5 }, countdownIterator_next)
+        .map((x, i) => [i, x])
+        .map(([i, x]) => Math.imul(i, x) >>> 0)
+        .toArray(),
+    ),
   ];
 }
 
 export function largest(xs, TOrd, TCopy) {
-  return $maxBy(xs.map((item) => TCopy.copy(item)), TOrd.cmp, true);
+  return $maxBy(
+    xs.map((item) => TCopy.copy(item)),
+    TOrd.cmp,
+    true,
+  );
 }
 
 export function in_order(a, b, TPartialOrd) {
@@ -529,24 +478,15 @@ export function in_order(a, b, TPartialOrd) {
 }
 
 export function orderings() {
-  const a = {
-    major: 1,
-    minor: 2
-  };
-  const b = {
-    major: 1,
-    minor: 10
-  };
-  let all = [
-    b,
-    {
-      major: 0,
-      minor: 9
-    },
-    a
-  ];
+  const a = { major: 1, minor: 2 };
+  const b = { major: 1, minor: 10 };
+  let all = [b, { major: 0, minor: 9 }, a];
   all.sort((a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
-  const v = largest(all, { cmp: (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor) }, { copy: (value) => ({ ...value }) });
+  const v = largest(
+    all,
+    { cmp: (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor) },
+    { copy: (value) => ({ ...value }) },
+  );
   const v$1 = $minBy(all, (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
   return [
     ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) < 0,
@@ -554,70 +494,41 @@ export function orderings() {
     ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) === -1,
     (v != null ? v.minor : undefined) ?? 0,
     (v$1 != null ? v$1.minor : undefined) ?? 0,
-    all.map((v) => v.minor)
+    all.map((v) => v.minor),
   ];
 }
 
 export function partial_orderings() {
-  const p = {
-    x: 1,
-    y: NaN
-  };
-  const q = {
-    x: 1,
-    y: 2
-  };
-  const r = {
-    x: 0.5,
-    y: NaN
-  };
+  const p = { x: 1, y: NaN };
+  const q = { x: 1, y: 2 };
+  const r = { x: 0.5, y: NaN };
   return [
     $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) < 0,
     $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) >= 0,
     $thenCmp($partialCmp(r.x, q.x), $partialCmp(r.y, q.y)) < 0,
-    $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) == null
+    $thenCmp($partialCmp(p.x, q.x), $partialCmp(p.y, q.y)) == null,
   ];
 }
 
 export function more_orderings() {
-  let words = [
-    ["pear"],
-    ["fig"],
-    ["apple"],
-    ["kiwi"]
-  ];
+  let words = [["pear"], ["fig"], ["apple"], ["kiwi"]];
   words.sort(wordOrd_cmp);
-  let priorities = [
-    "High",
-    "Low",
-    "Mid"
-  ];
-  priorities.sort((a, b) => $cmpIn([
-    "Low",
-    "Mid",
-    "High"
-  ], a, b));
+  let priorities = ["High", "Low", "Mid"];
+  priorities.sort((a, b) => $cmpIn(["Low", "Mid", "High"], a, b));
   let lists = [
     [2, 1],
-    [
-      1,
-      5,
-      0
-    ],
-    [1, 5]
+    [1, 5, 0],
+    [1, 5],
   ];
   lists.sort((a, b) => $cmpItems(a, b, $cmp));
   let sizes = words.map((w) => Array.from(w[0]).length);
   for (const list of lists) {
     sizes.push(list.length);
   }
-  let byKey = [{
-    major: 2,
-    minor: 0
-  }, {
-    major: 1,
-    minor: 5
-  }];
+  let byKey = [
+    { major: 2, minor: 0 },
+    { major: 1, minor: 5 },
+  ];
   const key = (v) => [v.minor, v.major];
   byKey.sort((a, b) => {
     const left = key(a);
@@ -625,16 +536,12 @@ export function more_orderings() {
     return $cmp(left[0], right[0]) || $cmp(left[1], right[1]);
   });
   return [
-    $cmpIn([
-      "Low",
-      "Mid",
-      "High"
-    ], "Low", "High") < 0,
+    $cmpIn(["Low", "Mid", "High"], "Low", "High") < 0,
     $index(priorities, 0) === "Low",
-    (3 == null ? undefined == null ? 0 : -1 : undefined == null ? 1 : $cmp(3, undefined)) > 0,
+    (3 == null ? (undefined == null ? 0 : -1) : undefined == null ? 1 : $cmp(3, undefined)) > 0,
     sizes,
     in_order("abc", "abd", { partial_cmp: $cmp }),
-    $index(byKey, 0).major
+    $index(byKey, 0).major,
   ];
 }
 
@@ -643,50 +550,49 @@ export function debugged(x, TDebug) {
 }
 
 export function debugs(n) {
-  const p = {
-    x: n,
-    y: -2.5
-  };
-  const r = n > 1 ? {
-    TAG: "Ok",
-    _0: n
-  } : {
-    TAG: "Err",
-    _0: "small"
-  };
-  const arg = [
-    n,
-    "a",
-    "'"
-  ];
+  const p = { x: n, y: -2.5 };
+  const r = n > 1 ? { TAG: "Ok", _0: n } : { TAG: "Err", _0: "small" };
+  const arg = [n, "a", "'"];
   const arg$1 = [5];
   return [
     posDebug_fmt(p),
     dimsDebug_fmt([n, 2]) + " " + nothingDebug_fmt(undefined) + " " + glyphDebug_fmt("Dot"),
-    glyphDebug_fmt({
-      TAG: "Ring",
-      _0: 1.5
-    }) + " " + glyphDebug_fmt({
-      TAG: "Box",
-      w: n,
-      h: 3
-    }),
-    sixDebug_fmt({
-      a: 1,
-      b: 2,
-      c: 3,
-      d: 4,
-      e: 5,
-      f: "x"
-    }),
-    boxedDebug_fmt({ item: p }, posDebug()) + " " + boxedDebug_fmt({ item: "s" }, { fmt: (value) => value == null ? "None" : "Some(" + $debugStr(value) + ")" }),
-    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") + " " + (undefined == null ? "None" : "Some(" + String(undefined) + ")") + " (" + String(arg[0]) + ", " + $debugStr(arg[1]) + ", " + $debugStr(arg[2], "'") + ") (" + String(arg$1[0]) + ",)",
-    "[" + [p, p].map((item) => posDebug_fmt(item)).join(", ") + "] " + (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") + " " + [
-      "Less",
-      "Equal",
-      "Greater"
-    ][$cmp(n, 1) + 1],
-    hiddenDebug_fmt(undefined) + " " + debugged([[3, 4]], { fmt: (value) => "[" + value.map((item) => item == null ? "None" : "Some(" + dimsDebug_fmt(item) + ")").join(", ") + "]" })
+    glyphDebug_fmt({ TAG: "Ring", _0: 1.5 }) + " " + glyphDebug_fmt({ TAG: "Box", w: n, h: 3 }),
+    sixDebug_fmt({ a: 1, b: 2, c: 3, d: 4, e: 5, f: "x" }),
+    boxedDebug_fmt({ item: p }, posDebug()) +
+      " " +
+      boxedDebug_fmt(
+        { item: "s" },
+        { fmt: (value) => (value == null ? "None" : "Some(" + $debugStr(value) + ")") },
+      ),
+    (1 == null ? "None" : "Some(" + $debugF64(1) + ")") +
+      " " +
+      (undefined == null ? "None" : "Some(" + String(undefined) + ")") +
+      " (" +
+      String(arg[0]) +
+      ", " +
+      $debugStr(arg[1]) +
+      ", " +
+      $debugStr(arg[2], "'") +
+      ") (" +
+      String(arg$1[0]) +
+      ",)",
+    "[" +
+      [p, p].map((item) => posDebug_fmt(item)).join(", ") +
+      "] " +
+      (r.TAG === "Ok" ? "Ok(" + String(r._0) + ")" : "Err(" + $debugStr(r._0) + ")") +
+      " " +
+      ["Less", "Equal", "Greater"][$cmp(n, 1) + 1],
+    hiddenDebug_fmt(undefined) +
+      " " +
+      debugged([[3, 4]], {
+        fmt: (value) =>
+          "[" +
+          value
+            .map((item) => (item == null ? "None" : "Some(" + dimsDebug_fmt(item) + ")"))
+            .join(", ") +
+          "]",
+      }),
   ];
 }
 
@@ -699,7 +605,7 @@ export function countdown(n) {
 }
 
 export function total(items) {
-  return Iterator.from(items).reduce((a, b) => a + b >>> 0, 0);
+  return Iterator.from(items).reduce((a, b) => (a + b) >>> 0, 0);
 }
 
 export function middle(items, k) {
@@ -709,7 +615,7 @@ export function middle(items, k) {
 export function looped(items) {
   let sum = 0;
   for (const x of items) {
-    sum = sum + x >>> 0;
+    sum = (sum + x) >>> 0;
   }
   return sum;
 }
@@ -719,35 +625,27 @@ export function generic_iterators(n) {
     total(evens_below(n)),
     middle($iterator(countdown(n), countdownIterator_next), 2),
     middle(evens_below(Math.imul(n, 2) >>> 0), 3),
-    looped([
-      n,
-      2,
-      3
-    ]),
+    looped([n, 2, 3]),
     total($iterator({ n }, countdownIterator_next)),
-    $iterator(countdown(n), countdownIterator_next).map((x) => x + 1 >>> 0).reduce((a, b) => a + b >>> 0, 0)
+    $iterator(countdown(n), countdownIterator_next)
+      .map((x) => (x + 1) >>> 0)
+      .reduce((a, b) => (a + b) >>> 0, 0),
   ];
 }
 
 function configDefault_default() {
-  return {
-    retries: 3,
-    name: "main"
-  };
+  return { retries: 3, name: "main" };
 }
 
 function trackedClone_clone(tracked) {
-  return { generation: tracked.generation + 1 >>> 0 };
+  return { generation: (tracked.generation + 1) >>> 0 };
 }
 
 function figureClone_clone(figure) {
   if (figure === "Dot") {
     return "Dot";
   } else {
-    return {
-      TAG: "Poly",
-      _0: figure._0.slice()
-    };
+    return { TAG: "Poly", _0: figure._0.slice() };
   }
 }
 
@@ -805,15 +703,15 @@ function countdownIterator_next(countdown$1) {
   if (countdown$1.n === 0) {
     return undefined;
   } else {
-    countdown$1.n = countdown$1.n - 1 >>> 0;
-    return countdown$1.n + 1 >>> 0;
+    countdown$1.n = (countdown$1.n - 1) >>> 0;
+    return (countdown$1.n + 1) >>> 0;
   }
 }
 
 function fibonacciIterator_next(fibonacci$1) {
   const a = fibonacci$1.a;
   fibonacci$1.a = fibonacci$1.b;
-  fibonacci$1.b = fibonacci$1.b + a >>> 0;
+  fibonacci$1.b = (fibonacci$1.b + a) >>> 0;
   return a;
 }
 
@@ -821,7 +719,7 @@ function repeatIterator_next(repeat, TClone) {
   if (repeat.times === 0) {
     return undefined;
   }
-  repeat.times = repeat.times - 1 >>> 0;
+  repeat.times = (repeat.times - 1) >>> 0;
   return $some(TClone.clone(repeat.item));
 }
 
@@ -861,21 +759,14 @@ function glyphDebug_fmt(glyph) {
 }
 
 function sixDebug_fmt(six) {
-  const names = [
-    "a",
-    "b",
-    "c",
-    "d",
-    "e",
-    "f"
-  ];
+  const names = ["a", "b", "c", "d", "e", "f"];
   const values = [
     String(six.a),
     String(six.b),
     String(six.c),
     String(six.d),
     String(six.e),
-    $debugStr(six.f, "'")
+    $debugStr(six.f, "'"),
   ];
   return $debugFields("Six", names, values);
 }
@@ -948,25 +839,21 @@ export function labeledDisplay(TDisplay) {
   if ($labeledDisplay === undefined) {
     $labeledDisplay = new WeakMap();
   }
-  return $traitImpl($labeledDisplay, [TDisplay], () => ({ fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay) }));
+  return $traitImpl($labeledDisplay, [TDisplay], () => ({
+    fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay),
+  }));
 }
 
 export function wordPartialOrd() {
   if ($wordPartialOrd === undefined) {
-    $wordPartialOrd = {
-      PartialEq: () => ({ eq: $eq }),
-      partial_cmp: wordPartialOrd_partial_cmp
-    };
+    $wordPartialOrd = { PartialEq: () => ({ eq: $eq }), partial_cmp: wordPartialOrd_partial_cmp };
   }
   return $wordPartialOrd;
 }
 
 export function wordOrd() {
   if ($wordOrd === undefined) {
-    $wordOrd = {
-      PartialOrd: () => wordPartialOrd(),
-      cmp: wordOrd_cmp
-    };
+    $wordOrd = { PartialOrd: () => wordPartialOrd(), cmp: wordOrd_cmp };
   }
   return $wordOrd;
 }

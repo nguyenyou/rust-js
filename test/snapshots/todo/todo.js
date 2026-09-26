@@ -36,12 +36,8 @@ function on(target, event, state, view, change) {
 }
 
 function add(s, title) {
-  s.todos.push({
-    id: s.next_id,
-    title,
-    done: false
-  });
-  s.next_id = s.next_id + 1 >>> 0;
+  s.todos.push({ id: s.next_id, title, done: false });
+  s.next_id = (s.next_id + 1) >>> 0;
 }
 
 function toggle(s, id) {
@@ -91,7 +87,7 @@ function render(state, view) {
   let left = 0;
   for (const todo of s.todos) {
     if (!todo.done) {
-      left = left + 1 | 0;
+      left = (left + 1) | 0;
     }
     if (shown(s.filter, todo)) {
       view.list.append(item(state, view, todo));
@@ -103,15 +99,8 @@ function render(state, view) {
 
 export function main() {
   const app = $unwrap(document.getElementById("app"), "the page has an #app");
-  const state = { value: {
-    todos: [],
-    next_id: 1,
-    filter: "All"
-  } };
-  const view = {
-    list: create("ul"),
-    left: create("span")
-  };
+  const state = { value: { todos: [], next_id: 1, filter: "All" } };
+  const view = { list: create("ul"), left: create("span") };
   const input = create("input");
   input.placeholder = "What needs to be done?";
   const adding = state;
@@ -129,7 +118,7 @@ export function main() {
   for (const [label, filter] of [
     ["All", "All"],
     ["Active", "Active"],
-    ["Completed", "Completed"]
+    ["Completed", "Completed"],
   ]) {
     const b = text("button", label);
     on(b, "click", state, view, (s) => {

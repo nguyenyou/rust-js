@@ -17,12 +17,12 @@ function $traitImpl(cache, keys, make) {
 // equally close, JS takes the even one (1888570120608320.2), and Rust the
 // larger (1888570120608320.3).
 function $displayF64(value) {
-  if (Number.isNaN(value)) return 'NaN';
-  if (value === Infinity) return 'inf';
-  if (value === -Infinity) return '-inf';
-  const sign = value < 0 || Object.is(value, -0) ? '-' : '';
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
   const x = Math.abs(value);
-  if (x === 0) return sign + '0';
+  if (x === 0) return sign + "0";
 
   const bitsView = new DataView(new ArrayBuffer(8));
   bitsView.setFloat64(0, x);
@@ -36,9 +36,10 @@ function $displayF64(value) {
 
   // The floating-point logarithm is only an estimate; correct it exactly.
   let exponent = Math.floor(Math.log10(x));
-  const atLeastPowerOfTen = e => e >= 0
-    ? numerator >= denominator * 10n ** BigInt(e)
-    : numerator * 10n ** BigInt(-e) >= denominator;
+  const atLeastPowerOfTen = (e) =>
+    e >= 0
+      ? numerator >= denominator * 10n ** BigInt(e)
+      : numerator * 10n ** BigInt(-e) >= denominator;
   while (!atLeastPowerOfTen(exponent)) exponent--;
   while (atLeastPowerOfTen(exponent + 1)) exponent++;
 
@@ -55,7 +56,11 @@ function $displayF64(value) {
       if (candidate > 0n && Number(`${candidate}e${power}`) === x) {
         const delta = candidate * d - n;
         const distance = delta < 0n ? -delta : delta;
-        if (best === undefined || distance < bestDistance || (distance === bestDistance && candidate > best)) {
+        if (
+          best === undefined ||
+          distance < bestDistance ||
+          (distance === bestDistance && candidate > best)
+        ) {
           best = candidate;
           bestDistance = distance;
         }
@@ -64,18 +69,21 @@ function $displayF64(value) {
     if (best !== undefined) {
       let digits = best.toString();
       let decimalPower = power;
-      while (digits.endsWith('0')) {
+      while (digits.endsWith("0")) {
         digits = digits.slice(0, -1);
         decimalPower++;
       }
       const point = digits.length + decimalPower;
-      const body = point <= 0 ? '0.' + '0'.repeat(-point) + digits
-        : point >= digits.length ? digits + '0'.repeat(point - digits.length)
-        : digits.slice(0, point) + '.' + digits.slice(point);
+      const body =
+        point <= 0
+          ? "0." + "0".repeat(-point) + digits
+          : point >= digits.length
+            ? digits + "0".repeat(point - digits.length)
+            : digits.slice(0, point) + "." + digits.slice(point);
       return sign + body;
     }
   }
-  throw new Error('No f64 round-trip decimal found');
+  throw new Error("No f64 round-trip decimal found");
 }
 
 function $f64Max(a, b) {
@@ -100,20 +108,13 @@ export function demo() {
   const c = { r: 1 };
   const direct = circleShape_area(c);
   const mixed = [
-    {
-      value: c,
-      impl: circleShape()
-    },
-    {
-      value: [2],
-      impl: squareShape()
-    },
-    {
-      value: 3,
-      impl: f64Shape()
-    }
+    { value: c, impl: circleShape() },
+    { value: [2], impl: squareShape() },
+    { value: 3, impl: f64Shape() },
   ];
-  return direct + total([[1], [2]], squareShape()) + largest(mixed) + vecShape_area([[1]], squareShape());
+  return (
+    direct + total([[1], [2]], squareShape()) + largest(mixed) + vecShape_area([[1]], squareShape())
+  );
 }
 
 function circleShape_area(circle) {
@@ -146,40 +147,28 @@ function vecShape_area(vec, TShape) {
 
 export function circleShape() {
   if ($circleShape === undefined) {
-    $circleShape = {
-      area: circleShape_area,
-      name: circleShape_name
-    };
+    $circleShape = { area: circleShape_area, name: circleShape_name };
   }
   return $circleShape;
 }
 
 export function squareShape() {
   if ($squareShape === undefined) {
-    $squareShape = {
-      area: squareShape_area,
-      name: (self) => "shape"
-    };
+    $squareShape = { area: squareShape_area, name: (self) => "shape" };
   }
   return $squareShape;
 }
 
 export function blobShape() {
   if ($blobShape === undefined) {
-    $blobShape = {
-      area: blobShape_area,
-      name: (self) => "shape"
-    };
+    $blobShape = { area: blobShape_area, name: (self) => "shape" };
   }
   return $blobShape;
 }
 
 export function f64Shape() {
   if ($f64Shape === undefined) {
-    $f64Shape = {
-      area: f64Shape_area,
-      name: (self) => "shape"
-    };
+    $f64Shape = { area: f64Shape_area, name: (self) => "shape" };
   }
   return $f64Shape;
 }
@@ -190,7 +179,7 @@ export function vecShape(TShape) {
   }
   return $traitImpl($vecShape, [TShape], () => ({
     area: (arg0) => vecShape_area(arg0, TShape),
-    name: (self) => "shape"
+    name: (self) => "shape",
   }));
 }
 
@@ -198,7 +187,7 @@ export function circleLabeled() {
   if ($circleLabeled === undefined) {
     $circleLabeled = {
       Shape: () => circleShape(),
-      label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self))
+      label: (self) => circleShape_name(self) + " of area " + $displayF64(circleShape_area(self)),
     };
   }
   return $circleLabeled;

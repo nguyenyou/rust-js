@@ -24,10 +24,7 @@ function $rsplitOnce(s, separator) {
 }
 
 function say(text, tone) {
-  return {
-    text,
-    tone
-  };
+  return { text, tone };
 }
 
 function appended(rows, label, value) {
@@ -37,13 +34,16 @@ function appended(rows, label, value) {
 }
 
 function testsSummary(passed, failed, ignored) {
-  const total = passed + failed >>> 0;
+  const total = (passed + failed) >>> 0;
   const ignoredText = ignored > 0 ? ", " + String(ignored) + " ignored" : "";
   if (total === 0) {
     return say("No tests.", "Good");
   } else {
     const tone = failed > 0 ? "Bad" : "Good";
-    return say("Tests: " + String(passed) + " passed, " + String(failed) + " failed" + ignoredText + ".", tone);
+    return say(
+      "Tests: " + String(passed) + " passed, " + String(failed) + " failed" + ignoredText + ".",
+      tone,
+    );
   }
 }
 
@@ -73,11 +73,7 @@ export function App() {
       let first;
       const match = loaded.examples[0];
       if (match != null) {
-        first = [
-          match.name,
-          match.root,
-          match.files.slice()
-        ];
+        first = [match.name, match.root, match.files.slice()];
       } else {
         first = undefined;
       }
@@ -100,24 +96,25 @@ export function App() {
     return view != null ? view.state : undefined;
   };
   const run = (files, rootJs, test) => {
-    const n = runs.current + 1 >>> 0;
+    const n = (runs.current + 1) >>> 0;
     runs.current = n;
     const match = programs.prepare(files, rootJs, test, n);
     if (match === "Nothing") {
       setProgram(undefined);
     } else if (match.TAG === "Blocked") {
       setProgram(undefined);
-      const names = match._0.map((s) => "\"" + s + "\"");
+      const names = match._0.map((s) => '"' + s + '"');
       const names$1 = names.join(", ");
       setStatus((s) => {
-        const text = s.text + " Not run: it imports " + names$1 + ", which the playground can't load. Bundle it with bun build.";
+        const text =
+          s.text +
+          " Not run: it imports " +
+          names$1 +
+          ", which the playground can't load. Bundle it with bun build.";
         return say(text, "Bad");
       });
     } else {
-      setProgram({
-        run: n,
-        page: match._0
-      });
+      setProgram({ run: n, page: match._0 });
     }
   };
   const onCompile = (test) => {
@@ -140,35 +137,40 @@ export function App() {
       shown = "";
     }
     setStatus(say(test ? "Compiling the tests…" : "Compiling…", "Plain"));
-    startTransition(() => (async () => {
-      const r = await compiler.compile(loaded$1, sources, root, test);
-      const n = compiles.current + 1 | 0;
-      compiles.current = n;
-      if (r.ok) {
-        const files = Array.from(r.files);
-        const count = files.length;
-        const shown$1 = files.some((param) => param[0] === shown) ? shown : rootJs;
-        setOutput({
-          TAG: "Files",
-          files,
-          shown: shown$1
-        });
-        setStatus(say("Compiled: " + String(count) + " JS file" + (count === 1 ? "" : "s") + ".", "Good"));
-        run(r.files, rootJs, test);
-      } else {
-        setOutput({
-          TAG: "Diagnostics",
-          _0: r.stderr
-        });
-        setProgram(undefined);
-        setStatus(say("Failed: exit " + r.exit + ".", "Bad"));
-      }
-      const result = r.ok ? "ok" : "error";
-      const times = "instantiate " + compiler.ms(r.instantiate) + ", run " + compiler.ms(r.run) + ", memory " + compiler.mb(r.memory) + ", " + result;
-      const label = "compile #" + String(n);
-      setStats((rows) => appended(rows, label, times));
-      window.lastResult = r;
-    })());
+    startTransition(() =>
+      (async () => {
+        const r = await compiler.compile(loaded$1, sources, root, test);
+        const n = (compiles.current + 1) | 0;
+        compiles.current = n;
+        if (r.ok) {
+          const files = Array.from(r.files);
+          const count = files.length;
+          const shown$1 = files.some((param) => param[0] === shown) ? shown : rootJs;
+          setOutput({ TAG: "Files", files, shown: shown$1 });
+          setStatus(
+            say("Compiled: " + String(count) + " JS file" + (count === 1 ? "" : "s") + ".", "Good"),
+          );
+          run(r.files, rootJs, test);
+        } else {
+          setOutput({ TAG: "Diagnostics", _0: r.stderr });
+          setProgram(undefined);
+          setStatus(say("Failed: exit " + r.exit + ".", "Bad"));
+        }
+        const result = r.ok ? "ok" : "error";
+        const times =
+          "instantiate " +
+          compiler.ms(r.instantiate) +
+          ", run " +
+          compiler.ms(r.run) +
+          ", memory " +
+          compiler.mb(r.memory) +
+          ", " +
+          result;
+        const label = "compile #" + String(n);
+        setStats((rows) => appended(rows, label, times));
+        window.lastResult = r;
+      })(),
+    );
   };
   const onOutcome = (outcome) => {
     if (outcome.TAG === "Failed") {
@@ -178,7 +180,8 @@ export function App() {
     } else if (outcome.TAG === "Tested") {
       setStatus(testsSummary(outcome._0.passed, outcome._0.failed, outcome._0.ignored));
     } else {
-      const text = "The Result frame didn't run. Is something blocking its script? See the console.";
+      const text =
+        "The Result frame didn't run. Is something blocking its script? See the console.";
       setStatus(say(text, "Bad"));
     }
   };
@@ -223,7 +226,8 @@ export function App() {
     }
     const modulePath = new RegExp("^([a-z_][a-z0-9_]*/)*[a-z_][a-z0-9_]*\\.rs$", "");
     if (!modulePath.test(path)) {
-      const text = "\"" + path + "\" isn't a Rust module file name, like math.rs or geometry/shape.rs.";
+      const text =
+        '"' + path + "\" isn't a Rust module file name, like math.rs or geometry/shape.rs.";
       setStatus(say(text, "Bad"));
       return;
     }
@@ -240,17 +244,18 @@ export function App() {
       file = path;
     }
     const module = $stripSuffix(file, ".rs") ?? file;
-    const text$1 = "Created " + path + ". Declare it with `mod " + module + ";` in its parent, or rustc won't include it.";
+    const text$1 =
+      "Created " +
+      path +
+      ". Declare it with `mod " +
+      module +
+      ";` in its parent, or rustc won't include it.";
     setStatus(say(text$1, "Plain"));
   };
   const openOutput = (path) => {
     if (output.TAG === "Files") {
       const files = output.files.map((param) => [param[0], param[1]]);
-      setOutput({
-        TAG: "Files",
-        files,
-        shown: path
-      });
+      setOutput({ TAG: "Files", files, shown: path });
     }
   };
   const blank = useMemo(() => codemirror.sourceState(""), []);
@@ -294,23 +299,71 @@ export function App() {
   }
   const examples = tmp$2;
   const submit = onCompile;
-  return <>
-    <h1 className="mb-1 text-lg font-bold">rust-js playground</h1>
-    <p className="mb-3 text-muted">rustc's front end and rust-js, as WebAssembly. No server compiles anything.</p>
-    <toolbar.Toolbar examples={examples} example={example} onExample={onExample} ready={loaded != null && !compiling} onCompile={onCompile} status={status} />
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-3">
-      <pane.Pane title="Rust" label="Rust files" explorer={<>
-        <ul id="source-files">
-          <file_tree.FileTree tree={sourceTree} depth={0} first={project.root} selected={project.current} onOpen={openFile} onDelete={deleteFile} />
-        </ul>
-        <button id="new-file" className="mx-2 mt-1.5 block cursor-pointer text-muted" onClick={() => newFile()}>+ New file</button>
-      </>} editor={<editor.Editor state={current} view={source} onSubmit={() => submit(false)} />} />
-      <pane.Pane title="JavaScript" label="JavaScript files" explorer={<ul id="output-files">
-        {outputTree.length === 0 ? <li className="flex items-center px-2 py-0.5 text-muted">(none)</li> : <file_tree.FileTree tree={outputTree} depth={0} first={projects.jsName(project.root)} selected={tmp$1[1]} onOpen={openOutput} />}
-      </ul>} editor={<editor.Editor state={shownState} />} />
-    </div>
-    <result_frame.ResultFrame program={program} onOutcome={onOutcome} />
-    <stats_table.StatsTable rows={stats} />
-  </>;
+  return (
+    <>
+      <h1 className="mb-1 text-lg font-bold">rust-js playground</h1>
+      <p className="mb-3 text-muted">
+        rustc's front end and rust-js, as WebAssembly. No server compiles anything.
+      </p>
+      <toolbar.Toolbar
+        examples={examples}
+        example={example}
+        onExample={onExample}
+        ready={loaded != null && !compiling}
+        onCompile={onCompile}
+        status={status}
+      />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-3">
+        <pane.Pane
+          title="Rust"
+          label="Rust files"
+          explorer={
+            <>
+              <ul id="source-files">
+                <file_tree.FileTree
+                  tree={sourceTree}
+                  depth={0}
+                  first={project.root}
+                  selected={project.current}
+                  onOpen={openFile}
+                  onDelete={deleteFile}
+                />
+              </ul>
+              <button
+                id="new-file"
+                className="mx-2 mt-1.5 block cursor-pointer text-muted"
+                onClick={() => newFile()}
+              >
+                + New file
+              </button>
+            </>
+          }
+          editor={<editor.Editor state={current} view={source} onSubmit={() => submit(false)} />}
+        />
+        <pane.Pane
+          title="JavaScript"
+          label="JavaScript files"
+          explorer={
+            <ul id="output-files">
+              {outputTree.length === 0 ? (
+                <li className="flex items-center px-2 py-0.5 text-muted">(none)</li>
+              ) : (
+                <file_tree.FileTree
+                  tree={outputTree}
+                  depth={0}
+                  first={projects.jsName(project.root)}
+                  selected={tmp$1[1]}
+                  onOpen={openOutput}
+                />
+              )}
+            </ul>
+          }
+          editor={<editor.Editor state={shownState} />}
+        />
+      </div>
+      <result_frame.ResultFrame program={program} onOutcome={onOutcome} />
+      <stats_table.StatsTable rows={stats} />
+    </>
+  );
 }
 //# sourceMappingURL=app.jsx.map

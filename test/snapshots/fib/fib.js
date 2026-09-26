@@ -14,7 +14,7 @@ export function fib(n) {
   if (n < 2) {
     return n;
   } else {
-    return fib(n - 1 >>> 0) + fib(n - 2 >>> 0) >>> 0;
+    return (fib((n - 1) >>> 0) + fib((n - 2) >>> 0)) >>> 0;
   }
 }
 
@@ -24,7 +24,7 @@ export function fib_match(n) {
   } else if (n === 1) {
     return 1;
   } else {
-    return fib_match(n - 1 >>> 0) + fib_match(n - 2 >>> 0) >>> 0;
+    return (fib_match((n - 1) >>> 0) + fib_match((n - 2) >>> 0)) >>> 0;
   }
 }
 
@@ -33,10 +33,10 @@ export function fib_iter(n) {
   let b = 1;
   let i = 0;
   while (i < n) {
-    const next = a + b >>> 0;
+    const next = (a + b) >>> 0;
     a = b;
     b = next;
-    i = i + 1 >>> 0;
+    i = (i + 1) >>> 0;
   }
   return a;
 }
@@ -49,10 +49,10 @@ export function fib_loop(n) {
     if (i === n) {
       return a;
     }
-    const next = a + b >>> 0;
+    const next = (a + b) >>> 0;
     a = b;
     b = next;
-    i = i + 1 >>> 0;
+    i = (i + 1) >>> 0;
   }
 }
 
@@ -60,12 +60,12 @@ export function nth(order, n) {
   if (order === "Ascending") {
     return fib_iter(n);
   } else {
-    return fib_iter(20 - n >>> 0);
+    return fib_iter((20 - n) >>> 0);
   }
 }
 
 export function wrap_demo(x) {
-  return Math.imul(x, 3) - 7 | 0;
+  return (Math.imul(x, 3) - 7) | 0;
 }
 
 export function ratio(a, b) {

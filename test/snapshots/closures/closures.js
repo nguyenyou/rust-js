@@ -3,7 +3,7 @@
 export function by_reference(a, b) {
   let total = 0;
   let add = (x) => {
-    total = total + x | 0;
+    total = (total + x) | 0;
   };
   add(a);
   add(b);
@@ -14,15 +14,15 @@ export function move_copies(n) {
   let n$1 = n;
   let n$2 = n$1;
   const get = () => n$2;
-  n$1 = n$1 + 100 | 0;
-  return Math.imul(get(), 1000) + n$1 | 0;
+  n$1 = (n$1 + 100) | 0;
+  return (Math.imul(get(), 1000) + n$1) | 0;
 }
 
 export function own_state(start) {
   let count = start;
   let count$1 = count;
   let next = () => {
-    count$1 = count$1 + 1 | 0;
+    count$1 = (count$1 + 1) | 0;
     return count$1;
   };
   next();
@@ -37,32 +37,29 @@ export function fresh_copy_each_time(times) {
   while (i < times) {
     let n$1 = n;
     let bump = () => {
-      n$1 = n$1 + 1 | 0;
+      n$1 = (n$1 + 1) | 0;
       return n$1;
     };
-    total = total + (Math.imul(bump(), 10) + bump() | 0) | 0;
-    i = i + 1 | 0;
+    total = (total + ((Math.imul(bump(), 10) + bump()) | 0)) | 0;
+    i = (i + 1) | 0;
   }
   return total;
 }
 
 export function struct_copy(x) {
-  let p = {
-    x,
-    y: 0
-  };
+  let p = { x, y: 0 };
   let x$1 = p.x;
   let shift = () => {
-    x$1 = x$1 + 1 | 0;
+    x$1 = (x$1 + 1) | 0;
     return x$1;
   };
   shift();
   p.y = 5;
-  return [shift(), p.x + p.y | 0];
+  return [shift(), (p.x + p.y) | 0];
 }
 
 function adder(k) {
-  return (x) => x + k | 0;
+  return (x) => (x + k) | 0;
 }
 
 export function add_both(a, b) {
@@ -77,6 +74,6 @@ function apply(f, a, b) {
 
 export function pattern_param(a, b) {
   const scale = 3;
-  return apply(([x, y]) => Math.imul(x, scale) - y | 0, a, b);
+  return apply(([x, y]) => (Math.imul(x, scale) - y) | 0, a, b);
 }
 //# sourceMappingURL=closures.js.map

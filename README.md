@@ -33,8 +33,9 @@ and rust-js as WebAssembly, so nothing is compiled on a server (see [wasm/](wasm
 The page itself is written in Rust, as React components, and compiled by rust-js: [wasm/web/rust/](wasm/web/rust/components.rs)
 ([ADRs 0032](docs/decisions/0032-dogfooding-the-playground.md) and [0044](docs/decisions/0044-playground-on-react.md)).
 
-JS is printed by [oxc](https://oxc.rs). The source map points back into the
-`.rs` file, so a debugger can show the Rust source.
+JS is printed by [oxc](https://oxc.rs), and formatted as [oxfmt](https://oxc.rs/docs/guide/usage/formatter) formats it:
+the output is what Prettier would leave ([ADR 0065](docs/decisions/0065-format-with-oxfmt.md)). The source map points
+back into the `.rs` file, so a debugger can show the Rust source.
 
 ## Semantics
 

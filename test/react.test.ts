@@ -14,28 +14,28 @@ test("React components are hand-written JSX, and React runs them", () => {
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   // A module with JSX is a `.jsx` file.
   const js = require("node:fs").readFileSync(join(out, "components.jsx"), "utf8");
-  expect(js).toContain('import { createContext, memo, useContext, useEffect, useId, useMemo, useReducer, useRef, useState } from "react";');
+  expect(js).toContain("import {\n  createContext,\n  memo,\n  useContext,\n  useEffect,\n  useId,\n  useMemo,\n  useReducer,\n  useRef,\n  useState,\n} from \"react\";");
   // Props taken apart, as a component takes them; `children` as JSX children.
-  expect(js).toContain("export function Card({ title, children }) {\n  return <div className=\"card\">\n    <h2>{title}</h2>\n    {children}\n  </div>;\n}");
+  expect(js).toContain("export function Card({ title, children }) {\n  return (\n    <div className=\"card\">\n      <h2>{title}</h2>\n      {children}\n    </div>\n  );\n}");
   expect(js).toContain('const [draft, setDraft] = useState("");');
   expect(js).toContain("const left = useMemo(() => todos.filter((t) => !t.done).length, [todos]);");
   // A handler of one call stays in the JSX; one with statements is named first.
-  expect(js).toContain("onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />");
+  expect(js).toContain("onChange={(e) => setDraft(e.target.value)}\n          onKeyDown={onKeyDown}\n        />");
   expect(js).toContain("const onKeyDown = (e) => {");
   // A list, with its keys.
-  expect(js).toContain('return <li key={t.id} className={t.done ? "done" : ""} onClick={onClick}>{t.text}</li>;');
+  expect(js).toContain("return (\n      <li key={t.id} className={t.done ? \"done\" : \"\"} onClick={onClick}>\n        {t.text}\n      </li>");
   expect(js).toContain("<ul>{items}</ul>");
   // `Option::map` to an element: the element, or nothing.
   expect(js).toContain('{t != null ? <p className="latest">{t.text}</p> : undefined}');
   // `()` as an effect's dependencies is `[]`, and its cleanup is a function it returns.
-  expect(js).toContain("useEffect(() => {\n    setTicks((t) => t + 10 | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
+  expect(js).toContain("useEffect(() => {\n    setTicks((t) => (t + 10) | 0);\n    return () => {\n      setTicks(-1);\n    };\n  }, []);");
   // Components by name, as JSX tags.
-  expect(js).toContain("<Todos />\n    <Clock />\n    <Themed />");
+  expect(js).toContain("<Todos />\n      <Clock />\n      <Themed />");
   // A context and memoized components, made once, as `const`s of the module
   // (from `thread_local!`); a provider is the context as a tag, as in React 19.
   expect(js).toContain('const THEME = createContext("light");\nconst BADGE = memo(Badge);\nconst LOOSE_BADGE = memo(Badge, (a, b) => ');
   expect(js).toContain("const theme = useContext(THEME);");
-  expect(js).toContain('<BADGE label="outside" />\n    <THEME value={dark ? "dark" : "light"}>');
+  expect(js).toContain("<BADGE label=\"outside\" />\n      <THEME value={dark ? \"dark\" : \"light\"}>");
   // `!` of a `&bool`, which rustc writes as `Not::not`.
   expect(js).toContain("setDark((d) => !d)");
   copyFileSync(join(root, "test", "react_app.jsx"), join(out, "react_app.test.jsx"));
@@ -113,12 +113,12 @@ test("React's and React DOM's APIs are hand-written React, and they run", () => 
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   const js = require("node:fs").readFileSync(join(out, "apis.jsx"), "utf8");
   // Built-in components are JSX tags, and `use` is `use`.
-  expect(js).toContain('return <Suspense fallback={<p className="loading">Loading</p>}>\n    <Greeting />\n  </Suspense>;');
+  expect(js).toContain("return (\n    <Suspense fallback={<p className=\"loading\">Loading</p>}>\n      <Greeting />\n    </Suspense>");
   expect(js).toContain("const text = use(globalThis.greeting);");
   expect(js).toContain('<Activity mode={hidden ? "hidden" : "visible"}>');
-  expect(js).toContain("{[1, 2].map((n) => <Fragment key={n}>");
+  expect(js).toContain("{[1, 2].map((n) => (\n          <Fragment key={n}>");
   // Objects built by methods: a style, raw HTML, and options.
-  expect(js).toContain('const style = {\n    color: "red",\n    fontSize: 12,\n    "--gap": "4px"\n  };');
+  expect(js).toContain("const style = { color: \"red\", fontSize: 12, \"--gap\": \"4px\" };");
   expect(js).toContain('dangerouslySetInnerHTML={{ __html: "<i>raw</i>" }}');
   expect(js).toContain('return renderToString(<Page />, { identifierPrefix: "s-" });');
   expect(js).toContain('const root = createRoot(container, { identifierPrefix: "c-" });');
@@ -209,9 +209,9 @@ pub fn full_name(person: &Person) -> String {
   expect(lib).toContain("export function greet(firstName) {\n  return people.fullName(people.makePerson(firstName));");
   expect(people).toContain("export function makePerson(firstName) {");
   // Fields: of a struct, of an enum's variant, and one kept by its `#[rust_js::name]`.
-  expect(people).toContain('    firstName,\n    lastName: "Doe",\n    user_id: 7');
+  expect(people).toContain("firstName, lastName: \"Doe\", user_id: 7");
   expect(people).toContain('person.firstName + " " + person.lastName');
-  expect(lib).toContain("export function rectWidth(shape) {\n  return shape.bottomRight - shape.topLeft");
+  expect(lib).toContain("export function rectWidth(shape) {\n  return (shape.bottomRight - shape.topLeft");
   // A hook React finds by its name, and props as React code names them.
   expect(lib).toContain("export function useClicks() {");
   expect(lib).toContain("export function FancyButton({ labelText, onPress }) {");

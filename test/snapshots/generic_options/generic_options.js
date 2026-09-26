@@ -38,7 +38,7 @@ export function count_some(xs) {
   for (const item of xs) {
     const o = $some(item);
     if (o != null) {
-      n = n + 1 >>> 0;
+      n = (n + 1) >>> 0;
     }
   }
   return n;
@@ -57,7 +57,7 @@ export function kept(xs) {
   for (const item of xs) {
     const match = pick(item, true);
     if (match != null) {
-      n = n + 1 >>> 0;
+      n = (n + 1) >>> 0;
     }
   }
   return n;
@@ -105,56 +105,30 @@ export function first_some(xs) {
 }
 
 export function units() {
-  return count_some([
-    undefined,
-    undefined,
-    undefined
-  ]) + kept([undefined, undefined]) >>> 0;
+  return (count_some([undefined, undefined, undefined]) + kept([undefined, undefined])) >>> 0;
 }
 
 export function nones() {
-  return count_some([undefined, 1]) + kept([
-    undefined,
-    undefined,
-    2
-  ]) >>> 0;
+  return (count_some([undefined, 1]) + kept([undefined, undefined, 2])) >>> 0;
 }
 
 export function inner_values() {
   const a = inner_or(undefined, true, 7);
   const b = inner_or(3, false, 7);
   const c = unwrapped(undefined);
-  return [
-    a,
-    b,
-    c,
-    inner_or(5, true, 9)
-  ];
+  return [a, b, c, inner_or(5, true, 9)];
 }
 
 export function mapped_values() {
   const noneInside = $unwrap(mapped(undefined, (o) => o == null));
   const doubled = $unwrap(mapped(4, (n) => Math.imul(n, 2)));
-  return [
-    noneInside,
-    tried_some(undefined, true),
-    doubled
-  ];
+  return [noneInside, tried_some(undefined, true), doubled];
 }
 
 export function std_values() {
   const poppedNone = popped_some([1, undefined]);
   const empty = popped_some([]);
   const firstNone = first_some([undefined, 1]);
-  return [
-    poppedNone,
-    empty,
-    firstNone,
-    $unwrap(popped([
-      1,
-      2,
-      3
-    ]))
-  ];
+  return [poppedNone, empty, firstNone, $unwrap(popped([1, 2, 3]))];
 }
 //# sourceMappingURL=generic_options.js.map

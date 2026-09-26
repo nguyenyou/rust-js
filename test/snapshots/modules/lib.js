@@ -7,7 +7,7 @@ import * as util from "./util.js";
 export const HALVES = 2;
 
 export function summary(a, b) {
-  return stats.mean(a, b) + area.square(a) >>> 0;
+  return (stats.mean(a, b) + area.square(a)) >>> 0;
 }
 
 export function clamp(x) {

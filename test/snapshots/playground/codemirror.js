@@ -11,7 +11,7 @@ const SOURCE = [
   basicSetup,
   rust(),
   THEME.of(themeFor(false)),
-  EditorView.contentAttributes.of(Object.fromEntries([["aria-label", "Rust source"]]))
+  EditorView.contentAttributes.of(Object.fromEntries([["aria-label", "Rust source"]])),
 ];
 const JS_OUTPUT = output(javascript());
 const PLAIN_OUTPUT = output(undefined);
@@ -23,7 +23,9 @@ function output(language) {
   }
   extensions.push(THEME.of(themeFor(false)));
   extensions.push(EditorState.readOnly.of(true));
-  extensions.push(EditorView.contentAttributes.of(Object.fromEntries([["aria-label", "Generated JavaScript"]])));
+  extensions.push(
+    EditorView.contentAttributes.of(Object.fromEntries([["aria-label", "Generated JavaScript"]])),
+  );
   return extensions;
 }
 
@@ -36,18 +38,12 @@ function themeFor(dark) {
 }
 
 export function sourceState(text) {
-  return EditorState.create({
-    doc: text,
-    extensions: SOURCE
-  });
+  return EditorState.create({ doc: text, extensions: SOURCE });
 }
 
 export function outputState(text, js) {
   const extensions = js ? JS_OUTPUT : PLAIN_OUTPUT;
-  return EditorState.create({
-    doc: text,
-    extensions
-  });
+  return EditorState.create({ doc: text, extensions });
 }
 
 export function textOf(state) {
@@ -55,10 +51,7 @@ export function textOf(state) {
 }
 
 export function openView(parent, state) {
-  return new EditorView({
-    state,
-    parent
-  });
+  return new EditorView({ state, parent });
 }
 
 export function show(view, state) {

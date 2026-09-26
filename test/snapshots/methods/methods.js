@@ -2,22 +2,16 @@
 
 export const Counter = {
   new(step) {
-    return {
-      count: 0,
-      step
-    };
+    return { count: 0, step };
   },
   default_step() {
     return 1;
   },
   tick(counter) {
-    counter.count = counter.count + counter.step >>> 0;
+    counter.count = (counter.count + counter.step) >>> 0;
   },
   ticked(counter, times) {
-    let next = {
-      count: counter.count,
-      step: counter.step
-    };
+    let next = { count: counter.count, step: counter.step };
     for (let i = 0; i < times; i++) {
       Counter.tick(next);
     }
@@ -25,7 +19,7 @@ export const Counter = {
   },
   value(counter) {
     return counter.count;
-  }
+  },
 };
 
 export const Light = {
@@ -38,7 +32,7 @@ export const Light = {
   },
   is_go(light) {
     return light === "Green";
-  }
+  },
 };
 
 export const Pair = {
@@ -46,8 +40,8 @@ export const Pair = {
     return [a, b];
   },
   sum(pair) {
-    return pair[0] + pair[1] | 0;
-  }
+    return (pair[0] + pair[1]) | 0;
+  },
 };
 
 export function counted(step, times) {
@@ -70,6 +64,6 @@ export function lights(n) {
 }
 
 export function pair_sum(a, b) {
-  return Pair.sum(Pair.new(a, b)) + (Counter.default_step() | 0) | 0;
+  return (Pair.sum(Pair.new(a, b)) + (Counter.default_step() | 0)) | 0;
 }
 //# sourceMappingURL=methods.js.map

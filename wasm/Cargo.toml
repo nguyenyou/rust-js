@@ -29,12 +29,15 @@ rustc_hir = { path = "rustc/compiler/rustc_hir" }
 rustc_interface = { path = "rustc/compiler/rustc_interface" }
 rustc_middle = { path = "rustc/compiler/rustc_middle" }
 rustc_span = { path = "rustc/compiler/rustc_span" }
-oxc_allocator = "=0.151.0"
-oxc_ast = "=0.151.0"
-oxc_codegen = "=0.151.0"
+# The same oxc release as ../Cargo.toml, from its tag (see there).
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_ast = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_ast_visit = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_codegen = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_formatter = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
 oxc_sourcemap = "=8.1.2"
-oxc_span = "=0.151.0"
-oxc_syntax = "=0.151.0"
+oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
+oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.151.0" }
 
 # Standalone: not part of the rust-js package one directory up.
 [workspace]

@@ -2,10 +2,10 @@
 
 const COUNT = { value: 0 };
 const LOG = { value: [] };
-const START = { value: Math.imul(10, 4) + 2 | 0 };
+const START = { value: (Math.imul(10, 4) + 2) | 0 };
 
 export function bump() {
-  COUNT.value = COUNT.value + 1 >>> 0;
+  COUNT.value = (COUNT.value + 1) >>> 0;
   return COUNT.value;
 }
 

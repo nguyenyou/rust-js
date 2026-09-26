@@ -3,8 +3,20 @@
 import * as styles from "../styles.js";
 
 export function ExamplePicker({ examples, chosen, onChoose }) {
-  return <select id="example" className={styles.CONTROL} aria-label="Example" value={chosen} onChange={(e) => onChoose(e.target.value)}>
-    {examples.map((example) => <option key={example.name} value={example.name}>{example.title}</option>)}
-  </select>;
+  return (
+    <select
+      id="example"
+      className={styles.CONTROL}
+      aria-label="Example"
+      value={chosen}
+      onChange={(e) => onChoose(e.target.value)}
+    >
+      {examples.map((example) => (
+        <option key={example.name} value={example.name}>
+          {example.title}
+        </option>
+      ))}
+    </select>
+  );
 }
 //# sourceMappingURL=example_picker.jsx.map

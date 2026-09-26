@@ -10,11 +10,11 @@ export function square(x) {
 }
 
 export function mixed(x) {
-  return util$1.double(x) + util.triple(x) >>> 0;
+  return (util$1.double(x) + util.triple(x)) >>> 0;
 }
 
 export function shadowed(x) {
-  const util$2 = x + 1 >>> 0;
+  const util$2 = (x + 1) >>> 0;
   return util$1.double(util$2);
 }
 //# sourceMappingURL=area.js.map

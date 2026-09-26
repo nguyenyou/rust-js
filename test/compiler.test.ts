@@ -217,13 +217,13 @@ test("a crate split across files becomes one JS file per module", async () => {
   expect(area).toContain('import * as util from "./util.js";');
   expect(area).toContain('import * as util$1 from "../util.js";');
   // A local named like an alias is renamed rather than shadowing it.
-  expect(area).toContain("const util$2 = x + 1 >>> 0;");
+  expect(area).toContain("const util$2 = (x + 1) >>> 0;");
   expect(area).toContain("return util$1.double(util$2);");
   // lib ↔ stats import each other: a cycle, which Rust and ES modules allow.
   const stats = await Bun.file(join(out, "stats.js")).text();
   expect(stats).toContain('import * as lib from "./lib.js";');
   // A `const` of another module, by its name there.
-  expect(stats).toContain("return x / lib.HALVES >>> 0;");
+  expect(stats).toContain("return (x / lib.HALVES) >>> 0;");
 
   // Each file's source map points into the .rs file its module lives in.
   const sources = async (f: string) => (await Bun.file(join(out, `${f}.map`)).json()).sources;
@@ -304,16 +304,16 @@ test("async code becomes async functions and await", async () => {
   expect(js).toContain("  const module = await WebAssembly.compile(bytes);\n  const imports = { env: { double: (x) => Math.imul(x, 2) } };\n  const instance = await WebAssembly.instantiate(module, imports);\n  return instance.exports.add(a, b);");
   // A dictionary result is a struct: its fields are read as they are.
   expect(js).toContain("source.instance.exports.add(1, 2) === 3");
-  expect(js).toContain("export async function sum(a, b) {\n  return await double(a) + await double(b) >>> 0;\n}");
+  expect(js).toContain("export async function sum(a, b) {\n  return ((await double(a)) + (await double(b))) >>> 0;\n}");
   // Parameters are the body's variables: no `let x = x`.
   expect(js).toContain("export async function countdown(n) {\n  let steps = 0;");
   expect(js).toContain("export async function swap(param) {\n  const a = param[0];");
   // An `async` block is an async arrow, called; an `async` closure, an async arrow.
-  expect(js).toContain("const block = (async () => await double(x) + 1 >>> 0)();");
-  expect(js).toContain("const add = async (y) => await setTimeout(0, y) + x >>> 0;");
+  expect(js).toContain("const block = (async () => ((await double(x)) + 1) >>> 0");
+  expect(js).toContain("const add = async (y) => ((await setTimeout(0, y)) + x) >>> 0;");
   // A future in a variable is the promise; `.await` on it is `await`.
   expect(js).toContain("const first = setTimeout(5, 1);");
-  expect(js).toContain("return await first + await second >>> 0;");
+  expect(js).toContain("return ((await first) + (await second)) >>> 0;");
 
   const countdown = await Bun.file(join(target, "countdown.js")).text();
   expect(countdown).toContain("return new Promise((resolve) => {\n    setTimeout(resolve, ms);\n  });");
@@ -333,7 +333,7 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   const read = (path: string) => Bun.file(join(target, "playground", path)).text();
   const lib = await read("lib.jsx");
   expect(lib).toContain('import * as app from "./components/app.jsx";');
-  expect(lib).toContain("  root.render(<StrictMode>\n    <app.App />\n  </StrictMode>);");
+  expect(lib).toContain("  root.render(\n    <StrictMode>\n      <app.App />\n    </StrictMode>");
   // Each component's file exports it alone, which Fast Refresh needs.
   const components = [
     ["app", "App"], ["editor", "Editor"], ["example_picker", "ExamplePicker"], ["file_item", "FileItem"],
@@ -345,7 +345,7 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
     expect([...js.matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1])).toEqual([name]);
   }
   // A folder's entries are a FileTree inside it: the component is recursive.
-  expect(await read("components/file_tree.jsx")).toContain("<FileTree tree={param[1]._0} depth={depth + 1 >>> 0}");
+  expect(await read("components/file_tree.jsx")).toContain("<FileTree\n                tree={param[1]._0}\n                depth={(depth + 1) >>> 0}");
   expect(await read("components/file_tree.jsx")).toContain("export function FileTree({ tree: tree$1, depth, first, selected, onOpen, onDelete }) {");
   // The editor's view is made in an effect, and destroyed in its cleanup.
   expect(await read("components/editor.jsx")).toContain("    return () => {\n      editor.destroy();");
@@ -355,7 +355,7 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
   expect(await read("dark_mode.js")).toContain("export function useDarkMode() {\n  return useSyncExternalStore(");
 
   const compiler = await read("compiler.js");
-  expect(compiler).toContain('import { ConsoleStdout, Directory, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";');
+  expect(compiler).toContain("import {\n  ConsoleStdout,\n  Directory,\n  File,\n  OpenFile,\n  PreopenDirectory,\n  WASI,\n} from \"@bjorn3/browser_wasi_shim\";");
   for (const name of ["load", "loadExample", "ms", "mb", "compile"]) {
     expect(compiler).toMatch(new RegExp(`^export (async )?function ${name}\\(`, "m"));
   }
@@ -384,8 +384,8 @@ test("the playground is Rust components, compiled to the JS main.ts starts", asy
 // ADR 0037: `thread_local!` is a variable of its module.
 test("thread-locals are module variables", async () => {
   const js = await Bun.file(join(target, "thread_locals.js")).text();
-  expect(js).toContain("const COUNT = { value: 0 };\nconst LOG = { value: [] };\nconst START = { value: Math.imul(10, 4) + 2 | 0 };");
-  expect(js).toContain("  COUNT.value = COUNT.value + 1 >>> 0;\n  return COUNT.value;");
+  expect(js).toContain("const COUNT = { value: 0 };\nconst LOG = { value: [] };\nconst START = { value: (Math.imul(10, 4) + 2) | 0 };");
+  expect(js).toContain("  COUNT.value = (COUNT.value + 1) >>> 0;\n  return COUNT.value;");
   expect(js).toContain("  })(LOG.value);");
   // A closure that only returns is its body, on the key or its value, in place.
   expect(js).toContain("  return START.value;");
@@ -400,7 +400,7 @@ test("iterators are array methods, and sorting takes comparators", async () => {
   expect(js).toContain("  return $range(0, n).map((i) => Math.imul(i, i) >>> 0);");
   // `|&&x|` is `x`: a reference is the value.
   expect(js).toContain("  return v.filter((x) => x % 2 === 0);");
-  expect(js).toContain("  const sum = v.reduce((a, b) => a + b | 0, 0);");
+  expect(js).toContain("  const sum = v.reduce((a, b) => (a + b) | 0, 0);");
   expect(js).toContain("  const anyNegative = v.some((x) => x < 0);");
   expect(js).toContain("  return v.slice(1).slice(0, 2).toReversed();");
   expect(js).toContain('  return words.map((w) => w.toUpperCase()).join("-");');
@@ -440,7 +440,7 @@ test("a throwing JS call is a Result, and ? returns early", async () => {
 test("string methods are JS's, and format! is concatenation", async () => {
   const js = await Bun.file(join(target, "strings.js")).text();
   expect(js).toContain('  return name + ": " + String(n) + " item" + (n === 1 ? "" : "s");');
-  expect(js).toContain('    s.startsWith("ab"),\n    s.endsWith("c"),\n    s.includes("b/"),\n    s.includes("/")');
+  expect(js).toContain("s.startsWith(\"ab\"), s.endsWith(\"c\"), s.includes(\"b/\"), s.includes(\"/\")");
   expect(js).toContain('  return s.replaceAll("/", " / ").replaceAll("a", "A");');
   expect(js).toContain('  return $stripSuffix(file, ".rs") ?? file;');
   expect(js).toContain('  for (const part of path.split("/")) {');
@@ -460,13 +460,13 @@ test("enums with fields are tagged objects, as in ReScript", async () => {
   const js = await Bun.file(join(target, "enums.js")).text();
   // A variant without fields is its name; one with fields, `{ TAG, _0 }` or named fields.
   expect(js).toContain('  return "Empty";');
-  expect(js).toContain('  return {\n    TAG: "Circle",\n    _0: r\n  };');
-  expect(js).toContain('  return {\n    TAG: "Rect",\n    w,\n    h\n  };');
+  expect(js).toContain("  return { TAG: \"Circle\", _0: r };");
+  expect(js).toContain("  return { TAG: \"Rect\", w, h };");
   // Matching tests the name, or the `TAG`, then the fields, in place.
   expect(js).toContain('  if (s === "Empty") {\n    return 0;\n  } else if (s.TAG === "Circle") {');
-  expect(js).toContain('  } else if (s.TAG === "Rect" && s.w === 0 || s === "Empty") {');
+  expect(js).toContain("  } else if ((s.TAG === \"Rect\" && s.w === 0) || s === \"Empty\") {");
   // Through a reference, with no copy: the reference is the value.
-  expect(js).toContain("  if (t.TAG === \"Leaf\") {\n    return t._0;\n  } else {\n    return sum(t._0) + sum(t._1) | 0;");
+  expect(js).toContain("  if (t.TAG === \"Leaf\") {\n    return t._0;\n  } else {\n    return (sum(t._0) + sum(t._1)) | 0;");
   // `Result` is ReScript's `result`.
   expect(js).toContain('  if (match.TAG === "Ok") {\n    return match._0;');
 });
@@ -482,7 +482,7 @@ test("constants are the values rustc computed, by name", async () => {
   expect(js).toContain("  let p = { ...ORIGIN };\n");
   expect(js).toContain("  return [{ ...p }, { ...ORIGIN }];");
   // A known divisor needs no check for zero.
-  expect(js).toContain("  return SIZE / 1024 >>> 0;");
+  expect(js).toContain("  return (SIZE / 1024) >>> 0;");
   // std's are written in place.
   expect(js).toContain("  return [4294967295, -2147483648];");
   expect(js).toContain("  for (const p of PRIMES) {");
@@ -491,12 +491,12 @@ test("constants are the values rustc computed, by name", async () => {
 // ADR 0030: `Some(x)` is `x`, `None` is `undefined`, and `null` counts as `None`.
 test("options are the value or undefined", async () => {
   const js = await Bun.file(join(target, "options.js")).text();
-  expect(js).toContain("    return n / 2 | 0;\n  } else {\n    return undefined;");
+  expect(js).toContain("    return (n / 2) | 0;\n  } else {\n    return undefined;");
   // `Some(0)` needs no `!= null`; `Some(n)` does.
   expect(js).toContain("  if (o === 0) {\n    return 100;\n  } else if (o != null && o < 0) {");
   // `if let Some(h) = ..` keeps the value in a `const h`.
   expect(js).toContain("  const h = half(n);\n  if (h != null) {\n    return h;");
-  expect(js).toContain("    h != null,\n    h == null,\n    h ?? -1");
+  expect(js).toContain("h != null, h == null, h ?? -1");
   // `unwrap_or`'s argument runs even when it isn't needed, as in Rust.
   expect(js).toContain("  const option = half(n);\n  const fallback = bump();\n  const v = option ?? fallback;");
   expect(js).toContain('  return $unwrap(half(n), "an even number");');
@@ -547,7 +547,7 @@ test("the counter's JS is plain DOM code", async () => {
   expect(js).toContain("b.textContent = label;");
   expect(js).toContain("const count = { value: 0 };");
   expect(js).toContain('b.addEventListener("click", () => {');
-  expect(js).toContain("count$1.value = count$1.value + by | 0;");
+  expect(js).toContain("count$1.value = (count$1.value + by) | 0;");
   expect(js).toContain("output.textContent = String(count$1.value);");
   expect(js).toContain("app.append(output);");
 });
@@ -581,9 +581,9 @@ test("the web crate's bindings become plain JS", async () => {
 // ADR 0047: a type's methods are an object named after it.
 test("methods are their type's object of functions", async () => {
   const js = await Bun.file(join(target, "methods.js")).text();
-  expect(js).toContain("export const Counter = {\n  new(step) {\n    return {\n      count: 0,\n      step\n    };\n  },");
+  expect(js).toContain("export const Counter = {\n  new(step) {\n    return { count: 0, step };\n  }");
   // `self` is named after its type; `&mut self` changes the object itself.
-  expect(js).toContain("  tick(counter) {\n    counter.count = counter.count + counter.step >>> 0;\n  },");
+  expect(js).toContain("  tick(counter) {\n    counter.count = (counter.count + counter.step) >>> 0;\n  }");
   expect(js).toContain("      Counter.tick(next);");
   // A call is the method with its receiver first, as Rust's `Counter::tick(&mut c)`.
   expect(js).toContain("  return Counter.value(Counter.ticked(Counter.new(step), times));");
@@ -650,7 +650,7 @@ pub fn tally_of_four() -> u32 {
   expect(lib).toContain("  return shapes.Square.area(shapes.Square.new(side));");
   expect(shapes).toContain("export const Square = {\n  new(side) {");
   expect(shapes).toContain("  area(square) {\n    return Math.imul(Square.sideLength(square), Square.sideLength(square)) >>> 0;");
-  expect(shapes).toContain("\nconst Tally = {\n  doubled(tally) {\n    return Math.imul(tally[0], 2) >>> 0;\n  }\n};\n\nexport function tallyOfFour() {");
+  expect(shapes).toContain("\nconst Tally = {\n  doubled(tally) {\n    return Math.imul(tally[0], 2) >>> 0;\n  },\n};\n\nexport function tallyOfFour() {");
   // Laid out on lines of its own, a lone method still maps back to its Rust.
   const { decodeMappings, lookup } = await import("./sourcemap.ts");
   const segments = decodeMappings((await Bun.file(join(dir, "shapes.js.map")).json()).mappings);
@@ -780,7 +780,7 @@ test("std trait impls are direct calls, and a clone copies only what changes", a
   expect(js).toContain("const both = twice(copy.tracked, trackedClone());");
   expect(js).toContain("export function twice(x, TClone) {\n  return [TClone.clone(x), TClone.clone(x)];");
   // Derived: written in place, copying only the `Vec` that's pushed to.
-  expect(js).toContain("  let t = {\n    ...s,\n    tags: s.tags.slice()\n  };");
+  expect(js).toContain("  let t = { ...s, tags: s.tags.slice() };");
   expect(js).toContain("  const dot = \"Dot\";");
   // `From`, once per argument type, and `into()` is the same call.
   expect(js).toContain("const b = metersFromU32_from(3);");
@@ -810,14 +810,14 @@ test("== calls a hand-written eq wherever it's inside, and generics take a dicti
   expect(js).toContain("export function same(a, b, TPartialEq) {\n  return TPartialEq.eq(a, b);");
   expect(js).toContain("    versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),");
   expect(js).toContain("    !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),");
-  expect(js).toContain('    left.TAG === "Bump" ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0) : $eq(left, right),');
+  expect(js).toContain("    left.TAG === \"Bump\"\n      ? right.TAG === \"Bump\" && versionPartialEq_eq(left._0, right._0)\n      : $eq(left, right");
   // A fieldless variant is a string: only itself is equal to it.
-  expect(js).toContain('    } === "Nothing",');
+  expect(js).toContain("} === \"Nothing\"");
   // A `T: Eq` is given `T`'s `PartialEq`, and one that compares field by field is `$eq`.
   expect(js).toContain("count_equal(all, version(1, \"z\"), versionPartialEq())");
   expect(js).toContain("{ eq: $eq }");
   // `!=` of a hand-written `PartialEq<f64>` negates its `eq`.
-  expect(js).toContain("return [\n    metersPartialEqF64_eq(m, 2),\n    !metersPartialEqF64_eq(m, 3),");
+  expect(js).toContain("return [metersPartialEqF64_eq(m, 2), !metersPartialEqF64_eq(m, 3");
 });
 
 // ADR 0054: a `fmt` returns the string it writes, and `{}` of a value calls it.
@@ -846,7 +846,7 @@ test("an Iterator impl is a JS iterator, lazy until something wants all of it", 
   expect(js).toContain("$iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)");
   expect(js).toContain("$iterator({ n: 4 }, countdownIterator_next).toArray().length");
   // A generic `next` may box a `Some` that looks like `None`: unboxed as it comes out.
-  expect(js).toContain("(iterator) => repeatIterator_next(iterator, { clone: (value) => value }), true)");
+  expect(js).toContain("      (iterator) => repeatIterator_next(iterator, { clone: (value) => value }),\n      true,\n    )");
 });
 
 // `format_args!` is recognized whole, so its arguments are written in place,
@@ -881,20 +881,20 @@ test("PartialOrd and Ord compare with $cmp, a hand-written cmp, or the parts in 
 test("format options pad, round and change base as Rust does", async () => {
   const js = await Bun.file(join(target, "strings.js")).text();
   // Numbers are ASCII: JS's own padding. Strings count `char`s: `$pad`.
-  expect(js).toContain('"[" + String(n).padStart(6) + "] [" + String(n).padEnd(6) + "] [" + $pad(name, 9, "^") + "]');
+  expect(js).toContain("\"[\" +\n    String(n).padStart(6) +\n    \"] [\" +\n    String(n).padEnd(6) +\n    \"] [\" +\n    $pad(name, 9, \"^\") +\n    \"]");
   expect(js).toContain('$pad(name, 9, ">", "*")');
-  expect(js).toContain('"] [0x" + (n >>> 0).toString(16) + "] ["');
+  expect(js).toContain("\"] [0x\" +\n    (n >>> 0).toString(16) +\n    \"] [\"");
   // `{:.1}` rounds a tie to even, exactly, and `{:?}` of an `f64` keeps its `.0`.
-  expect(js).toContain('return $toFixed(x, 0) + " " + $toFixed(x, 1) + " " + $toFixed(x, 3).padStart(8) + " " + $debugF64(x);');
+  expect(js).toContain("return (\n    $toFixed(x, 0) + \" \" + $toFixed(x, 1) + \" \" + $toFixed(x, 3).padStart(8) + \" \" + $debugF64(x");
 });
 
 // ADR 0059: a `HashMap` is a JS `Map`, and a `HashSet` a `Set`.
 test("HashMap and HashSet are a JS Map and Set", async () => {
   const js = await Bun.file(join(target, "collections.js")).text();
   // The count idiom: the value there, or the one it would start as.
-  expect(js).toContain("counts.set(word, (counts.get(word) ?? 0) + 1 >>> 0);");
+  expect(js).toContain("counts.set(word, ((counts.get(word) ?? 0) + 1) >>> 0);");
   // A value that's used is the old one; one that isn't is plain `set`.
-  expect(js).toContain('  m.set("a", n);\n  const old = $insert(m, "a", n + 1 >>> 0);');
+  expect(js).toContain('  m.set("a", n);\n  const old = $insert(m, "a", (n + 1) >>> 0);');
   expect(js).toContain("$orInsert(groups, key, []).push(i);");
   expect(js).toContain("const copy = new Map(Array.from(groups).map(([key, value]) => [key, value.slice()]));");
 });
@@ -932,7 +932,7 @@ test("the calculator's JS is what a person would write", async () => {
   expect(js).toContain('"Some((" + String(arg$1[0]) + ", " + $debugStr(arg$1[1], "\'") + "))"');
   expect(js).toContain('$splitBy(text, (c) => !/^[\\p{Alphabetic}\\p{N}]$/u.test(c))');
   // `?` from a `&str` error to a `String` one: the same string, returned as it is.
-  expect(js).toContain('_0: "underflow"\n      };\n      if (result$1.TAG === "Err") {\n        return result$1;');
+  expect(js).toContain("_0: \"underflow\" };\n      if (result$1.TAG === \"Err\") {\n        return result$1;");
 });
 
 // ADR 0064: a number's methods are `Math`'s where JS agrees with Rust, and
@@ -941,7 +941,7 @@ test("numbers are Math's, operators call their impl, and vec![x; n] fills", asyn
   const js = await Bun.file(join(target, "numbers.js")).text();
   expect(js).toContain("return Math.sqrt(vec2.x * vec2.x + vec2.y * vec2.y);");
   expect(js).toContain("vec2Add_add(");
-  expect(js).toContain("$displayF64(Math.floor(x)) + \" \" + $displayF64(Math.ceil(x)) + \" \" + $displayF64($round(x))");
+  expect(js).toContain("$displayF64(Math.floor(x)) +\n    \" \" +\n    $displayF64(Math.ceil(x)) +\n    \" \" +\n    $displayF64($round(x))");
   expect(js).toContain("$checked(b - 10, 0, 4294967295)");
   expect(js).toContain("String(Math.max(b - 100, 0))");
   // Each row made again; a struct cloned, since one is changed later.

@@ -9,7 +9,10 @@ function $try(f) {
 }
 
 function $settle(promise) {
-  return promise.then((value) => ({ TAG: "Ok", _0: value }), (e) => ({ TAG: "Err", _0: e }));
+  return promise.then(
+    (value) => ({ TAG: "Ok", _0: value }),
+    (e) => ({ TAG: "Err", _0: e }),
+  );
 }
 
 export function sum_json(json) {
@@ -17,17 +20,11 @@ export function sum_json(json) {
   if (match.TAG === "Ok") {
     let sum = 0;
     for (const n of match._0) {
-      sum = sum + n >>> 0;
+      sum = (sum + n) >>> 0;
     }
-    return {
-      TAG: "Ok",
-      _0: sum
-    };
+    return { TAG: "Ok", _0: sum };
   } else {
-    return {
-      TAG: "Err",
-      _0: String(match._0)
-    };
+    return { TAG: "Err", _0: String(match._0) };
   }
 }
 
@@ -42,10 +39,7 @@ export function first_twice(json) {
     first = Math.imul(n, 2) >>> 0;
     break;
   }
-  return {
-    TAG: "Ok",
-    _0: first
-  };
+  return { TAG: "Ok", _0: first };
 }
 
 export async function settled(fail) {

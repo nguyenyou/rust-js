@@ -8,22 +8,14 @@ function $stripSuffix(s, suffix) {
 
 export const Project = {
   empty() {
-    return {
-      root: "lib.rs",
-      files: [],
-      current: ""
-    };
+    return { root: "lib.rs", files: [], current: "" };
   },
   of(root, texts) {
     const files = texts.map((param) => ({
       path: param[0],
-      state: codemirror.sourceState(param[1])
+      state: codemirror.sourceState(param[1]),
     }));
-    return {
-      root,
-      files,
-      current: root
-    };
+    return { root, files, current: root };
   },
   has(project, path) {
     return project.files.some((f) => f.path === path);
@@ -51,47 +43,28 @@ export const Project = {
     return files;
   },
   opening(project, path, live) {
-    return {
-      root: project.root,
-      files: Project.keeping(project, live),
-      current: path
-    };
+    return { root: project.root, files: Project.keeping(project, live), current: path };
   },
   adding(project, path, live) {
     let files = Project.keeping(project, live);
-    files.push({
-      path,
-      state: codemirror.sourceState("")
-    });
-    return {
-      root: project.root,
-      files,
-      current: path
-    };
+    files.push({ path, state: codemirror.sourceState("") });
+    return { root: project.root, files, current: path };
   },
   removing(project, path) {
-    const files = project.files.filter((f) => f.path !== path).map((f) => ({
-      path: f.path,
-      state: f.state
-    }));
+    const files = project.files
+      .filter((f) => f.path !== path)
+      .map((f) => ({ path: f.path, state: f.state }));
     const current = project.current === path ? project.root : project.current;
-    return {
-      root: project.root,
-      files,
-      current
-    };
+    return { root: project.root, files, current };
   },
   sources(project, live) {
     const files = Project.keeping(project, live);
     return new Map(files.map((f) => [f.path, codemirror.textOf(f.state)]));
-  }
+  },
 };
 
 function copy(files) {
-  return files.map((f) => ({
-    path: f.path,
-    state: f.state
-  }));
+  return files.map((f) => ({ path: f.path, state: f.state }));
 }
 
 export function jsName(path) {

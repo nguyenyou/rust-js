@@ -17,7 +17,10 @@ export function Editor({ state, view, onSubmit }) {
   const made = useRef(undefined);
   const dark = dark_mode.useDarkMode();
   useEffect(() => {
-    const editor = codemirror.openView($unwrap(parent.current, "the editor's element is mounted"), state);
+    const editor = codemirror.openView(
+      $unwrap(parent.current, "the editor's element is mounted"),
+      state,
+    );
     made.current = editor;
     if (view != null) {
       view.current = editor;
@@ -44,6 +47,12 @@ export function Editor({ state, view, onSubmit }) {
       onSubmit();
     }
   };
-  return <div className={"min-w-0 overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:text-[13px]"} ref={parent} onKeyDownCapture={onKeyDownCapture} />;
+  return (
+    <div
+      className={"min-w-0 overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:text-[13px]"}
+      ref={parent}
+      onKeyDownCapture={onKeyDownCapture}
+    />
+  );
 }
 //# sourceMappingURL=editor.jsx.map

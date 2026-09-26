@@ -7,14 +7,22 @@ import * as listen from "./listen.js";
 const DARK = window.matchMedia("(prefers-color-scheme: dark)");
 
 export function useDarkMode() {
-  return useSyncExternalStore((notify) => {
-    const controller = new AbortController();
-    listen.listen(DARK, "change", () => {
-      notify();
-    }, controller);
-    return () => {
-      controller.abort();
-    };
-  }, () => DARK.matches);
+  return useSyncExternalStore(
+    (notify) => {
+      const controller = new AbortController();
+      listen.listen(
+        DARK,
+        "change",
+        () => {
+          notify();
+        },
+        controller,
+      );
+      return () => {
+        controller.abort();
+      };
+    },
+    () => DARK.matches,
+  );
 }
 //# sourceMappingURL=dark_mode.js.map
