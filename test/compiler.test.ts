@@ -31,6 +31,7 @@ let lexer: Record<string, (...args: any[]) => unknown>;
 let values: Record<string, (...args: any[]) => unknown>;
 let versions: Record<string, (...args: any[]) => unknown>;
 let wire: Record<string, (...args: any[]) => unknown>;
+let inbox: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -90,6 +91,8 @@ beforeAll(async () => {
   versions = await import(join(target, "versions.js"));
   run([join(target, "debug", "rust-js"), "examples/wire.rs", "-o", join(target, "wire.js"), "--", ...buildSerde()]);
   wire = await import(join(target, "wire.js"));
+  run([join(target, "debug", "rust-js"), "examples/inbox.rs", "-o", join(target, "inbox.js"), "--", ...buildSerde()]);
+  inbox = await import(join(target, "inbox.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -208,6 +211,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "wire") {
         return wire[path[1]](...c.args);
+      }
+      if (path[0] === "inbox") {
+        return inbox[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);

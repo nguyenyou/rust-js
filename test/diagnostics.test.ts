@@ -35,6 +35,9 @@ for (const [name, source, message, crate] of [
   ["handwritten JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "element builders are compiler-only"],
   ["a generic Serialize", '#[derive(serde::Serialize)] pub struct W<T> { pub x: T }\npub fn f() -> String { serde_json::to_string(&W { x: 1u32 }).unwrap() }', "`Serialize` of a generic type", "serde"],
   ["#[serde(flatten)]", '#[derive(serde::Serialize)] pub struct In { pub a: u32 }\n#[derive(serde::Serialize)] pub struct Out { #[serde(flatten)] pub i: In }\npub fn f(o: &Out) -> String { serde_json::to_string(o).unwrap() }', "`#[serde(flatten)]`", "serde"],
+  ["a generic Deserialize", '#[derive(serde::Deserialize)] pub struct W<T> { pub x: T }\npub fn f(s: &str) -> bool { serde_json::from_str::<W<u32>>(s).is_ok() }', "`Deserialize` of a generic type", "serde"],
+  ["reading an internally tagged enum", '#[derive(serde::Deserialize)] #[serde(tag = "t")] pub enum E { A }\npub fn f(s: &str) -> bool { serde_json::from_str::<E>(s).is_ok() }', "deserializing an internally tagged enum", "serde"],
+  ["reading a borrowed str", 'pub fn f(s: &str) -> bool { serde_json::from_str::<&str>(s).is_ok() }', "deserializing `&str`", "serde"],
 ] as [string, string, string, string?][]) {
   test(`${name} reports a source location and preserves existing output`, () => {
     const dir = fixture("diagnostic");

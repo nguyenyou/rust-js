@@ -45,7 +45,8 @@ This folder is where we write those choices down.
 | `src/jsx_syntax.rs`, `src/jsx_syntax/` | Load configured modules and expand JSX tokens into typed Rust before resolution; shared by native and WASM |
 | `src/lower/link.rs` | Resolve actual module dependencies and collision-free aliases after lowering |
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
-| `src/lower/serde.rs`, `serde/` | `#[serde(..)]` attributes and serde_json-compatible JSON; the serde crates, built with the pinned toolchain |
+| `src/lower/serde.rs`, `src/lower/serde/`, `serde/` | `#[serde(..)]` attributes, and JSON written and read as serde_json does; the serde crates, built with the pinned toolchain |
+| `src/runtime/from_json.js` | serde_json's reader, ported to JS |
 | `src/runtime.rs` | Runtime helpers emitted on demand |
 | `src/prepare.rs` | JSX readability preparation after lowering |
 | `src/output.rs` | Filename validation, manifests and artifact publication |
@@ -147,6 +148,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 **Talking to a server**
 
 - [0077 `#[derive(Serialize)]` is a function that writes serde_json's text](decisions/0077-serde-json.md)
+- [0078 `serde_json::from_str` is serde_json's reader, ported; `#[derive(Deserialize)]` is a table it reads by](decisions/0078-serde-json-reading.md)
 
 **Scope and process**
 

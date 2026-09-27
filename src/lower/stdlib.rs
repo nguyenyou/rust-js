@@ -79,6 +79,8 @@ pub(super) enum Std {
     Heap(HeapOp),
     /// `serde_json::to_string(&v)` (false) and `to_string_pretty` (ADR 0077).
     ToJson(bool),
+    /// `serde_json::from_str::<T>(s)` (ADR 0078).
+    FromJson,
     /// `it.next()`, `peekable()`, `peek()` and the like (ADR 0071).
     Step(StepOp),
     /// `VecDeque::remove(i)`: an `Option`, where `Vec`'s panics.
@@ -242,6 +244,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             match tcx.item_name(def_id).as_str() {
                 "to_string" => return Some(Std::ToJson(false)),
                 "to_string_pretty" => return Some(Std::ToJson(true)),
+                "from_str" => return Some(Std::FromJson),
                 _ => {}
             }
         }

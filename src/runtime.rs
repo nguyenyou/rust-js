@@ -46,7 +46,9 @@ pub enum Helper {
     Next,
     NextSome,
     Scan,
+    JsonFail,
     ToJson,
+    FromJson,
     JsonError,
     LowerExp,
     FromDigit,
@@ -958,16 +960,22 @@ function $debugJsonError(e) {
 }
 "#
             }
-            // serde_json's writer (ADR 0077): `write` makes serde's calls on it,
-            // and it lays them out as serde_json's compact or pretty
-            // formatter does. A number is as serde_json writes an `f64`: its
-            // shortest digits, fixed from 1e-5 to 1e15, else `1.5e+16`.
-            Helper::ToJson => {
+            // A `serde_json::Error` on its way out: a message, and where in the
+            // text, line 0 when it's not about a place.
+            Helper::JsonFail => {
                 r#"
-class $JsonError extends Error {}
+class $JsonError extends Error {
+  constructor(message, line = 0, column = 0) {
+    super(message);
+    this.line = line;
+    this.column = column;
+  }
+}
 function $jsonError(message) {
   return new $JsonError(message);
 }
+// A float as serde_json writes one: its shortest digits, fixed from 1e-5
+// to 1e15, else `1.5e+16`.
 function $jsonNumber(x) {
   if (!Number.isFinite(x)) return "null";
   if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
@@ -977,6 +985,14 @@ function $jsonNumber(x) {
   const fixed = String(x);
   return fixed.includes(".") ? fixed : `${fixed}.0`;
 }
+"#
+            }
+            Helper::FromJson => include_str!("runtime/from_json.js"),
+            // serde_json's writer (ADR 0077): `write` makes serde's calls on it,
+            // and it lays them out as serde_json's compact or pretty
+            // formatter does.
+            Helper::ToJson => {
+                r#"
 function $jsonWriter(pretty) {
   // For each array or object open: whether nothing is in it yet.
   const empty = [];
@@ -1015,7 +1031,7 @@ function $toJson(value, write, pretty) {
   try {
     write(value, json);
   } catch (e) {
-    if (e instanceof $JsonError) return { TAG: "Err", _0: { message: e.message, line: 0, column: 0 } };
+    if (e instanceof $JsonError) return { TAG: "Err", _0: { message: e.message, line: e.line, column: e.column } };
     throw e;
   }
   return { TAG: "Ok", _0: json.text };

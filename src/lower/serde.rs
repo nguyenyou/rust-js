@@ -19,7 +19,10 @@
 //! ```
 //!
 //! What a type's JSON looks like is serde's to say, from its `#[serde(..)]`
-//! attributes, read here as serde_derive reads them.
+//! attributes, read here as serde_derive reads them. Reading JSON back is
+//! in `de`.
+
+mod de;
 
 use super::bindings::variant_name;
 use super::representation::{Num, variant_field};
@@ -204,23 +207,40 @@ enum Tagging {
     Untagged,
 }
 
+/// `#[serde(default)]`, or `#[serde(default = "path")]`.
+#[derive(Clone, Copy)]
+enum SerdeDefault {
+    Default,
+    Path,
+}
+
 /// The `#[serde(..)]` attributes of a container, a variant or a field.
+/// `rename` is the name JSON is written with, and `de_rename` the one it's
+/// read with: `rename(serialize = "a", deserialize = "b")` tells them apart.
 #[derive(Default)]
 struct Attrs {
     rename: Option<String>,
     rename_all: Option<Rule>,
     rename_all_fields: Option<Rule>,
+    de_rename: Option<String>,
+    de_rename_all: Option<Rule>,
+    de_rename_all_fields: Option<Rule>,
+    aliases: Vec<String>,
     tag: Option<String>,
     content: Option<String>,
     untagged: bool,
     transparent: bool,
     skip_serializing: bool,
     skip_serializing_if: Option<String>,
+    skip_deserializing: bool,
+    default: Option<SerdeDefault>,
+    deny_unknown_fields: bool,
+    other: bool,
+    expecting: Option<String>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// `#[serde(..)]` on `def_id`, as serde_derive reads it: what it writes
-    /// to JSON. What only reading JSON uses is taken, and left for then.
+    /// `#[serde(..)]` on `def_id`, as serde_derive reads it.
     fn serde_attrs(&self, def_id: DefId) -> R<Attrs> {
         let mut attrs = Attrs::default();
         let span = self
@@ -230,33 +250,50 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for item in self.krate.serde_attrs.get(&span).into_iter().flatten() {
             let name = item.name.as_str();
             let value = item.value.clone();
-            // `rename(serialize = "a", deserialize = "b")`: the one JSON is written with.
-            let written = value.clone().or_else(|| {
-                item.nested
-                    .iter()
-                    .find(|(n, _)| n == "serialize")
-                    .and_then(|(_, v)| v.clone())
-            });
-            let rule = |this: &Self| -> R<Option<Rule>> {
-                match &written {
+            // `rename(serialize = "a", deserialize = "b")`: the one JSON is
+            // written with, and the one it's read with.
+            let named = |which: &str| {
+                value.clone().or_else(|| {
+                    item.nested
+                        .iter()
+                        .find(|(n, _)| n == which)
+                        .and_then(|(_, v)| v.clone())
+                })
+            };
+            let (written, read) = (named("serialize"), named("deserialize"));
+            let rule = |name: &Option<String>| -> R<Option<Rule>> {
+                match name {
                     Some(name) => Rule::parse(name)
                         .map(Some)
-                        .ok_or_else(|| this.unsupported(item.span, &format!("`rename_all = {name:?}`"))),
+                        .ok_or_else(|| self.unsupported(item.span, &format!("`rename_all = {name:?}`"))),
                     None => Ok(None),
                 }
             };
             match name {
-                "rename" => attrs.rename = written.clone(),
-                "rename_all" => attrs.rename_all = rule(self)?,
-                "rename_all_fields" => attrs.rename_all_fields = rule(self)?,
+                "rename" => (attrs.rename, attrs.de_rename) = (written, read),
+                "rename_all" => (attrs.rename_all, attrs.de_rename_all) = (rule(&written)?, rule(&read)?),
+                "rename_all_fields" => {
+                    (attrs.rename_all_fields, attrs.de_rename_all_fields) = (rule(&written)?, rule(&read)?)
+                }
+                "alias" => attrs.aliases.extend(value),
                 "tag" => attrs.tag = value,
                 "content" => attrs.content = value,
                 "untagged" => attrs.untagged = true,
                 "transparent" => attrs.transparent = true,
-                "skip" | "skip_serializing" => attrs.skip_serializing = true,
+                "skip" => (attrs.skip_serializing, attrs.skip_deserializing) = (true, true),
+                "skip_serializing" => attrs.skip_serializing = true,
                 "skip_serializing_if" => attrs.skip_serializing_if = value,
-                // Only reading JSON cares.
-                "skip_deserializing" | "default" | "deny_unknown_fields" | "alias" | "other" | "expecting" => {}
+                "skip_deserializing" => attrs.skip_deserializing = true,
+                "default" => {
+                    attrs.default = Some(if value.is_some() {
+                        SerdeDefault::Path
+                    } else {
+                        SerdeDefault::Default
+                    })
+                }
+                "deny_unknown_fields" => attrs.deny_unknown_fields = true,
+                "other" => attrs.other = true,
+                "expecting" => attrs.expecting = value,
                 _ => return Err(self.unsupported(item.span, &format!("`#[serde({name})]`"))),
             }
         }
@@ -276,9 +313,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
+    /// A derived `serialize` or `deserialize`.
+    pub(super) fn lower_codec(&mut self, method: DefId) -> R<js::Function> {
+        match super::analysis::serde_impl(self.tcx, self.tcx.parent(method)) {
+            Some(true) => self.lower_serialize(method),
+            _ => self.lower_deserialize(method),
+        }
+    }
+
     /// `function orderSerialize_serialize(order, json) { .. }`: the derived
     /// `serialize`, as the steps it takes with `$json`.
-    pub(super) fn lower_serialize(&mut self, method: DefId) -> R<js::Function> {
+    fn lower_serialize(&mut self, method: DefId) -> R<js::Function> {
         let imp = self.tcx.parent(method);
         let span = self.tcx.def_span(imp);
         let self_ty = self.tcx.type_of(imp).instantiate_identity();
@@ -313,7 +358,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `serde_json::to_string(&v)` and `to_string_pretty`: `$toJson((json) =>
     /// { .. }, pretty)`, the steps for `v` in a function the writer calls.
     pub(super) fn json_text(&mut self, value: Expr, ty: Ty<'tcx>, pretty: bool, span: Span) -> R<Expr> {
-        self.runtime.insert(Helper::ToJson);
+        self.runtime.extend([Helper::ToJson, Helper::JsonFail]);
         let write = match self.serialize_fn(ty.peel_refs()) {
             Some(f) => self.fn_ref(f),
             None => {
@@ -526,7 +571,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             });
             let mut body = Vec::new();
             if attrs.skip_serializing {
-                self.runtime.insert(Helper::ToJson);
+                self.runtime.insert(Helper::JsonFail);
                 let message = format!(
                     "the enum variant {}::{} cannot be serialized",
                     self.tcx.item_name(adt.did()),
@@ -728,6 +773,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Serde's derive has already asked rustc to resolve the predicate. Its
     /// path retains the attribute's source span, including imports and aliases.
     fn resolved_skip(&self, field: DefId) -> Option<DefId> {
+        self.resolved_path(field, "skip_serializing_if", true)
+    }
+
+    /// The function a `#[serde(name = "path")]` on `def_id` names, as rustc
+    /// resolved it in the derived `Serialize` impl, or `Deserialize`'s.
+    fn resolved_path(&self, def_id: DefId, name: &str, serialize: bool) -> Option<DefId> {
         struct Predicate<'tcx> {
             types: &'tcx ty::TypeckResults<'tcx>,
             span: Span,
@@ -745,23 +796,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 intravisit::walk_expr(self, expr);
             }
         }
-        let field_span = self
+        let item_span = self
             .tcx
-            .def_ident_span(field)
-            .unwrap_or_else(|| self.tcx.def_span(field));
+            .def_ident_span(def_id)
+            .unwrap_or_else(|| self.tcx.def_span(def_id));
         let span = self
             .krate
             .serde_attrs
-            .get(&field_span)?
+            .get(&item_span)?
             .iter()
-            .find(|item| item.name == "skip_serializing_if")?
+            .find(|item| item.name == name)?
             .span;
         for owner in self.tcx.hir_body_owners() {
-            if self
-                .tcx
-                .opt_parent(owner.to_def_id())
-                .is_none_or(|parent| super::analysis::serde_impl(self.tcx, parent) != Some(true))
+            // Deserializing, it's called in the derive's visitor, inside the impl.
+            let mut parent = self.tcx.opt_parent(owner.to_def_id());
+            while let Some(id) = parent
+                && super::analysis::serde_impl(self.tcx, id).is_none()
             {
+                parent = self.tcx.opt_parent(id);
+            }
+            if parent.is_none_or(|parent| super::analysis::serde_impl(self.tcx, parent) != Some(serialize)) {
                 continue;
             }
             let body = self.tcx.hir_body_owned_by(owner);

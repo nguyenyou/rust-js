@@ -33,10 +33,18 @@ function $sortedEntries(map, cmp) {
   return Array.from(map).sort((a, b) => cmp(a[0], b[0]));
 }
 
-class $JsonError extends Error {}
+class $JsonError extends Error {
+  constructor(message, line = 0, column = 0) {
+    super(message);
+    this.line = line;
+    this.column = column;
+  }
+}
 function $jsonError(message) {
   return new $JsonError(message);
 }
+// A float as serde_json writes one: its shortest digits, fixed from 1e-5
+// to 1e15, else `1.5e+16`.
 function $jsonNumber(x) {
   if (!Number.isFinite(x)) return "null";
   if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
@@ -46,6 +54,7 @@ function $jsonNumber(x) {
   const fixed = String(x);
   return fixed.includes(".") ? fixed : `${fixed}.0`;
 }
+
 function $jsonWriter(pretty) {
   // For each array or object open: whether nothing is in it yet.
   const empty = [];
@@ -101,7 +110,7 @@ function $toJson(value, write, pretty) {
     write(value, json);
   } catch (e) {
     if (e instanceof $JsonError)
-      return { TAG: "Err", _0: { message: e.message, line: 0, column: 0 } };
+      return { TAG: "Err", _0: { message: e.message, line: e.line, column: e.column } };
     throw e;
   }
   return { TAG: "Ok", _0: json.text };
@@ -197,6 +206,102 @@ function orderSerialize_serialize(order, json) {
   json.endArray();
   json.key("ok");
   json.raw(String(order.paid));
+  json.endObject();
+}
+
+function everythingSerialize_serialize(everything, json) {
+  json.beginObject();
+  json.key("id");
+  idSerialize_serialize(everything.id, json);
+  json.key("at");
+  pointSerialize_serialize(everything.at, json);
+  json.key("unit");
+  unitSerialize_serialize(everything.unit, json);
+  json.key("len");
+  metersSerialize_serialize(everything.len, json);
+  json.key("shapes");
+  json.beginArray();
+  for (const item of everything.shapes) {
+    json.element();
+    shapeSerialize_serialize(item, json);
+  }
+  json.endArray();
+  json.key("events");
+  json.beginArray();
+  for (const item$1 of everything.events) {
+    json.element();
+    eventSerialize_serialize(item$1, json);
+  }
+  json.endArray();
+  json.key("msgs");
+  json.beginArray();
+  for (const item$2 of everything.msgs) {
+    json.element();
+    msgSerialize_serialize(item$2, json);
+  }
+  json.endArray();
+  json.key("loose");
+  json.beginArray();
+  for (const item$3 of everything.loose) {
+    json.element();
+    looseSerialize_serialize(item$3, json);
+  }
+  json.endArray();
+  json.key("counts");
+  json.beginObject();
+  for (const [key, item$4] of $sortedEntries(everything.counts, $cmp)) {
+    json.key(key);
+    json.raw(String(item$4));
+  }
+  json.endObject();
+  json.key("by_id");
+  json.beginObject();
+  for (const [key$1, item$5] of $sortedEntries(everything.by_id, $cmp)) {
+    json.key(String(key$1));
+    json.raw(String(item$5));
+  }
+  json.endObject();
+  json.key("pair");
+  json.beginArray();
+  json.element();
+  json.raw(String(everything.pair[0]));
+  json.element();
+  json.string(everything.pair[1]);
+  json.element();
+  if (everything.pair[2] == null) {
+    json.raw("null");
+  } else {
+    json.raw(String(everything.pair[2]));
+  }
+  json.endArray();
+  json.key("empty");
+  json.beginArray();
+  for (const item$6 of everything.empty) {
+    json.element();
+    json.raw(String(item$6));
+  }
+  json.endArray();
+  json.key("nested");
+  json.beginArray();
+  for (const item$7 of everything.nested) {
+    json.element();
+    json.beginArray();
+    for (const item$8 of item$7) {
+      json.element();
+      json.raw(String(item$8));
+    }
+    json.endArray();
+  }
+  json.endArray();
+  json.key("text");
+  json.string(everything.text);
+  json.key("floats");
+  json.beginArray();
+  for (const item$9 of everything.floats) {
+    json.element();
+    json.number(item$9);
+  }
+  json.endArray();
   json.endObject();
 }
 
@@ -332,101 +437,5 @@ function unitSerialize_serialize(unit, json) {
 
 function metersSerialize_serialize(meters, json) {
   json.number(meters.value);
-}
-
-function everythingSerialize_serialize(everything, json) {
-  json.beginObject();
-  json.key("id");
-  idSerialize_serialize(everything.id, json);
-  json.key("at");
-  pointSerialize_serialize(everything.at, json);
-  json.key("unit");
-  unitSerialize_serialize(everything.unit, json);
-  json.key("len");
-  metersSerialize_serialize(everything.len, json);
-  json.key("shapes");
-  json.beginArray();
-  for (const item of everything.shapes) {
-    json.element();
-    shapeSerialize_serialize(item, json);
-  }
-  json.endArray();
-  json.key("events");
-  json.beginArray();
-  for (const item$1 of everything.events) {
-    json.element();
-    eventSerialize_serialize(item$1, json);
-  }
-  json.endArray();
-  json.key("msgs");
-  json.beginArray();
-  for (const item$2 of everything.msgs) {
-    json.element();
-    msgSerialize_serialize(item$2, json);
-  }
-  json.endArray();
-  json.key("loose");
-  json.beginArray();
-  for (const item$3 of everything.loose) {
-    json.element();
-    looseSerialize_serialize(item$3, json);
-  }
-  json.endArray();
-  json.key("counts");
-  json.beginObject();
-  for (const [key, item$4] of $sortedEntries(everything.counts, $cmp)) {
-    json.key(key);
-    json.raw(String(item$4));
-  }
-  json.endObject();
-  json.key("by_id");
-  json.beginObject();
-  for (const [key$1, item$5] of $sortedEntries(everything.by_id, $cmp)) {
-    json.key(String(key$1));
-    json.raw(String(item$5));
-  }
-  json.endObject();
-  json.key("pair");
-  json.beginArray();
-  json.element();
-  json.raw(String(everything.pair[0]));
-  json.element();
-  json.string(everything.pair[1]);
-  json.element();
-  if (everything.pair[2] == null) {
-    json.raw("null");
-  } else {
-    json.raw(String(everything.pair[2]));
-  }
-  json.endArray();
-  json.key("empty");
-  json.beginArray();
-  for (const item$6 of everything.empty) {
-    json.element();
-    json.raw(String(item$6));
-  }
-  json.endArray();
-  json.key("nested");
-  json.beginArray();
-  for (const item$7 of everything.nested) {
-    json.element();
-    json.beginArray();
-    for (const item$8 of item$7) {
-      json.element();
-      json.raw(String(item$8));
-    }
-    json.endArray();
-  }
-  json.endArray();
-  json.key("text");
-  json.string(everything.text);
-  json.key("floats");
-  json.beginArray();
-  for (const item$9 of everything.floats) {
-    json.element();
-    json.number(item$9);
-  }
-  json.endArray();
-  json.endObject();
 }
 //# sourceMappingURL=wire.js.map

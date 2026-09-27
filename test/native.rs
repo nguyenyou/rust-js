@@ -32,6 +32,10 @@ mod combinators;
 #[allow(dead_code)]
 mod wire;
 
+#[path = "../examples/inbox.rs"]
+#[allow(dead_code)]
+mod inbox;
+
 #[path = "../examples/versions.rs"]
 #[allow(dead_code)]
 mod versions;
@@ -253,6 +257,8 @@ fn main() {
     case("versions.report", &[], versions::report);
     // serde_json's own bytes, compact and pretty.
     case("wire.report", &[], wire::report);
+    // serde_json's values and errors, to the byte and the column.
+    case("inbox.report", &[], inbox::report);
     for i in [0, 1, 2] {
         case("versions.panics", &[i as i64], || versions::panics(i));
     }

@@ -132,7 +132,7 @@ which are the same digits, and lays them out as serde_json does.
 - A `HashMap` is written in JS's insertion order, not Rust's hash order.
   Both are valid JSON objects, but not the same text; use a `BTreeMap`
   when the text must match.
-- Reading JSON back (`serde_json::from_str`) is still an error.
+- Reading JSON back (`serde_json::from_str`) is [ADR 0078](0078-serde-json-reading.md).
 
 `test/serde.test.ts` compiles the same source natively and through rust-js,
 then compares compact and pretty JSON. It covers these attribute combinations

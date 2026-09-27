@@ -249,6 +249,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let value = self.expr(args[0], out)?;
             return self.json_text(value, ty, pretty, span);
         }
+        if let Std::FromJson = known {
+            let ty = generic_args.types().next().expect("`from_str::<T>`");
+            let text = self.expr(args[0], out)?;
+            return self.json_value(text, ty, span);
+        }
         if let Std::Step(op) = known {
             return self.step_call(op, fun, args, generic_args, span, out);
         }
@@ -680,7 +685,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Heap(_)
             | Std::DequeRemove
             | Std::Step(_)
-            | Std::ToJson(_) => {
+            | Std::ToJson(_)
+            | Std::FromJson => {
                 unreachable!("handled above")
             }
             // `Some(&x)` is `x`, and its clone is `x`'s.

@@ -30,8 +30,12 @@ pub(super) fn from_serde_derive(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
         let mut ctxt = tcx.def_span(id).ctxt();
         while !ctxt.is_root() {
             let expansion = ctxt.outer_expn_data();
-            if let ExpnKind::Macro(MacroKind::Derive, name) = expansion.kind
-                && matches!(name.as_str(), "Serialize" | "Deserialize")
+            // By the macro, not its name: `serde::Deserialize` and an alias are
+            // named as they're written.
+            if let ExpnKind::Macro(MacroKind::Derive, _) = expansion.kind
+                && expansion
+                    .macro_def_id
+                    .is_some_and(|id| tcx.crate_name(id.krate).as_str() == "serde_derive")
             {
                 return true;
             }
@@ -189,20 +193,21 @@ pub fn lower_crate<'tcx>(
         })
         .collect();
 
-    // A derived `Serialize`'s `serialize`, which rust-js writes (ADR 0077).
-    let serializers: Vec<DefId> = trait_impls
+    // A derived `Serialize`'s `serialize` and `Deserialize`'s `deserialize`,
+    // which rust-js writes (ADRs 0077 and 0078).
+    let codecs: Vec<DefId> = trait_impls
         .iter()
-        .filter(|&&id| serde_impl(tcx, id) == Some(true))
+        .filter(|&&id| serde_impl(tcx, id).is_some())
         .map(|&id| tcx.associated_item_def_ids(id)[0])
         .collect();
     // What gets a JS name: functions and methods, `const`s, dictionaries,
-    // and serializers.
+    // and codecs.
     let items: Vec<LocalDefId> = bodies
         .iter()
         .map(|body| body.def_id)
         .chain(consts.iter().copied())
         .chain(dictionaries.iter().map(|id| id.expect_local()))
-        .chain(serializers.iter().map(|id| id.expect_local()))
+        .chain(codecs.iter().map(|id| id.expect_local()))
         .collect();
     // The modules that get a JS file: the root, then every module with one of
     // those, in the order the first one appears.
@@ -268,13 +273,32 @@ pub fn lower_crate<'tcx>(
         trait_impls: &trait_impls,
         serde_attrs,
     };
-    for (def_id, body) in bodies
+    let mut work: Vec<(DefId, Option<&Body<'tcx>>)> = bodies
         .iter()
         .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
         .map(|b| (b.def_id.to_def_id(), Some(*b)))
         .chain(dictionaries.iter().map(|id| (*id, None)))
-        .chain(serializers.iter().map(|id| (*id, None)))
-    {
+        .collect();
+    let (mut used, mut queued) = (HashSet::new(), HashSet::new());
+    let mut next = 0;
+    loop {
+        // Then the codecs something uses, a round at a time, each in the
+        // order they're declared. A shared crate derives both for its types,
+        // so one that's never used isn't lowered: its type needn't be one
+        // rust-js reads or writes.
+        if next == work.len() {
+            let round: Vec<_> = codecs
+                .iter()
+                .filter(|&&id| used.contains(&id) && queued.insert(id))
+                .map(|&id| (id, None))
+                .collect();
+            if round.is_empty() {
+                break;
+            }
+            work.extend(round);
+        }
+        let (def_id, body) = work[next];
+        next += 1;
         let module = fns[&def_id].module;
         let file = module_file(tcx, module);
         let mut cx = FnCx {
@@ -309,7 +333,7 @@ pub fn lower_crate<'tcx>(
         };
         let result = match body {
             Some(body) => cx.lower_fn(body),
-            None if serializers.contains(&def_id) => cx.lower_serialize(def_id).map(|function| super::LoweredFn {
+            None if codecs.contains(&def_id) => cx.lower_codec(def_id).map(|function| super::LoweredFn {
                 function,
                 runtime: std::mem::take(&mut cx.runtime),
                 jsx: cx.jsx,
@@ -326,7 +350,10 @@ pub fn lower_crate<'tcx>(
             }
         };
         match result {
-            Ok(lowered) => lowered_items.push((def_id, lowered)),
+            Ok(lowered) => {
+                used.extend(lowered.dependencies.uses.iter().map(|&(_, to)| to));
+                lowered_items.push((def_id, lowered));
+            }
             Err(_) => failed = true,
         }
     }

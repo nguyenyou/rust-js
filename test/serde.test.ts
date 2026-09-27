@@ -145,3 +145,60 @@ fn main() { println!("{}", serde_json::to_string(&report()).unwrap()); }
     expect(generated.report()).toBe(expected);
   });
 }
+
+// Numbers chosen at random, the same ones each run: an f64 from any 64 bits,
+// written with `to_string`, and number texts of every form, read with
+// `from_str` as an `f64` and an `i32`. serde_json's float parsing isn't
+// correctly rounded (ADR 0078), and its digits are its own (ADR 0077).
+test("serde: numbers are written and read as serde_json does", async () => {
+  let seed = 20260927n;
+  const next = () => (seed = (seed * 6364136223846793005n + 1442695040888963407n) & 0xffffffffffffffffn);
+  const below = (n: number) => Number(next() >> 33n) % n;
+  const digits = (n: number) => String(1 + below(9)) + Array.from({ length: n - 1 }, () => below(10)).join("");
+  const bits = new DataView(new ArrayBuffer(8));
+  const floats: string[] = [];
+  while (floats.length < 2000) {
+    bits.setBigUint64(0, next());
+    const x = bits.getFloat64(0);
+    if (Number.isFinite(x)) floats.push(x.toPrecision(17).replace("e+", "e"));
+  }
+  const texts = Array.from({ length: 2000 }, () => {
+    const sign = below(3) === 0 ? "-" : "";
+    const forms = [
+      () => digits(1 + below(25)),
+      () => `${digits(1 + below(12))}.${digits(1 + below(20))}`,
+      () => `${digits(1 + below(18))}e${below(2) ? "-" : ""}${below(330)}`,
+      () => `0.0000${digits(1 + below(20))}e-${below(300)}`,
+      () => `${digits(15 + below(10))}.${digits(10)}E+${below(290)}`,
+    ];
+    return sign + forms[below(forms.length)]();
+  });
+  const dir = fixture("serde-numbers");
+  writeFileSync(join(dir, "cases.rs"), `pub fn report() -> String {
+    let mut out = String::new();
+    for x in [${floats.map((x) => `${/[.e]/.test(x) ? x : `${x}.0`}_f64`).join(", ")}] {
+        out.push_str(&serde_json::to_string(&x).unwrap());
+        out.push('\\n');
+    }
+    for text in [${texts.map((t) => JSON.stringify(t)).join(", ")}] {
+        match serde_json::from_str::<f64>(text) {
+            Ok(v) => out.push_str(&format!("{:?}\\n", v)),
+            Err(e) => out.push_str(&format!("{}\\n", e)),
+        }
+        match serde_json::from_str::<i32>(text) {
+            Ok(v) => out.push_str(&format!("{}\\n", v)),
+            Err(e) => out.push_str(&format!("{}\\n", e)),
+        }
+    }
+    out
+}
+`);
+  writeFileSync(join(dir, "native.rs"), `include!("cases.rs");
+fn main() { println!("{}", serde_json::to_string(&report()).unwrap()); }
+`);
+  run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native"), ...buildSerde("rlib")]);
+  const expected = JSON.parse(run([join(dir, "native")]));
+  run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js"), "--", ...buildSerde()]);
+  const generated = await import(join(dir, "cases.js"));
+  expect(generated.report()).toBe(expected);
+}, 120_000);
