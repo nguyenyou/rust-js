@@ -23,10 +23,11 @@ the downstream rustc/oxc dependency rules. See
 [ADR 0084](docs/decisions/0084-owned-phases-and-host-boundaries.md) for contracts
 and executable evidence.
 
-Standard-library call recognition now has a context containing only immutable
-type and trait inputs in `src/lower/recognition.rs`. It is separate from function
-emission state. Some feature-specific dispatch, including Serde Value operations,
-still combines recognition and emission; recognition is not yet unified across
+Standard-library and Serde Value call recognition use only immutable type and
+trait inputs in `src/lower/recognition.rs`, separate from function emission state.
+Serde calls produce explicit operations before lowering evaluates operands or
+selects runtime helpers. Individual Value method handling and other feature-specific
+dispatch still need further separation; recognition is not yet unified across
 every library family.
 
 **The entire target architecture is not yet delivered.** General Cargo graph

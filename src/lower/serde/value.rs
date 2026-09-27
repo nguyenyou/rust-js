@@ -5,15 +5,14 @@
 //! `"i"`nteger or `"f"`loat, as serde_json keeps one.
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
-use crate::lower::recognition::Json;
+use crate::lower::recognition::{Json, JsonCall};
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R};
 use crate::runtime::Helper;
-use rustc_hir::LangItem;
 use rustc_middle::thir::ExprId;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
+use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `serde_json::Value`, `Number` or `Map`.
@@ -40,103 +39,78 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Option<Expr>> {
-        let tcx = self.tcx;
-        let name = tcx.item_name(def_id);
-        if tcx.crate_name(def_id.krate).as_str() == "serde_json"
-            && name.as_str() == "to_value"
-            && tcx.trait_of_assoc(def_id).is_none()
-        {
-            let ty = generic_args.types().next().expect("`to_value::<T>`").peel_refs();
-            let value = self.expr(args[0], out)?;
-            self.use_value();
-            // Of a string, a number, a `bool` or `()`, it can't fail: `Ok` of it.
-            if self.is_string_like(ty) || ty.is_bool() || ty.is_unit() || Num::of(ty).is_some() {
-                let value = if ty.is_char() {
-                    Expr::object(vec![
-                        Prop::Field("TAG".into(), Expr::str("String")),
+        let Some(operation) = self.recognition().json_call(def_id, generic_args) else {
+            return Ok(None);
+        };
+        match operation {
+            JsonCall::ToValue(ty) => {
+                let value = self.expr(args[0], out)?;
+                self.use_value();
+                // Of a string, a number, a `bool` or `()`, it can't fail: `Ok` of it.
+                if self.is_string_like(ty) || ty.is_bool() || ty.is_unit() || Num::of(ty).is_some() {
+                    let value = if ty.is_char() {
+                        Expr::object(vec![
+                            Prop::Field("TAG".into(), Expr::str("String")),
+                            Prop::Field("_0".into(), value),
+                        ])
+                    } else {
+                        self.json_value_from(value, ty, span)?
+                    };
+                    return Ok(Some(Expr::object(vec![
+                        Prop::Field("TAG".into(), Expr::str("Ok")),
                         Prop::Field("_0".into(), value),
-                    ])
-                } else {
-                    self.json_value_from(value, ty, span)?
-                };
-                return Ok(Some(Expr::object(vec![
-                    Prop::Field("TAG".into(), Expr::str("Ok")),
-                    Prop::Field("_0".into(), value),
-                ])));
+                    ])));
+                }
+                let writer = self.json_writer(ty, span)?;
+                Ok(Some(Expr::call(Expr::var("$toJsonValue"), vec![value, writer])))
             }
-            let writer = self.json_writer(ty, span)?;
-            return Ok(Some(Expr::call(Expr::var("$toJsonValue"), vec![value, writer])));
-        }
-        // `serde_json::from_value::<T>(v)`: `T` read from the `Value`.
-        if tcx.crate_name(def_id.krate).as_str() == "serde_json"
-            && name.as_str() == "from_value"
-            && tcx.trait_of_assoc(def_id).is_none()
-        {
-            let ty = generic_args.types().next().expect("`from_value::<T>`");
-            let value = self.expr(args[0], out)?;
-            let reader = self.json_reader(ty, span)?;
-            self.use_value();
-            self.runtime.insert(Helper::FromJson);
-            return Ok(Some(Expr::call(Expr::var("$fromJsonValue"), vec![value, reader])));
-        }
-        if let Some(trait_id) = tcx.trait_of_assoc(def_id) {
-            let tr = ty::TraitRef::from_assoc(tcx, trait_id, generic_args);
-            let (this, other) = (tr.self_ty(), tr.args.types().nth(1));
-            let this_value = self.json_type(this) == Some(Json::Value);
-            let other_value = other.is_some_and(|o| self.json_type(o) == Some(Json::Value));
-            if tcx.is_lang_item(trait_id, LangItem::Index) && this_value {
+            JsonCall::FromValue(ty) => {
+                let value = self.expr(args[0], out)?;
+                let reader = self.json_reader(ty, span)?;
+                self.use_value();
+                self.runtime.insert(Helper::FromJson);
+                Ok(Some(Expr::call(Expr::var("$fromJsonValue"), vec![value, reader])))
+            }
+            JsonCall::Index => {
                 let values = self.operands(args, out)?;
                 self.use_value();
-                return Ok(Some(Expr::call(Expr::var("$jsonIndex"), values)));
+                Ok(Some(Expr::call(Expr::var("$jsonIndex"), values)))
             }
-            if tcx.is_lang_item(trait_id, LangItem::PartialEq)
-                && let Some(other) = other
-                && this_value != other_value
-            {
+            JsonCall::Equal {
+                other,
+                value_first,
+                negate,
+            } => {
                 let mut values = self.operands(args, out)?;
                 let (b, a) = (values.pop().expect("two sides"), values.pop().expect("two sides"));
-                let eq = if this_value {
+                let eq = if value_first {
                     self.json_value_eq(a, b, other, span)?
                 } else {
-                    self.json_value_eq(b, a, this, span)?
+                    self.json_value_eq(b, a, other, span)?
                 };
-                return Ok(Some(match name.as_str() {
-                    "ne" => crate::lower::std_impls::negate(eq),
-                    _ => eq,
-                }));
+                Ok(Some(if negate {
+                    crate::lower::std_impls::negate(eq)
+                } else {
+                    eq
+                }))
             }
-            let converting = match other {
-                Some(other) if tcx.is_diagnostic_item(sym::From, trait_id) => Some((this, other)),
-                Some(other) if tcx.is_diagnostic_item(sym::Into, trait_id) => Some((other, this)),
-                _ => None,
-            };
-            if let Some((to, from)) = converting
-                && let Some(json) = self.json_type(to)
-            {
+            JsonCall::Convert { to, from, json } => {
                 let x = self.expr(args[0], out)?;
-                return Ok(Some(match json {
+                Ok(Some(match json {
                     Json::Value => self.json_value_from(x, from, span)?,
                     Json::Number if Num::of(from.peel_refs()).is_some_and(|n| n != Num::F64) => {
                         self.use_value();
                         Expr::call(Expr::var("$jsonInt"), vec![x])
                     }
                     _ => return Err(self.unsupported(span, &format!("`{to}::from` of `{from}`"))),
-                }));
+                }))
             }
-            if tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) && this_value {
-                return Ok(Some(Expr::str("Null")));
+            JsonCall::Default => Ok(Some(Expr::str("Null"))),
+            JsonCall::Method { name, owner } => {
+                let values = self.operands(args, out)?;
+                self.json_value_method(name.as_str(), owner, values, span).map(Some)
             }
-            return Ok(None);
         }
-        let Some(imp) = tcx.inherent_impl_of_assoc(def_id) else {
-            return Ok(None);
-        };
-        let owner = tcx.type_of(imp).instantiate_identity();
-        if !matches!(self.json_type(owner), Some(Json::Value | Json::Number)) {
-            return Ok(None);
-        }
-        let values = self.operands(args, out)?;
-        self.json_value_method(name.as_str(), owner, values, span).map(Some)
     }
 
     fn use_value(&mut self) {

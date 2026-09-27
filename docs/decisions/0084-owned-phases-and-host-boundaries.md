@@ -32,8 +32,11 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   access function locals, dependency recording, temporary allocation, statement
   output, or runtime-helper selection. Shared type/trait predicates live there;
   lowering delegates to them instead of duplicating recognition rules. Formatting
-  and iterator emission remain in `stdlib.rs`. Serde Value operation dispatch
-  and other feature-specific recognition still need further separation.
+  and iterator emission remain in `stdlib.rs`. Serde Value calls also use this
+  read-only boundary: conversion, indexing, comparison (including operand order
+  and negation), default construction and inherent-method ownership are recognized
+  before operands are lowered. Individual Value method handling and other
+  feature-specific recognition still need further separation.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature

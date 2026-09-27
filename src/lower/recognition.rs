@@ -741,3 +741,84 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         self.json_type(ty) == Some(Json::Map)
     }
 }
+
+/// Recognized serde_json calls carry type facts, never lowered operands.
+pub(super) enum JsonCall<'tcx> {
+    ToValue(Ty<'tcx>),
+    FromValue(Ty<'tcx>),
+    Index,
+    Equal {
+        other: Ty<'tcx>,
+        value_first: bool,
+        negate: bool,
+    },
+    Convert {
+        to: Ty<'tcx>,
+        from: Ty<'tcx>,
+        json: Json,
+    },
+    Default,
+    Method {
+        name: Symbol,
+        owner: Ty<'tcx>,
+    },
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn json_call(&self, def_id: DefId, generic_args: ty::GenericArgsRef<'tcx>) -> Option<JsonCall<'tcx>> {
+        let tcx = self.tcx;
+        let name = tcx.item_name(def_id);
+        if tcx.crate_name(def_id.krate).as_str() == "serde_json" && tcx.trait_of_assoc(def_id).is_none() {
+            match name.as_str() {
+                "to_value" => {
+                    return Some(JsonCall::ToValue(
+                        generic_args.types().next().expect("`to_value::<T>`").peel_refs(),
+                    ));
+                }
+                // `serde_json::from_value::<T>(v)`: `T` read from the `Value`.
+                "from_value" => {
+                    return Some(JsonCall::FromValue(
+                        generic_args.types().next().expect("`from_value::<T>`"),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        if let Some(trait_id) = tcx.trait_of_assoc(def_id) {
+            let tr = ty::TraitRef::from_assoc(tcx, trait_id, generic_args);
+            let (this, other) = (tr.self_ty(), tr.args.types().nth(1));
+            let this_value = self.json_type(this) == Some(Json::Value);
+            let other_value = other.is_some_and(|o| self.json_type(o) == Some(Json::Value));
+            if tcx.is_lang_item(trait_id, LangItem::Index) && this_value {
+                return Some(JsonCall::Index);
+            }
+            if tcx.is_lang_item(trait_id, LangItem::PartialEq)
+                && let Some(other) = other
+                && this_value != other_value
+            {
+                return Some(JsonCall::Equal {
+                    other: if this_value { other } else { this },
+                    value_first: this_value,
+                    negate: name.as_str() == "ne",
+                });
+            }
+            let converting = match other {
+                Some(other) if tcx.is_diagnostic_item(sym::From, trait_id) => Some((this, other)),
+                Some(other) if tcx.is_diagnostic_item(sym::Into, trait_id) => Some((other, this)),
+                _ => None,
+            };
+            if let Some((to, from)) = converting
+                && let Some(json) = self.json_type(to)
+            {
+                return Some(JsonCall::Convert { to, from, json });
+            }
+            if tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) && this_value {
+                return Some(JsonCall::Default);
+            }
+            return None;
+        }
+        let imp = tcx.inherent_impl_of_assoc(def_id)?;
+        let owner = tcx.type_of(imp).instantiate_identity();
+        matches!(self.json_type(owner), Some(Json::Value | Json::Number)).then_some(JsonCall::Method { name, owner })
+    }
+}

@@ -12,6 +12,25 @@ beforeAll(() => {
 
 const cases = [
   {
+    name: "Value comparisons preserve operand order in both directions",
+    definitions: `pub fn json(log: &mut String) -> serde_json::Value {
+    log.push_str("v");
+    serde_json::Value::from("hello")
+}
+pub fn text(log: &mut String) -> &'static str {
+    log.push_str("s");
+    "hello"
+}`,
+    value: `{
+        let mut log = String::new();
+        let a = json(&mut log) == text(&mut log);
+        let b = text(&mut log) == json(&mut log);
+        let c = json(&mut log) != text(&mut log);
+        let d = text(&mut log) != json(&mut log);
+        (a, b, c, d, log)
+    }`,
+  },
+  {
     name: "ordinary renamed structs and optional fields agree (control)",
     definitions: `#[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
