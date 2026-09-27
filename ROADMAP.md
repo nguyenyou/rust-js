@@ -116,8 +116,10 @@ pilot. No delivery dates are assigned yet.
   ([ADR 0088](docs/decisions/0088-corpus.md)). [Generated programs](test/generate.ts)
   of integer arithmetic, casts and control flow, each from a seed, are
   compared with native Rust and reduced when they differ
-  ([ADR 0092](docs/decisions/0092-generated-programs.md)); other kinds of
-  program remain.
+  ([ADR 0092](docs/decisions/0092-generated-programs.md)). Of 600 run on
+  GitHub, one differed: an element assignment checked its index before its
+  value ran, now fixed and kept as a [corpus case](test/corpus/assignment_order.rs).
+  Other kinds of program remain.
 
 ### M3 — Prove a complete application
 
@@ -241,7 +243,8 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,182 of 2,686 in scope pass at the pinned toolchain, and the
+  1,193 of 2,685 in scope pass at the pinned toolchain, every other one is a
+  clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink.
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for
