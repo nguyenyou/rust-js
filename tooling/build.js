@@ -12,6 +12,15 @@ import { parseCompilerIdentity } from "./manifest.js";
 export const defaultResources = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const defaultCompiler = join(defaultResources, "target/debug/rust-js");
 
+export function findCompiler(root) {
+  const require = createRequire(join(root, "package.json"));
+  try { return join(dirname(require.resolve("rust-js-native/package.json")), "bin/rust-js"); }
+  catch (error) {
+    if (error.code !== "MODULE_NOT_FOUND") throw error;
+    return defaultCompiler;
+  }
+}
+
 function installedResources(root) {
   const require = createRequire(join(root, "package.json"));
   try { return dirname(require.resolve("rust-js-resources/package.json")); }
@@ -33,7 +42,7 @@ function run(command, args, cwd) {
   });
 }
 
-export function createNativeBuilder({ root, rustJs = defaultCompiler, resources = installedResources(root), cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
+export function createNativeBuilder({ root, rustJs = findCompiler(root), resources = installedResources(root), cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
   const repo = resources;
   const compilerPath = existsSync(rustJs) ? realpathSync(rustJs) : rustJs;
   const compilerInputs = [...new Set([rustJs, compilerPath])];

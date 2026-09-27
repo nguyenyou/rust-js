@@ -4,20 +4,20 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
-import { createNativeBuilder, defaultCompiler } from "rust-js-build/build";
+import { createNativeBuilder, findCompiler } from "rust-js-build/build";
 import { parseManifest } from "rust-js-build/manifest";
 
 /**
  * @param {object} [options]
  * @param {string[]} [options.crates] Crate roots relative to Vite's root.
- * @param {string} [options.rustJs] Compiler binary; defaults to this checkout.
+ * @param {string} [options.rustJs] Compiler binary; defaults to the app's native package, then this checkout.
  * @param {string[]} [options.bindings] Built-in metadata recipes: react (default), serde.
  * @param {(job: { crate: string, output: string, manifest: string }) => Promise<void>} [options.compile]
  *   Compile a crate some other way, like the playground's with rust-js.wasm:
  *   write its JS beside it and a manifest (ADR 0042) to `manifest`, all paths
  *   absolute, or throw rustc's errors. It builds the crates it needs itself.
  */
-export default function rustJs({ crates = ["src/App.rs"], rustJs = defaultCompiler, compile: custom, resources, rustcFlags = [], cacheDir, bindings, externs } = {}) {
+export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custom, resources, rustcFlags = [], cacheDir, bindings, externs } = {}) {
   let root, server, builder, closed = false;
   let active;
   const pending = new Set();
@@ -107,8 +107,10 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = defaultCompil
     enforce: "pre",
     configResolved(config) {
       root = config.root;
-      rustJs = resolve(root, rustJs);
-      if (!custom) builder = createNativeBuilder({ root, rustJs, resources, rustcFlags, cacheDir, bindings, externs });
+      if (!custom) {
+        rustJs = resolve(root, rustJs ?? findCompiler(root));
+        builder = createNativeBuilder({ root, rustJs, resources, rustcFlags, cacheDir, bindings, externs });
+      }
     },
     async buildStart() {
       // The generated JS is committed, as ReScript recommends (ADR 0041), so

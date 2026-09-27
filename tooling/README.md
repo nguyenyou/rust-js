@@ -36,9 +36,10 @@ Both host packages remain private while distribution is being developed. Local
 tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
 The package test installs these tarballs with Bun into an independent application
 and compiles through the plugin. No registry release is implied.
-Provide `rustJs` explicitly. Resource discovery first uses the supplied `resources`
+Compiler discovery first uses the supplied `rustJs` path, then the application's
+`rust-js-native` package, then the development checkout. Resource discovery uses the supplied `resources`
 path, then `rust-js-resources` resolved from the application's dependencies,
-then the development checkout. The compiler default still locates that checkout;
+then the development checkout;
 compiler binaries and binding resources are not included in these host packages.
 
 Build and package a native compiler for the current macOS or Linux host:
@@ -53,8 +54,9 @@ with OS/architecture restrictions in its package manifest. Install the pinned
 Rust toolchain with `rustc-dev` on the destination machine first. The launcher
 asks that toolchain for its sysroot and sets the dynamic-library search path
 before forwarding arguments and exit status to the compiler. It does not install
-toolchains or modify global configuration. Set `rustJs` to the absolute path of
-`node_modules/rust-js-native/bin/rust-js` (or its installed `.bin` link).
+toolchains or modify global configuration. The adapter discovers this package
+automatically. To override it, set `rustJs` to an absolute compiler or launcher
+path, including its installed `.bin` link.
 The host hashes and watches both the launcher and its compiler binary.
 
 This is a local packaging path, tested on the development host. It still depends
@@ -100,8 +102,12 @@ running the installed packages does not depend on that choice:
 ```
 
 The override routes the plugin's versioned dependency to the local tarball while
-the package is unpublished. Set `rustJs` to the compiler binary and select
-`bindings: ["react", "serde"]`; no resource path is needed for this installation.
+the package is unpublished. Select `bindings: ["react", "serde"]`; neither a
+compiler path nor a resource path is needed for this installation:
+
+```js
+rustJs({ crates: ["src/App.rs"], bindings: ["react", "serde"] })
+```
 
 The isolated package test installs offline with lifecycle scripts disabled,
 repeats installation with a frozen lockfile, and exercises React/JSX and Serde

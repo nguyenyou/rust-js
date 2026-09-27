@@ -164,8 +164,9 @@ pilot. No delivery dates are assigned yet.
   [build-host dependency](tooling/package.json); the
   [package test](test/packages.test.ts) verifies offline Bun installation and
   frozen-lockfile reuse of local tarballs, then compiles an independent app with
-  an explicitly supplied compiler. Resources are discovered from the app's
-  dependencies. Default compiler discovery still assumes the checkout. A fresh
+  automatically discovered compiler and resource packages from the app's
+  dependencies. Explicit paths take precedence; checkout defaults are a
+  development fallback. A fresh
   app must eventually build using only documented installed dependencies.
 - [ ] **M4.3 — Provide a reproducible starter and upgrade path.** Document
   create/build/test/deploy commands, expose compiler/toolchain versions in
