@@ -1358,23 +1358,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .pattern_test(&arm.pattern, &subject, &mut bindings)?
                 .map(|t| t.or_at(pat_span));
 
-            // A guard is tested before the arm's body, where the variables
-            // with their own `const` are declared. Only named places work there.
-            if arm.guard.is_some() && bindings.iter().any(|b| !stable || b.mutable) {
-                return Err(self.unsupported(arm.pattern.span, "this binding in a guarded arm"));
-            }
-            let mut body = Vec::new();
-            self.bind_all(bindings, stable, pat_span, &mut body);
+            // A guard is tested before the arm's body, where a binding that
+            // isn't the place it names gets its `const`. So the guard reads
+            // each binding from its place, which nothing has changed yet: it
+            // runs right after the pattern's test.
             if let Some(guard) = arm.guard {
                 if !self.is_simple(guard) {
                     return Err(self.unsupported(self.thir[guard].span, "this guard"));
                 }
-                let guard = self.expr(guard, out)?;
+                for b in &bindings {
+                    let place = Var {
+                        place: b.place.clone(),
+                        mutable: false,
+                        depth: self.loops.len(),
+                    };
+                    self.vars.insert(b.var, place);
+                }
+                let guard = self.expr(guard, out);
+                for b in &bindings {
+                    self.vars.remove(&b.var);
+                }
+                let guard = guard?;
                 test = Some(match test {
                     Some(t) => Expr::bin(Op::And, t, guard),
                     None => guard,
                 });
             }
+            let mut body = Vec::new();
+            self.bind_all(bindings, stable, pat_span, &mut body);
             // Rust checked the match is exhaustive, so if we reach the last
             // unguarded arm, it matches. No need to test it.
             if i == arms.len() - 1 && arm.guard.is_none() {

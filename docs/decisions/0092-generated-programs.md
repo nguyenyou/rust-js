@@ -71,6 +71,8 @@ left is written with its seed to `target/fuzz/`, to become a corpus case.
   replaced an empty pattern in `"🦀x"`: JS's `replaceAll` put the
   replacement between the emoji's two UTF-16 units, where Rust puts it at
   each char's boundary; `split("")` differed too (`empty_pattern.rs`).
+  And ten of 300 seeds used a binding in a guarded arm, `E::B(n) if n > 0`,
+  which rust-js rejected; it's supported now (`guarded_bindings.rs`).
 - **A failure is a few lines,** which say what's wrong, rather than a
   program of dozens.
 
