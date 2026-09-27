@@ -35,40 +35,6 @@ pub(super) enum TextOp {
     Drain,
 }
 
-/// Which `TextOp` a method of a `char` or a `str` is.
-pub(super) fn classify(name: &str, char: bool, str: bool) -> Option<TextOp> {
-    Some(match name {
-        "is_whitespace" if char => TextOp::Is("/^\\p{White_Space}$/u"),
-        "is_alphabetic" if char => TextOp::Is("/^\\p{Alphabetic}$/u"),
-        "is_numeric" if char => TextOp::Is("/^\\p{N}$/u"),
-        "is_alphanumeric" if char => TextOp::Is("/^[\\p{Alphabetic}\\p{N}]$/u"),
-        "is_uppercase" if char => TextOp::Is("/^\\p{Uppercase}$/u"),
-        "is_lowercase" if char => TextOp::Is("/^\\p{Lowercase}$/u"),
-        "is_control" if char => TextOp::Is("/^\\p{Cc}$/u"),
-        "is_ascii_digit" if char => TextOp::Is("/^[0-9]$/"),
-        "is_ascii_hexdigit" if char => TextOp::Is("/^[0-9A-Fa-f]$/"),
-        "is_ascii_alphabetic" if char => TextOp::Is("/^[A-Za-z]$/"),
-        "is_ascii_alphanumeric" if char => TextOp::Is("/^[A-Za-z0-9]$/"),
-        "is_ascii_uppercase" if char => TextOp::Is("/^[A-Z]$/"),
-        "is_ascii_lowercase" if char => TextOp::Is("/^[a-z]$/"),
-        "is_ascii_whitespace" if char => TextOp::Is("/^[ \\t\\n\\f\\r]$/"),
-        "is_ascii_punctuation" if char => TextOp::Is("/^[!-\\/:-@[-`{-~]$/"),
-        "is_ascii_graphic" if char => TextOp::Is("/^[!-~]$/"),
-        "is_ascii_control" if char => TextOp::Is("/^[\\0-\\x1f\\x7f]$/"),
-        "is_ascii" if char => TextOp::IsAscii,
-        "to_ascii_uppercase" if char => TextOp::ToAsciiUpper,
-        "to_ascii_lowercase" if char => TextOp::ToAsciiLower,
-        "to_digit" if char => TextOp::ToDigit,
-        "to_uppercase" if char => TextOp::CharCase(true),
-        "to_lowercase" if char => TextOp::CharCase(false),
-        "is_digit" if char => TextOp::IsDigit,
-        "split_whitespace" if str => TextOp::SplitWhitespace,
-        "lines" if str => TextOp::Lines,
-        "parse" if str => TextOp::Parse,
-        _ => return None,
-    })
-}
-
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn text_call(
         &mut self,

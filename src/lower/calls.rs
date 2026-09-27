@@ -3,7 +3,7 @@
 use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
 use super::combinators::StepOp;
 use super::numbers::NumOp;
-use super::recognition::Std;
+use super::recognition::{Catching, Std};
 use super::representation::Num;
 use super::text::TextOp;
 use super::{FnCx, R, camel_case, global};
@@ -14,8 +14,8 @@ use rustc_ast::LitKind;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A call to one of our functions (local or imported by name),
@@ -174,29 +174,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let Some(known) = self.std_fn(fun) else {
             // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
-            let on_string = args.first().is_some_and(|&a| self.is_string_like(self.thir[a].ty));
-            let indexing = self
-                .tcx
-                .trait_of_assoc(def_id)
-                .is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Index));
-            let name = self.tcx.item_name(def_id);
-            let offsets = [
-                "len",
-                "find",
-                "rfind",
-                "char_indices",
-                "match_indices",
-                "rmatch_indices",
-            ];
-            if on_string && (indexing || offsets.contains(&name.as_str())) {
+            if let Some(string) = self
+                .recognition()
+                .unsupported_string(def_id, args.first().map(|&a| self.thir[a].ty))
+            {
+                let name = string.name;
+                let indexing = string.indexing;
                 let what = if indexing {
                     "indexing or slicing a string".to_string()
                 } else {
                     format!("`{name}()` of a string")
                 };
-                let why = match name.as_str() {
-                    "len" => "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works",
-                    _ => "Rust counts its UTF-8 bytes, and JS its UTF-16 units",
+                let why = if string.suggest_is_empty {
+                    "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works"
+                } else {
+                    "Rust counts its UTF-8 bytes, and JS its UTF-16 units"
                 };
                 return Err(self
                     .tcx
@@ -885,26 +877,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, and
     /// `TryInto` as `TryFrom`, if that's a hand-written impl.
     fn resolve_into(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(DefId, ty::GenericArgsRef<'tcx>)> {
-        let into = self.tcx.trait_of_assoc(def_id)?;
-        let from = if self.tcx.is_diagnostic_item(sym::Into, into) {
-            self.tcx.get_diagnostic_item(sym::From)?
-        } else if self.tcx.is_diagnostic_item(sym::TryInto, into) {
-            self.tcx.get_diagnostic_item(sym::TryFrom)?
-        } else {
-            return None;
-        };
-        let method = self
-            .tcx
-            .associated_items(from)
-            .in_definition_order()
-            .find(|item| item.is_fn())?
-            .def_id;
-        let args = self.tcx.mk_args(&[args[1], args[0]]);
-        let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
-        self.krate
-            .fns
-            .contains_key(&instance.def_id())
-            .then_some((method, args))
+        let (method, args, implementation) = self.recognition().resolve_into(def_id, args)?;
+        self.krate.fns.contains_key(&implementation).then_some((method, args))
     }
 
     /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
@@ -956,21 +930,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// returning a `Result` runs in a `try`, `$try(() => f(x))`, and one
     /// returning a `Promise<Result<..>>` settles either way, `$settle(p)`.
     pub(super) fn catching(&mut self, def_id: DefId, value: Expr) -> Expr {
-        let output = self.tcx.fn_sig(def_id).skip_binder().skip_binder().output();
-        if self.is_std_adt(output, sym::Result) {
-            self.runtime.insert(Helper::Try);
-            let span = value.span;
-            let thunk = Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(span)]);
-            return Expr::call(Expr::var("$try"), vec![thunk]);
+        match self.recognition().catching(def_id) {
+            Catching::Result => {
+                self.runtime.insert(Helper::Try);
+                let span = value.span;
+                let thunk = Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(span)]);
+                Expr::call(Expr::var("$try"), vec![thunk])
+            }
+            Catching::PromiseResult => {
+                self.runtime.insert(Helper::Settle);
+                Expr::call(Expr::var("$settle"), vec![value])
+            }
+            Catching::Direct => value,
         }
-        let settles = matches!(output.kind(), ty::Adt(adt, args) if self.is_js_object(output)
-            && self.tcx.item_name(adt.did()).as_str() == "Promise"
-            && args.types().next().is_some_and(|t| self.is_std_adt(t, sym::Result)));
-        if settles {
-            self.runtime.insert(Helper::Settle);
-            return Expr::call(Expr::var("$settle"), vec![value]);
-        }
-        value
     }
 }
 

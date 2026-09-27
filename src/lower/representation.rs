@@ -76,55 +76,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// An iterator that's a JS array (ADR 0036): a slice's or a `Vec`'s, a
     /// `split` or `chars` of a string, and the adapters on them.
     pub(super) fn is_array_iter(&self, ty: Ty<'tcx>) -> bool {
-        let ty = self.reveal(ty);
-        let ty::Adt(adt, _) = ty.kind() else { return false };
-        let path = self.tcx.def_path_str(adt.did());
-        let krate = self.tcx.crate_name(adt.did().krate);
-        (krate == sym::core || krate == sym::alloc)
-            && (path.contains("::iter::")
-                || [
-                    "std::slice::Iter",
-                    "std::vec::IntoIter",
-                    "std::str::Chars",
-                    "std::str::SplitWhitespace",
-                    "std::str::Lines",
-                    "std::array::IntoIter",
-                    "std::char::ToUppercase",
-                    "std::char::ToLowercase",
-                    "std::collections::vec_deque::Iter",
-                    "std::collections::vec_deque::IntoIter",
-                    "std::collections::binary_heap::Iter",
-                    "std::collections::binary_heap::IntoIter",
-                ]
-                .contains(&path.as_str())
-                || self.is_str_split(ty))
-            // A map's `iter()`, `keys()` and `values()` are arrays too (ADR 0059).
-            || ((krate == sym::alloc || krate == sym::std)
-                && ["btree_map::Iter", "btree_map::IterMut", "btree_map::Keys", "btree_map::Values", "btree_map::ValuesMut", "btree_map::IntoIter", "btree_set::Iter", "btree_set::IntoIter"]
-                    .iter()
-                    .any(|name| path == format!("std::collections::{name}")))
-            || (krate == sym::std
-                && ["hash_map::Iter", "hash_map::IterMut", "hash_map::Keys", "hash_map::Values", "hash_map::ValuesMut", "hash_map::IntoIter", "hash_set::Iter", "hash_set::IntoIter"]
-                    .iter()
-                    .any(|name| path == format!("std::collections::{name}")))
+        self.recognition().is_array_iter(ty)
     }
 
     /// `str::split`'s iterator, which is a JS array of strings (ADR 0034).
     pub(super) fn is_str_split(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
-            && self.tcx.item_name(adt.did()).as_str() == "Split"
-            && self.tcx.def_path_str(adt.did()).contains("str::"))
+        self.recognition().is_str_split(ty)
     }
 
     /// The type an `impl Trait` stands for, which rustc knows after type
     /// checking (ADR 0061); any other type is itself.
     pub(super) fn reveal(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
-        if !rustc_middle::ty::TypeVisitableExt::has_opaque_types(&ty) {
-            return ty;
-        }
-        self.tcx
-            .try_normalize_erasing_regions(self.typing_env, ty)
-            .unwrap_or(ty)
+        self.recognition().reveal(ty)
     }
 
     /// `T`, for an `Option<T>`.
@@ -173,12 +136,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `{ value }`, a `RefCell`'s guards are what they guard, and `Vec<T>`
     /// is an array.
     pub(super) fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
-        ty.is_box()
-            || self.is_lang_adt(ty, LangItem::String)
-            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut"]
-                .into_iter()
-                .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
-            || self.is_vec_like(ty)
+        self.recognition().is_std_wrapper(ty)
     }
 
     /// A `Vec`, a `VecDeque` or a `BinaryHeap`: a JS array (ADR 0068). A
@@ -865,16 +823,7 @@ pub(super) fn variant_field(tcx: TyCtxt<'_>, variant: &ty::VariantDef, i: usize)
 
 /// An `Ordering` is -1, 0 or 1 (ADR 0036), its discriminant, which a JS
 /// comparator returns as it is.
-pub(super) fn ordering_value(tcx: TyCtxt<'_>, enum_def: DefId, variant: Symbol) -> Option<i128> {
-    if !tcx.is_lang_item(enum_def, LangItem::OrderingEnum) {
-        return None;
-    }
-    Some(match variant.as_str() {
-        "Less" => -1,
-        "Equal" => 0,
-        _ => 1,
-    })
-}
+pub(super) use super::recognition::ordering_value;
 
 /// A `char` constant (ADR 0034).
 pub(super) fn char_value(value: ty::Value<'_>) -> Option<char> {

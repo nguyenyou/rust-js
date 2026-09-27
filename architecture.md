@@ -45,6 +45,12 @@ conversion categories and scalar comparison categories are recognized there too,
 including nested Vec/Option element types. Other feature-specific dispatch
 remains in feature modules where it depends on local lowering state. Formatting-call
 and standard Serde skip-predicate recognition also use this boundary.
+The remaining recognition cleanup is complete for currently supported library
+families: parse/JSON errors, iterator types, Reverse, Serde traits and derives,
+conversion targets, comparison methods, and fallible JS bindings now share that
+read-only boundary. Pure method tables live in `lower/recognition/methods.rs`.
+Feature modules still own representation and emission; syntax desugaring,
+binding attributes and Serde attribute capture keep their existing adapters.
 
 An experimental scalar cross-crate proof now links separately compiled free
 functions using versioned export metadata, real rustc dependency checks, and
@@ -55,7 +61,7 @@ orchestration and reusable compilation caches are still pending.
 
 **The entire target architecture is not yet delivered.** General Cargo graph
 compilation and general cross-crate JS linkage, a supported distribution outside this
-checkout, centralized recognition across all library families, and measured
+checkout, and measured
 application performance budgets remain open. Helper dependencies are centralized,
 but runtime helpers still emit inline per module. ABI identity in a manifest
 does not establish a reusable-crate ABI. These gaps remain in M3/M4/M5/M8 of the

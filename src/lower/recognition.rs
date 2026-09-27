@@ -1,16 +1,20 @@
 //! Read-only library-operation recognition. No function lowering state or JS emission.
 
-use super::combinators::{self, Comb, HeapOp, IterComb, StepOp};
+mod methods;
+
+use super::combinators::{Comb, HeapOp, IterComb, StepOp};
 use super::format_spec::Radix;
 use super::maps::{MapOp, Part};
-use super::numbers::{self, NumOp};
+use super::numbers::NumOp;
 use super::representation::Num;
-use super::text::{self, TextOp};
-use rustc_hir::LangItem;
+use super::text::TextOp;
+use rustc_hir::def::DefKind;
+use rustc_hir::{self as hir, LangItem, intravisit};
 use rustc_middle::mir::{BinOp, UnOp};
 use rustc_middle::traits::ImplSource;
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::def_id::DefId;
+use rustc_span::def_id::{DefId, LocalDefId};
+use rustc_span::hygiene::{ExpnKind, MacroKind};
 use rustc_span::{Symbol, sym};
 
 /// Only immutable analysis inputs: recognition cannot record dependencies,
@@ -391,7 +395,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     "min" => Std::Extreme(false),
                     "last" => Std::Last,
                     "count" => Std::Len,
-                    name if let Some(comb) = combinators::classify_iter(name) => Std::IterComb(comb),
+                    name if let Some(comb) = methods::iterator(name) => Std::IterComb(comb),
                     "copied" | "cloned" => Std::Cloned,
                     "collect" if collects_string() => Std::CollectString,
                     "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
@@ -420,7 +424,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 };
             }
             // `v.extend(items)` (ADR 0062).
-            if combinators::is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
+            if is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
                 return Some(Std::Comb(Comb::Extend));
             }
             // `VecDeque::from(v)` is a copy of `v`, which may be a clone that
@@ -505,22 +509,22 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         if own.is_some() {
             return own;
         }
-        if let Some(op) = text::classify(name.as_str(), owner.is_char(), owner.is_str()) {
+        if let Some(op) = methods::text(name.as_str(), owner.is_char(), owner.is_str()) {
             return Some(Std::Text(op));
         }
         if let Some(num) = Num::of(owner)
-            && let Some(op) = numbers::classify(name.as_str(), num)
+            && let Some(op) = methods::number(name.as_str(), num)
         {
             return Some(Std::Number(op));
         }
-        if let Some(comb) = combinators::classify(
+        if let Some(comb) = methods::combinator(
             name.as_str(),
             option,
             result,
             adt("Vec") || deque,
             adt("Vec") || deque || owner.is_slice(),
         )
-        .or_else(|| combinators::classify_bool(name.as_str(), owner.is_bool()))
+        .or_else(|| methods::boolean(name.as_str(), owner.is_bool()))
         {
             return Some(Std::Comb(comb));
         }
@@ -1025,4 +1029,417 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn skips_none(&self, function: DefId) -> bool {
         self.tcx.crate_name(function.krate).as_str() == "core" && self.tcx.item_name(function).as_str() == "is_none"
     }
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
+            && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError"]
+                .contains(&self.tcx.item_name(adt.did()).as_str()))
+    }
+
+    pub(super) fn is_json_error(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate).as_str() == "serde_json"
+            && self.tcx.item_name(adt.did()).as_str() == "Error")
+    }
+
+    pub(super) fn is_reverse(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
+            && self.tcx.item_name(adt.did()).as_str() == "Reverse")
+    }
+
+    pub(super) fn is_array_iter(&self, ty: Ty<'tcx>) -> bool {
+        let ty = self.reveal(ty);
+        let ty::Adt(adt, _) = ty.kind() else { return false };
+        let path = self.tcx.def_path_str(adt.did());
+        let krate = self.tcx.crate_name(adt.did().krate);
+        (krate == sym::core || krate == sym::alloc)
+            && (path.contains("::iter::")
+                || [
+                    "std::slice::Iter",
+                    "std::vec::IntoIter",
+                    "std::str::Chars",
+                    "std::str::SplitWhitespace",
+                    "std::str::Lines",
+                    "std::array::IntoIter",
+                    "std::char::ToUppercase",
+                    "std::char::ToLowercase",
+                    "std::collections::vec_deque::Iter",
+                    "std::collections::vec_deque::IntoIter",
+                    "std::collections::binary_heap::Iter",
+                    "std::collections::binary_heap::IntoIter",
+                ]
+                .contains(&path.as_str())
+                || self.is_str_split(ty))
+            // A map's `iter()`, `keys()` and `values()` are arrays too (ADR 0059).
+            || ((krate == sym::alloc || krate == sym::std)
+                && ["btree_map::Iter", "btree_map::IterMut", "btree_map::Keys", "btree_map::Values", "btree_map::ValuesMut", "btree_map::IntoIter", "btree_set::Iter", "btree_set::IntoIter"]
+                    .iter()
+                    .any(|name| path == format!("std::collections::{name}")))
+            || (krate == sym::std
+                && ["hash_map::Iter", "hash_map::IterMut", "hash_map::Keys", "hash_map::Values", "hash_map::ValuesMut", "hash_map::IntoIter", "hash_set::Iter", "hash_set::IntoIter"]
+                    .iter()
+                    .any(|name| path == format!("std::collections::{name}")))
+    }
+
+    pub(super) fn is_str_split(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
+            && self.tcx.item_name(adt.did()).as_str() == "Split"
+            && self.tcx.def_path_str(adt.did()).contains("str::"))
+    }
+
+    pub(super) fn reveal(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
+        if !rustc_middle::ty::TypeVisitableExt::has_opaque_types(&ty) {
+            return ty;
+        }
+        self.tcx
+            .try_normalize_erasing_regions(self.typing_env, ty)
+            .unwrap_or(ty)
+    }
+
+    pub(super) fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
+        ty.is_box()
+            || self.is_lang_adt(ty, LangItem::String)
+            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut"]
+                .into_iter()
+                .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || self.is_vec_like(ty)
+    }
+
+    pub(super) fn is_std(&self, id: DefId) -> bool {
+        [sym::core, sym::alloc, sym::std].contains(&self.tcx.crate_name(id.krate))
+    }
+
+    pub(super) fn is_derived_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
+        let tr = ty::TraitRef::new_from_args(self.tcx, trait_id, self.args_of(trait_id, ty));
+        let tr = self.tcx.erase_and_anonymize_regions(tr);
+        matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
+            Ok(ImplSource::UserDefined(imp)) if self.trait_impls.contains(&imp.impl_def_id)
+                && self.tcx.is_automatically_derived(imp.impl_def_id))
+    }
+}
+
+pub(super) fn serde_trait(tcx: TyCtxt<'_>, trait_id: DefId) -> Option<bool> {
+    if !matches!(tcx.crate_name(trait_id.krate).as_str(), "serde" | "serde_core") {
+        return None;
+    }
+    match tcx.item_name(trait_id).as_str() {
+        "Serialize" => Some(true),
+        "Deserialize" | "DeserializeOwned" => Some(false),
+        _ => None,
+    }
+}
+
+pub(super) fn from_serde_derive(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
+    let mut item = Some(def_id);
+    while let Some(id) = item {
+        let mut ctxt = tcx.def_span(id).ctxt();
+        while !ctxt.is_root() {
+            let expansion = ctxt.outer_expn_data();
+            // By the macro, not its name: `serde::Deserialize` and an alias are
+            // named as they're written.
+            if let ExpnKind::Macro(MacroKind::Derive, _) = expansion.kind
+                && expansion
+                    .macro_def_id
+                    .is_some_and(|id| tcx.crate_name(id.krate).as_str() == "serde_derive")
+            {
+                return true;
+            }
+            ctxt = expansion.call_site.ctxt();
+        }
+        item = tcx.opt_local_parent(id);
+    }
+    false
+}
+
+pub(super) fn serde_impl(tcx: TyCtxt<'_>, id: DefId) -> Option<bool> {
+    if !matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) {
+        return None;
+    }
+    let tr = tcx.impl_trait_ref(id).instantiate_identity();
+    let own = matches!(tr.self_ty().kind(), ty::Adt(adt, _)
+        if adt.did().as_local().is_some_and(|local| !from_serde_derive(tcx, local)));
+    serde_trait(tcx, tr.def_id).filter(|_| own)
+}
+
+pub(super) fn is_extend(tcx: rustc_middle::ty::TyCtxt<'_>, trait_id: rustc_span::def_id::DefId) -> bool {
+    tcx.crate_name(trait_id.krate) == rustc_span::sym::core && tcx.item_name(trait_id) == Symbol::intern("Extend")
+}
+
+/// How an explicitly fallible JavaScript binding delivers its result.
+pub(super) enum Catching {
+    Direct,
+    Result,
+    PromiseResult,
+}
+
+pub(super) struct UnsupportedString {
+    pub name: Symbol,
+    pub indexing: bool,
+    pub suggest_is_empty: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum OrderingCall {
+    Compare,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Max,
+    Min,
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn catching(&self, id: DefId) -> Catching {
+        let output = self.tcx.fn_sig(id).skip_binder().skip_binder().output();
+        if self.is_std_adt(output, sym::Result) {
+            Catching::Result
+        } else if matches!(output.kind(), ty::Adt(adt, args) if self.is_js_object(output)
+            && self.tcx.item_name(adt.did()).as_str() == "Promise"
+            && args.types().next().is_some_and(|t| self.is_std_adt(t, sym::Result)))
+        {
+            Catching::PromiseResult
+        } else {
+            Catching::Direct
+        }
+    }
+
+    pub(super) fn unsupported_string(&self, id: DefId, receiver: Option<Ty<'tcx>>) -> Option<UnsupportedString> {
+        if !receiver.is_some_and(|ty| self.is_string_like(ty)) {
+            return None;
+        }
+        let indexing = self
+            .tcx
+            .trait_of_assoc(id)
+            .is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Index));
+        let name = self.tcx.item_name(id);
+        (indexing
+            || [
+                "len",
+                "find",
+                "rfind",
+                "char_indices",
+                "match_indices",
+                "rmatch_indices",
+            ]
+            .contains(&name.as_str()))
+        .then_some(UnsupportedString {
+            name,
+            indexing,
+            suggest_is_empty: name.as_str() == "len",
+        })
+    }
+
+    pub(super) fn ordering_call(&self, id: DefId, tr: ty::TraitRef<'tcx>) -> Option<(OrderingCall, bool)> {
+        let partial = self.tcx.is_lang_item(tr.def_id, LangItem::PartialOrd);
+        if !partial && !self.tcx.is_diagnostic_item(sym::Ord, tr.def_id) {
+            return None;
+        }
+        let name = self.tcx.item_name(id);
+        if Num::of(tr.self_ty().peel_refs()).is_some() && name.as_str() != "partial_cmp" {
+            return None;
+        }
+        let call = match name.as_str() {
+            "lt" => OrderingCall::Lt,
+            "le" => OrderingCall::Le,
+            "gt" => OrderingCall::Gt,
+            "ge" => OrderingCall::Ge,
+            "cmp" | "partial_cmp" => OrderingCall::Compare,
+            "max" => OrderingCall::Max,
+            "min" => OrderingCall::Min,
+            _ => return None,
+        };
+        Some((call, partial))
+    }
+}
+
+pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    id.is_local()
+        || tcx.is_lang_item(id, LangItem::Copy)
+        || tcx.is_lang_item(id, LangItem::Clone)
+        || tcx.is_lang_item(id, LangItem::PartialEq)
+        || tcx.is_lang_item(id, LangItem::PartialOrd)
+        || tcx.is_diagnostic_item(sym::Ord, id)
+        || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
+        || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
+        || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+        // Its evidence is the writer or reader itself (ADR 0081).
+        || serde_trait(tcx, id).is_some()
+}
+
+pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    operational(tcx, id)
+        || tcx.is_diagnostic_item(sym::From, id)
+        || tcx.is_diagnostic_item(sym::TryFrom, id)
+        || tcx.is_diagnostic_item(sym::Eq, id)
+        || tcx.is_diagnostic_item(sym::Iterator, id)
+        || is_operator(tcx, id)
+}
+
+pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    [
+        LangItem::Add,
+        LangItem::Sub,
+        LangItem::Mul,
+        LangItem::Div,
+        LangItem::Rem,
+        LangItem::Neg,
+        LangItem::Not,
+        LangItem::AddAssign,
+        LangItem::SubAssign,
+        LangItem::MulAssign,
+        LangItem::DivAssign,
+        LangItem::RemAssign,
+        LangItem::Index,
+    ]
+    .into_iter()
+    .any(|item| tcx.is_lang_item(id, item))
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn bounded_by(&self, ty: ty::Ty<'tcx>, name: Symbol) -> bool {
+        let ty = ty.peel_refs();
+        let Some(trait_id) = self.tcx.get_diagnostic_item(name) else {
+            return false;
+        };
+        matches!(ty.kind(), ty::Param(_)) && {
+            let tr = ty::TraitRef::new(self.tcx, trait_id, [ty]);
+            matches!(
+                self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
+                Ok(rustc_middle::traits::ImplSource::Param(_))
+            )
+        }
+    }
+
+    pub(super) fn is_generic_iter(&self, ty: ty::Ty<'tcx>) -> bool {
+        self.bounded_by(ty, sym::Iterator)
+    }
+
+    pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
+        let ty = self.reveal(ty.peel_refs());
+        self.is_user_iterator(ty)
+            || self.is_generic_iter(ty)
+            || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
+    }
+}
+
+pub(super) enum TraitCall {
+    Clone,
+    Default,
+    Equality { negate: bool },
+    Ordering,
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn trait_call(&self, method: DefId, trait_id: DefId) -> Option<TraitCall> {
+        if self.tcx.is_lang_item(method, LangItem::CloneFn) {
+            Some(TraitCall::Clone)
+        } else if self.tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) {
+            Some(TraitCall::Default)
+        } else if self.tcx.is_lang_item(trait_id, LangItem::PartialEq) {
+            Some(TraitCall::Equality {
+                negate: self.tcx.item_name(method).as_str() == "ne",
+            })
+        } else if self.tcx.is_diagnostic_item(sym::Ord, trait_id)
+            || self.tcx.is_lang_item(trait_id, LangItem::PartialOrd)
+        {
+            Some(TraitCall::Ordering)
+        } else {
+            None
+        }
+    }
+
+    /// Resolve blanket Into/TryInto through From/TryFrom. The caller decides
+    /// whether the resulting implementation is available for emission.
+    pub(super) fn resolve_into(
+        &self,
+        def_id: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Option<(DefId, ty::GenericArgsRef<'tcx>, DefId)> {
+        let into = self.tcx.trait_of_assoc(def_id)?;
+        let from = if self.tcx.is_diagnostic_item(sym::Into, into) {
+            self.tcx.get_diagnostic_item(sym::From)?
+        } else if self.tcx.is_diagnostic_item(sym::TryInto, into) {
+            self.tcx.get_diagnostic_item(sym::TryFrom)?
+        } else {
+            return None;
+        };
+        let method = self
+            .tcx
+            .associated_items(from)
+            .in_definition_order()
+            .find(|item| item.is_fn())?
+            .def_id;
+        let args = self.tcx.mk_args(&[args[1], args[0]]);
+        let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
+        Some((method, args, instance.def_id()))
+    }
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
+        struct Finder<'tcx> {
+            tcx: TyCtxt<'tcx>,
+            types: &'tcx ty::TypeckResults<'tcx>,
+            convert: DefId,
+            found: Option<Ty<'tcx>>,
+        }
+        impl<'tcx> intravisit::Visitor<'tcx> for Finder<'tcx> {
+            fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+                if let hir::ExprKind::Path(ref path) = expr.kind
+                    && let hir::def::Res::Def(_, id) = self.types.qpath_res(path, expr.hir_id)
+                    && self.tcx.trait_of_assoc(id) == Some(self.convert)
+                {
+                    self.found = Some(self.types.node_args(expr.hir_id).type_at(1));
+                }
+                intravisit::walk_expr(self, expr);
+            }
+        }
+        let convert = self.tcx.get_diagnostic_item(convert)?;
+        for owner in self.tcx.hir_body_owners() {
+            let mut parent = self.tcx.opt_parent(owner.to_def_id());
+            while let Some(id) = parent
+                && serde_impl(self.tcx, id).is_none()
+            {
+                parent = self.tcx.opt_parent(id);
+            }
+            let Some(imp) = parent else { continue };
+            let self_ty = self.tcx.type_of(imp).instantiate_identity();
+            if serde_impl(self.tcx, imp) != Some(serialize)
+                || !matches!(self_ty.kind(), ty::Adt(a, _) if a.did() == adt)
+            {
+                continue;
+            }
+            let body = self.tcx.hir_body_owned_by(owner);
+            let mut finder = Finder {
+                tcx: self.tcx,
+                types: self.tcx.typeck_body(body.id()),
+                convert,
+                found: None,
+            };
+            intravisit::Visitor::visit_body(&mut finder, body);
+            if finder.found.is_some() {
+                return finder.found;
+            }
+        }
+        None
+    }
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    pub(super) fn is_mutable_map_get(&self, id: DefId, args: ty::GenericArgsRef<'tcx>) -> bool {
+        self.classify(id, args) == Some(Std::Map(MapOp::Get)) && self.tcx.item_name(id).as_str() == "get_mut"
+    }
+}
+
+pub(super) fn ordering_value(tcx: TyCtxt<'_>, enum_def: DefId, variant: Symbol) -> Option<i128> {
+    if !tcx.is_lang_item(enum_def, LangItem::OrderingEnum) {
+        return None;
+    }
+    Some(match variant.as_str() {
+        "Less" => -1,
+        "Equal" => 0,
+        _ => 1,
+    })
 }

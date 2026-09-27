@@ -11,48 +11,19 @@ use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
-use rustc_span::hygiene::{ExpnKind, MacroKind};
 use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Made by serde's `#[derive(Serialize)]` or `#[derive(Deserialize)]`, or
 /// inside what they made (its `const _: () = { .. }`): left out, since
 /// rust-js writes each type's JSON codec itself (ADR 0077).
-pub(super) fn from_serde_derive(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
-    let mut item = Some(def_id);
-    while let Some(id) = item {
-        let mut ctxt = tcx.def_span(id).ctxt();
-        while !ctxt.is_root() {
-            let expansion = ctxt.outer_expn_data();
-            // By the macro, not its name: `serde::Deserialize` and an alias are
-            // named as they're written.
-            if let ExpnKind::Macro(MacroKind::Derive, _) = expansion.kind
-                && expansion
-                    .macro_def_id
-                    .is_some_and(|id| tcx.crate_name(id.krate).as_str() == "serde_derive")
-            {
-                return true;
-            }
-            ctxt = expansion.call_site.ctxt();
-        }
-        item = tcx.opt_local_parent(id);
-    }
-    false
-}
+pub(super) use super::recognition::from_serde_derive;
 
 /// Is `id` serde's derived `impl Serialize` (`Some(true)`) or `impl
 /// Deserialize` (`Some(false)`)?
 /// Only the impls for the crate's own types: the derive's helpers inside
 /// its `const _` block have impls too.
-pub(super) fn serde_impl(tcx: TyCtxt<'_>, id: DefId) -> Option<bool> {
-    if !matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) {
-        return None;
-    }
-    let tr = tcx.impl_trait_ref(id).instantiate_identity();
-    let own = matches!(tr.self_ty().kind(), ty::Adt(adt, _)
-        if adt.did().as_local().is_some_and(|local| !from_serde_derive(tcx, local)));
-    super::serde::serde_trait(tcx, tr.def_id).filter(|_| own)
-}
+pub(super) use super::recognition::serde_impl;
 
 /// Copy the THIR of every function and closure in the crate.
 ///

@@ -107,16 +107,7 @@ pub fn attributes(tcx: TyCtxt<'_>) -> SerdeAttributes {
 
 /// `Some(true)` for serde's `Serialize`, `Some(false)` for `Deserialize`
 /// and `DeserializeOwned`.
-pub(super) fn serde_trait(tcx: TyCtxt<'_>, trait_id: DefId) -> Option<bool> {
-    if !matches!(tcx.crate_name(trait_id.krate).as_str(), "serde" | "serde_core") {
-        return None;
-    }
-    match tcx.item_name(trait_id).as_str() {
-        "Serialize" => Some(true),
-        "Deserialize" | "DeserializeOwned" => Some(false),
-        _ => None,
-    }
-}
+pub(super) use super::recognition::serde_trait;
 
 /// How `rename_all` turns a Rust name into a JSON one: serde_derive's rules.
 #[derive(Clone, Copy, PartialEq)]
@@ -891,51 +882,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// derive's call of `From::from`, `TryFrom::try_from` or `Into::into`
     /// (the trait `convert` names), whose types rustc worked out.
     fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
-        struct Finder<'tcx> {
-            tcx: TyCtxt<'tcx>,
-            types: &'tcx ty::TypeckResults<'tcx>,
-            convert: DefId,
-            found: Option<Ty<'tcx>>,
-        }
-        impl<'tcx> intravisit::Visitor<'tcx> for Finder<'tcx> {
-            fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
-                if let hir::ExprKind::Path(ref path) = expr.kind
-                    && let hir::def::Res::Def(_, id) = self.types.qpath_res(path, expr.hir_id)
-                    && self.tcx.trait_of_assoc(id) == Some(self.convert)
-                {
-                    self.found = Some(self.types.node_args(expr.hir_id).type_at(1));
-                }
-                intravisit::walk_expr(self, expr);
-            }
-        }
-        let convert = self.tcx.get_diagnostic_item(convert)?;
-        for owner in self.tcx.hir_body_owners() {
-            let mut parent = self.tcx.opt_parent(owner.to_def_id());
-            while let Some(id) = parent
-                && super::analysis::serde_impl(self.tcx, id).is_none()
-            {
-                parent = self.tcx.opt_parent(id);
-            }
-            let Some(imp) = parent else { continue };
-            let self_ty = self.tcx.type_of(imp).instantiate_identity();
-            if super::analysis::serde_impl(self.tcx, imp) != Some(serialize)
-                || !matches!(self_ty.kind(), ty::Adt(a, _) if a.did() == adt)
-            {
-                continue;
-            }
-            let body = self.tcx.hir_body_owned_by(owner);
-            let mut finder = Finder {
-                tcx: self.tcx,
-                types: self.tcx.typeck_body(body.id()),
-                convert,
-                found: None,
-            };
-            intravisit::Visitor::visit_body(&mut finder, body);
-            if finder.found.is_some() {
-                return finder.found;
-            }
-        }
-        None
+        self.recognition().conversion(adt, convert, serialize)
     }
 
     /// `<to as From<from>>::from(value)` (or `TryFrom`), of the crate's own impl.

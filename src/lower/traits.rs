@@ -2,6 +2,7 @@
 //! lazy dictionaries for impls, and `{ value, impl }` for trait objects.
 
 use super::bindings;
+use super::recognition::TraitCall;
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
 use crate::runtime::Helper;
@@ -14,19 +15,7 @@ use rustc_span::{Span, Symbol, sym};
 
 /// A trait whose bounds take dictionaries (ADR 0049): the crate's own, and
 /// the std ones rust-js has dictionaries for (ADR 0052).
-pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    id.is_local()
-        || tcx.is_lang_item(id, LangItem::Copy)
-        || tcx.is_lang_item(id, LangItem::Clone)
-        || tcx.is_lang_item(id, LangItem::PartialEq)
-        || tcx.is_lang_item(id, LangItem::PartialOrd)
-        || tcx.is_diagnostic_item(sym::Ord, id)
-        || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
-        || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
-        || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
-        // Its evidence is the writer or reader itself (ADR 0081).
-        || super::serde::serde_trait(tcx, id).is_some()
-}
+pub(super) use super::recognition::operational;
 
 /// A trait the crate may implement. `From` and `TryFrom` have no
 /// dictionaries: their impls are only called where the types are known
@@ -34,36 +23,11 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
 /// methods: a `T: Eq` bound is its `PartialEq` (ADR 0053). An `Iterator` is a
 /// JS iterator, and has no dictionaries either (ADR 0055). An operator's
 /// impl is called where `a + b` is, with the types known (ADR 0064).
-pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    operational(tcx, id)
-        || tcx.is_diagnostic_item(sym::From, id)
-        || tcx.is_diagnostic_item(sym::TryFrom, id)
-        || tcx.is_diagnostic_item(sym::Eq, id)
-        || tcx.is_diagnostic_item(sym::Iterator, id)
-        || is_operator(tcx, id)
-}
+pub(super) use super::recognition::implementable;
 
 /// `Add`, `Neg`, `AddAssign` and the like: what `a + b`, `-a` and
 /// `a += b` call on a type of the crate's own.
-pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    [
-        LangItem::Add,
-        LangItem::Sub,
-        LangItem::Mul,
-        LangItem::Div,
-        LangItem::Rem,
-        LangItem::Neg,
-        LangItem::Not,
-        LangItem::AddAssign,
-        LangItem::SubAssign,
-        LangItem::MulAssign,
-        LangItem::DivAssign,
-        LangItem::RemAssign,
-        LangItem::Index,
-    ]
-    .into_iter()
-    .any(|item| tcx.is_lang_item(id, item))
-}
+pub(super) use super::recognition::is_operator;
 
 pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
     let mut valid = true;
@@ -402,15 +366,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // What rust-js writes itself, in place: `c.clone()` of a struct is a
         // copy of it, not a dictionary's `clone` (ADR 0052).
-        if self.tcx.is_lang_item(id, LangItem::CloneFn) {
+        let known = self.recognition().trait_call(id, trait_id);
+        if matches!(known, Some(TraitCall::Clone)) {
             let mut values = values;
             return Ok(Some(self.clone_value(values.remove(0), tr.self_ty(), span, out)?));
         }
-        if self.tcx.is_diagnostic_item(Symbol::intern("Default"), trait_id) {
+        if matches!(known, Some(TraitCall::Default)) {
             return Ok(Some(self.default_value(tr.self_ty(), span)?));
         }
         // `a != b` is `!(a == b)`, as Rust requires them to agree (ADR 0053).
-        if self.tcx.is_lang_item(trait_id, LangItem::PartialEq) {
+        if let Some(TraitCall::Equality { negate }) = known {
             let [a, b]: [Expr; 2] = values.try_into().map_err(|_| self.unsupported(span, "this `==`"))?;
             // A hand-written `PartialEq<Rhs>` is its own `eq`, whatever `Rhs` is.
             let eq = if self.is_user_impl(tr) {
@@ -419,14 +384,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             } else {
                 self.eq_value(a, b, tr.self_ty(), span, out)?
             };
-            return Ok(Some(match self.tcx.item_name(id).as_str() {
-                "ne" => super::std_impls::negate(eq),
-                _ => eq,
-            }));
+            return Ok(Some(if negate { super::std_impls::negate(eq) } else { eq }));
         }
         // `a < b`, `a.cmp(&b)`, `a.max(b)` (ADR 0057). Of numbers, they're
         // std's operators and `Math.max`, as before.
-        let ordering = tr.def_id == self.ord_trait() || tr.def_id == self.partial_ord_trait();
+        let ordering = matches!(known, Some(TraitCall::Ordering));
         if let Some(call) = self.ordering_call(id, tr, values.clone(), span, out)? {
             return Ok(Some(call));
         }

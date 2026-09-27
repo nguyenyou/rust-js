@@ -355,31 +355,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A type parameter that's an `Iterator`: `I: Iterator<Item = u32>`, or
     /// `impl Iterator` as a parameter's type (ADR 0061).
     pub(super) fn is_generic_iter(&self, ty: ty::Ty<'tcx>) -> bool {
-        self.bounded_by(ty, sym::Iterator)
+        self.recognition().is_generic_iter(ty)
     }
 
     /// A type parameter with a bound of the std trait `name`.
     pub(super) fn bounded_by(&self, ty: ty::Ty<'tcx>, name: Symbol) -> bool {
-        let ty = ty.peel_refs();
-        let Some(trait_id) = self.tcx.get_diagnostic_item(name) else {
-            return false;
-        };
-        matches!(ty.kind(), ty::Param(_)) && {
-            let tr = ty::TraitRef::new(self.tcx, trait_id, [ty]);
-            matches!(
-                self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
-                Ok(rustc_middle::traits::ImplSource::Param(_))
-            )
-        }
+        self.recognition().bounded_by(ty, name)
     }
 
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
     pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
-        let ty = self.reveal(ty.peel_refs());
-        self.is_user_iterator(ty)
-            || self.is_generic_iter(ty)
-            || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
+        self.recognition().is_lazy_iter(ty)
     }
 
     /// An iterator of the crate's own as a JS one, `$iterator(it,

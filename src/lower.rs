@@ -1539,11 +1539,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         else {
             return Ok(None);
         };
-        let &ty::FnDef(get, _) = self.thir[self.strip(fun)].ty.kind() else {
+        let &ty::FnDef(get, generic_args) = self.thir[self.strip(fun)].ty.kind() else {
             return Ok(None);
         };
-        let slot = self.std_fn(fun) == Some(Std::Map(maps::MapOp::Get))
-            && self.tcx.item_name(get).as_str() == "get_mut"
+        let slot = self.recognition().is_mutable_map_get(get, generic_args)
             && matches!(ty.kind(), ty::Ref(_, value, Mutability::Mut) if self.is_primitive_key(*value));
         if !slot {
             return Ok(None);

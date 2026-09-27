@@ -5,6 +5,7 @@
 //! is the one that's falsy.
 
 use super::bindings::variant_name;
+use super::recognition::OrderingCall;
 use super::representation::Num;
 use super::{FnCx, R, Shape};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -28,8 +29,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `std::cmp::Reverse`, which has no diagnostic item of its own.
     pub(super) fn is_reverse(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
-            && self.tcx.item_name(adt.did()).as_str() == "Reverse")
+        self.recognition().is_reverse(ty)
     }
 
     /// Does JS's `<` order `ty` as Rust does? Numbers, strings, `char`s,
@@ -217,22 +217,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<Option<Expr>> {
         let ty = tr.self_ty();
-        let partial = tr.def_id == self.partial_ord_trait();
-        if !partial && tr.def_id != self.ord_trait() {
+        let Some((call, partial)) = self.recognition().ordering_call(id, tr) else {
             return Ok(None);
-        }
-        let name = self.tcx.item_name(id);
-        let operator = match name.as_str() {
-            "lt" => Some(Op::Lt),
-            "le" => Some(Op::Le),
-            "gt" => Some(Op::Gt),
-            "ge" => Some(Op::Ge),
+        };
+        let operator = match call {
+            OrderingCall::Lt => Some(Op::Lt),
+            OrderingCall::Le => Some(Op::Le),
+            OrderingCall::Gt => Some(Op::Gt),
+            OrderingCall::Ge => Some(Op::Ge),
             _ => None,
         };
-        let numbers = Num::of(ty.peel_refs()).is_some() && name.as_str() != "partial_cmp";
-        if numbers || (operator.is_none() && !matches!(name.as_str(), "cmp" | "partial_cmp" | "max" | "min")) {
-            return Ok(None);
-        }
         let [a, b]: [Expr; 2] = values
             .try_into()
             .map_err(|_| self.unsupported(span, "this comparison"))?;
@@ -243,7 +237,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Some(Expr::bin(op, a, b)));
         }
         // `max` and `min` return one of them, so each is read twice.
-        let (a, b) = if matches!(name.as_str(), "max" | "min") {
+        let (a, b) = if matches!(call, OrderingCall::Max | OrderingCall::Min) {
             let a = if a.reads_same() { a } else { self.spill("left", a, out) };
             let b = if b.reads_same() { b } else { self.spill("right", b, out) };
             (a, b)
@@ -253,11 +247,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `partial_cmp`'s `undefined` makes every one of these false, as `None` does.
         let order = self.cmp_value(a.clone(), b.clone(), ty, partial, span, out)?;
         let zero = || Expr::int(0);
-        Ok(Some(match name.as_str() {
+        Ok(Some(match call {
             _ if let Some(op) = operator => Expr::bin(op, order, zero()),
             // The second when they're equal, as Rust's `max` does.
-            "max" => Expr::cond(Expr::bin(Op::Gt, order, zero()), a, b),
-            "min" => Expr::cond(Expr::bin(Op::Gt, order, zero()), b, a),
+            OrderingCall::Max => Expr::cond(Expr::bin(Op::Gt, order, zero()), a, b),
+            OrderingCall::Min => Expr::cond(Expr::bin(Op::Gt, order, zero()), b, a),
             _ => order,
         }))
     }

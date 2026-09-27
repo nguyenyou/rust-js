@@ -33,9 +33,23 @@ test("lowering and artifact planning cannot publish files", () => {
 });
 
 test("library recognition cannot access function emission state", () => {
-  const recognition = read("src/lower/recognition.rs");
-  expect(recognition).not.toMatch(/\b(?:FnCx|ExprId|Stmt)\b|\bRefCell\s*<|crate::js|runtime::|&mut\s+self/);
-  expect(recognition).toContain("pub(super) struct Recognition");
+  for (const file of ["src/lower/recognition.rs", ...files("src/lower/recognition")]) {
+    expect(read(file), file).not.toMatch(/\b(?:FnCx|ExprId|Stmt)\b|\bRefCell\s*<|crate::js|runtime::/);
+    // HIR visitors accumulate local query results; classification methods
+    // must not mutate their shared recognition context.
+    expect(read(file), file).not.toMatch(/\bfn\s+(?!visit_)\w+\s*\([^)]*&mut\s+self/);
+  }
+  expect(read("src/lower/recognition.rs")).toContain("pub(super) struct Recognition");
+});
+
+test("library identity checks and method tables stay in recognition", () => {
+  for (const file of files("src/lower").filter(file => !file.includes("/recognition") && !file.endsWith("/library.rs"))) {
+    // The scalar linkage adapter owns canonical crate names, not library intrinsics.
+    expect(read(file), file).not.toMatch(/\.crate_name\s*\(|fn classify(?:_\w+)?\s*\(/);
+  }
+  for (const file of ["src/lower/calls.rs", "src/lower/ordering.rs", "src/lower/traits.rs"]) {
+    expect(read(file), file).not.toMatch(/match\s+(?:self\.tcx\.item_name\(\w+\)|name)\.as_str\(\)/);
+  }
 });
 
 test("Vite delegates build preparation and validates build results", () => {

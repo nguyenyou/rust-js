@@ -64,6 +64,15 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   Formatting calls, formatter signatures and standard Serde skip predicates also
   use recognition. Local formatter-variable validation and calls to user-defined
   predicates stay in emission because they require function state.
+  The final cleanup also moves parse/JSON error and Reverse identity checks,
+  iterator classification, Serde trait/derive and conversion-target recognition,
+  supported trait classification, and Into/TryInto resolution into this boundary.
+  Comparisons and fallible JS bindings return typed operations; lowering retains
+  operand sequencing, local implementation availability and runtime selection.
+  Numeric, text and combinator method tables live under `recognition/methods.rs`.
+  Read-only HIR queries may accumulate local visitor results, but do not mutate
+  the recognition context or access emission state. The mutable-map lookup
+  special case and Ordering constants use the same identity boundary.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature
@@ -183,11 +192,15 @@ release work under roadmap M3/M4/M8, not consequences of moving modules.
 Library recognition still has concrete Serde/std assumptions. Extending those
 families requires explicit recognition, representation and semantic tests; there
 is no claim that adding a serializer is a configuration-only operation.
-The boundary audit still finds error-type classification in `lower/display.rs`,
-Promise/Result interop classification in `lower/calls.rs`, and Serde-specific
-representation rules in its feature modules. Those are remaining adapter work,
-not grounds to claim recognition is fully centralized. The enforced ownership,
-publication, rustc and printer dependency boundaries remain intact.
+The recognition cleanup for currently supported families is complete. Architecture
+tests reject library crate-name checks outside recognition (except the scalar
+linkage adapter's canonical crate identity) and method tables in emission modules.
+`test/recognition.test.ts` compares same-named user types, real standard types,
+and ordering operations against native Rust. Serde-specific representation and
+attribute rules remain in its adapter deliberately: these define encoding and
+emission rather than identify a library operation. Rust syntax/desugaring checks,
+diagnostic names and associated-item lookup are not library-name dispatch.
+The enforced ownership, publication, rustc and printer boundaries remain intact.
 
 Application-scale phase/memory budgets, runtime-sharing policy, and an independent
 client/server adoption test also remain open. The existing module-graph benchmark
@@ -198,9 +211,9 @@ three warm samples on the development machine): 10 modules 33 ms; 100 modules
 136 ms; 500 modules 1,326 ms. This includes rustc, formatting and publication.
 These are observations, not enforced budgets or comparisons across machines.
 
-Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 299
-tests (7,589 expectations) after `bun run wasm`. A subsequent focused manifest
-run passed six tests, including the added scalar-contract validation test.
+Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 302
+tests (7,628 expectations) after `bun run wasm`, including recognition boundary
+guards and native comparisons for same-named user types.
 `bun run fmt:check`,
 `cargo clippy --locked -- -D warnings`, `cargo test --locked`, documentation
 link checks and `git diff --check` also passed. Generated JavaScript snapshots

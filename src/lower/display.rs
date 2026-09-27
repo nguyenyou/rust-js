@@ -248,15 +248,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `ParseIntError` and the like, which rust-js holds as their message
     /// (ADR 0063): `e.to_string()` is the message itself.
     pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
-            && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError"]
-                .contains(&self.tcx.item_name(adt.did()).as_str()))
+        self.recognition().is_parse_error(ty)
     }
 
     /// `serde_json::Error`: `{ message, line, column }` (ADR 0077).
     pub(super) fn is_json_error(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate).as_str() == "serde_json"
-            && self.tcx.item_name(adt.did()).as_str() == "Error")
+        self.recognition().is_json_error(ty)
     }
 
     pub(super) fn debug_trait(&self) -> DefId {

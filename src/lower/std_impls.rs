@@ -29,11 +29,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is the crate's impl of `trait_id` for `ty` a `#[derive]`d one?
     pub(super) fn is_derived_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
-        let tr = ty::TraitRef::new_from_args(self.tcx, trait_id, self.args_of(trait_id, ty));
-        let tr = self.tcx.erase_and_anonymize_regions(tr);
-        matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
-            Ok(ImplSource::UserDefined(imp)) if self.krate.trait_impls.contains(&imp.impl_def_id)
-                && self.tcx.is_automatically_derived(imp.impl_def_id))
+        self.recognition().is_derived_impl(trait_id, ty)
     }
 
     /// Is `tr` a hand-written impl from this crate?
@@ -107,7 +103,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn is_std(&self, id: DefId) -> bool {
-        [sym::core, sym::alloc, sym::std].contains(&self.tcx.crate_name(id.krate))
+        self.recognition().is_std(id)
     }
 
     /// std enums whose fields are what JS has: `Option`, `Result`, `Ordering`.
