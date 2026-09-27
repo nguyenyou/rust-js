@@ -159,7 +159,7 @@ rust-js supports a growing subset of Rust aimed at JavaScript applications:
 
 Support is specific to each feature. For example, generic trait methods remain
 unsupported, map keys must have a supported value-based representation, and
-JSON deserialization does not yet handle borrowed strings or `#[serde(flatten)]`.
+JSON deserialization does not yet handle borrowed strings or `#[serde(with)]`.
 The linked design decisions describe the current boundaries.
 
 ## Get started

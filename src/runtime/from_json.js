@@ -61,11 +61,21 @@ class $JsonDecoder {
   // `missing`, the value it has when it's not there, for `#[serde(default)]`.
   // `build` makes the struct of their values.
   struct(expected, fields, build, options = {}) {
-    return this.deserializeMap(
+    const visitMap = (map) => this.structMap(map, fields, build, options);
+    // With a flattened field, serde reads a struct as a map.
+    if (options.flatten) return this.deserializeMap(options.expecting ?? expected, visitMap);
+    return this.deserializeStruct(
       options.expecting ?? expected,
-      (map) => this.structMap(map, fields, build, options),
+      fields.flatMap(([names]) => names),
+      visitMap,
       (seq) => this.structSeq(seq, expected, fields, build, options),
     );
+  }
+
+  // `deserialize_struct`: a map, of these `names`, or for most readers, any
+  // map at all.
+  deserializeStruct(expected, names, visitMap, visitSeq) {
+    return this.deserializeMap(expected, visitMap, visitSeq);
   }
 
   // An untagged struct variant, which serde reads from an object only.
@@ -75,11 +85,19 @@ class $JsonDecoder {
     });
   }
 
-  structMap(map, fields, build, { deny = false, container } = {}) {
+  // `flatten`: the readers of the flattened fields, which read what the
+  // struct's own fields don't, kept until they're all read.
+  structMap(map, fields, build, { deny = false, container, flatten } = {}) {
     const values = new Array(fields.length);
     const seen = new Array(fields.length).fill(false);
+    const kept = [];
     while (map.next()) {
-      const i = $jsonField(map.key().string(), fields, deny);
+      const key = map.key().string();
+      const i = $jsonField(key, fields, deny && !flatten);
+      if (i < 0 && flatten) {
+        kept.push([{ type: "str", value: key }, map.value((json) => json.content())]);
+        continue;
+      }
       if (i < 0) {
         map.value((json) => json.ignoreValue());
         continue;
@@ -92,6 +110,10 @@ class $JsonDecoder {
     fields.forEach(([names, read, missing], i) => {
       if (!seen[i]) values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
     });
+    if (!flatten) return build(values, defaults);
+    for (const read of flatten) values.push(read(new $JsonFlat(kept)));
+    const left = deny && kept.find(Boolean);
+    if (left) throw $jsonError(`unknown field \`${left[0].value}\``);
     return build(values, defaults);
   }
 
@@ -171,6 +193,7 @@ class $JsonDecoder {
   adjacentlyTagged(tag, content, expected, variants, visit, { deny = false, other } = {}) {
     const variantOf = (json) =>
       json.enum(
+        undefined,
         variants,
         (name, access) => {
           access.unit();
@@ -196,8 +219,9 @@ class $JsonDecoder {
       if (key !== undefined) throw $jsonError(`duplicate field \`${key === "tag" ? tag : content}\``);
       return value;
     };
-    return this.deserializeMap(
+    return this.deserializeStruct(
       expected,
+      [tag, content],
       (map) => {
         const first = relevant(map);
         if (first === "tag") {
@@ -924,8 +948,9 @@ class $JsonReader extends $JsonDecoder {
   }
 
   // `deserialize_enum`: `"Name"`, or `{"Name": ..}`. `visit` gets the
-  // variant's name and a `$JsonVariant` to read what it holds.
-  enum(variants, visit, other) {
+  // variant's name and a `$JsonVariant` to read what it holds. `enumName` is
+  // the enum's, for a flattened one.
+  enum(enumName, variants, visit, other) {
     const peek = this.parseWhitespace();
     if (peek === 34) return visit(this.identifier(variants, other), new $JsonVariant(this, true));
     if (peek !== 123) throw this.peekError(peek === -1 ? "EOF while parsing a value" : "expected value");
@@ -1045,7 +1070,7 @@ class $JsonContent extends $JsonDecoder {
     return this.data;
   }
 
-  enum(variants, visit, other) {
+  enum(enumName, variants, visit, other) {
     const { type, value } = this.data;
     let variant;
     let held;
@@ -1313,8 +1338,11 @@ class $JsonVariant {
     return this.reader.tupleStruct(expected, fields, build, options);
   }
 
+  // With a flattened field, serde reads it as a newtype variant of a map.
   struct(expected, fields, build, options) {
-    if (this.isUnit) throw $jsonError("invalid type: unit variant, expected struct variant");
+    if (this.isUnit) {
+      throw $jsonError(`invalid type: unit variant, expected ${options?.flatten ? "newtype" : "struct"} variant`);
+    }
     return this.reader.struct(expected, fields, build, options);
   }
 }
@@ -1347,7 +1375,148 @@ class $JsonContentVariant {
   }
 
   struct(expected, fields, build, options) {
-    return this.reader("struct variant", ["map", "seq"]).struct(expected, fields, build, options);
+    const reader = options?.flatten ? this.reader("newtype variant") : this.reader("struct variant", ["map", "seq"]);
+    return reader.struct(expected, fields, build, options);
+  }
+}
+
+// A flattened field (serde's `FlatMapDeserializer`): what's left of its
+// struct's object. A struct takes the entries it has fields for, a map or an
+// untagged or internally tagged enum sees every one left, and an enum takes
+// the first that names a variant. Anything else can't be flattened.
+class $JsonFlat extends $JsonDecoder {
+  constructor(entries) {
+    super();
+    this.entries = entries;
+  }
+
+  other() {
+    return $jsonError("can only flatten structs and maps");
+  }
+
+  deserializeNumber() {
+    throw this.other();
+  }
+
+  deserializeStr() {
+    throw this.other();
+  }
+
+  deserializeSeq() {
+    throw this.other();
+  }
+
+  bool() {
+    throw this.other();
+  }
+
+  identifier() {
+    throw this.other();
+  }
+
+  deserializeMap(expected, visitMap) {
+    return visitMap(new $JsonFlatMap(this.entries));
+  }
+
+  deserializeStruct(expected, names, visitMap) {
+    return visitMap(new $JsonFlatStruct(this.entries, names));
+  }
+
+  deserializeAny(expected, visitor) {
+    return this.deserializeMap(expected, (map) => {
+      if (!visitor.map) throw $jsonError(`invalid type: map, expected ${expected}`);
+      return visitor.map(map);
+    });
+  }
+
+  unit() {
+    return undefined;
+  }
+
+  unitStruct() {
+    return undefined;
+  }
+
+  ignoreValue() {}
+
+  // An `Option`: `None` when what it holds can't be read from what's left.
+  option(read) {
+    try {
+      return read(this);
+    } catch (e) {
+      if (!(e instanceof $JsonError)) throw e;
+      return undefined;
+    }
+  }
+
+  content() {
+    return { type: "map", value: this.entries.filter(Boolean) };
+  }
+
+  enum(enumName, variants, visit, other) {
+    const names = variants.flatMap((names) => names);
+    const i = this.entries.findIndex((entry) => entry && entry[0].type === "str" && names.includes(entry[0].value));
+    if (i < 0) throw $jsonError(`no variant of enum ${enumName} found in flattened data`);
+    const entry = this.entries[i];
+    this.entries[i] = null;
+    return new $JsonContent({ type: "map", value: [entry] }, true).enum(enumName, variants, visit, other);
+  }
+}
+
+// `FlatStructAccess`: the entries a struct has fields for, taken.
+class $JsonFlatStruct {
+  constructor(entries, names) {
+    this.entries = entries;
+    this.names = names;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const i = this.index++;
+      const entry = this.entries[i];
+      if (entry && entry[0].type === "str" && this.names.includes(entry[0].value)) {
+        this.entries[i] = null;
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], true);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], true));
+  }
+}
+
+// `FlatMapAccess`: every entry left, seen but left for the fields after.
+class $JsonFlatMap {
+  constructor(entries) {
+    this.entries = entries;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const entry = this.entries[this.index++];
+      if (entry) {
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], false);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], false));
   }
 }
 
@@ -1492,7 +1661,7 @@ const $json = {
   },
   // serde's impl for `Result`: `{"Ok": ..}` or `{"Err": ..}`.
   result: (ok, err) => (json) =>
-    json.enum(["Ok", "Err"], (variant, content) => ({
+    json.enum("Result", ["Ok", "Err"], (variant, content) => ({
       TAG: variant,
       _0: content.newtype(variant === "Ok" ? ok : err),
     })),

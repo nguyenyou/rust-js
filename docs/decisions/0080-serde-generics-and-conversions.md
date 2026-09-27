@@ -75,5 +75,5 @@ to the server.
 ## Consequences
 
 - A generic function that writes or reads its own type parameter,
-  `fn get<T: DeserializeOwned>(..)`, is still an error: its `T` would need
-  its reader passed in.
+  `fn get<T: DeserializeOwned>(..)`, gets its reader passed in: [ADR
+  0081](0081-serde-bounds.md).

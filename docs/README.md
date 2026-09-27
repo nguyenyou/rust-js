@@ -151,6 +151,8 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0078 `serde_json::from_str` is serde_json's reader, ported; `#[derive(Deserialize)]` is a table it reads by](decisions/0078-serde-json-reading.md)
 - [0079 A tagged or untagged enum is read as serde reads one: through the value, read first and kept](decisions/0079-serde-tagged-enums.md)
 - [0080 A generic type's codec takes its type parameters' codecs; `Result`, `from`, `try_from` and `into` are serde's](decisions/0080-serde-generics-and-conversions.md)
+- [0081 A `T: Serialize` bound's evidence is `T`'s writer, and `T: DeserializeOwned`'s its reader](decisions/0081-serde-bounds.md)
+- [0082 `#[serde(flatten)]` is serde's flat map: a field's entries among its struct's](decisions/0082-serde-flatten.md)
 
 **Scope and process**
 

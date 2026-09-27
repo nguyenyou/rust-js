@@ -100,11 +100,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// The function that reads a `ty` as serde's impl for it does:
     /// `$json.u32`, `$json.vec($json.string)`, `orderDeserialize_deserialize`.
-    fn json_reader(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+    pub(in crate::lower) fn json_reader(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let reader = |name: &str| Expr::member(Expr::var("$json"), name);
         let unsupported = |this: &Self| this.unsupported(span, &format!("deserializing `{ty}`"));
-        if let Some((_, read)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
-            return Ok(Expr::var(read));
+        if let Some(read) = self.serde_evidence(ty, false) {
+            return Ok(read);
         }
         if ty.is_unit() {
             return Ok(reader("unit"));
@@ -335,9 +335,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut entries = Vec::new();
         let mut params = Vec::new();
         let mut items = Vec::new();
+        // `#[serde(flatten)]`: read after the others, from what they left.
+        let (mut flattened, mut flat_params) = (Vec::new(), Vec::new());
         for (i, field) in variant.fields.iter().enumerate() {
             let attrs = self.serde_attrs(field.did)?;
             let field_ty = field.ty(self.tcx, args);
+            if attrs.flatten && !attrs.skip_deserializing {
+                flattened.push(self.json_reader(field_ty, span)?);
+                let param = self.fresh(&keys[i]);
+                items.push(Expr::var(&param));
+                flat_params.push(param);
+                continue;
+            }
             // A skipped field is `Default::default()`, unless the container
             // has a default.
             let default = match attrs.default {
@@ -380,6 +389,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             items.push(Expr::var(&param));
             params.push(param);
         }
+        let has_flatten = !flattened.is_empty();
+        params.extend(flat_params);
         // Built as it's read: a tuple struct's values are the array of them.
         let as_read = !named && adt.is_struct() && items.len() == params.len() && defaults.is_none();
         let build = (!as_read).then(|| {
@@ -405,6 +416,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(expecting) = &container.expecting {
             options.push(Prop::Field("expecting".into(), Expr::str(expecting.as_str())));
+        }
+        if has_flatten {
+            options.push(Prop::Field("flatten".into(), Expr::array(flattened)));
         }
         Ok(Table {
             entries,
@@ -629,7 +643,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 method("adjacentlyTagged", call_args)
             }
             _ => {
-                let mut call_args = vec![Expr::array(names), visit];
+                let mut call_args = vec![Expr::str(type_name), Expr::array(names), visit];
                 call_args.extend(other.map(Expr::str));
                 method("enum", call_args)
             }

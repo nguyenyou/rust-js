@@ -155,11 +155,13 @@ pub fn lower_crate<'tcx>(
         })
         .map(|id| id.to_def_id())
         .collect();
-    // The impls that get a dictionary: not `From`'s (ADR 0052).
+    // The impls that get a dictionary: not `From`'s (ADR 0052), nor serde's,
+    // whose evidence is a codec (ADR 0081).
     let dictionaries: Vec<DefId> = trait_impls
         .iter()
         .copied()
         .filter(|&id| traits::operational(tcx, tcx.impl_trait_ref(id).instantiate_identity().def_id))
+        .filter(|&id| serde_impl(tcx, id).is_none())
         .collect();
 
     // Closures are lowered inside the function that creates them.

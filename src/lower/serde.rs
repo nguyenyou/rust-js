@@ -11,9 +11,9 @@
 //!   function orderSerialize_serialize(order, json) {
 //!     json.beginObject();
 //!     json.key("id");
-//!     json.raw(String(order.id));
+//!     json.int(order.id);
 //!     json.key("note");
-//!     if (order.note == null) json.raw("null"); else json.string(order.note);
+//!     if (order.note == null) json.null(); else json.string(order.note);
 //!     json.endObject();
 //!   }
 //! ```
@@ -101,14 +101,15 @@ pub fn attributes(tcx: TyCtxt<'_>) -> SerdeAttributes {
     collector.0
 }
 
-/// `Some(true)` for serde's `Serialize`, `Some(false)` for `Deserialize`.
+/// `Some(true)` for serde's `Serialize`, `Some(false)` for `Deserialize`
+/// and `DeserializeOwned`.
 pub(super) fn serde_trait(tcx: TyCtxt<'_>, trait_id: DefId) -> Option<bool> {
     if !matches!(tcx.crate_name(trait_id.krate).as_str(), "serde" | "serde_core") {
         return None;
     }
     match tcx.item_name(trait_id).as_str() {
         "Serialize" => Some(true),
-        "Deserialize" => Some(false),
+        "Deserialize" | "DeserializeOwned" => Some(false),
         _ => None,
     }
 }
@@ -242,6 +243,7 @@ struct Attrs {
     from: bool,
     try_from: bool,
     into: bool,
+    flatten: bool,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -302,6 +304,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 "from" => attrs.from = true,
                 "try_from" => attrs.try_from = true,
                 "into" => attrs.into = true,
+                "flatten" => attrs.flatten = true,
                 _ => return Err(self.unsupported(item.span, &format!("`#[serde({name})]`"))),
             }
         }
@@ -364,6 +367,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(Expr::call(Expr::var("$toJson"), vec![value, write, Expr::bool(pretty)]))
     }
 
+    /// The writer (`serialize`) or reader of a type parameter: a generic
+    /// codec's parameter, or a generic function's evidence for its bound,
+    /// `T: Serialize` or `T: DeserializeOwned` (ADR 0081).
+    fn serde_evidence(&self, ty: Ty<'tcx>, serialize: bool) -> Option<Expr> {
+        if let Some((_, name)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
+            return Some(Expr::var(name));
+        }
+        self.evidence
+            .iter()
+            .find(|(tr, _)| tr.self_ty() == ty && serde_trait(self.tcx, tr.def_id) == Some(serialize))
+            .map(|(_, evidence)| evidence.clone())
+    }
+
     /// A generic type's codec takes a function for each of its type
     /// parameters, `writeT` or `readT` (ADR 0080): their names, which the
     /// codec's type parameters now stand for.
@@ -383,10 +399,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The function that writes a `ty` value, `(value, json) => ..`: a
     /// generic codec's parameter, the crate's own type's `serialize`, or
     /// the steps for it.
-    fn json_writer(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+    pub(super) fn json_writer(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let ty = ty.peel_refs();
-        if let Some((_, writer)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
-            return Ok(Expr::var(writer));
+        if let Some(writer) = self.serde_evidence(ty, true) {
+            return Ok(writer);
         }
         if let ty::Adt(_, args) = ty.kind()
             && args.types().next().is_none()
@@ -410,18 +426,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn write_json(&mut self, value: Expr, json: &str, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
         let ty = ty.peel_refs();
         // A type parameter: its writer's call.
-        if let Some((_, writer)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
-            let call = Expr::call(Expr::var(writer), vec![value, Expr::var(json)]);
+        if let Some(writer) = self.serde_evidence(ty, true) {
+            let call = Expr::call(writer, vec![value, Expr::var(json)]);
             out.push(StmtKind::Expr(call).at(js::Span::NONE));
             return Ok(());
         }
+        // Each kind by its own method, which a flattened field tells apart.
         if ty.is_unit() {
-            self.emit(json, "raw", vec![Expr::str("null")], out);
+            self.emit(json, "null", Vec::new(), out);
             return Ok(());
         }
-        if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
-            let text = Expr::call(Expr::var("String"), vec![value]);
-            self.emit(json, "raw", vec![text], out);
+        if ty.is_bool() {
+            self.emit(json, "bool", vec![value], out);
+            return Ok(());
+        }
+        if Num::of(ty).is_some_and(|n| n != Num::F64) {
+            self.emit(json, "int", vec![value], out);
             return Ok(());
         }
         if Num::of(ty) == Some(Num::F64) {
@@ -429,7 +449,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(());
         }
         if self.is_string_like(ty) {
-            self.emit(json, "string", vec![value], out);
+            self.emit(json, if ty.is_char() { "char" } else { "string" }, vec![value], out);
             return Ok(());
         }
         // Read more than once below.
@@ -449,7 +469,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut some = Vec::new();
             self.write_json(payload, json, inner, span, &mut some)?;
             let mut none = Vec::new();
-            self.emit(json, "raw", vec![Expr::str("null")], &mut none);
+            self.emit(json, "null", Vec::new(), &mut none);
             let test = Expr::bin(Op::LooseEq, value, Expr::null());
             out.push(StmtKind::If(test, none, Some(some)).at(js::Span::NONE));
             return Ok(());
@@ -482,16 +502,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             ty::Adt(_, args) if self.is_vec_like(ty) || (self.is_set(ty) && !self.is_sorted(ty)) => {
-                self.write_items(value, json, args.type_at(0), span, out)
+                self.write_items(value, json, "beginArray", args.type_at(0), span, out)
             }
             ty::Adt(_, args) if self.is_set(ty) => {
                 let items = self.in_order_of(value, ty, span)?;
-                self.write_items(items, json, args.type_at(0), span, out)
+                self.write_items(items, json, "beginArray", args.type_at(0), span, out)
             }
-            ty::Array(item, _) | ty::Slice(item) => self.write_items(value, json, *item, span, out),
+            // serde writes an array as a tuple.
+            ty::Array(item, _) => self.write_items(value, json, "beginTuple", *item, span, out),
+            ty::Slice(item) => self.write_items(value, json, "beginArray", *item, span, out),
             ty::Tuple(tys) => {
                 let tys: Vec<Ty<'tcx>> = tys.to_vec();
-                self.emit(json, "beginArray", Vec::new(), out);
+                self.emit(json, "beginTuple", Vec::new(), out);
                 for (i, t) in tys.into_iter().enumerate() {
                     self.emit(json, "element", Vec::new(), out);
                     self.write_json(Expr::index(value.clone(), Expr::int(i as i128)), json, t, span, out)?;
@@ -534,13 +556,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// `[a, b]`: each item, in its turn.
-    fn write_items(&mut self, items: Expr, json: &str, item_ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
+    /// `[a, b]`: each item, in its turn, after `begin`, `beginArray` or
+    /// `beginTuple`.
+    fn write_items(
+        &mut self,
+        items: Expr,
+        json: &str,
+        begin: &str,
+        item_ty: Ty<'tcx>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
         let item = self.fresh("item");
         let mut body = Vec::new();
         self.emit(json, "element", Vec::new(), &mut body);
         self.write_json(Expr::var(&item), json, item_ty, span, &mut body)?;
-        self.emit(json, "beginArray", Vec::new(), out);
+        self.emit(json, begin, Vec::new(), out);
         out.push(
             StmtKind::ForOf {
                 label: None,
@@ -610,11 +641,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return match variant.ctor_kind() {
                 Some(CtorKind::Const) => {
-                    self.emit(json, "raw", vec![Expr::str("null")], out);
+                    self.emit(json, "null", Vec::new(), out);
                     Ok(())
                 }
                 Some(CtorKind::Fn) => {
-                    self.emit(json, "beginArray", Vec::new(), out);
+                    self.emit(json, "beginTupleStruct", Vec::new(), out);
                     self.write_tuple_fields(json, variant, &fields, span, out)?;
                     self.emit(json, "endArray", Vec::new(), out);
                     Ok(())
@@ -801,21 +832,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .rename
                 .unwrap_or_else(|| rule.map_or(rust_name.clone(), |r| r.field(&rust_name)));
             let mut body = Vec::new();
-            self.emit(json, "key", vec![Expr::str(name)], &mut body);
-            // Written only when it's `Some`, so it's written as what it holds.
-            let written = match (attrs.skip_serializing_if.as_ref(), self.option_of(*ty)) {
-                (Some(_), Some(inner))
-                    if !self.boxed_payload(inner)
-                        && self.resolved_skip(field.did).is_some_and(|f| {
-                            self.tcx.crate_name(f.krate).as_str() == "core"
-                                && self.tcx.item_name(f).as_str() == "is_none"
-                        }) =>
-                {
-                    inner
-                }
-                _ => *ty,
-            };
-            self.write_json(value.clone(), json, written, span, &mut body)?;
+            // `#[serde(flatten)]`: its entries, among these.
+            if attrs.flatten {
+                let writer = self.json_writer(*ty, span)?;
+                self.emit(json, "flat", vec![value.clone(), writer], &mut body);
+            } else {
+                self.emit(json, "key", vec![Expr::str(name)], &mut body);
+                // Written only when it's `Some`, so it's written as what it holds.
+                let written = match (attrs.skip_serializing_if.as_ref(), self.option_of(*ty)) {
+                    (Some(_), Some(inner))
+                        if !self.boxed_payload(inner)
+                            && self.resolved_skip(field.did).is_some_and(|f| {
+                                self.tcx.crate_name(f.krate).as_str() == "core"
+                                    && self.tcx.item_name(f).as_str() == "is_none"
+                            }) =>
+                    {
+                        inner
+                    }
+                    _ => *ty,
+                };
+                self.write_json(value.clone(), json, written, span, &mut body)?;
+            }
             match attrs.skip_serializing_if {
                 Some(path) => {
                     let skip = self.skip_test(field.did, &path, value.clone(), *ty, span)?;
@@ -990,14 +1027,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let content = |this: &mut Self, out: &mut Vec<Stmt>| -> R<()> {
             match kind {
                 Some(CtorKind::Const) => {
-                    this.emit(json, "raw", vec![Expr::str("null")], out);
+                    this.emit(json, "null", Vec::new(), out);
                     Ok(())
                 }
                 Some(CtorKind::Fn) if fields.len() == 1 => {
                     this.write_json(fields[0].0.clone(), json, fields[0].1, span, out)
                 }
                 Some(CtorKind::Fn) => {
-                    this.emit(json, "beginArray", Vec::new(), out);
+                    this.emit(json, "beginTuple", Vec::new(), out);
                     this.write_tuple_fields(json, variant, fields, span, out)?;
                     this.emit(json, "endArray", Vec::new(), out);
                     Ok(())
@@ -1012,7 +1049,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         match tagging {
             Tagging::External if kind == Some(CtorKind::Const) => {
-                self.emit(json, "string", vec![Expr::str(name)], out);
+                self.emit(json, "variant", vec![Expr::str(name)], out);
             }
             Tagging::External => {
                 self.emit(json, "beginObject", Vec::new(), out);

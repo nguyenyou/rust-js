@@ -176,16 +176,35 @@ function $jsonWriter(pretty) {
   };
   return {
     text: "",
-    raw(text) {
-      this.text += text;
+    null() {
+      this.text += "null";
     },
-    string(s) {
-      this.text += JSON.stringify(s);
+    bool(b) {
+      this.text += String(b);
+    },
+    int(n) {
+      this.text += String(n);
     },
     number(x) {
       this.text += $jsonNumber(x);
     },
+    char(c) {
+      this.text += JSON.stringify(c);
+    },
+    string(s) {
+      this.text += JSON.stringify(s);
+    },
+    // An externally tagged unit variant: its name.
+    variant(name) {
+      this.string(name);
+    },
     beginArray() {
+      open(this, "[");
+    },
+    beginTuple() {
+      open(this, "[");
+    },
+    beginTupleStruct() {
       open(this, "[");
     },
     element() {
@@ -204,7 +223,85 @@ function $jsonWriter(pretty) {
     endObject() {
       close(this, "}");
     },
+    // `#[serde(flatten)]`: `value`'s entries, among the object's own.
+    flat(value, write) {
+      write(value, $jsonFlat(this));
+    },
   };
+}
+// serde's `FlatMapSerializer`: a struct's or a map's entries go into the
+// object `into` is writing; a variant is an entry of its name; `None` and
+// `()` are nothing; and anything else can't be flattened.
+function $jsonFlat(into) {
+  let depth = 0;
+  const top = (what) => {
+    if (depth === 0) throw $jsonError(`can only flatten structs and maps (got ${what})`);
+  };
+  const flat = {
+    null() {
+      if (depth > 0) into.null();
+    },
+    bool(b) {
+      top("a boolean");
+      into.bool(b);
+    },
+    int(n) {
+      top("an integer");
+      into.int(n);
+    },
+    number(x) {
+      top("a float");
+      into.number(x);
+    },
+    char(c) {
+      top("a char");
+      into.char(c);
+    },
+    string(s) {
+      top("a string");
+      into.string(s);
+    },
+    variant(name) {
+      if (depth > 0) return into.variant(name);
+      into.key(name);
+      into.null();
+    },
+    beginArray() {
+      top("a sequence");
+      depth++;
+      into.beginArray();
+    },
+    beginTuple() {
+      top("a tuple");
+      depth++;
+      into.beginTuple();
+    },
+    beginTupleStruct() {
+      top("a tuple struct");
+      depth++;
+      into.beginTupleStruct();
+    },
+    element() {
+      into.element();
+    },
+    endArray() {
+      depth--;
+      into.endArray();
+    },
+    beginObject() {
+      if (depth++ > 0) into.beginObject();
+    },
+    key(k) {
+      into.key(k);
+    },
+    endObject() {
+      if (--depth > 0) into.endObject();
+    },
+    flat(value, write) {
+      write(value, $jsonFlat(this));
+    },
+  };
+  return flat;
 }
 function $toJson(value, write, pretty) {
   const json = $jsonWriter(pretty);
@@ -285,11 +382,21 @@ class $JsonDecoder {
   // `missing`, the value it has when it's not there, for `#[serde(default)]`.
   // `build` makes the struct of their values.
   struct(expected, fields, build, options = {}) {
-    return this.deserializeMap(
+    const visitMap = (map) => this.structMap(map, fields, build, options);
+    // With a flattened field, serde reads a struct as a map.
+    if (options.flatten) return this.deserializeMap(options.expecting ?? expected, visitMap);
+    return this.deserializeStruct(
       options.expecting ?? expected,
-      (map) => this.structMap(map, fields, build, options),
+      fields.flatMap(([names]) => names),
+      visitMap,
       (seq) => this.structSeq(seq, expected, fields, build, options),
     );
+  }
+
+  // `deserialize_struct`: a map, of these `names`, or for most readers, any
+  // map at all.
+  deserializeStruct(expected, names, visitMap, visitSeq) {
+    return this.deserializeMap(expected, visitMap, visitSeq);
   }
 
   // An untagged struct variant, which serde reads from an object only.
@@ -299,11 +406,19 @@ class $JsonDecoder {
     });
   }
 
-  structMap(map, fields, build, { deny = false, container } = {}) {
+  // `flatten`: the readers of the flattened fields, which read what the
+  // struct's own fields don't, kept until they're all read.
+  structMap(map, fields, build, { deny = false, container, flatten } = {}) {
     const values = new Array(fields.length);
     const seen = new Array(fields.length).fill(false);
+    const kept = [];
     while (map.next()) {
-      const i = $jsonField(map.key().string(), fields, deny);
+      const key = map.key().string();
+      const i = $jsonField(key, fields, deny && !flatten);
+      if (i < 0 && flatten) {
+        kept.push([{ type: "str", value: key }, map.value((json) => json.content())]);
+        continue;
+      }
       if (i < 0) {
         map.value((json) => json.ignoreValue());
         continue;
@@ -317,6 +432,10 @@ class $JsonDecoder {
       if (!seen[i])
         values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
     });
+    if (!flatten) return build(values, defaults);
+    for (const read of flatten) values.push(read(new $JsonFlat(kept)));
+    const left = deny && kept.find(Boolean);
+    if (left) throw $jsonError(`unknown field \`${left[0].value}\``);
     return build(values, defaults);
   }
 
@@ -400,6 +519,7 @@ class $JsonDecoder {
   adjacentlyTagged(tag, content, expected, variants, visit, { deny = false, other } = {}) {
     const variantOf = (json) =>
       json.enum(
+        undefined,
         variants,
         (name, access) => {
           access.unit();
@@ -428,8 +548,9 @@ class $JsonDecoder {
         throw $jsonError(`duplicate field \`${key === "tag" ? tag : content}\``);
       return value;
     };
-    return this.deserializeMap(
+    return this.deserializeStruct(
       expected,
+      [tag, content],
       (map) => {
         const first = relevant(map);
         if (first === "tag") {
@@ -1198,8 +1319,9 @@ class $JsonReader extends $JsonDecoder {
   }
 
   // `deserialize_enum`: `"Name"`, or `{"Name": ..}`. `visit` gets the
-  // variant's name and a `$JsonVariant` to read what it holds.
-  enum(variants, visit, other) {
+  // variant's name and a `$JsonVariant` to read what it holds. `enumName` is
+  // the enum's, for a flattened one.
+  enum(enumName, variants, visit, other) {
     const peek = this.parseWhitespace();
     if (peek === 34) return visit(this.identifier(variants, other), new $JsonVariant(this, true));
     if (peek !== 123)
@@ -1332,7 +1454,7 @@ class $JsonContent extends $JsonDecoder {
     return this.data;
   }
 
-  enum(variants, visit, other) {
+  enum(enumName, variants, visit, other) {
     const { type, value } = this.data;
     let variant;
     let held;
@@ -1612,8 +1734,13 @@ class $JsonVariant {
     return this.reader.tupleStruct(expected, fields, build, options);
   }
 
+  // With a flattened field, serde reads it as a newtype variant of a map.
   struct(expected, fields, build, options) {
-    if (this.isUnit) throw $jsonError("invalid type: unit variant, expected struct variant");
+    if (this.isUnit) {
+      throw $jsonError(
+        `invalid type: unit variant, expected ${options?.flatten ? "newtype" : "struct"} variant`,
+      );
+    }
     return this.reader.struct(expected, fields, build, options);
   }
 }
@@ -1646,7 +1773,157 @@ class $JsonContentVariant {
   }
 
   struct(expected, fields, build, options) {
-    return this.reader("struct variant", ["map", "seq"]).struct(expected, fields, build, options);
+    const reader = options?.flatten
+      ? this.reader("newtype variant")
+      : this.reader("struct variant", ["map", "seq"]);
+    return reader.struct(expected, fields, build, options);
+  }
+}
+
+// A flattened field (serde's `FlatMapDeserializer`): what's left of its
+// struct's object. A struct takes the entries it has fields for, a map or an
+// untagged or internally tagged enum sees every one left, and an enum takes
+// the first that names a variant. Anything else can't be flattened.
+class $JsonFlat extends $JsonDecoder {
+  constructor(entries) {
+    super();
+    this.entries = entries;
+  }
+
+  other() {
+    return $jsonError("can only flatten structs and maps");
+  }
+
+  deserializeNumber() {
+    throw this.other();
+  }
+
+  deserializeStr() {
+    throw this.other();
+  }
+
+  deserializeSeq() {
+    throw this.other();
+  }
+
+  bool() {
+    throw this.other();
+  }
+
+  identifier() {
+    throw this.other();
+  }
+
+  deserializeMap(expected, visitMap) {
+    return visitMap(new $JsonFlatMap(this.entries));
+  }
+
+  deserializeStruct(expected, names, visitMap) {
+    return visitMap(new $JsonFlatStruct(this.entries, names));
+  }
+
+  deserializeAny(expected, visitor) {
+    return this.deserializeMap(expected, (map) => {
+      if (!visitor.map) throw $jsonError(`invalid type: map, expected ${expected}`);
+      return visitor.map(map);
+    });
+  }
+
+  unit() {
+    return undefined;
+  }
+
+  unitStruct() {
+    return undefined;
+  }
+
+  ignoreValue() {}
+
+  // An `Option`: `None` when what it holds can't be read from what's left.
+  option(read) {
+    try {
+      return read(this);
+    } catch (e) {
+      if (!(e instanceof $JsonError)) throw e;
+      return undefined;
+    }
+  }
+
+  content() {
+    return { type: "map", value: this.entries.filter(Boolean) };
+  }
+
+  enum(enumName, variants, visit, other) {
+    const names = variants.flatMap((names) => names);
+    const i = this.entries.findIndex(
+      (entry) => entry && entry[0].type === "str" && names.includes(entry[0].value),
+    );
+    if (i < 0) throw $jsonError(`no variant of enum ${enumName} found in flattened data`);
+    const entry = this.entries[i];
+    this.entries[i] = null;
+    return new $JsonContent({ type: "map", value: [entry] }, true).enum(
+      enumName,
+      variants,
+      visit,
+      other,
+    );
+  }
+}
+
+// `FlatStructAccess`: the entries a struct has fields for, taken.
+class $JsonFlatStruct {
+  constructor(entries, names) {
+    this.entries = entries;
+    this.names = names;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const i = this.index++;
+      const entry = this.entries[i];
+      if (entry && entry[0].type === "str" && this.names.includes(entry[0].value)) {
+        this.entries[i] = null;
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], true);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], true));
+  }
+}
+
+// `FlatMapAccess`: every entry left, seen but left for the fields after.
+class $JsonFlatMap {
+  constructor(entries) {
+    this.entries = entries;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const entry = this.entries[this.index++];
+      if (entry) {
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], false);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], false));
   }
 }
 
@@ -1816,7 +2093,7 @@ const $json = {
   },
   // serde's impl for `Result`: `{"Ok": ..}` or `{"Err": ..}`.
   result: (ok, err) => (json) =>
-    json.enum(["Ok", "Err"], (variant, content) => ({
+    json.enum("Result", ["Ok", "Err"], (variant, content) => ({
       TAG: variant,
       _0: content.newtype(variant === "Ok" ? ok : err),
     })),
@@ -1890,7 +2167,31 @@ function $debugStr(s, quote = '"') {
   return out + quote;
 }
 
-var $pageDebug, $pairDebug, $userDebug, $oddErrorDisplay;
+var $pageDebug, $pairDebug, $userDebug, $oddErrorDisplay, $responseDebug;
+
+export function encode(value, writeT) {
+  return $unwrapOk($toJson(value, writeT, false));
+}
+
+export function decode(text, readT) {
+  const result = $fromJson(text, readT);
+  return result.TAG === "Err" ? { TAG: "Err", _0: $displayJsonError(result._0) } : result;
+}
+
+export function roundtrip(value, writeT, readT, TDebug) {
+  const text = encode(value, writeT);
+  const back = $unwrapOk(decode(text, readT));
+  return `${text} ${TDebug.fmt(back)}`;
+}
+
+export function decode_all(texts, readT) {
+  return texts.map((t) => decode(t, readT));
+}
+
+export function borrowed(text, readT) {
+  const result = $fromJson(text, readT);
+  return result.TAG === "Ok" ? $some(result._0) : undefined;
+}
 
 export function report() {
   let out = "";
@@ -1904,7 +2205,7 @@ export function report() {
         match._0,
         (value, json) => {
           pageSerialize_serialize(value, json, (value$1, json$1) => {
-            json$1.raw(String(value$1));
+            json$1.int(value$1);
           });
         },
         false,
@@ -1923,7 +2224,7 @@ export function report() {
         match$1._0,
         (value$2, json$2) => {
           pageSerialize_serialize(value$2, json$2, (value$3, json$3) => {
-            json$3.raw(String(value$3));
+            json$3.int(value$3);
           });
         },
         false,
@@ -1942,7 +2243,7 @@ export function report() {
         match$2._0,
         (value$4, json$4) => {
           pageSerialize_serialize(value$4, json$4, (value$5, json$5) => {
-            json$5.raw(String(value$5));
+            json$5.int(value$5);
           });
         },
         false,
@@ -1996,7 +2297,7 @@ export function report() {
         (value$8, json$8) => {
           pageSerialize_serialize(value$8, json$8, (value$9, json$9) => {
             pageSerialize_serialize(value$9, json$9, (value$10, json$10) => {
-              json$10.raw(String(value$10));
+              json$10.int(value$10);
             });
           });
         },
@@ -2017,9 +2318,9 @@ export function report() {
         (value$11, json$11) => {
           pageSerialize_serialize(value$11, json$11, (value$12, json$12) => {
             if (value$12 == null) {
-              json$12.raw("null");
+              json$12.null();
             } else {
-              json$12.raw(String(value$12));
+              json$12.int(value$12);
             }
           });
         },
@@ -2162,7 +2463,7 @@ export function report() {
             json$24.beginArray();
             for (const item of value$24) {
               json$24.element();
-              json$24.raw(String(item));
+              json$24.int(item);
             }
             json$24.endArray();
           });
@@ -2186,7 +2487,7 @@ export function report() {
             json$26.beginArray();
             for (const item$1 of value$26) {
               json$26.element();
-              json$26.raw(String(item$1));
+              json$26.int(item$1);
             }
             json$26.endArray();
           });
@@ -2210,7 +2511,7 @@ export function report() {
             json$28.beginArray();
             for (const item$2 of value$28) {
               json$28.element();
-              json$28.raw(String(item$2));
+              json$28.int(item$2);
             }
             json$28.endArray();
           });
@@ -2248,7 +2549,7 @@ export function report() {
         match$17._0,
         (value$30, json$30) => {
           taggedSerialize_serialize(value$30, json$30, (value$31, json$31) => {
-            json$31.raw(String(value$31));
+            json$31.bool(value$31);
           });
         },
         false,
@@ -2267,7 +2568,7 @@ export function report() {
         match$18._0,
         (value$32, json$32) => {
           taggedSerialize_serialize(value$32, json$32, (value$33, json$33) => {
-            json$33.raw(String(value$33));
+            json$33.bool(value$33);
           });
         },
         false,
@@ -2289,7 +2590,7 @@ export function report() {
             value$34,
             json$34,
             (value$35, json$35) => {
-              json$35.raw(String(value$35));
+              json$35.int(value$35);
             },
             (value$36, json$36) => {
               json$36.string(value$36);
@@ -2315,7 +2616,7 @@ export function report() {
             value$37,
             json$37,
             (value$38, json$38) => {
-              json$38.raw(String(value$38));
+              json$38.int(value$38);
             },
             (value$39, json$39) => {
               json$39.string(value$39);
@@ -2341,7 +2642,7 @@ export function report() {
             value$40,
             json$40,
             (value$41, json$41) => {
-              json$41.raw(String(value$41));
+              json$41.int(value$41);
             },
             (value$42, json$42) => {
               json$42.string(value$42);
@@ -2371,10 +2672,10 @@ export function report() {
               value$44,
               json$44,
               (value$45, json$45) => {
-                json$45.raw(String(value$45));
+                json$45.int(value$45);
               },
               (value$46, json$46) => {
-                json$46.raw(String(value$46));
+                json$46.int(value$46);
               },
             );
           });
@@ -2449,6 +2750,393 @@ export function report() {
       false,
     ),
   );
+  out += "\n";
+  out += roundtrip(
+    { name: "a", age: 1 },
+    userSerialize_serialize,
+    userDeserialize_deserialize,
+    userDebug(),
+  );
+  out += "\n";
+  out += roundtrip(
+    [1, 2],
+    (value$49, json$49) => {
+      json$49.beginArray();
+      for (const item$4 of value$49) {
+        json$49.element();
+        json$49.int(item$4);
+      }
+      json$49.endArray();
+    },
+    $json.vec($json.u32),
+    { fmt: (value) => `[${value.map((item) => String(item)).join(", ")}]` },
+  );
+  out += "\n";
+  out += roundtrip(
+    { data: { name: "b", age: 2 }, ok: true },
+    (value$50, json$50) => {
+      responseSerialize_serialize(value$50, json$50, userSerialize_serialize);
+    },
+    $json.with(responseDeserialize_deserialize, userDeserialize_deserialize),
+    responseDebug(userDebug()),
+  );
+  out += "\n";
+  const users = decode_all(['{"name":"c","age":3}', '{"name":"d"}'], userDeserialize_deserialize);
+  out += `[${users.map((item) => (item.TAG === "Ok" ? `Ok(${userDebug_fmt(item._0)})` : `Err(${$debugStr(item._0)})`)).join(", ")}]\n`;
+  const reply = decode(
+    '{"data":[1,2],"ok":false}',
+    $json.with(responseDeserialize_deserialize, $json.vec($json.u8)),
+  );
+  out += `${reply.TAG === "Ok" ? `Ok(${responseDebug_fmt(reply._0, { fmt: (value) => `[${value.map((item) => String(item)).join(", ")}]` })})` : `Err(${$debugStr(reply._0)})`}\n`;
+  const n = borrowed("7", $json.u8);
+  const m = borrowed("x", $json.u8);
+  out += `${n == null ? "None" : `Some(${n})`} ${m == null ? "None" : `Some(${m})`}\n`;
+  out += encode({ data: undefined, ok: true }, (value$51, json$51) => {
+    responseSerialize_serialize(value$51, json$51, (value$52, json$52) => {
+      json$52.null();
+    });
+  });
+  out += "\n";
+  const match$26 = $fromJson(
+    '{"name":"a","page":1,"total":9,"x":5}',
+    listingDeserialize_deserialize,
+  );
+  if (match$26.TAG === "Ok") {
+    let tmp;
+    const match$27 = $toJson(match$26._0, listingSerialize_serialize, false);
+    if (match$27.TAG === "Ok") {
+      tmp = match$27._0;
+    } else {
+      tmp = `err ${$displayJsonError(match$27._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$26._0)} -> ${tmp}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$26._0)}\n`;
+  }
+  const match$28 = $fromJson('{"page":1,"name":"a","total":9}', listingDeserialize_deserialize);
+  if (match$28.TAG === "Ok") {
+    let tmp$1;
+    const match$29 = $toJson(match$28._0, listingSerialize_serialize, false);
+    if (match$29.TAG === "Ok") {
+      tmp$1 = match$29._0;
+    } else {
+      tmp$1 = `err ${$displayJsonError(match$29._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$28._0)} -> ${tmp$1}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$28._0)}\n`;
+  }
+  const match$30 = $fromJson('{"name":"a","page":1}', listingDeserialize_deserialize);
+  if (match$30.TAG === "Ok") {
+    let tmp$2;
+    const match$31 = $toJson(match$30._0, listingSerialize_serialize, false);
+    if (match$31.TAG === "Ok") {
+      tmp$2 = match$31._0;
+    } else {
+      tmp$2 = `err ${$displayJsonError(match$31._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$30._0)} -> ${tmp$2}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$30._0)}\n`;
+  }
+  const match$32 = $fromJson(
+    '{"name":"a","page":1,"total":2,"x":"y"}',
+    listingDeserialize_deserialize,
+  );
+  if (match$32.TAG === "Ok") {
+    let tmp$3;
+    const match$33 = $toJson(match$32._0, listingSerialize_serialize, false);
+    if (match$33.TAG === "Ok") {
+      tmp$3 = match$33._0;
+    } else {
+      tmp$3 = `err ${$displayJsonError(match$33._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$32._0)} -> ${tmp$3}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$32._0)}\n`;
+  }
+  const match$34 = $fromJson('["a"]', listingDeserialize_deserialize);
+  if (match$34.TAG === "Ok") {
+    let tmp$4;
+    const match$35 = $toJson(match$34._0, listingSerialize_serialize, false);
+    if (match$35.TAG === "Ok") {
+      tmp$4 = match$35._0;
+    } else {
+      tmp$4 = `err ${$displayJsonError(match$35._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$34._0)} -> ${tmp$4}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$34._0)}\n`;
+  }
+  const match$36 = $fromJson('{"name":"a","page":"1","total":2}', listingDeserialize_deserialize);
+  if (match$36.TAG === "Ok") {
+    let tmp$5;
+    const match$37 = $toJson(match$36._0, listingSerialize_serialize, false);
+    if (match$37.TAG === "Ok") {
+      tmp$5 = match$37._0;
+    } else {
+      tmp$5 = `err ${$displayJsonError(match$37._0)}`;
+    }
+    out += `ok ${listingDebug_fmt(match$36._0)} -> ${tmp$5}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$36._0)}\n`;
+  }
+  const match$38 = $fromJson(
+    '{"name":"a","page":1,"total":2}',
+    strictListingDeserialize_deserialize,
+  );
+  if (match$38.TAG === "Ok") {
+    let tmp$6;
+    const match$39 = $toJson(match$38._0, strictListingSerialize_serialize, false);
+    if (match$39.TAG === "Ok") {
+      tmp$6 = match$39._0;
+    } else {
+      tmp$6 = `err ${$displayJsonError(match$39._0)}`;
+    }
+    out += `ok ${strictListingDebug_fmt(match$38._0)} -> ${tmp$6}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$38._0)}\n`;
+  }
+  const match$40 = $fromJson(
+    '{"name":"a","page":1,"total":2,"z":0}',
+    strictListingDeserialize_deserialize,
+  );
+  if (match$40.TAG === "Ok") {
+    let tmp$7;
+    const match$41 = $toJson(match$40._0, strictListingSerialize_serialize, false);
+    if (match$41.TAG === "Ok") {
+      tmp$7 = match$41._0;
+    } else {
+      tmp$7 = `err ${$displayJsonError(match$41._0)}`;
+    }
+    out += `ok ${strictListingDebug_fmt(match$40._0)} -> ${tmp$7}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$40._0)}\n`;
+  }
+  const match$42 = $fromJson('{"id":1,"page":1,"total":2}', withOptionDeserialize_deserialize);
+  if (match$42.TAG === "Ok") {
+    let tmp$8;
+    const match$43 = $toJson(match$42._0, withOptionSerialize_serialize, false);
+    if (match$43.TAG === "Ok") {
+      tmp$8 = match$43._0;
+    } else {
+      tmp$8 = `err ${$displayJsonError(match$43._0)}`;
+    }
+    out += `ok ${withOptionDebug_fmt(match$42._0)} -> ${tmp$8}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$42._0)}\n`;
+  }
+  const match$44 = $fromJson('{"id":1,"page":1}', withOptionDeserialize_deserialize);
+  if (match$44.TAG === "Ok") {
+    let tmp$9;
+    const match$45 = $toJson(match$44._0, withOptionSerialize_serialize, false);
+    if (match$45.TAG === "Ok") {
+      tmp$9 = match$45._0;
+    } else {
+      tmp$9 = `err ${$displayJsonError(match$45._0)}`;
+    }
+    out += `ok ${withOptionDebug_fmt(match$44._0)} -> ${tmp$9}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$44._0)}\n`;
+  }
+  const match$46 = $fromJson('{"id":1}', withOptionDeserialize_deserialize);
+  if (match$46.TAG === "Ok") {
+    let tmp$10;
+    const match$47 = $toJson(match$46._0, withOptionSerialize_serialize, false);
+    if (match$47.TAG === "Ok") {
+      tmp$10 = match$47._0;
+    } else {
+      tmp$10 = `err ${$displayJsonError(match$47._0)}`;
+    }
+    out += `ok ${withOptionDebug_fmt(match$46._0)} -> ${tmp$10}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$46._0)}\n`;
+  }
+  const match$48 = $fromJson('{"id":1,"Book":{"pages":3}}', itemDeserialize_deserialize);
+  if (match$48.TAG === "Ok") {
+    let tmp$11;
+    const match$49 = $toJson(match$48._0, itemSerialize_serialize, false);
+    if (match$49.TAG === "Ok") {
+      tmp$11 = match$49._0;
+    } else {
+      tmp$11 = `err ${$displayJsonError(match$49._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$48._0)} -> ${tmp$11}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$48._0)}\n`;
+  }
+  const match$50 = $fromJson('{"Film":7,"id":2}', itemDeserialize_deserialize);
+  if (match$50.TAG === "Ok") {
+    let tmp$12;
+    const match$51 = $toJson(match$50._0, itemSerialize_serialize, false);
+    if (match$51.TAG === "Ok") {
+      tmp$12 = match$51._0;
+    } else {
+      tmp$12 = `err ${$displayJsonError(match$51._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$50._0)} -> ${tmp$12}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$50._0)}\n`;
+  }
+  const match$52 = $fromJson('{"id":3,"Other":null}', itemDeserialize_deserialize);
+  if (match$52.TAG === "Ok") {
+    let tmp$13;
+    const match$53 = $toJson(match$52._0, itemSerialize_serialize, false);
+    if (match$53.TAG === "Ok") {
+      tmp$13 = match$53._0;
+    } else {
+      tmp$13 = `err ${$displayJsonError(match$53._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$52._0)} -> ${tmp$13}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$52._0)}\n`;
+  }
+  const match$54 = $fromJson('{"id":4,"Pair":[1,2]}', itemDeserialize_deserialize);
+  if (match$54.TAG === "Ok") {
+    let tmp$14;
+    const match$55 = $toJson(match$54._0, itemSerialize_serialize, false);
+    if (match$55.TAG === "Ok") {
+      tmp$14 = match$55._0;
+    } else {
+      tmp$14 = `err ${$displayJsonError(match$55._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$54._0)} -> ${tmp$14}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$54._0)}\n`;
+  }
+  const match$56 = $fromJson('{"id":5}', itemDeserialize_deserialize);
+  if (match$56.TAG === "Ok") {
+    let tmp$15;
+    const match$57 = $toJson(match$56._0, itemSerialize_serialize, false);
+    if (match$57.TAG === "Ok") {
+      tmp$15 = match$57._0;
+    } else {
+      tmp$15 = `err ${$displayJsonError(match$57._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$56._0)} -> ${tmp$15}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$56._0)}\n`;
+  }
+  const match$58 = $fromJson('{"id":6,"Nope":1}', itemDeserialize_deserialize);
+  if (match$58.TAG === "Ok") {
+    let tmp$16;
+    const match$59 = $toJson(match$58._0, itemSerialize_serialize, false);
+    if (match$59.TAG === "Ok") {
+      tmp$16 = match$59._0;
+    } else {
+      tmp$16 = `err ${$displayJsonError(match$59._0)}`;
+    }
+    out += `ok ${itemDebug_fmt(match$58._0)} -> ${tmp$16}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$58._0)}\n`;
+  }
+  const match$60 = $fromJson(
+    '{"name":"d","type":"Circle","r":1.5}',
+    drawingDeserialize_deserialize,
+  );
+  if (match$60.TAG === "Ok") {
+    let tmp$17;
+    const match$61 = $toJson(match$60._0, drawingSerialize_serialize, false);
+    if (match$61.TAG === "Ok") {
+      tmp$17 = match$61._0;
+    } else {
+      tmp$17 = `err ${$displayJsonError(match$61._0)}`;
+    }
+    out += `ok ${drawingDebug_fmt(match$60._0)} -> ${tmp$17}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$60._0)}\n`;
+  }
+  const match$62 = $fromJson(
+    '{"type":"Square","side":2,"name":"e"}',
+    drawingDeserialize_deserialize,
+  );
+  if (match$62.TAG === "Ok") {
+    let tmp$18;
+    const match$63 = $toJson(match$62._0, drawingSerialize_serialize, false);
+    if (match$63.TAG === "Ok") {
+      tmp$18 = match$63._0;
+    } else {
+      tmp$18 = `err ${$displayJsonError(match$63._0)}`;
+    }
+    out += `ok ${drawingDebug_fmt(match$62._0)} -> ${tmp$18}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$62._0)}\n`;
+  }
+  const match$64 = $fromJson('{"name":"f","type":"Hex"}', drawingDeserialize_deserialize);
+  if (match$64.TAG === "Ok") {
+    let tmp$19;
+    const match$65 = $toJson(match$64._0, drawingSerialize_serialize, false);
+    if (match$65.TAG === "Ok") {
+      tmp$19 = match$65._0;
+    } else {
+      tmp$19 = `err ${$displayJsonError(match$65._0)}`;
+    }
+    out += `ok ${drawingDebug_fmt(match$64._0)} -> ${tmp$19}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$64._0)}\n`;
+  }
+  const match$66 = $fromJson('{"name":"g"}', drawingDeserialize_deserialize);
+  if (match$66.TAG === "Ok") {
+    let tmp$20;
+    const match$67 = $toJson(match$66._0, drawingSerialize_serialize, false);
+    if (match$67.TAG === "Ok") {
+      tmp$20 = match$67._0;
+    } else {
+      tmp$20 = `err ${$displayJsonError(match$67._0)}`;
+    }
+    out += `ok ${drawingDebug_fmt(match$66._0)} -> ${tmp$20}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$66._0)}\n`;
+  }
+  const match$68 = $fromJson(
+    '{"name":"n","page":1,"total":2,"flag":true,"q":3}',
+    nestedDeserialize_deserialize,
+  );
+  if (match$68.TAG === "Ok") {
+    let tmp$21;
+    const match$69 = $toJson(match$68._0, nestedSerialize_serialize, false);
+    if (match$69.TAG === "Ok") {
+      tmp$21 = match$69._0;
+    } else {
+      tmp$21 = `err ${$displayJsonError(match$69._0)}`;
+    }
+    out += `ok ${nestedDebug_fmt(match$68._0)} -> ${tmp$21}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$68._0)}\n`;
+  }
+  const match$70 = $fromJson('{"id":1,"n":2}', badDeserialize_deserialize);
+  if (match$70.TAG === "Ok") {
+    let tmp$22;
+    const match$71 = $toJson(match$70._0, badSerialize_serialize, false);
+    if (match$71.TAG === "Ok") {
+      tmp$22 = match$71._0;
+    } else {
+      tmp$22 = `err ${$displayJsonError(match$71._0)}`;
+    }
+    out += `ok ${badDebug_fmt(match$70._0)} -> ${tmp$22}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$70._0)}\n`;
+  }
+  let tmp$23;
+  const match$72 = $toJson({ id: 1, n: 2 }, badSerialize_serialize, false);
+  if (match$72.TAG === "Ok") {
+    tmp$23 = match$72._0;
+  } else {
+    tmp$23 = $displayJsonError(match$72._0);
+  }
+  out += tmp$23;
+  out += "\n";
+  let tmp$24;
+  const match$73 = $toJson({ items: [1] }, badSeqSerialize_serialize, false);
+  if (match$73.TAG === "Ok") {
+    tmp$24 = match$73._0;
+  } else {
+    tmp$24 = $displayJsonError(match$73._0);
+  }
+  out += tmp$24;
+  out += "\n";
+  const listing = { name: "p", meta: { page: 2, total: 3 }, extra: new Map() };
+  out += $unwrapOk($toJson({ listing, flag: false }, nestedSerialize_serialize, true));
   out += "\n";
   return out;
 }
@@ -2555,6 +3243,66 @@ function contactDebug_fmt(contact) {
   return `Contact { email: ${emailDebug_fmt(contact.email)}, temp: ${tempDebug_fmt(contact.temp)}, even: ${evenDebug_fmt(contact.even)} }`;
 }
 
+function responseDebug_fmt(response, TDebug) {
+  return `Response { data: ${TDebug.fmt(response.data)}, ok: ${response.ok} }`;
+}
+
+function metaDebug_fmt(meta) {
+  return `Meta { page: ${meta.page}, total: ${meta.total} }`;
+}
+
+function listingDebug_fmt(listing) {
+  return `Listing { name: ${$debugStr(listing.name)}, meta: ${metaDebug_fmt(listing.meta)}, extra: {${Array.from(
+    $sortedEntries(listing.extra, $cmp),
+  )
+    .map(([key, value]) => `${$debugStr(key)}: ${value}`)
+    .join(", ")}} }`;
+}
+
+function strictListingDebug_fmt(strictListing) {
+  return `StrictListing { name: ${$debugStr(strictListing.name)}, meta: ${metaDebug_fmt(strictListing.meta)} }`;
+}
+
+function withOptionDebug_fmt(withOption) {
+  return `WithOption { id: ${withOption.id}, meta: ${withOption.meta == null ? "None" : `Some(${metaDebug_fmt(withOption.meta)})`} }`;
+}
+
+function kindDebug_fmt(kind) {
+  if (kind.TAG === "Book") {
+    return `Book { pages: ${kind.pages} }`;
+  } else if (kind.TAG === "Film") {
+    return `Film(${kind._0})`;
+  } else if (kind.TAG === "Pair") {
+    return `Pair(${kind._0}, ${kind._1})`;
+  } else {
+    return "Other";
+  }
+}
+
+function itemDebug_fmt(item) {
+  return `Item { id: ${item.id}, kind: ${kindDebug_fmt(item.kind)} }`;
+}
+
+function shapeDebug_fmt(shape) {
+  if (shape.TAG === "Circle") {
+    return `Circle { r: ${$debugF64(shape.r)} }`;
+  } else {
+    return `Square { side: ${$debugF64(shape.side)} }`;
+  }
+}
+
+function drawingDebug_fmt(drawing) {
+  return `Drawing { name: ${$debugStr(drawing.name)}, shape: ${shapeDebug_fmt(drawing.shape)} }`;
+}
+
+function nestedDebug_fmt(nested) {
+  return `Nested { listing: ${listingDebug_fmt(nested.listing)}, flag: ${nested.flag} }`;
+}
+
+function badDebug_fmt(bad) {
+  return `Bad { id: ${bad.id}, n: ${bad.n} }`;
+}
+
 export function pageDebug(TDebug) {
   if ($pageDebug === undefined) {
     $pageDebug = new WeakMap();
@@ -2585,6 +3333,15 @@ export function oddErrorDisplay() {
   return $oddErrorDisplay;
 }
 
+export function responseDebug(TDebug) {
+  if ($responseDebug === undefined) {
+    $responseDebug = new WeakMap();
+  }
+  return $traitImpl($responseDebug, [TDebug], () => ({
+    fmt: (arg0) => responseDebug_fmt(arg0, TDebug),
+  }));
+}
+
 function pageSerialize_serialize(page, json, writeT) {
   json.beginObject();
   json.key("items");
@@ -2596,12 +3353,12 @@ function pageSerialize_serialize(page, json, writeT) {
   json.endArray();
   json.key("nextItem");
   if (page.next_item == null) {
-    json.raw("null");
+    json.null();
   } else {
     writeT($someValue(page.next_item), json);
   }
   json.key("total");
-  json.raw(String(page.total));
+  json.int(page.total);
   json.endObject();
 }
 
@@ -2660,12 +3417,12 @@ function replySerialize_serialize(reply, json, writeT) {
     json.endObject();
     json.endObject();
   } else {
-    json.string("Empty");
+    json.variant("Empty");
   }
 }
 
 function replyDeserialize_deserialize(json, readT) {
-  return json.enum(["Ok", "Err", "Empty"], (variant, content) => {
+  return json.enum("Reply", ["Ok", "Err", "Empty"], (variant, content) => {
     if (variant === "Ok") {
       return { TAG: "Ok", _0: content.newtype(readT) };
     } else if (variant === "Err") {
@@ -2788,7 +3545,7 @@ function userSerialize_serialize(user, json) {
   json.key("name");
   json.string(user.name);
   json.key("age");
-  json.raw(String(user.age));
+  json.int(user.age);
   json.endObject();
 }
 
@@ -2809,7 +3566,7 @@ function outcomeSerialize_serialize(outcome, json) {
   if (outcome.result.TAG === "Ok") {
     json.beginObject();
     json.key("Ok");
-    json.raw(String(outcome.result._0));
+    json.int(outcome.result._0);
     json.endObject();
   } else {
     json.beginObject();
@@ -2824,12 +3581,12 @@ function outcomeSerialize_serialize(outcome, json) {
     if (item.TAG === "Ok") {
       json.beginObject();
       json.key("Ok");
-      json.raw(String(item._0));
+      json.bool(item._0);
       json.endObject();
     } else {
       json.beginObject();
       json.key("Err");
-      json.raw(String(item._0));
+      json.int(item._0);
       json.endObject();
     }
   }
@@ -2869,6 +3626,165 @@ function contactDeserialize_deserialize(json) {
   );
 }
 
+function responseSerialize_serialize(response, json, writeT) {
+  json.beginObject();
+  json.key("data");
+  writeT(response.data, json);
+  json.key("ok");
+  json.bool(response.ok);
+  json.endObject();
+}
+
+function responseDeserialize_deserialize(json, readT) {
+  return json.struct(
+    "struct Response",
+    [
+      ["data", readT],
+      ["ok", $json.bool],
+    ],
+    ([data, ok]) => ({ data, ok }),
+  );
+}
+
+function listingSerialize_serialize(listing, json) {
+  json.beginObject();
+  json.key("name");
+  json.string(listing.name);
+  json.flat(listing.meta, metaSerialize_serialize);
+  json.flat(listing.extra, (value, json$1) => {
+    json$1.beginObject();
+    for (const [key, item] of $sortedEntries(value, $cmp)) {
+      json$1.key(key);
+      json$1.int(item);
+    }
+    json$1.endObject();
+  });
+  json.endObject();
+}
+
+function listingDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Listing",
+    [["name", $json.string]],
+    ([name, meta, extra]) => ({ name, meta, extra }),
+    { flatten: [metaDeserialize_deserialize, $json.map($json.key.string, $json.u32)] },
+  );
+}
+
+function strictListingSerialize_serialize(strictListing, json) {
+  json.beginObject();
+  json.key("name");
+  json.string(strictListing.name);
+  json.flat(strictListing.meta, metaSerialize_serialize);
+  json.endObject();
+}
+
+function strictListingDeserialize_deserialize(json) {
+  return json.struct(
+    "struct StrictListing",
+    [["name", $json.string]],
+    ([name, meta]) => ({ name, meta }),
+    { deny: true, flatten: [metaDeserialize_deserialize] },
+  );
+}
+
+function withOptionSerialize_serialize(withOption, json) {
+  json.beginObject();
+  json.key("id");
+  json.int(withOption.id);
+  json.flat(withOption.meta, (value, json$1) => {
+    if (value == null) {
+      json$1.null();
+    } else {
+      metaSerialize_serialize(value, json$1);
+    }
+  });
+  json.endObject();
+}
+
+function withOptionDeserialize_deserialize(json) {
+  return json.struct("struct WithOption", [["id", $json.u8]], ([id, meta]) => ({ id, meta }), {
+    flatten: [$json.option(metaDeserialize_deserialize)],
+  });
+}
+
+function itemSerialize_serialize(item, json) {
+  json.beginObject();
+  json.key("id");
+  json.int(item.id);
+  json.flat(item.kind, kindSerialize_serialize);
+  json.endObject();
+}
+
+function itemDeserialize_deserialize(json) {
+  return json.struct("struct Item", [["id", $json.u8]], ([id, kind]) => ({ id, kind }), {
+    flatten: [kindDeserialize_deserialize],
+  });
+}
+
+function drawingSerialize_serialize(drawing, json) {
+  json.beginObject();
+  json.key("name");
+  json.string(drawing.name);
+  json.flat(drawing.shape, shapeSerialize_serialize);
+  json.endObject();
+}
+
+function drawingDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Drawing",
+    [["name", $json.string]],
+    ([name, shape]) => ({ name, shape }),
+    { flatten: [shapeDeserialize_deserialize] },
+  );
+}
+
+function nestedSerialize_serialize(nested, json) {
+  json.beginObject();
+  json.flat(nested.listing, listingSerialize_serialize);
+  json.key("flag");
+  json.bool(nested.flag);
+  json.endObject();
+}
+
+function nestedDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Nested",
+    [["flag", $json.bool]],
+    ([flag, listing]) => ({ listing, flag }),
+    { flatten: [listingDeserialize_deserialize] },
+  );
+}
+
+function badSerialize_serialize(bad, json) {
+  json.beginObject();
+  json.key("id");
+  json.int(bad.id);
+  json.flat(bad.n, (value, json$1) => {
+    json$1.int(value);
+  });
+  json.endObject();
+}
+
+function badDeserialize_deserialize(json) {
+  return json.struct("struct Bad", [["id", $json.u8]], ([id, n]) => ({ id, n }), {
+    flatten: [$json.u32],
+  });
+}
+
+function badSeqSerialize_serialize(badSeq, json) {
+  json.beginObject();
+  json.flat(badSeq.items, (value, json$1) => {
+    json$1.beginArray();
+    for (const item of value) {
+      json$1.element();
+      json$1.int(item);
+    }
+    json$1.endArray();
+  });
+  json.endObject();
+}
+
 function tempDeserialize_deserialize(json) {
   return tempFromRawTemp_from(rawTempDeserialize_deserialize(json));
 }
@@ -2883,6 +3799,116 @@ function rawTempSerialize_serialize(rawTemp, json) {
 function evenDeserialize_deserialize(json) {
   return $json.tried(evenTryFromU32_try_from($json.u32(json)), (error) =>
     oddErrorDisplay_fmt(error),
+  );
+}
+
+function metaSerialize_serialize(meta, json) {
+  json.beginObject();
+  json.key("page");
+  json.int(meta.page);
+  json.key("total");
+  json.int(meta.total);
+  json.endObject();
+}
+
+function metaDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Meta",
+    [
+      ["page", $json.u32],
+      ["total", $json.u32],
+    ],
+    ([page, total]) => ({ page, total }),
+  );
+}
+
+function kindSerialize_serialize(kind, json) {
+  if (kind.TAG === "Book") {
+    json.beginObject();
+    json.key("Book");
+    json.beginObject();
+    json.key("pages");
+    json.int(kind.pages);
+    json.endObject();
+    json.endObject();
+  } else if (kind.TAG === "Film") {
+    json.beginObject();
+    json.key("Film");
+    json.int(kind._0);
+    json.endObject();
+  } else if (kind.TAG === "Pair") {
+    json.beginObject();
+    json.key("Pair");
+    json.beginTuple();
+    json.element();
+    json.int(kind._0);
+    json.element();
+    json.int(kind._1);
+    json.endArray();
+    json.endObject();
+  } else {
+    json.variant("Other");
+  }
+}
+
+function kindDeserialize_deserialize(json) {
+  return json.enum("Kind", ["Book", "Film", "Pair", "Other"], (variant, content) => {
+    if (variant === "Book") {
+      return content.struct("struct variant Kind::Book", [["pages", $json.u32]], ([pages]) => ({
+        TAG: "Book",
+        pages,
+      }));
+    } else if (variant === "Film") {
+      return { TAG: "Film", _0: content.newtype($json.u32) };
+    } else if (variant === "Pair") {
+      return content.tuple("tuple variant Kind::Pair", [$json.u8, $json.u8], ([_0, _1]) => ({
+        TAG: "Pair",
+        _0,
+        _1,
+      }));
+    } else {
+      content.unit();
+      return "Other";
+    }
+  });
+}
+
+function shapeSerialize_serialize(shape, json) {
+  if (shape.TAG === "Circle") {
+    json.beginObject();
+    json.key("type");
+    json.string("Circle");
+    json.key("r");
+    json.number(shape.r);
+    json.endObject();
+  } else {
+    json.beginObject();
+    json.key("type");
+    json.string("Square");
+    json.key("side");
+    json.number(shape.side);
+    json.endObject();
+  }
+}
+
+function shapeDeserialize_deserialize(json) {
+  return json.internallyTagged(
+    "type",
+    "internally tagged enum Shape",
+    ["Circle", "Square"],
+    (variant, content) => {
+      if (variant === "Circle") {
+        return content.struct("struct variant Shape::Circle", [["r", $json.f64]], ([r]) => ({
+          TAG: "Circle",
+          r,
+        }));
+      } else {
+        return content.struct("struct variant Shape::Square", [["side", $json.f64]], ([side]) => ({
+          TAG: "Square",
+          side,
+        }));
+      }
+    },
   );
 }
 

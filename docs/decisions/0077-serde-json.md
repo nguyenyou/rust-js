@@ -52,7 +52,7 @@ serde_json::to_string(&order)
 function orderSerialize_serialize(order, json) {
   json.beginObject();
   json.key("orderId");
-  json.raw(String(order.order_id));
+  json.int(order.order_id);
   if (order.note != null) {
     json.key("note");
     json.string(order.note);

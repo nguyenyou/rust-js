@@ -1012,10 +1012,17 @@ function $jsonWriter(pretty) {
   };
   return {
     text: "",
-    raw(text) { this.text += text; },
-    string(s) { this.text += JSON.stringify(s); },
+    null() { this.text += "null"; },
+    bool(b) { this.text += String(b); },
+    int(n) { this.text += String(n); },
     number(x) { this.text += $jsonNumber(x); },
+    char(c) { this.text += JSON.stringify(c); },
+    string(s) { this.text += JSON.stringify(s); },
+    // An externally tagged unit variant: its name.
+    variant(name) { this.string(name); },
     beginArray() { open(this, "["); },
+    beginTuple() { open(this, "["); },
+    beginTupleStruct() { open(this, "["); },
     element() { next(this); },
     endArray() { close(this, "]"); },
     beginObject() { open(this, "{"); },
@@ -1024,7 +1031,41 @@ function $jsonWriter(pretty) {
       this.text += JSON.stringify(k) + (pretty ? ": " : ":");
     },
     endObject() { close(this, "}"); },
+    // `#[serde(flatten)]`: `value`'s entries, among the object's own.
+    flat(value, write) { write(value, $jsonFlat(this)); },
   };
+}
+// serde's `FlatMapSerializer`: a struct's or a map's entries go into the
+// object `into` is writing; a variant is an entry of its name; `None` and
+// `()` are nothing; and anything else can't be flattened.
+function $jsonFlat(into) {
+  let depth = 0;
+  const top = (what) => {
+    if (depth === 0) throw $jsonError(`can only flatten structs and maps (got ${what})`);
+  };
+  const flat = {
+    null() { if (depth > 0) into.null(); },
+    bool(b) { top("a boolean"); into.bool(b); },
+    int(n) { top("an integer"); into.int(n); },
+    number(x) { top("a float"); into.number(x); },
+    char(c) { top("a char"); into.char(c); },
+    string(s) { top("a string"); into.string(s); },
+    variant(name) {
+      if (depth > 0) return into.variant(name);
+      into.key(name);
+      into.null();
+    },
+    beginArray() { top("a sequence"); depth++; into.beginArray(); },
+    beginTuple() { top("a tuple"); depth++; into.beginTuple(); },
+    beginTupleStruct() { top("a tuple struct"); depth++; into.beginTupleStruct(); },
+    element() { into.element(); },
+    endArray() { depth--; into.endArray(); },
+    beginObject() { if (depth++ > 0) into.beginObject(); },
+    key(k) { into.key(k); },
+    endObject() { if (--depth > 0) into.endObject(); },
+    flat(value, write) { write(value, $jsonFlat(this)); },
+  };
+  return flat;
 }
 function $toJson(value, write, pretty) {
   const json = $jsonWriter(pretty);

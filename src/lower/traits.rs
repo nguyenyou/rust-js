@@ -24,6 +24,8 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+        // Its evidence is the writer or reader itself (ADR 0081).
+        || super::serde::serde_trait(tcx, id).is_some()
 }
 
 /// A trait the crate may implement. `From` and `TryFrom` have no
@@ -207,7 +209,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         bounds(self.tcx, id)
             .into_iter()
             .map(|tr| {
-                let name = self.fresh(&js_word(&format!("{}{}", tr.self_ty(), self.tcx.item_name(tr.def_id))));
+                // `writeT` and `readT`, as a generic codec's (ADR 0081).
+                let name = match super::serde::serde_trait(self.tcx, tr.def_id) {
+                    Some(true) => format!("write{}", tr.self_ty()),
+                    Some(false) => format!("read{}", tr.self_ty()),
+                    None => format!("{}{}", tr.self_ty(), self.tcx.item_name(tr.def_id)),
+                };
+                let name = self.fresh(&js_word(&name));
                 self.evidence.push((tr, Expr::var(&name)));
                 name.into()
             })
@@ -250,6 +258,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn dictionary(&mut self, tr: ty::TraitRef<'tcx>, span: Span) -> R<Expr> {
+        // serde's: the function that writes or reads the type (ADR 0081).
+        match super::serde::serde_trait(self.tcx, tr.def_id) {
+            Some(true) => return self.json_writer(tr.self_ty(), span),
+            Some(false) => return self.json_reader(tr.self_ty(), span),
+            None => {}
+        }
         if let Some(found) = self.evidence_for(tr) {
             return Ok(found);
         }

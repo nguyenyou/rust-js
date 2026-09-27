@@ -149,16 +149,35 @@ function $jsonWriter(pretty) {
   };
   return {
     text: "",
-    raw(text) {
-      this.text += text;
+    null() {
+      this.text += "null";
     },
-    string(s) {
-      this.text += JSON.stringify(s);
+    bool(b) {
+      this.text += String(b);
+    },
+    int(n) {
+      this.text += String(n);
     },
     number(x) {
       this.text += $jsonNumber(x);
     },
+    char(c) {
+      this.text += JSON.stringify(c);
+    },
+    string(s) {
+      this.text += JSON.stringify(s);
+    },
+    // An externally tagged unit variant: its name.
+    variant(name) {
+      this.string(name);
+    },
     beginArray() {
+      open(this, "[");
+    },
+    beginTuple() {
+      open(this, "[");
+    },
+    beginTupleStruct() {
       open(this, "[");
     },
     element() {
@@ -177,7 +196,85 @@ function $jsonWriter(pretty) {
     endObject() {
       close(this, "}");
     },
+    // `#[serde(flatten)]`: `value`'s entries, among the object's own.
+    flat(value, write) {
+      write(value, $jsonFlat(this));
+    },
   };
+}
+// serde's `FlatMapSerializer`: a struct's or a map's entries go into the
+// object `into` is writing; a variant is an entry of its name; `None` and
+// `()` are nothing; and anything else can't be flattened.
+function $jsonFlat(into) {
+  let depth = 0;
+  const top = (what) => {
+    if (depth === 0) throw $jsonError(`can only flatten structs and maps (got ${what})`);
+  };
+  const flat = {
+    null() {
+      if (depth > 0) into.null();
+    },
+    bool(b) {
+      top("a boolean");
+      into.bool(b);
+    },
+    int(n) {
+      top("an integer");
+      into.int(n);
+    },
+    number(x) {
+      top("a float");
+      into.number(x);
+    },
+    char(c) {
+      top("a char");
+      into.char(c);
+    },
+    string(s) {
+      top("a string");
+      into.string(s);
+    },
+    variant(name) {
+      if (depth > 0) return into.variant(name);
+      into.key(name);
+      into.null();
+    },
+    beginArray() {
+      top("a sequence");
+      depth++;
+      into.beginArray();
+    },
+    beginTuple() {
+      top("a tuple");
+      depth++;
+      into.beginTuple();
+    },
+    beginTupleStruct() {
+      top("a tuple struct");
+      depth++;
+      into.beginTupleStruct();
+    },
+    element() {
+      into.element();
+    },
+    endArray() {
+      depth--;
+      into.endArray();
+    },
+    beginObject() {
+      if (depth++ > 0) into.beginObject();
+    },
+    key(k) {
+      into.key(k);
+    },
+    endObject() {
+      if (--depth > 0) into.endObject();
+    },
+    flat(value, write) {
+      write(value, $jsonFlat(this));
+    },
+  };
+  return flat;
 }
 function $toJson(value, write, pretty) {
   const json = $jsonWriter(pretty);
@@ -258,11 +355,21 @@ class $JsonDecoder {
   // `missing`, the value it has when it's not there, for `#[serde(default)]`.
   // `build` makes the struct of their values.
   struct(expected, fields, build, options = {}) {
-    return this.deserializeMap(
+    const visitMap = (map) => this.structMap(map, fields, build, options);
+    // With a flattened field, serde reads a struct as a map.
+    if (options.flatten) return this.deserializeMap(options.expecting ?? expected, visitMap);
+    return this.deserializeStruct(
       options.expecting ?? expected,
-      (map) => this.structMap(map, fields, build, options),
+      fields.flatMap(([names]) => names),
+      visitMap,
       (seq) => this.structSeq(seq, expected, fields, build, options),
     );
+  }
+
+  // `deserialize_struct`: a map, of these `names`, or for most readers, any
+  // map at all.
+  deserializeStruct(expected, names, visitMap, visitSeq) {
+    return this.deserializeMap(expected, visitMap, visitSeq);
   }
 
   // An untagged struct variant, which serde reads from an object only.
@@ -272,11 +379,19 @@ class $JsonDecoder {
     });
   }
 
-  structMap(map, fields, build, { deny = false, container } = {}) {
+  // `flatten`: the readers of the flattened fields, which read what the
+  // struct's own fields don't, kept until they're all read.
+  structMap(map, fields, build, { deny = false, container, flatten } = {}) {
     const values = new Array(fields.length);
     const seen = new Array(fields.length).fill(false);
+    const kept = [];
     while (map.next()) {
-      const i = $jsonField(map.key().string(), fields, deny);
+      const key = map.key().string();
+      const i = $jsonField(key, fields, deny && !flatten);
+      if (i < 0 && flatten) {
+        kept.push([{ type: "str", value: key }, map.value((json) => json.content())]);
+        continue;
+      }
       if (i < 0) {
         map.value((json) => json.ignoreValue());
         continue;
@@ -290,6 +405,10 @@ class $JsonDecoder {
       if (!seen[i])
         values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
     });
+    if (!flatten) return build(values, defaults);
+    for (const read of flatten) values.push(read(new $JsonFlat(kept)));
+    const left = deny && kept.find(Boolean);
+    if (left) throw $jsonError(`unknown field \`${left[0].value}\``);
     return build(values, defaults);
   }
 
@@ -373,6 +492,7 @@ class $JsonDecoder {
   adjacentlyTagged(tag, content, expected, variants, visit, { deny = false, other } = {}) {
     const variantOf = (json) =>
       json.enum(
+        undefined,
         variants,
         (name, access) => {
           access.unit();
@@ -401,8 +521,9 @@ class $JsonDecoder {
         throw $jsonError(`duplicate field \`${key === "tag" ? tag : content}\``);
       return value;
     };
-    return this.deserializeMap(
+    return this.deserializeStruct(
       expected,
+      [tag, content],
       (map) => {
         const first = relevant(map);
         if (first === "tag") {
@@ -1171,8 +1292,9 @@ class $JsonReader extends $JsonDecoder {
   }
 
   // `deserialize_enum`: `"Name"`, or `{"Name": ..}`. `visit` gets the
-  // variant's name and a `$JsonVariant` to read what it holds.
-  enum(variants, visit, other) {
+  // variant's name and a `$JsonVariant` to read what it holds. `enumName` is
+  // the enum's, for a flattened one.
+  enum(enumName, variants, visit, other) {
     const peek = this.parseWhitespace();
     if (peek === 34) return visit(this.identifier(variants, other), new $JsonVariant(this, true));
     if (peek !== 123)
@@ -1305,7 +1427,7 @@ class $JsonContent extends $JsonDecoder {
     return this.data;
   }
 
-  enum(variants, visit, other) {
+  enum(enumName, variants, visit, other) {
     const { type, value } = this.data;
     let variant;
     let held;
@@ -1585,8 +1707,13 @@ class $JsonVariant {
     return this.reader.tupleStruct(expected, fields, build, options);
   }
 
+  // With a flattened field, serde reads it as a newtype variant of a map.
   struct(expected, fields, build, options) {
-    if (this.isUnit) throw $jsonError("invalid type: unit variant, expected struct variant");
+    if (this.isUnit) {
+      throw $jsonError(
+        `invalid type: unit variant, expected ${options?.flatten ? "newtype" : "struct"} variant`,
+      );
+    }
     return this.reader.struct(expected, fields, build, options);
   }
 }
@@ -1619,7 +1746,157 @@ class $JsonContentVariant {
   }
 
   struct(expected, fields, build, options) {
-    return this.reader("struct variant", ["map", "seq"]).struct(expected, fields, build, options);
+    const reader = options?.flatten
+      ? this.reader("newtype variant")
+      : this.reader("struct variant", ["map", "seq"]);
+    return reader.struct(expected, fields, build, options);
+  }
+}
+
+// A flattened field (serde's `FlatMapDeserializer`): what's left of its
+// struct's object. A struct takes the entries it has fields for, a map or an
+// untagged or internally tagged enum sees every one left, and an enum takes
+// the first that names a variant. Anything else can't be flattened.
+class $JsonFlat extends $JsonDecoder {
+  constructor(entries) {
+    super();
+    this.entries = entries;
+  }
+
+  other() {
+    return $jsonError("can only flatten structs and maps");
+  }
+
+  deserializeNumber() {
+    throw this.other();
+  }
+
+  deserializeStr() {
+    throw this.other();
+  }
+
+  deserializeSeq() {
+    throw this.other();
+  }
+
+  bool() {
+    throw this.other();
+  }
+
+  identifier() {
+    throw this.other();
+  }
+
+  deserializeMap(expected, visitMap) {
+    return visitMap(new $JsonFlatMap(this.entries));
+  }
+
+  deserializeStruct(expected, names, visitMap) {
+    return visitMap(new $JsonFlatStruct(this.entries, names));
+  }
+
+  deserializeAny(expected, visitor) {
+    return this.deserializeMap(expected, (map) => {
+      if (!visitor.map) throw $jsonError(`invalid type: map, expected ${expected}`);
+      return visitor.map(map);
+    });
+  }
+
+  unit() {
+    return undefined;
+  }
+
+  unitStruct() {
+    return undefined;
+  }
+
+  ignoreValue() {}
+
+  // An `Option`: `None` when what it holds can't be read from what's left.
+  option(read) {
+    try {
+      return read(this);
+    } catch (e) {
+      if (!(e instanceof $JsonError)) throw e;
+      return undefined;
+    }
+  }
+
+  content() {
+    return { type: "map", value: this.entries.filter(Boolean) };
+  }
+
+  enum(enumName, variants, visit, other) {
+    const names = variants.flatMap((names) => names);
+    const i = this.entries.findIndex(
+      (entry) => entry && entry[0].type === "str" && names.includes(entry[0].value),
+    );
+    if (i < 0) throw $jsonError(`no variant of enum ${enumName} found in flattened data`);
+    const entry = this.entries[i];
+    this.entries[i] = null;
+    return new $JsonContent({ type: "map", value: [entry] }, true).enum(
+      enumName,
+      variants,
+      visit,
+      other,
+    );
+  }
+}
+
+// `FlatStructAccess`: the entries a struct has fields for, taken.
+class $JsonFlatStruct {
+  constructor(entries, names) {
+    this.entries = entries;
+    this.names = names;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const i = this.index++;
+      const entry = this.entries[i];
+      if (entry && entry[0].type === "str" && this.names.includes(entry[0].value)) {
+        this.entries[i] = null;
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], true);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], true));
+  }
+}
+
+// `FlatMapAccess`: every entry left, seen but left for the fields after.
+class $JsonFlatMap {
+  constructor(entries) {
+    this.entries = entries;
+    this.index = 0;
+  }
+
+  next() {
+    while (this.index < this.entries.length) {
+      const entry = this.entries[this.index++];
+      if (entry) {
+        this.entry = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entry[0], false);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entry[1], false));
   }
 }
 
@@ -1789,7 +2066,7 @@ const $json = {
   },
   // serde's impl for `Result`: `{"Ok": ..}` or `{"Err": ..}`.
   result: (ok, err) => (json) =>
-    json.enum(["Ok", "Err"], (variant, content) => ({
+    json.enum("Result", ["Ok", "Err"], (variant, content) => ({
       TAG: variant,
       _0: content.newtype(variant === "Ok" ? ok : err),
     })),
@@ -2021,11 +2298,11 @@ function looseDebug_fmt(loose) {
 function orderSerialize_serialize(order, json) {
   json.beginObject();
   json.key("orderId");
-  json.raw(String(order.order_id));
+  json.int(order.order_id);
   json.key("itemName");
   json.string(order.item_name);
   json.key("qty");
-  json.raw(String(order.qty));
+  json.int(order.qty);
   if (order.note != null) {
     json.key("note");
     json.string(order.note);
@@ -2040,7 +2317,7 @@ function orderSerialize_serialize(order, json) {
   }
   json.endArray();
   json.key("ok");
-  json.raw(String(order.paid));
+  json.bool(order.paid);
   json.endObject();
 }
 
@@ -2055,20 +2332,20 @@ function eventSerialize_serialize(event, json) {
     json.key("type");
     json.string("moved");
     json.key("dx");
-    json.raw(String(event.dx));
+    json.int(event.dx);
     json.key("dy");
-    json.raw(String(event.dy));
+    json.int(event.dy);
     json.endObject();
   } else {
     json.beginObject();
     json.key("type");
     json.string("placed");
     json.key("orderId");
-    json.raw(String(event._0.order_id));
+    json.int(event._0.order_id);
     json.key("itemName");
     json.string(event._0.item_name);
     json.key("qty");
-    json.raw(String(event._0.qty));
+    json.int(event._0.qty);
     if (event._0.note != null) {
       json.key("note");
       json.string(event._0.note);
@@ -2083,7 +2360,7 @@ function eventSerialize_serialize(event, json) {
     }
     json.endArray();
     json.key("ok");
-    json.raw(String(event._0.paid));
+    json.bool(event._0.paid);
     json.endObject();
   }
 }
@@ -2131,11 +2408,11 @@ function msgSerialize_serialize(msg, json) {
     json.key("t");
     json.string("Pair");
     json.key("c");
-    json.beginArray();
+    json.beginTuple();
     json.element();
-    json.raw(String(msg._0));
+    json.int(msg._0);
     json.element();
-    json.raw(String(msg._1));
+    json.int(msg._1);
     json.endArray();
     json.endObject();
   }
@@ -2170,7 +2447,7 @@ function looseSerialize_serialize(loose, json) {
   } else if (loose.TAG === "Word") {
     json.string(loose._0);
   } else {
-    json.raw("null");
+    json.null();
   }
 }
 
@@ -2227,34 +2504,34 @@ function everythingSerialize_serialize(everything, json) {
   json.beginObject();
   for (const [key, item$4] of $sortedEntries(everything.counts, $cmp)) {
     json.key(key);
-    json.raw(String(item$4));
+    json.int(item$4);
   }
   json.endObject();
   json.key("by_id");
   json.beginObject();
   for (const [key$1, item$5] of $sortedEntries(everything.by_id, $cmp)) {
     json.key(String(key$1));
-    json.raw(String(item$5));
+    json.bool(item$5);
   }
   json.endObject();
   json.key("pair");
-  json.beginArray();
+  json.beginTuple();
   json.element();
-  json.raw(String(everything.pair[0]));
+  json.int(everything.pair[0]);
   json.element();
-  json.string(everything.pair[1]);
+  json.char(everything.pair[1]);
   json.element();
   if (everything.pair[2] == null) {
-    json.raw("null");
+    json.null();
   } else {
-    json.raw(String(everything.pair[2]));
+    json.int(everything.pair[2]);
   }
   json.endArray();
   json.key("empty");
   json.beginArray();
   for (const item$6 of everything.empty) {
     json.element();
-    json.raw(String(item$6));
+    json.int(item$6);
   }
   json.endArray();
   json.key("nested");
@@ -2264,7 +2541,7 @@ function everythingSerialize_serialize(everything, json) {
     json.beginArray();
     for (const item$8 of item$7) {
       json.element();
-      json.raw(String(item$8));
+      json.int(item$8);
     }
     json.endArray();
   }
@@ -2308,7 +2585,7 @@ function orderDeserialize_deserialize(json) {
 
 function shapeSerialize_serialize(shape, json) {
   if (shape === "Dot") {
-    json.string("Dot");
+    json.variant("Dot");
   } else if (shape.TAG === "Circle") {
     json.beginObject();
     json.key("Circle");
@@ -2317,7 +2594,7 @@ function shapeSerialize_serialize(shape, json) {
   } else if (shape.TAG === "Rect") {
     json.beginObject();
     json.key("Rect");
-    json.beginArray();
+    json.beginTuple();
     json.element();
     json.number(shape._0);
     json.element();
@@ -2329,7 +2606,7 @@ function shapeSerialize_serialize(shape, json) {
     json.key("Poly");
     json.beginObject();
     json.key("sides");
-    json.raw(String(shape.sides));
+    json.int(shape.sides);
     json.key("name");
     json.string(shape.name);
     json.endObject();
@@ -2338,20 +2615,20 @@ function shapeSerialize_serialize(shape, json) {
 }
 
 function idSerialize_serialize(id, json) {
-  json.raw(String(id[0]));
+  json.int(id[0]);
 }
 
 function pointSerialize_serialize(point, json) {
-  json.beginArray();
+  json.beginTupleStruct();
   json.element();
-  json.raw(String(point[0]));
+  json.int(point[0]);
   json.element();
-  json.raw(String(point[1]));
+  json.int(point[1]);
   json.endArray();
 }
 
 function unitSerialize_serialize(unit, json) {
-  json.raw("null");
+  json.null();
 }
 
 function metersSerialize_serialize(meters, json) {
