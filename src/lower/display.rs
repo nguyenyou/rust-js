@@ -2,6 +2,7 @@
 //! string it writes. Its formatter is a local string, each write is `f += s`,
 //! and `fmt::Result`, which is always `Ok`, is nothing at all.
 
+use super::recognition::WriteCall;
 use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -13,34 +14,20 @@ use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// `&mut Formatter<'_>`.
-    fn is_formatter(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Ref(_, inner, rustc_ast::Mutability::Mut)
-            if self.is_std_adt(*inner, Symbol::intern("Formatter")))
-    }
-
     pub(super) fn display_trait(&self) -> DefId {
-        self.tcx
-            .get_diagnostic_item(Symbol::intern("Display"))
-            .expect("std has `Display`")
+        self.recognition().display_trait()
     }
 
     /// `fmt::Result`, as `Display::fmt` returns it.
     pub(super) fn is_fmt_result(&self, ty: Ty<'tcx>) -> bool {
-        let fmt = self.tcx.associated_item_def_ids(self.display_trait())[0];
-        let result = self.tcx.fn_sig(fmt).skip_binder().skip_binder().output();
-        self.tcx.erase_and_anonymize_regions(ty) == self.tcx.erase_and_anonymize_regions(result)
+        self.recognition().is_fmt_result(ty)
     }
 
     /// Which parameter of `def_id` is the `Formatter` it writes to, if it
     /// takes one and returns a `fmt::Result`. In JS it returns the string
     /// instead, and takes no formatter.
     pub(super) fn formatter_param(&self, def_id: DefId) -> Option<usize> {
-        let sig = self.tcx.fn_sig(def_id).skip_binder().skip_binder();
-        if !self.is_fmt_result(sig.output()) {
-            return None;
-        }
-        sig.inputs().iter().position(|&t| self.is_formatter(t))
+        self.recognition().formatter_param(def_id)
     }
 
     /// The JS parameters of a function that writes to a formatter, and its
@@ -132,38 +119,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .filter(|&(j, _)| j != i)
             .map(|(_, &a)| a)
             .collect();
+        let operation = self
+            .recognition()
+            .write_call(def_id, self.krate.fns.contains_key(&def_id));
         let mut values = self.operands(&others, out)?;
-        let tcx = self.tcx;
-        let trait_id = tcx.trait_of_assoc(def_id);
-        let is_trait = |name: &str| trait_id.is_some_and(|t| tcx.is_diagnostic_item(Symbol::intern(name), t));
-        let owner = tcx
-            .inherent_impl_of_assoc(def_id)
-            .map(|imp| tcx.type_of(imp).instantiate_identity());
-        let on_formatter = owner.is_some_and(|t| self.is_std_adt(t, Symbol::intern("Formatter")));
-        let written = match tcx.item_name(def_id).as_str() {
+        let written = match operation {
             // `write!(f, ..)` is `f.write_fmt(format_args!(..))`, which is a string (ADR 0034).
-            "write_fmt" | "write_str" | "write_char" if on_formatter || is_trait("FmtWrite") => values.remove(0),
-            "fmt" if is_trait("Display") => {
+            WriteCall::Text => values.remove(0),
+            WriteCall::Display => {
                 let ty = generic_args.type_at(0);
                 self.display_string(values.remove(0), ty, span)?
             }
-            "fmt" if is_trait("Debug") => {
+            WriteCall::Debug => {
                 let ty = generic_args.type_at(0);
                 self.debug_string(values.remove(0), ty, span)?
             }
             // More than five fields: arrays of their names and strings.
-            "debug_struct_fields_finish" if on_formatter => {
+            WriteCall::StructFields => {
                 self.runtime.insert(Helper::DebugFields);
                 Expr::call(Expr::var("$debugFields"), values)
             }
-            "debug_tuple_fields_finish" if on_formatter => {
+            WriteCall::TupleFields => {
                 let (type_name, items) = (values.remove(0), values.remove(0));
                 let joined = Expr::call(Expr::member(items, "join"), vec![Expr::str(", ")]);
                 join(vec![type_name, Expr::str("("), joined, Expr::str(")")])
             }
             // A derived `Debug`'s body (ADR 0060): its fields are strings
             // already, each a `&dyn Debug` (`debug_dyn`).
-            name if on_formatter && name.starts_with("debug_struct_field") && name.ends_with("_finish") => {
+            WriteCall::Struct => {
                 let type_name = values.remove(0);
                 let mut parts = vec![type_name, Expr::str(" { ")];
                 let mut first = true;
@@ -178,7 +161,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 parts.push(Expr::str(" }"));
                 join(parts)
             }
-            name if on_formatter && name.starts_with("debug_tuple_field") && name.ends_with("_finish") => {
+            WriteCall::Tuple => {
                 let type_name = values.remove(0);
                 let mut parts = vec![type_name, Expr::str("(")];
                 for (i, value) in values.drain(..).enumerate() {
@@ -190,18 +173,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 parts.push(Expr::str(")"));
                 join(parts)
             }
-            _ if self.krate.fns.contains_key(&def_id) && trait_id.is_none() => {
+            WriteCall::Function => {
                 values.extend(self.evidence_args(def_id, generic_args, span)?);
                 Expr::call(self.fn_ref(def_id), values)
             }
-            _ if trait_id.is_some_and(|t| t.is_local()) => {
-                match self.trait_call(def_id, generic_args, values, span, out)? {
-                    Some(call) => call,
-                    None => return Err(self.unsupported(span, "this call")),
-                }
-            }
+            WriteCall::Trait => match self.trait_call(def_id, generic_args, values, span, out)? {
+                Some(call) => call,
+                None => return Err(self.unsupported(span, "this call")),
+            },
             _ => {
-                let what = format!("calling `{}`", tcx.def_path_str(def_id));
+                let what = format!("calling `{}`", self.tcx.def_path_str(def_id));
                 return Err(self.unsupported(span, &what));
             }
         };

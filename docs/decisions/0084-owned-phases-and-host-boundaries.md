@@ -24,7 +24,8 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   requests, reserved names and requested runtime helpers. The driver invokes
   `link::link` only after the lowering diagnostic gate passes. Linking consumes
   this value, resolves imports and runtime dependency closure, and produces the
-  `Lowered` value accepted by output planning. `lower/analysis.rs` returns an
+  `Linked` wrapper accepted by output planning. Its private constructor stays
+  in the linker; the wrapper owns the existing `Lowered` value without copying. `lower/analysis.rs` returns an
   `AnalyzedCrate` containing named items, imports, trait facts, body references,
   tests and mutation facts. It does not lower functions or invoke the linker.
   The result owns its collections and borrows captured THIR; it is not a second
@@ -59,8 +60,10 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   diagnostics. Emission consumes those operations without method-name dispatch.
   Value conversion and scalar comparison categories also come from recognition;
   emission constructs the selected representation and recursively lowers container
-  conversions. The Option type predicate is shared with ordinary lowering. Other
-  feature-specific recognition still needs further separation.
+  conversions. The Option type predicate is shared with ordinary lowering.
+  Formatting calls, formatter signatures and standard Serde skip predicates also
+  use recognition. Local formatter-variable validation and calls to user-defined
+  predicates stay in emission because they require function state.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature
@@ -168,8 +171,9 @@ this checkout; the workflow alone does not enforce merging policy.
 ## Remaining target-architecture work
 
 General Cargo graph resolution, reusable compiled JS crates, exported trait and
-representation metadata, a validated cross-crate ABI, and distribution without
-a compiler-resource checkout are not implemented by this refactor. Neither are
+representation metadata and a validated cross-crate ABI are not implemented by
+this refactor. Local packages can run outside the source checkout; clean-machine
+distribution and release qualification remain open. Neither are
 additional serialization frameworks or Protocol Buffers. These are feature and
 release work under roadmap M3/M4/M8, not consequences of moving modules.
 
@@ -186,8 +190,8 @@ three warm samples on the development machine): 10 modules 33 ms; 100 modules
 136 ms; 500 modules 1,326 ms. This includes rustc, formatting and publication.
 These are observations, not enforced budgets or comparisons across machines.
 
-Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 273
-tests (7,346 expectations) after `bun run wasm`. `bun run fmt:check`,
+Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 291
+tests (7,541 expectations) after `bun run wasm`. `bun run fmt:check`,
 `cargo clippy --locked -- -D warnings`, `cargo test --locked`, documentation
-link checks and `git diff --check` also passed. Generated JavaScript snapshot
-changes were reviewed. Hosted CI has not been run for these uncommitted changes.
+link checks and `git diff --check` also passed. Generated JavaScript snapshots
+remain unchanged for this boundary cleanup. Hosted CI was not run.

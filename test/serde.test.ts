@@ -12,6 +12,16 @@ beforeAll(() => {
 
 const cases = [
   {
+    name: "standard skip predicates recognize optional and empty fields",
+    definitions: `#[derive(serde::Serialize)]
+pub struct Skips {
+    #[serde(skip_serializing_if = "Option::is_some")] pub present: Option<u32>,
+    #[serde(skip_serializing_if = "String::is_empty")] pub text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")] pub items: Vec<u32>,
+}`,
+    value: '(Skips { present: Some(7), text: String::new(), items: Vec::new() }, Skips { present: None, text: "kept".into(), items: vec![2] })',
+  },
+  {
     name: "nested Value conversions preserve vectors, optional values and nulls",
     definitions: "",
     value: `serde_json::Value::from(vec![Some(vec![1_i32, -2]), None, Some(Vec::<i32>::new())])`,

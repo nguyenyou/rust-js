@@ -255,6 +255,13 @@ tooling while preserving rust-js's own readable-output goals.
   shared crates, transitive dependencies, features, `cfg`, and the agreed
   build-script/procedural-macro model. Specify metadata and artifact versioning,
   module linking, dependency invalidation, and reproducible builds.
+  First proof: a separate Cargo library with a non-generic scalar function,
+  consumed through a path dependency by both a native executable and a rust-js
+  application. Resolve the dependency from Cargo metadata, compile it separately,
+  link its JS export through versioned dependency metadata, and compare results.
+  A dependency edit must invalidate the consumer build; incompatible artifact
+  identities must fail before publication. This narrow proof does not establish
+  support for exported generics, trait evidence, build scripts or procedural macros.
 - [ ] **M8.2 — Prove ecosystem compatibility.** Keep a versioned corpus of
   representative portable crates and real applications. Track each as builds
   unchanged, needs documented target adaptation, or blocked with a specific

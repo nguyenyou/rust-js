@@ -7,8 +7,18 @@ use crate::names::fresh_in;
 use crate::program::{ImportRequest, Lowered, LoweredImport, LoweredModule, Unlinked};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+/// Proof that import resolution and runtime dependency closure completed.
+/// The private field prevents other phases from constructing this directly.
+pub(crate) struct Linked(Lowered);
+
+impl Linked {
+    pub(crate) fn into_program(self) -> Lowered {
+        self.0
+    }
+}
+
 /// Consume symbolic output; printing only receives the completed linked crate.
-pub(crate) fn link(unlinked: Unlinked) -> Lowered {
+pub(crate) fn link(unlinked: Unlinked) -> Linked {
     let modules = unlinked
         .modules
         .into_iter()
@@ -18,11 +28,11 @@ pub(crate) fn link(unlinked: Unlinked) -> Lowered {
             item.module
         })
         .collect();
-    Lowered {
+    Linked(Lowered {
         sources: unlinked.sources,
         modules,
         tests: unlinked.tests,
-    }
+    })
 }
 
 fn resolve(module: &mut LoweredModule, imports: &[ImportRequest], mut names: HashSet<String>) {

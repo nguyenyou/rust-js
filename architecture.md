@@ -30,7 +30,7 @@ rustc module identities before calling it. Shared identifier policy lives in
 returns collected crate facts; `src/lower/pipeline.rs` orchestrates constant and
 function emission, reachability and symbolic module assembly. It returns an owned
 `Unlinked` value. The driver passes that value to the linker, which resolves
-imports and runtime-helper dependencies before producing `Lowered`, the input
+imports and runtime-helper dependencies before producing a privately constructed `Linked` value, the input
 to output planning. The analysis result borrows captured THIR; the unlinked
 output contains no frontend references. Dependency traversal lives in
 `src/reachability.rs` and treats item IDs as opaque values; the pipeline supplies
@@ -42,8 +42,9 @@ Serde calls produce explicit operations before lowering evaluates operands or
 selects runtime helpers. Value/Number methods also produce typed operations;
 method names and unsupported-method classification stay in recognition. Value
 conversion categories and scalar comparison categories are recognized there too,
-including nested Vec/Option element types. Other feature-specific dispatch still
-needs further separation; recognition is not yet unified across every library family.
+including nested Vec/Option element types. Other feature-specific dispatch
+remains in feature modules where it depends on local lowering state. Formatting-call
+and standard Serde skip-predicate recognition also use this boundary.
 
 **The entire target architecture is not yet delivered.** General Cargo graph
 resolution and cross-crate JS linkage, a supported distribution outside this
@@ -197,9 +198,10 @@ Lowering also rejects unsupported constructs with source diagnostics.
 | --- | --- | --- |
 | Driver | Compiler invocation, rustc callbacks, phase sequencing, diagnostic gates | Feature lowering or Vite behavior |
 | Syntax expansion | JSX-to-Rust syntax translation and source provenance | Bypassing Rust checks or deciding JS representations |
-| Analysis | Definition indexes, validated bindings, trait and representation facts | Output names, mutable lowering state, filesystem writes |
+| Analysis | Definition indexes, validated bindings, trait and representation facts, item names and reserved imports | Mutable function state, emission, filesystem writes |
+| Lowering pipeline | Work scheduling, demand-driven codecs, Rust-specific retention policy and module assembly | Import alias resolution, runtime dependency closure, publication |
 | Lowering | Rust-to-JS semantics, control flow, places, copying, evaluation order | Formatting, output paths, installation |
-| Linker | Symbol resolution, reachable dependencies, collision-free aliases, runtime selection | Re-lowering bodies or changing expression semantics |
+| Linker | Symbol resolution, collision-free aliases, runtime dependency closure, completed linked output | Rust-specific retention policy, re-lowering bodies or changing expression semantics |
 | Runtime catalog | Helper implementations, exported names, transitive dependencies | Rust syntax recognition or host setup |
 | Preparation | Readability transformations that preserve evaluation regions | New language semantics or predicted printer indentation |
 | Printer adapter | oxc conversion, formatting, source-map generation | Rust type decisions or artifact publication |
@@ -365,7 +367,13 @@ or release needs justify it. Existing files provide the starting points:
 | Build adapter and native host | `tooling/build.js`, `tooling/manifest.js`, `vite-plugin/index.js` |
 | Browser host | `wasm/web/compile-rust.ts`, `tooling/publish.js`, `wasm/web/compiler-client.js`, `wasm/web/compiler-worker.js`, `wasm/web/rust/compiler.rs` |
 
-Private fields and narrow module APIs enforce ownership. Printer and preparation
+Private fields and narrow module APIs enforce ownership. Only the linker can
+construct the `Linked` wrapper required by artifact planning; it wraps the existing
+owned program without copying its tree. Analysis assigns stable item names because
+those are immutable inputs to lowering. Rust-specific derived-item retention stays
+in the pipeline, using the separate generic reachability traversal. These are
+deliberate ownership choices; moving them into linking would reintroduce frontend
+dependencies. Printer and preparation
 modules must not import rustc APIs; lowering must not write artifacts or import
 oxc APIs. Build hosts consume the manifest instead of inferring compiler output.
 Small dependency checks can guard these rules as the codebase grows.

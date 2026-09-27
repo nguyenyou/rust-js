@@ -939,3 +939,90 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
     }
 }
+
+pub(super) enum WriteCall {
+    Text,
+    Display,
+    Debug,
+    StructFields,
+    TupleFields,
+    Struct,
+    Tuple,
+    Function,
+    Trait,
+    Unsupported,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum SkipPredicate {
+    None,
+    Some,
+    Empty,
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    /// `&mut Formatter<'_>`.
+    fn is_formatter(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Ref(_, inner, rustc_ast::Mutability::Mut)
+            if self.is_std_adt(*inner, Symbol::intern("Formatter")))
+    }
+    pub(super) fn display_trait(&self) -> DefId {
+        self.tcx
+            .get_diagnostic_item(Symbol::intern("Display"))
+            .expect("std has `Display`")
+    }
+    pub(super) fn is_fmt_result(&self, ty: Ty<'tcx>) -> bool {
+        let fmt = self.tcx.associated_item_def_ids(self.display_trait())[0];
+        let result = self.tcx.fn_sig(fmt).skip_binder().skip_binder().output();
+        self.tcx.erase_and_anonymize_regions(ty) == self.tcx.erase_and_anonymize_regions(result)
+    }
+    pub(super) fn formatter_param(&self, def_id: DefId) -> Option<usize> {
+        let sig = self.tcx.fn_sig(def_id).skip_binder().skip_binder();
+        if !self.is_fmt_result(sig.output()) {
+            return None;
+        }
+        sig.inputs().iter().position(|&t| self.is_formatter(t))
+    }
+
+    pub(super) fn write_call(&self, def_id: DefId, known_function: bool) -> WriteCall {
+        let tcx = self.tcx;
+        let trait_id = tcx.trait_of_assoc(def_id);
+        let is_trait = |name: &str| trait_id.is_some_and(|t| tcx.is_diagnostic_item(Symbol::intern(name), t));
+        let owner = tcx
+            .inherent_impl_of_assoc(def_id)
+            .map(|imp| tcx.type_of(imp).instantiate_identity());
+        let on_formatter = owner.is_some_and(|t| self.is_std_adt(t, Symbol::intern("Formatter")));
+        match tcx.item_name(def_id).as_str() {
+            "write_fmt" | "write_str" | "write_char" if on_formatter || is_trait("FmtWrite") => WriteCall::Text,
+            "fmt" if is_trait("Display") => WriteCall::Display,
+            "fmt" if is_trait("Debug") => WriteCall::Debug,
+            "debug_struct_fields_finish" if on_formatter => WriteCall::StructFields,
+            "debug_tuple_fields_finish" if on_formatter => WriteCall::TupleFields,
+            name if on_formatter && name.starts_with("debug_struct_field") && name.ends_with("_finish") => {
+                WriteCall::Struct
+            }
+            name if on_formatter && name.starts_with("debug_tuple_field") && name.ends_with("_finish") => {
+                WriteCall::Tuple
+            }
+            _ if known_function && trait_id.is_none() => WriteCall::Function,
+            _ if trait_id.is_some_and(|t| t.is_local()) => WriteCall::Trait,
+            _ => WriteCall::Unsupported,
+        }
+    }
+
+    pub(super) fn skip_predicate(&self, function: DefId, ty: Ty<'tcx>) -> Option<SkipPredicate> {
+        let standard = matches!(self.tcx.crate_name(function.krate).as_str(), "core" | "alloc");
+        match self.tcx.item_name(function).as_str() {
+            "is_none" if standard && self.option_of(ty).is_some() => Some(SkipPredicate::None),
+            "is_some" if standard && self.option_of(ty).is_some() => Some(SkipPredicate::Some),
+            "is_empty" if standard && (self.is_vec_like(ty.peel_refs()) || self.is_string_like(ty)) => {
+                Some(SkipPredicate::Empty)
+            }
+            _ => None,
+        }
+    }
+
+    pub(super) fn skips_none(&self, function: DefId) -> bool {
+        self.tcx.crate_name(function.krate).as_str() == "core" && self.tcx.item_name(function).as_str() == "is_none"
+    }
+}

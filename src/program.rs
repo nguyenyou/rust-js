@@ -80,7 +80,7 @@ pub struct UnlinkedModule {
 }
 
 /// Complete lowering output, owned independently of rustc. Only linking turns
-/// this into the Lowered value accepted by output planning.
+/// this into the Linked wrapper accepted by output planning.
 pub struct Unlinked {
     pub sources: Sources,
     pub modules: Vec<UnlinkedModule>,

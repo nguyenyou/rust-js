@@ -260,7 +260,8 @@ impl OutputPlan {
         }
     }
 
-    pub fn plan(&mut self, lowered: program::Lowered, sources: Vec<PathBuf>) -> Result<ArtifactPlan, String> {
+    pub fn plan(&mut self, linked: crate::link::Linked, sources: Vec<PathBuf>) -> Result<ArtifactPlan, String> {
+        let lowered = linked.into_program();
         self.jsx = lowered
             .modules
             .iter()

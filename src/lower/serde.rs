@@ -28,6 +28,7 @@ mod value;
 pub(super) use super::recognition::Json;
 
 use super::bindings::variant_name;
+use super::recognition::SkipPredicate;
 use super::representation::{Num, variant_field};
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -850,10 +851,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let written = match (attrs.skip_serializing_if.as_ref(), self.option_of(*ty)) {
                     (Some(_), Some(inner))
                         if !self.boxed_payload(inner)
-                            && self.resolved_skip(field.did).is_some_and(|f| {
-                                self.tcx.crate_name(f.krate).as_str() == "core"
-                                    && self.tcx.item_name(f).as_str() == "is_none"
-                            }) =>
+                            && self
+                                .resolved_skip(field.did)
+                                .is_some_and(|f| self.recognition().skips_none(f)) =>
                     {
                         inner
                     }
@@ -878,13 +878,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let Some(f) = self.resolved_skip(field) else {
             return Err(self.unsupported(span, &format!("`skip_serializing_if = {path:?}` of `{ty}`")));
         };
-        let standard = matches!(self.tcx.crate_name(f.krate).as_str(), "core" | "alloc");
-        match self.tcx.item_name(f).as_str() {
-            "is_none" if standard && self.option_of(ty).is_some() => Ok(Expr::bin(Op::LooseEq, value, Expr::null())),
-            "is_some" if standard && self.option_of(ty).is_some() => Ok(Expr::bin(Op::LooseNe, value, Expr::null())),
-            "is_empty" if standard && (self.is_vec_like(ty.peel_refs()) || self.is_string_like(ty)) => {
-                Ok(Expr::bin(Op::Eq, Expr::member(value, "length"), Expr::int(0)))
-            }
+        match self.recognition().skip_predicate(f, ty) {
+            Some(SkipPredicate::None) => Ok(Expr::bin(Op::LooseEq, value, Expr::null())),
+            Some(SkipPredicate::Some) => Ok(Expr::bin(Op::LooseNe, value, Expr::null())),
+            Some(SkipPredicate::Empty) => Ok(Expr::bin(Op::Eq, Expr::member(value, "length"), Expr::int(0))),
             _ if self.krate.fns.contains_key(&f) => Ok(Expr::call(self.fn_ref(f), vec![value])),
             _ => Err(self.unsupported(span, &format!("`skip_serializing_if = {path:?}` of `{ty}`"))),
         }
