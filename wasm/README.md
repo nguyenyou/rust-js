@@ -77,7 +77,7 @@ Tailwind. `vite-plugin-rust-js` compiles `web/rust/` on start and on each save, 
 `rust-js.wasm` under the same WASI shim, in Bun (`web/compile-rust.ts`), so
 saving a component's file is a Fast Refresh of that component. On its own: `cd web && bun compile-rust.ts`.
 
-It's also deployed to **https://nguyenyou.github.io/rust-js/** by the
+It's also deployed to **https://rust-js-lang.github.io/rust-js/** by the
 *Deploy playground* workflow (`.github/workflows/deploy-playground.yml`),
 which you run by hand from the Actions tab, or with `bun run deploy`.
 

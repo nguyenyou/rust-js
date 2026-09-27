@@ -7,7 +7,7 @@ by ReScript, it keeps rustc's front end and replaces code generation with a
 JavaScript back end. The goal is output you can read, debug, and call from
 JavaScript as if you had written it yourself.
 
-[Try the playground](https://nguyenyou.github.io/rust-js/) — compilation runs
+[Try the playground](https://rust-js-lang.github.io/rust-js/) — compilation runs
 entirely in your browser. The playground itself is written in Rust and
 compiled by rust-js.
 
