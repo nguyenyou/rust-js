@@ -685,8 +685,11 @@ pub(super) fn thread_local_components(sess: &Session, item: &ast::Item) -> Vec<B
                 }
             }
             Ok(None) => break,
+            // Not an item, as `thread_local!`'s last declaration, which needs
+            // no `;`, isn't: the macro's own expansion says what's wrong, if
+            // anything is.
             Err(e) => {
-                e.emit();
+                e.cancel();
                 break;
             }
         }

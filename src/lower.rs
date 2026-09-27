@@ -574,6 +574,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::AssignOp { op, lhs, rhs } if self.slots_write(lhs) => {
                 let rhs_js = self.expr(rhs, out)?;
+                let rhs_js = self.shift_amount(assign_op(op), rhs_js, lhs, rhs);
                 let ty = self.thir[lhs].ty;
                 let span = expr.span;
                 let write =
@@ -588,6 +589,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::AssignOp { op, lhs, rhs } if let Some(slot) = self.map_slot(lhs) => {
                 let rhs_js = self.assignment_value(rhs, out)?;
+                let rhs_js = self.shift_amount(assign_op(op), rhs_js, lhs, rhs);
                 let place = self.prepare_map_place(slot, true, expr.span, out)?;
                 let value = self.binary(
                     assign_op(op),
@@ -623,6 +625,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::AssignOp { op, lhs, rhs } => {
                 let rhs_js = self.expr(rhs, out)?;
+                let rhs_js = self.shift_amount(assign_op(op), rhs_js, lhs, rhs);
                 // Rust takes the value first, then the place, which is read and
                 // written: what in it has effects, `v[f()]`, is taken once.
                 let mut place = Vec::new();
@@ -1974,6 +1977,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Adt(ref adt) => self.adt(adt, ty, span, out),
             ExprKind::Binary { op, lhs, rhs } => {
                 let [l, r] = self.operands(&[lhs, rhs], out)?.try_into().ok().unwrap();
+                let r = self.shift_amount(op, r, lhs, rhs);
                 self.binary(op, l, r, self.known_int(rhs), self.thir[lhs].ty, span)
             }
             ExprKind::LogicalOp { op, lhs, rhs } => {
@@ -2330,6 +2334,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             BinOp::Shr => Expr::bin(Op::Shr, l, big_shift(r)),
             _ => return Err(self.unsupported(span, "this operator")),
         })
+    }
+
+    /// A shift of a narrower integer by an `i64` or a `u64`: the amount a
+    /// number, `Number(n & 63n)`, as JS won't shift a number by a BigInt.
+    /// 63 keeps every width's own mask, which the shift then applies.
+    fn shift_amount(&self, op: BinOp, r: Expr, lhs: ExprId, rhs: ExprId) -> Expr {
+        let big = |e: ExprId| Num::of(self.thir[e].ty).is_some_and(Num::big);
+        if !matches!(op, BinOp::Shl | BinOp::Shr) || big(lhs) || !big(rhs) {
+            return r;
+        }
+        match r.as_bigint() {
+            Some(n) => Expr::int(n & 63),
+            None => Expr::call(Expr::var("Number"), vec![Expr::bin(Op::BitAnd, r, Expr::bigint(63))]),
+        }
     }
 
     fn bitwise(&self, op: Op, l: Expr, r: Expr, num: Num) -> Expr {

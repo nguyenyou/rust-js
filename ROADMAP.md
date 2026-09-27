@@ -236,7 +236,10 @@ tooling while preserving rust-js's own readable-output goals.
   rejections with `compile-fail`, and gaps with `ignore-rust-js`, which fails
   once a gap closes ([ADR 0088](docs/decisions/0088-corpus.md)). Its first
   cases found and fixed two miscompilations (nested element writes, repeated
-  index effects in compound assignment).
+  index effects in compound assignment). rustc's own `run-pass` UI tests run
+  the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
+  1,181 of 2,688 in scope pass at the pinned toolchain, and the
+  [known failures](test/rustc-known-failures.txt) only shrink.
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for
   broad portable Rust. Include wider integers, `f32`, nested options, general

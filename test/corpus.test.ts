@@ -35,12 +35,13 @@ type Expect =
 /** What a case's directives say, or the problems with them. */
 function directives(source: string): Expect | string {
   const found: Expect[] = [];
-  for (const [, name, value] of source.matchAll(/^\/\/@ ([a-z-]+)(?:: (.*))?$/gm)) {
+  for (const [, line] of source.matchAll(/^\/\/@(.*)$/gm)) {
+    const [, name, value] = /^ ([a-z-]+)(?:: (.+))?$/.exec(line) ?? [];
     if (name === "run-pass" && value === undefined) found.push({ kind: "run-pass" });
     else if (name === "run-fail" && value) found.push({ kind: "run-fail", message: value.replaceAll("\\n", "\n") });
     else if (name === "compile-fail" && value) found.push({ kind: "compile-fail", text: value });
     else if (name === "ignore-rust-js" && value) found.push({ kind: "ignore-rust-js", reason: value });
-    else return `unknown or malformed directive \`//@ ${name}${value === undefined ? "" : `: ${value}`}\``;
+    else return `unknown or malformed directive \`//@${line}\``;
   }
   if (found.length > 1) return "more than one directive";
   return found[0] ?? { kind: "run-pass" };
@@ -214,6 +215,8 @@ test("a compile-fail case rust-js compiles, or rejects for another reason, is re
 test("unknown and repeated directives are reported", () => {
   expect(directives("//@ run-passes\nfn main() {}")).toContain("unknown or malformed directive");
   expect(directives("//@ run-fail\nfn main() {}")).toContain("unknown or malformed directive");
+  expect(directives("//@ run_pass\nfn main() {}")).toContain("unknown or malformed directive");
+  expect(directives("//@run-pass\nfn main() {}")).toContain("unknown or malformed directive");
   expect(directives("//@ run-pass\n//@ run-fail: x\nfn main() {}")).toBe("more than one directive");
   expect(directives("fn main() {}")).toEqual({ kind: "run-pass" });
 });
@@ -239,4 +242,24 @@ test("print! without a process writes whole lines, and loses none", () => {
   // The task ends: what no line end wrote is written.
   for (const task of tasks) task();
   expect(lines).toEqual(["log ab", "error x", "log ", "log cdleft"]);
+});
+
+// A crate root may enable the features rust-js enables for itself, and
+// choose its edition: rustc takes each only once.
+test("a crate's own features and edition are its own", () => {
+  const dir = fixture("corpus-root");
+  const file = join(dir, "root.rs");
+  writeFileSync(
+    file,
+    "#![feature(decl_macro, stmt_expr_attributes)]\n" +
+      "macro double($x:expr) { $x * 2 }\n" +
+      // Edition 2015's trait objects need no `dyn`.
+      "pub fn f() -> i32 { let g: Box<Fn() -> i32> = Box::new(|| #[allow(unused_parens)] (3)); double!(g()) }\n",
+  );
+  const js = join(dir, "root.js");
+  const p = Bun.spawnSync([compiler, file, "-o", js, "--", "--edition=2015", "-Awarnings"], { cwd: root, stderr: "pipe" });
+  expect(p.stderr.toString()).toBe("");
+  expect(p.exitCode).toBe(0);
+  const run = Bun.spawnSync([process.execPath, "-e", `import(${JSON.stringify(js)}).then((m) => console.log(m.f()))`]);
+  expect(run.stdout.toString()).toBe("6\n");
 });

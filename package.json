@@ -18,6 +18,8 @@
     "pack:compiler": "bun scripts/package-compiler.ts",
     "pack:distribution": "bun scripts/package-distribution.ts",
     "test": "bun test",
+    "test:rustc": "cargo build && bun scripts/rustc-suite.ts",
+    "test:rustc:bless": "cargo build && bun scripts/rustc-suite.ts --bless",
     "fmt": "bun scripts/format.ts",
     "fmt:check": "bun scripts/format.ts --check",
     "generate": "bun web/generate.ts",

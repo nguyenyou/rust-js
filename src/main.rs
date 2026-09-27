@@ -45,7 +45,7 @@ mod reachability;
 mod runtime;
 mod to_oxc;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use rustc_driver::{Callbacks, Compilation};
@@ -206,14 +206,31 @@ fn main() -> ExitCode {
         // `-- --cfg browser` turns it on. Declaring any cfg makes rustc check them
         // all, so `test` is declared too, as Cargo does.
         "--check-cfg=cfg(browser, test)".to_string(),
-        // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
-        // and `#![rust_js::import = "./App.css"]` inside a module.
-        "-Zcrate-attr=feature(register_tool, custom_inner_attributes)".to_string(),
-        "-Zcrate-attr=feature(decl_macro, stmt_expr_attributes)".to_string(),
-        "-Zcrate-attr=register_tool(rust_js)".to_string(),
     ];
+    // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
+    // and `#![rust_js::import = "./App.css"]` inside a module. A feature the
+    // crate enables itself isn't enabled again, which rustc rejects.
+    let enabled = enabled_features(&input);
+    for feature in [
+        "register_tool",
+        "custom_inner_attributes",
+        "decl_macro",
+        "stmt_expr_attributes",
+    ] {
+        if !enabled.iter().any(|f| f == feature) {
+            rustc_args.push(format!("-Zcrate-attr=feature({feature})"));
+        }
+    }
+    rustc_args.push("-Zcrate-attr=register_tool(rust_js)".to_string());
     if test {
         rustc_args.push("--test".to_string());
+    }
+    // An edition after `--` is the one: rustc takes only one.
+    if to_rustc
+        .iter()
+        .any(|arg| arg == "--edition" || arg.starts_with("--edition="))
+    {
+        rustc_args.retain(|arg| arg != "--edition=2024");
     }
     rustc_args.extend(to_rustc.iter().cloned());
     let mut callbacks = RustJs {
@@ -222,4 +239,20 @@ fn main() -> ExitCode {
         output: output::OutputPlan::new(input, output, test, manifest),
     };
     rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))
+}
+
+/// The features a crate's root enables itself: `#![feature(a, b)]`.
+fn enabled_features(root: &Path) -> Vec<String> {
+    let source = std::fs::read_to_string(root).unwrap_or_default();
+    source
+        .match_indices("#![feature(")
+        .flat_map(|(at, open)| {
+            let list = &source[at + open.len()..];
+            list[..list.find(')').unwrap_or(list.len())]
+                .split(',')
+                .map(|feature| feature.trim().to_string())
+                .filter(|feature| !feature.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
