@@ -24,6 +24,7 @@ extern crate rustc_driver;
 extern crate rustc_expand;
 extern crate rustc_hir;
 extern crate rustc_interface;
+extern crate rustc_lexer;
 extern crate rustc_middle;
 extern crate rustc_parse;
 extern crate rustc_session;
@@ -45,6 +46,7 @@ mod reachability;
 mod runtime;
 mod to_oxc;
 
+use rustc_lexer::TokenKind;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -256,18 +258,55 @@ fn main() -> ExitCode {
 /// `usize` is 32 bits, as a JS one is here (ADR 0025). Nothing is made for it.
 const TARGET: &str = "wasm32-unknown-unknown";
 
-/// The features a crate's root enables itself: `#![feature(a, b)]`.
+/// The features a crate's root enables itself, `#![feature(a, b)]`, read as
+/// rustc's lexer reads the file: with spaces anywhere, and a comment or a
+/// string not an attribute. Only the root's leading inner attributes can
+/// enable one.
 fn enabled_features(root: &Path) -> Vec<String> {
     let source = std::fs::read_to_string(root).unwrap_or_default();
-    source
-        .match_indices("#![feature(")
-        .flat_map(|(at, open)| {
-            let list = &source[at + open.len()..];
-            list[..list.find(')').unwrap_or(list.len())]
-                .split(',')
-                .map(|feature| feature.trim().to_string())
-                .filter(|feature| !feature.is_empty())
-                .collect::<Vec<_>>()
+    let text = &source[rustc_lexer::strip_shebang(&source).unwrap_or(0)..];
+    let mut at = 0;
+    let tokens: Vec<(TokenKind, &str)> = rustc_lexer::tokenize(text, rustc_lexer::FrontmatterAllowed::No)
+        .filter_map(|token| {
+            let piece = &text[at..at + token.len as usize];
+            at += token.len as usize;
+            let trivia = matches!(
+                token.kind,
+                TokenKind::Whitespace | TokenKind::LineComment { .. } | TokenKind::BlockComment { .. }
+            );
+            (!trivia).then_some((token.kind, piece))
         })
-        .collect()
+        .collect();
+    let mut features = Vec::new();
+    let mut i = 0;
+    // Each `#![..]`, to its matching `]`.
+    while let [
+        (TokenKind::Pound, _),
+        (TokenKind::Bang, _),
+        (TokenKind::OpenBracket, _),
+        ..,
+    ] = tokens[i..]
+    {
+        i += 3;
+        let open = i;
+        let mut depth = 1;
+        while depth > 0 && i < tokens.len() {
+            match tokens[i].0 {
+                TokenKind::OpenBracket => depth += 1,
+                TokenKind::CloseBracket => depth -= 1,
+                _ => {}
+            }
+            i += 1;
+        }
+        if let [(TokenKind::Ident, "feature"), (TokenKind::OpenParen, _), rest @ ..] =
+            &tokens[open..i.saturating_sub(1)]
+        {
+            features.extend(
+                rest.iter()
+                    .filter(|(kind, _)| *kind == TokenKind::Ident)
+                    .map(|(_, name)| name.to_string()),
+            );
+        }
+    }
+    features
 }

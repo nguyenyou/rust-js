@@ -2,7 +2,7 @@
 // (ADR 0088) and generated programs (ADR 0092): what it prints to stdout and
 // stderr, and how its `main` ends, as the oracle says it (ADR 0088).
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { same, type Outcome } from "./oracle";
@@ -20,13 +20,20 @@ export type Run = { stdout: string; stderr: string; outcome: Outcome | string };
 // of stopping the suite.
 const timeout = 10_000;
 
+/** Runs `cmd`, which writes how `main` ended to `outcomeFile`, and says
+ * what it printed and how it ended. A run that fails after writing its
+ * outcome, as an unhandled rejection after `main` returns makes it, failed:
+ * a run counts only if it exits 0, and only by the outcome it wrote itself. */
 export function execute(cmd: string[], outcomeFile: string): Run {
+  rmSync(outcomeFile, { force: true });
   const p = Bun.spawnSync(cmd, { cwd: root, stdout: "pipe", stderr: "pipe", timeout });
   const stdout = p.stdout.toString();
   const stderr = p.stderr.toString();
   if (p.signalCode) return { stdout, stderr, outcome: `killed by ${p.signalCode} (a ${timeout / 1000}s limit)` };
   if (!existsSync(outcomeFile)) return { stdout, stderr, outcome: `exited ${p.exitCode} without an outcome` };
-  return { stdout, stderr, outcome: JSON.parse(readFileSync(outcomeFile, "utf8")) };
+  const outcome = readFileSync(outcomeFile, "utf8");
+  if (p.exitCode !== 0) return { stdout, stderr, outcome: `exited ${p.exitCode} after it ended ${outcome}` };
+  return { stdout, stderr, outcome: JSON.parse(outcome) };
 }
 
 /** A string as a Rust string literal, for the wrappers' `include!`. */

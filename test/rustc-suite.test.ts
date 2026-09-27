@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 
 import { homedir } from "node:os";
 
-import { firstError, ratchet, scope, type Result } from "../scripts/rustc-suite";
+import { failureKind, firstError, ratchet, scope, type Result } from "../scripts/rustc-suite";
 
 test("a test is in scope unless a directive says it needs what a case can't have", () => {
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
@@ -51,5 +51,29 @@ test("the ratchet reports a new failure and a listed test that passes", () => {
   expect(regressions.map((r) => r.test)).toEqual(["c.rs"]);
   expect(fixed.map((r) => r.test)).toEqual(["d.rs"]);
   // Nothing new: nothing to say.
-  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({ regressions: [], fixed: [] });
+  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({ regressions: [], fixed: [], worse: [] });
+});
+
+test("a failure is rejected, crashed or wrong, and one listed as rejected may not get worse", () => {
+  expect(failureKind("error: rust-js does not support statics yet")).toBe("rejected");
+  expect(failureKind("error: rust-js: generated trait implementation name `x` collides")).toBe("rejected");
+  expect(failureKind("error: internal compiler error: ~/.rustup/x.rs:1:2: oops")).toBe("crashed");
+  expect(failureKind("thread 'rustc' panicked at /rustc-dev/x.rs:1:2:")).toBe("crashed");
+  expect(failureKind('bun: ended {"panic":"x"}')).toBe("wrong");
+  expect(failureKind("node: different stdout")).toBe("wrong");
+  const listed = new Map([
+    ["a.rs", "error: rust-js does not support statics yet"],
+    ["b.rs", "error: rust-js does not support statics yet"],
+    ["c.rs", "error: rust-js does not support statics yet"],
+    ["d.rs", "bun: different stdout"],
+  ]);
+  const now: Result[] = [
+    { test: "a.rs", status: "fail", reason: "error: rust-js does not support unions yet" },
+    { test: "b.rs", status: "fail", reason: "thread 'rustc' panicked at x.rs:1:2:" },
+    { test: "c.rs", status: "fail", reason: "bun: different stdout" },
+    { test: "d.rs", status: "fail", reason: "error: rust-js does not support statics yet" },
+  ];
+  // Another rejection is no worse; a crash or a wrong answer is; a wrong
+  // answer turned into a rejection is better.
+  expect(ratchet(now, listed).worse.map((r) => r.test)).toEqual(["b.rs", "c.rs"]);
 });

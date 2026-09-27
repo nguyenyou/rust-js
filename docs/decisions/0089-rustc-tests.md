@@ -31,6 +31,11 @@ and stderr, and return, under Bun and Node.
   one that is must fail: when it passes, the run fails until it's taken off
   (`bun run test:rustc:bless`). So the list only shrinks, and a change that
   breaks a passing test is seen.
+- **How a test fails is kept too:** `rejected`, rust-js's own clear error,
+  `crashed`, another compile error such as rustc's panic, or `wrong`, JS
+  that ran otherwise. A test listed as rejected that now crashes or answers
+  wrongly fails the run, as a failure that got worse. The list is 1,489
+  rejected, 15 crashed and none wrong.
 
 ## Why
 
@@ -92,3 +97,7 @@ and stderr, and return, under Bun and Node.
 - The known failures are a release build's on Linux, as the workflow makes
   them, and as `bun run test:rustc` builds: a debug build's deeper stack
   overflows on a test or two a release build passes.
+- Which features a crate enables itself is read with rustc's lexer, so
+  `#![feature (x)]` with a space is one, and a comment or a string that
+  says `#![feature(x)]` isn't; a substring match had both wrong. Found in
+  review.

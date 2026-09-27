@@ -90,3 +90,7 @@ expected u64`), and a `Value`'s `as_u64()` and `as_i64()` work.
 - `usize` and `isize` stay 32-bit, as on `wasm32` (ADR 0025), so
   `usize::try_from(1u64 << 40)` is an `Err` where a 64-bit host's is `Ok`.
 - `i128`, `u128` and `f32` are still errors.
+- A fieldless enum's discriminants, cast to a 64-bit integer, are BigInt
+  literals from the start: `{ A: 9007199254740993n }[b]`, where a table of
+  numbers had lost what's past 2^53 before it became a BigInt. Found in
+  review (`enum_discriminants_wide.rs`).

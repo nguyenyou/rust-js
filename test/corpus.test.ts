@@ -226,3 +226,21 @@ test("rustc checks programs for rust-js's 32-bit usize", () => {
   const run = Bun.spawnSync([process.execPath, "-e", `import(${JSON.stringify(js)}).then((m) => console.log(m.width()))`]);
   expect(run.stdout.toString()).toBe("4294967295 4294967295 0 4 true true rust-js\n");
 });
+
+// Which features a crate enables itself is read as Rust reads it: spaces
+// anywhere, comments and strings aren't attributes. Found in review.
+test("a crate's own features are read from its syntax, not its text", () => {
+  const compiles = (name: string, source: string) => {
+    const dir = fixture(`corpus-features-${name}`);
+    const file = join(dir, "root.rs");
+    writeFileSync(file, source + "macro double($x:expr) { $x * 2 }\npub fn f() -> i32 { double!(3) }\n");
+    const p = Bun.spawnSync([compiler, file, "-o", join(dir, "root.js"), "--", "-Awarnings"], { cwd: root, stderr: "pipe" });
+    return [name, p.exitCode === 0 ? "compiles" : p.stderr.toString().split("\n")[0]];
+  };
+  expect(compiles("spaced", "#![feature (decl_macro)]\n")).toEqual(["spaced", "compiles"]);
+  expect(compiles("lines", "#![feature(\n    decl_macro,\n    stmt_expr_attributes,\n)]\n")).toEqual(["lines", "compiles"]);
+  expect(compiles("documented", "//! A crate.\n/* #![feature(nothing)] */\n#![allow(unused)]\n#![feature(decl_macro)]\n")).toEqual(["documented", "compiles"]);
+  // Only text: rust-js still enables what it needs.
+  expect(compiles("commented", "// Enable it with #![feature(decl_macro)] if you need it.\n")).toEqual(["commented", "compiles"]);
+  expect(compiles("quoted", 'pub const S: &str = "#![feature(decl_macro)]";\n')).toEqual(["quoted", "compiles"]);
+});

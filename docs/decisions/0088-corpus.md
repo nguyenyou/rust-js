@@ -56,7 +56,11 @@ What it expects is in a `//@` directive:
   of what's missing only shrinks, and each entry says why.
 - **A case runs in its own process with a time limit,** natively through a
   wrapper that includes it as a module and catches its panic, and as JS
-  through `test/corpus-run.ts`, so one that never ends fails alone.
+  through `test/corpus-run.ts`, so one that never ends fails alone. A run
+  counts only if it exits 0, and only by an outcome it wrote itself: one
+  that fails after writing it, as an unhandled rejection after `main`
+  makes it, failed, and an outcome left from an earlier run is removed
+  first (`test/programs.test.ts`).
 - Negative controls show a wrong directive, an ignored case that passes,
   and a `compile-fail` rust-js compiles are each reported.
 

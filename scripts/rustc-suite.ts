@@ -62,12 +62,26 @@ export function scope(source: string): Scope {
 
 export type Result = { test: string; status: "pass" } | { test: string; status: "fail" | "skip"; reason: string };
 
+/** How a test fails, from what its reason says: `rejected`, rust-js's
+ * own clear error; `crashed`, another compile error, such as a panic of
+ * rustc's; or `wrong`, JS that ran otherwise than native Rust. */
+export function failureKind(reason: string): "rejected" | "crashed" | "wrong" {
+  if (/^(bun|node): /.test(reason)) return "wrong";
+  return /^error: rust-js( does not support|:)/.test(reason) ? "rejected" : "crashed";
+}
+
 /** What's changed since the known failures were written: a test that fails
- * and isn't listed, and one that's listed and passes. */
+ * and isn't listed, one that's listed and passes, and one that fails worse
+ * than it's listed as, a clear rejection now a crash or a wrong answer. */
 export function ratchet(results: Result[], known: Map<string, string>) {
+  const failing = results.filter((r): r is Result & { reason: string } => r.status === "fail");
   return {
-    regressions: results.filter((r): r is Result & { reason: string } => r.status === "fail" && !known.has(r.test)),
+    regressions: failing.filter((r) => !known.has(r.test)),
     fixed: results.filter((r) => r.status === "pass" && known.has(r.test)),
+    worse: failing.filter((r) => {
+      const listed = known.get(r.test);
+      return listed !== undefined && failureKind(listed) === "rejected" && failureKind(r.reason) !== "rejected";
+    }),
   };
 }
 
@@ -126,7 +140,10 @@ async function runTest(ui: string, file: string): Promise<Result> {
       const outcomeFile = join(dir, `${name}.json`);
       const run = await spawn([runtime, join(root, "test", "corpus-run.ts"), js, outcomeFile], dir, 10_000);
       if (run.killed) return { test, status: "fail", reason: `${name}: didn't end in 10s` };
-      const outcome = existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : `exited ${run.code}: ${firstError(run.stderr)}`;
+      // It counts only if it exits 0: one that fails after writing how `main`
+      // ended, as an unhandled rejection makes it, failed.
+      const written = existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : undefined;
+      const outcome = written !== undefined && run.code === 0 ? written : `exited ${run.code}: ${written ?? firstError(run.stderr)}`;
       if (outcome !== '{"value":null}') return { test, status: "fail", reason: `${name}: ended ${outcome.slice(0, 200)}` };
       if (run.stdout !== native.stdout) return { test, status: "fail", reason: `${name}: different stdout` };
       if (run.stderr !== native.stderr) return { test, status: "fail", reason: `${name}: different stderr` };
@@ -228,10 +245,12 @@ function report(results: Result[], bless: boolean) {
     toSummary([`Wrote ${failing.length} known failures.`]);
     return;
   }
-  const { regressions, fixed } = ratchet(results, readKnown());
+  const known = readKnown();
+  const { regressions, fixed, worse } = ratchet(results, known);
   for (const r of regressions) console.log(`FAILS\t${r.test}\t${r.reason}`);
   for (const r of fixed) console.log(`PASSES\t${r.test}\tremove it from test/rustc-known-failures.txt`);
-  if (regressions.length === 0 && fixed.length === 0) {
+  for (const r of worse) console.log(`WORSE\t${r.test}\t${failureKind(r.reason)}, listed as rejected: ${r.reason}`);
+  if (regressions.length === 0 && fixed.length === 0 && worse.length === 0) {
     toSummary(["The known failures are as listed."]);
     return;
   }
@@ -240,8 +259,9 @@ function report(results: Result[], bless: boolean) {
     "|---|---|---|",
     ...regressions.map((r) => `| ${r.test} | fails | ${cell(r.reason)} |`),
     ...fixed.map((r) => `| ${r.test} | passes | take it off the known failures |`),
+    ...worse.map((r) => `| ${r.test} | ${failureKind(r.reason)} | listed as rejected: ${cell(r.reason)} |`),
   ]);
-  console.log(`${regressions.length} newly failing, ${fixed.length} newly passing: run with --bless once they're intended`);
+  console.log(`${regressions.length} newly failing, ${fixed.length} newly passing, ${worse.length} failing worse: run with --bless once they're intended`);
   process.exitCode = 1;
 }
 

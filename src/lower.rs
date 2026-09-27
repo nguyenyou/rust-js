@@ -2422,25 +2422,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Each one fits the target type, so there's nothing to wrap.
             let (lo, hi) = target.range();
             let fits = target == Num::F64 || discriminants.iter().all(|&(_, d)| lo <= d && d <= hi);
+            let repr = rustc_middle::ty::util::IntTypeExt::to_ty(&adt.repr().discr_type(), self.tcx);
+            let repr = Num::of(repr).unwrap_or(Num::I32);
+            // The discriminants as what they're read as: the target, if each
+            // fits it, else the enum's own type, cast to it after. A 64-bit
+            // one is a BigInt from the start, exact past 2^53.
+            let read = if fits { target } else { repr };
             let value = if counting {
                 let names = Expr::array(discriminants.into_iter().map(|(n, _)| Expr::str(n)).collect());
-                Expr::call(Expr::member(names, "indexOf"), vec![v])
+                let index = Expr::call(Expr::member(names, "indexOf"), vec![v]);
+                if read.big() { to_bigint(index) } else { index }
             } else {
                 let table = Expr::object(
                     discriminants
                         .into_iter()
-                        .map(|(n, d)| Prop::Field(n, Expr::int(d)))
+                        .map(|(n, d)| Prop::Field(n, if read.big() { Expr::bigint(d) } else { Expr::int(d) }))
                         .collect(),
                 );
                 Expr::index(table, v)
             };
             if fits {
-                return Ok(if target.big() { to_bigint(value) } else { value });
+                return Ok(value);
             }
-            let repr = rustc_middle::ty::util::IntTypeExt::to_ty(&adt.repr().discr_type(), self.tcx);
-            let repr = Num::of(repr).unwrap_or(Num::I32);
-            // Its discriminant was a JS number, whatever its type.
-            (if repr.big() { to_bigint(value) } else { value }, repr)
+            (value, repr)
         } else {
             (v, self.num(from, span)?)
         };
