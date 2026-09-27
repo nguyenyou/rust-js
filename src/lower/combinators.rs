@@ -274,7 +274,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             HeapOp::IntoSorted => (Helper::HeapSorted, "$heapSorted"),
             HeapOp::From => (Helper::HeapFrom, "$heapFrom"),
         };
-        self.runtime.extend([helper, Helper::SiftUp, Helper::SiftDown]);
+        self.runtime.insert(helper);
         Ok(Expr::call(Expr::var(name), values))
     }
 

@@ -62,7 +62,10 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature
-  handlers request helpers rather than reproducing dependency lists. Substantial
+  handlers request helpers rather than reproducing dependency lists. Heap
+  operations and Serde Value lowering request only their direct helper; the
+  catalog supplies sifting and JSON support dependencies. Isolated heap-module
+  tests check both behavior and omission of unrelated sifting helpers. Substantial
   JSON and fixed-format implementations live in JavaScript files. Helpers remain
   inline per module; sharing state or moving helpers into runtime modules needs
   a separate measured change.

@@ -114,13 +114,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn use_value(&mut self) {
-        self.runtime.extend([
-            Helper::JsonValue,
-            Helper::JsonFail,
-            Helper::ToJson,
-            Helper::SortedEntries,
-            Helper::Cmp,
-        ]);
+        self.runtime.insert(Helper::JsonValue);
     }
 
     /// `$jsonValueWrite` and `$jsonNumberWrite`: what writes a `Value` or a
@@ -163,7 +157,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(in crate::lower) fn json_value_debug(&mut self, value: Expr, ty: Ty<'tcx>) -> Option<Expr> {
         let json = self.json_type(ty)?;
         self.use_value();
-        self.runtime.insert(Helper::DebugStr);
         Some(match json {
             Json::Value => Expr::call(Expr::var("$debugJsonValue"), vec![value]),
             Json::Number => Expr::call(Expr::var("$debugJsonNumber"), vec![value]),

@@ -60,3 +60,34 @@ test("derived Debug dependencies are retained transitively without unused implem
   expect(generated.report()).toBe(run([join(dir, "native")]).trim());
   expect(readFileSync(join(dir, "lib.js"), "utf8")).not.toContain("Unused");
 });
+
+test("heap modules request only their operations and linking supplies helper dependencies", async () => {
+  const dir = fixture("heap-runtime-dependencies");
+  writeFileSync(join(dir, "lib.rs"), `
+    pub mod push_pop {
+      use std::collections::BinaryHeap;
+      pub fn run() -> Vec<i32> {
+        let mut heap = BinaryHeap::new();
+        for n in [3, 1, 8, 2, 8] { heap.push(n); }
+        let mut out = Vec::new();
+        while let Some(n) = heap.pop() { out.push(n); }
+        out
+      }
+    }
+    pub mod sorted {
+      use std::collections::BinaryHeap;
+      pub fn run() -> Vec<i32> { BinaryHeap::from(vec![3, 1, 8, 2, 8]).into_sorted_vec() }
+    }
+  `);
+  writeFileSync(join(dir, "native.rs"), 'mod lib; fn main() { println!("{:?}", lib::push_pop::run()); println!("{:?}", lib::sorted::run()); }');
+  run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native")]);
+  const expected = run([join(dir, "native")]).trim().split("\n").map(line => JSON.parse(line));
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  for (const [i, name, needed, unused] of [[0, "push_pop", "$siftUp", "$siftDown"], [1, "sorted", "$siftDown", "$siftUp"]] as const) {
+    const file = join(dir, `${name}.js`);
+    expect((await import(file)).run()).toEqual(expected[i]);
+    const code = readFileSync(file, "utf8");
+    expect(code).toContain(`function ${needed}(`);
+    expect(code).not.toContain(unused);
+  }
+});
