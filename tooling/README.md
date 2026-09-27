@@ -27,7 +27,7 @@ await builder.compile({
 });
 ```
 
-`rust-js-build` exposes three package entry points: `/build` for native compiler
+`rust-js-build` exposes package entry points: `/build` for native compiler
 preparation, `/manifest` for build-result validation, and `/publish` for WASI
 artifact publication. Vite and the playground declare this package dependency;
 neither imports tooling through a path outside its own package.
@@ -213,3 +213,22 @@ Callers supply only a successful compiler result and serialize builds targeting
 the same outputs. Publication preserves unchanged files, checks stale-file
 ownership, and rolls back ordinary I/O errors. It does not guarantee crash-atomic
 multi-file replacement.
+
+## Experimental Cargo planning
+
+`rust-js-build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,
+packageName?, features?, noDefaultFeatures? })`. Supply an exact nightly pin and
+an explicit target triple. `packageName` selects a member of a virtual workspace.
+
+The planner invokes Cargo metadata with `--frozen`: create and commit the lockfile
+first. It resolves offline without changing that lockfile, and returns local
+library packages in dependency order, preserving dependency aliases, source paths,
+editions and Cargo-resolved features. Development dependencies are excluded.
+Registry/git packages, build scripts, procedural macros and packages without an
+ordinary library target are rejected when reachable from the selected library.
+
+This is dependency discovery, not a Cargo compilation entry point. It does not
+produce rustc invocations, compile dependencies to JS, establish a cross-crate ABI
+or cache compilation artifacts. Metadata feature sets are Cargo resolution data,
+not a substitute for Cargo compiler-unit/build-script information. The native
+builder and Vite do not consume this experimental plan yet.

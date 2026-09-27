@@ -255,6 +255,10 @@ tooling while preserving rust-js's own readable-output goals.
   shared crates, transitive dependencies, features, `cfg`, and the agreed
   build-script/procedural-macro model. Specify metadata and artifact versioning,
   module linking, dependency invalidation, and reproducible builds.
+  Initial evidence: `tooling/cargo.js` discovers an offline, locked local-library
+  graph with dependency aliases, resolved features and dependency ordering;
+  `test/cargo.test.ts` exercises independent workspaces. Compilation, JS linkage
+  and invalidation remain open.
   First proof: a separate Cargo library with a non-generic scalar function,
   consumed through a path dependency by both a native executable and a rust-js
   application. Resolve the dependency from Cargo metadata, compile it separately,

@@ -7,7 +7,15 @@
   "exports": {
     "./build": "./build.js",
     "./manifest": "./manifest.js",
-    "./publish": "./publish.js"
+    "./publish": "./publish.js",
+    "./cargo": "./cargo.js"
   },
-  "files": ["build.js", "resources.js", "manifest.js", "publish.js", "README.md"]
+  "files": [
+    "build.js",
+    "resources.js",
+    "manifest.js",
+    "publish.js",
+    "README.md",
+    "cargo.js"
+  ]
 }
