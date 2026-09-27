@@ -37,6 +37,11 @@ fn bump(c: &mut Counter) -> usize {
     0
 }
 
+fn reset(c: &mut Counter) -> i32 {
+    c.n = 10;
+    2
+}
+
 fn set(r: &mut [i32; 2]) {
     r[index("through a reference", 0)] = value("through a reference", 8);
 }
@@ -71,6 +76,17 @@ fn main() {
     let mut t = vec![0];
     t[bump(&mut c)] = c.n;
     println!("{} {x} {} {y} {} {z} {} {}", one[0], w[0], u[0], t[0], c.n);
+    // `+=` reads its place after the value, which may change it. Found in
+    // review.
+    let mut d = Counter { n: 1 };
+    d.n += reset(&mut d);
+    let mut e = 1;
+    let mut inc = || {
+        e += 10;
+        2
+    };
+    e += inc();
+    println!("{} {e}", d.n);
     let mut empty: Vec<i8> = Vec::new();
     empty[index("out of bounds", 0)] = value("out of bounds", 8) as i8;
 }

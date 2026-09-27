@@ -650,6 +650,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 let target = self.read_twice(target, &mut place);
                 let rhs_js = self.value_first(rhs_js, &place, &target, out);
+                // The place is read after the value, which may change it:
+                // `c.n += bump(&mut c)`, or a closure's call that captured it.
+                let rhs_js = if rhs_js.has_effects() && self.may_change(lhs) {
+                    self.spill("value", rhs_js, out)
+                } else {
+                    rhs_js
+                };
                 out.extend(place);
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
@@ -3099,6 +3106,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             value
         }
+    }
+
+    /// Could running code change the place `lhs`? Only what holds a
+    /// `&mut` of its variable could, a call it's passed to or a closure
+    /// that captured it, and anything could change a place of no variable.
+    fn may_change(&self, lhs: ExprId) -> bool {
+        let Some(id) = self.root_var(lhs) else { return true };
+        self.thir.exprs.iter().any(|e| {
+            matches!(e.kind, ExprKind::Borrow { borrow_kind: BorrowKind::Mut { .. }, arg } if self.root_var(arg) == Some(id))
+        })
     }
 
     /// A target that `x += 1` reads and then writes: each part of it that

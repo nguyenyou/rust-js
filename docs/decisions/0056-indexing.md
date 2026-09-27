@@ -37,9 +37,13 @@ makes the array longer, where Rust panics.
   when `i` is out of bounds; and any but a literal, where the place can
   change what it reads, `v[{ x = 2; 0 }] = x` or `v[bump(&mut c)] =
   c.n`. Reading variables, and `$at` or `$index` of them, changes
-  nothing, so `v[$at(v, i)] = x` stays as it is. Found by a generated
-  program (seed 1476), where an index checked first panicked before
-  Rust's `% 0` did, and in review.
+  nothing, so `v[$at(v, i)] = x` stays as it is. And `+=` reads its
+  place after the value, which JS reads first, so a value with effects is
+  taken first where it could change the place, holding a `&mut` of its
+  variable: `c.n += bump(&mut c)`, or a closure's call that captured it.
+  `total += f(x)` stays as it is. Found by a generated program (seed
+  1476), where an index checked first panicked before Rust's `% 0` did,
+  and in review.
 - **An array that has elements written is a type that changes in place**
   (ADR 0020). A copy of it is `a.slice()`, or a copy of each item that
   changes too. `let b = a; a[1] = 9;` leaves `b` as it was.
