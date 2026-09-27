@@ -36,6 +36,10 @@ mod wire;
 #[allow(dead_code)]
 mod inbox;
 
+#[path = "../examples/api.rs"]
+#[allow(dead_code)]
+mod api;
+
 #[path = "../examples/versions.rs"]
 #[allow(dead_code)]
 mod versions;
@@ -259,6 +263,7 @@ fn main() {
     case("wire.report", &[], wire::report);
     // serde_json's values and errors, to the byte and the column.
     case("inbox.report", &[], inbox::report);
+    case("api.report", &[], api::report);
     for i in [0, 1, 2] {
         case("versions.panics", &[i as i64], || versions::panics(i));
     }
@@ -274,6 +279,9 @@ fn main() {
     case("std_traits.hand_written", &[], std_traits::hand_written);
     case("std_traits.enum_clones", &[], std_traits::enum_clones);
     case("std_traits.conversions", &[], std_traits::conversions);
+    for n in [4, 7] {
+        case("std_traits.fallible_conversions", &[n as i64], || std_traits::fallible_conversions(n));
+    }
     case("std_traits.equalities", &[], std_traits::equalities);
     case("std_traits.generic_equalities", &[], std_traits::generic_equalities);
     case("std_traits.compared", &[], std_traits::compared);

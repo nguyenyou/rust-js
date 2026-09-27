@@ -859,15 +859,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         )))
     }
 
-    /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, if that's a
-    /// hand-written impl.
+    /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, and
+    /// `TryInto` as `TryFrom`, if that's a hand-written impl.
     fn resolve_into(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(DefId, ty::GenericArgsRef<'tcx>)> {
         let into = self.tcx.trait_of_assoc(def_id)?;
-        if !self.tcx.is_diagnostic_item(sym::Into, into) {
+        let from = if self.tcx.is_diagnostic_item(sym::Into, into) {
+            self.tcx.get_diagnostic_item(sym::From)?
+        } else if self.tcx.is_diagnostic_item(sym::TryInto, into) {
+            self.tcx.get_diagnostic_item(sym::TryFrom)?
+        } else {
             return None;
-        }
-        let from = self.tcx.get_diagnostic_item(sym::From)?;
-        let method = self.tcx.associated_item_def_ids(from)[0];
+        };
+        let method = self
+            .tcx
+            .associated_items(from)
+            .in_definition_order()
+            .find(|item| item.is_fn())?
+            .def_id;
         let args = self.tcx.mk_args(&[args[1], args[0]]);
         let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
         self.krate

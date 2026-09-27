@@ -26,14 +26,16 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
 }
 
-/// A trait the crate may implement. `From` has no dictionaries: its impls
-/// are only called where the types are known (ADR 0052). `Eq` has no
+/// A trait the crate may implement. `From` and `TryFrom` have no
+/// dictionaries: their impls are only called where the types are known
+/// (ADR 0052). `Eq` has no
 /// methods: a `T: Eq` bound is its `PartialEq` (ADR 0053). An `Iterator` is a
 /// JS iterator, and has no dictionaries either (ADR 0055). An operator's
 /// impl is called where `a + b` is, with the types known (ADR 0064).
 pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
     operational(tcx, id)
         || tcx.is_diagnostic_item(sym::From, id)
+        || tcx.is_diagnostic_item(sym::TryFrom, id)
         || tcx.is_diagnostic_item(sym::Eq, id)
         || tcx.is_diagnostic_item(sym::Iterator, id)
         || is_operator(tcx, id)

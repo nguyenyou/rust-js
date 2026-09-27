@@ -1767,6 +1767,13 @@ const $json = {
   char: (json) => json.char(),
   unit: (json) => json.unit(),
   option: (read) => (json) => json.option(read),
+  // A generic `T` in an `Option`, boxed when it looks like `None` (ADR 0051).
+  some: (read) => (json) => $some(read(json)),
+  // A generic type's reader, given its type arguments' readers (ADR 0080).
+  with:
+    (deserialize, ...readers) =>
+    (json) =>
+      deserialize(json, ...readers),
   vec: (read) => (json) => json.vec(read),
   set: (read) => (json) => new Set(json.vec(read)),
   map: (readKey, read) => (json) => json.map(readKey, read),
@@ -1774,6 +1781,18 @@ const $json = {
     (...reads) =>
     (json) =>
       json.tuple(reads),
+  // `#[serde(try_from = "T")]`: the value of a `TryFrom`'s `Ok`, and of an
+  // `Err`, serde's `Error::custom` of its `display`.
+  tried: (result, display) => {
+    if (result.TAG === "Err") throw $jsonError(display(result._0));
+    return result._0;
+  },
+  // serde's impl for `Result`: `{"Ok": ..}` or `{"Err": ..}`.
+  result: (ok, err) => (json) =>
+    json.enum(["Ok", "Err"], (variant, content) => ({
+      TAG: variant,
+      _0: content.newtype(variant === "Ok" ? ok : err),
+    })),
   array: (length, read) => (json) => json.array(length, read),
   // An object's keys.
   key: {

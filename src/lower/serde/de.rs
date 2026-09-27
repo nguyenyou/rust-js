@@ -30,7 +30,7 @@ use rustc_hir::LangItem;
 use rustc_hir::def::CtorKind;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol};
+use rustc_span::{Span, Symbol, sym};
 
 /// A struct's or a variant's fields, as `json.struct` and `json.tupleStruct`
 /// take them.
@@ -81,22 +81,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty::Adt(adt, args) = *self_ty.kind() else {
             return Err(self.unsupported(span, "deserializing this"));
         };
-        if self
-            .tcx
-            .generics_of(imp)
-            .own_params
-            .iter()
-            .any(|p| !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-        {
-            return Err(self.unsupported(span, "`Deserialize` of a generic type"));
-        }
         self.use_reader();
         let json = self.fresh("json");
+        let mut params = vec![json.clone().into()];
+        params.extend(self.codec_params(args, "read"));
         let value = self.read_adt(&json, adt, args, span)?;
         let js_span = self.js_span(span);
         Ok(js::Function {
             name: self.krate.fns[&method].name.clone(),
-            params: vec![json.into()],
+            params,
             body: vec![StmtKind::Return(Some(value)).at(js_span)],
             export: false,
             is_async: false,
@@ -110,6 +103,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn json_reader(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let reader = |name: &str| Expr::member(Expr::var("$json"), name);
         let unsupported = |this: &Self| this.unsupported(span, &format!("deserializing `{ty}`"));
+        if let Some((_, read)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
+            return Ok(Expr::var(read));
+        }
         if ty.is_unit() {
             return Ok(reader("unit"));
         }
@@ -127,16 +123,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(reader("string"));
         }
         if let Some(inner) = self.option_of(ty) {
-            // `Some(None)` would be `None` (ADR 0030).
-            if self.can_be_nullish(inner) {
-                return Err(unsupported(self));
-            }
             let read = self.json_reader(inner, span)?;
+            // Of a type parameter, a `Some` that looks like `None` is boxed
+            // (ADR 0051). Otherwise `Some(None)` would be `None` (ADR 0030).
+            let read = if self.boxed_payload(inner) {
+                self.runtime.insert(Helper::Some);
+                Expr::call(reader("some"), vec![read])
+            } else if self.can_be_nullish(inner) {
+                return Err(unsupported(self));
+            } else {
+                read
+            };
             return Ok(Expr::call(reader("option"), vec![read]));
         }
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
                 self.json_reader(args.type_at(0), span)
+            }
+            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("Result")) => {
+                let (ok, err) = (
+                    self.json_reader(args.type_at(0), span)?,
+                    self.json_reader(args.type_at(1), span)?,
+                );
+                Ok(Expr::call(reader("result"), vec![ok, err]))
             }
             // A heap would have to be put in its order.
             ty::Adt(..) if self.is_std_adt(ty, Symbol::intern("BinaryHeap")) => Err(unsupported(self)),
@@ -164,7 +173,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let reads = tys.iter().map(|t| self.json_reader(t, span)).collect::<R<_>>()?;
                 Ok(Expr::call(reader("tuple"), reads))
             }
-            ty::Adt(..) if let Some(deserialize) = self.deserialize_fn(ty) => Ok(self.fn_ref(deserialize)),
+            // A generic one's, with the readers of its type's arguments.
+            ty::Adt(_, args) if let Some(deserialize) = self.deserialize_fn(ty) => {
+                let callee = self.fn_ref(deserialize);
+                let readers = args.types().map(|t| self.json_reader(t, span)).collect::<R<Vec<_>>>()?;
+                if readers.is_empty() {
+                    return Ok(callee);
+                }
+                Ok(Expr::call(
+                    reader("with"),
+                    std::iter::once(callee).chain(readers).collect(),
+                ))
+            }
             _ => Err(unsupported(self)),
         }
     }
@@ -194,6 +214,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let container = self.serde_attrs(adt.did())?;
         let type_name = self.tcx.item_name(adt.did()).to_string();
         let method = |name: &str, args: Vec<Expr>| Expr::call(Expr::member(Expr::var(json), name), args);
+        // `#[serde(from = "T")]` and `try_from`: a `T`, read, then converted.
+        if container.from || container.try_from {
+            let convert = if container.from { sym::From } else { sym::TryFrom };
+            let Some(source) = self.conversion(adt.did(), convert, false) else {
+                return Err(self.unsupported(span, "this `#[serde(from)]`"));
+            };
+            let this = Ty::new_adt(self.tcx, adt, args);
+            let read = self.json_reader(source, span)?;
+            let value = self.convert(convert, this, source, Expr::call(read, vec![Expr::var(json)]), span)?;
+            if container.from {
+                return Ok(value);
+            }
+            // An `Err` is serde's `Error::custom` of it: its `Display`.
+            let error = self.try_from_error(this, source, span)?;
+            let e = self.fresh("error");
+            let shown = self.display_string(Expr::var(&e), error, span)?;
+            let display = Expr::arrow(vec![e.into()], vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)]);
+            return Ok(Expr::call(
+                Expr::member(Expr::var("$json"), "tried"),
+                vec![value, display],
+            ));
+        }
         if adt.is_enum() {
             return self.read_enum(json, adt, args, &container, &type_name, span);
         }
@@ -223,6 +265,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(method("struct", table.args(expected("struct"))))
             }
         }
+    }
+
+    /// `<to as TryFrom<from>>::Error`.
+    fn try_from_error(&self, to: Ty<'tcx>, from: Ty<'tcx>, span: Span) -> R<Ty<'tcx>> {
+        let trait_id = self.tcx.get_diagnostic_item(sym::TryFrom).expect("std has it");
+        let error = self
+            .tcx
+            .associated_items(trait_id)
+            .in_definition_order()
+            .find(|item| item.is_type())
+            .ok_or_else(|| self.unsupported(span, "this `#[serde(try_from)]`"))?;
+        let projection = Ty::new_projection(self.tcx, error.def_id, [to, from]);
+        Ok(self.tcx.normalize_erasing_regions(self.typing_env, projection))
     }
 
     /// `#[serde(transparent)]`: the one field that's read, as it's read; the

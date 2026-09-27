@@ -322,6 +322,7 @@ pub fn lower_crate<'tcx>(
             runtime: HashSet::new(),
             jsx: false,
             writer: None,
+            codec_params: Vec::new(),
             slots: HashMap::new(),
             stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
             iterators: HashSet::new(),
@@ -604,12 +605,14 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
                 continue;
             }
             DefKind::AssocConst { .. } => "associated constants",
-            // An `Iterator`'s `Item` (ADR 0055) and an operator's `Output`
-            // (ADR 0064): rustc works out what they are.
+            // An `Iterator`'s `Item` (ADR 0055), an operator's `Output` (ADR
+            // 0064) and a `TryFrom`'s `Error`: rustc works out what they are.
             DefKind::AssocTy
                 if tcx.trait_impl_of_assoc(def_id.to_def_id()).is_some_and(|imp| {
                     let tr = tcx.impl_trait_ref(imp).instantiate_identity().def_id;
-                    tcx.is_diagnostic_item(sym::Iterator, tr) || traits::is_operator(tcx, tr)
+                    tcx.is_diagnostic_item(sym::Iterator, tr)
+                        || tcx.is_diagnostic_item(sym::TryFrom, tr)
+                        || traits::is_operator(tcx, tr)
                 }) =>
             {
                 continue;

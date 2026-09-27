@@ -150,6 +150,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0077 `#[derive(Serialize)]` is a function that writes serde_json's text](decisions/0077-serde-json.md)
 - [0078 `serde_json::from_str` is serde_json's reader, ported; `#[derive(Deserialize)]` is a table it reads by](decisions/0078-serde-json-reading.md)
 - [0079 A tagged or untagged enum is read as serde reads one: through the value, read first and kept](decisions/0079-serde-tagged-enums.md)
+- [0080 A generic type's codec takes its type parameters' codecs; `Result`, `from`, `try_from` and `into` are serde's](decisions/0080-serde-generics-and-conversions.md)
 
 **Scope and process**
 

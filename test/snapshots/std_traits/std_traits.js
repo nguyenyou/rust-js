@@ -325,6 +325,19 @@ export function conversions() {
   return [a[0], b[0], c[0]];
 }
 
+export function fallible_conversions(n) {
+  let direct;
+  const match = evenTryFromU32_try_from(n);
+  if (match.TAG === "Ok") {
+    direct = `even ${match._0[0]}`;
+  } else {
+    direct = match._0;
+  }
+  const inferred = evenTryFromU32_try_from((n + 1) >>> 0);
+  const result = inferred.TAG === "Ok" ? { TAG: "Ok", _0: String(inferred._0[0]) } : inferred;
+  return `${direct}, ${result.TAG === "Ok" ? result._0 : result._0}`;
+}
+
 function version(major, label) {
   return { major, label };
 }
@@ -627,6 +640,14 @@ function metersFromF64_from(m) {
 
 function metersFromU32_from(km) {
   return [km * 1000];
+}
+
+function evenTryFromU32_try_from(n) {
+  if (n % 2 === 0) {
+    return { TAG: "Ok", _0: [n] };
+  } else {
+    return { TAG: "Err", _0: `${n} is odd` };
+  }
 }
 
 function versionPartialEq_eq(version$1, other) {

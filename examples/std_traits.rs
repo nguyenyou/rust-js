@@ -174,6 +174,24 @@ pub fn conversions() -> (f64, f64, f64) {
     (a.0, b.0, c.0)
 }
 
+pub struct Even(pub u32);
+
+impl TryFrom<u32> for Even {
+    type Error = String;
+    fn try_from(n: u32) -> Result<Self, String> {
+        if n % 2 == 0 { Ok(Even(n)) } else { Err(format!("{n} is odd")) }
+    }
+}
+
+pub fn fallible_conversions(n: u32) -> String {
+    let direct = match Even::try_from(n) {
+        Ok(even) => format!("even {}", even.0),
+        Err(e) => e,
+    };
+    let inferred: Result<Even, String> = (n + 1).try_into();
+    format!("{direct}, {}", inferred.map(|even| even.0.to_string()).unwrap_or_else(|e| e))
+}
+
 /// Versions are equal when their majors are: the label doesn't count.
 pub struct Version {
     pub major: u32,

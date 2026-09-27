@@ -34,7 +34,7 @@ use rustc_hir::def::CtorKind;
 use rustc_hir::{self as hir, intravisit};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol};
+use rustc_span::{Span, Symbol, sym};
 use std::collections::HashMap;
 
 /// One `#[serde(..)]` item: `rename = "a"`, or `rename(serialize = "a")`.
@@ -237,6 +237,11 @@ struct Attrs {
     deny_unknown_fields: bool,
     other: bool,
     expecting: Option<String>,
+    /// `#[serde(from = "T")]`, `try_from` and `into`: the type is the one
+    /// rustc resolved in the derive (`conversion`).
+    from: bool,
+    try_from: bool,
+    into: bool,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -294,6 +299,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 "deny_unknown_fields" => attrs.deny_unknown_fields = true,
                 "other" => attrs.other = true,
                 "expecting" => attrs.expecting = value,
+                "from" => attrs.from = true,
+                "try_from" => attrs.try_from = true,
+                "into" => attrs.into = true,
                 _ => return Err(self.unsupported(item.span, &format!("`#[serde({name})]`"))),
             }
         }
@@ -330,23 +338,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty::Adt(adt, args) = *self_ty.kind() else {
             return Err(self.unsupported(span, "serializing this"));
         };
-        if self
-            .tcx
-            .generics_of(imp)
-            .own_params
-            .iter()
-            .any(|p| !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-        {
-            return Err(self.unsupported(span, "`Serialize` of a generic type"));
-        }
         let value = self.fresh(&lower_first(self.tcx.item_name(adt.did()).as_str()));
         let json = self.fresh("json");
+        let mut params = vec![value.clone().into(), json.clone().into()];
+        params.extend(self.codec_params(args, "write"));
         let mut body = Vec::new();
         self.write_adt(Expr::var(&value), &json, adt, args, span, &mut body)?;
         let js_span = self.js_span(span);
         Ok(js::Function {
             name: self.krate.fns[&method].name.clone(),
-            params: vec![value.into(), json.into()],
+            params,
             body,
             export: false,
             is_async: false,
@@ -359,16 +360,44 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// { .. }, pretty)`, the steps for `v` in a function the writer calls.
     pub(super) fn json_text(&mut self, value: Expr, ty: Ty<'tcx>, pretty: bool, span: Span) -> R<Expr> {
         self.runtime.extend([Helper::ToJson, Helper::JsonFail]);
-        let write = match self.serialize_fn(ty.peel_refs()) {
-            Some(f) => self.fn_ref(f),
-            None => {
-                let (item, json) = (self.fresh("value"), self.fresh("json"));
-                let mut body = Vec::new();
-                self.write_json(Expr::var(&item), &json, ty, span, &mut body)?;
-                Expr::arrow(vec![item.into(), json.into()], body)
-            }
-        };
+        let write = self.json_writer(ty, span)?;
         Ok(Expr::call(Expr::var("$toJson"), vec![value, write, Expr::bool(pretty)]))
+    }
+
+    /// A generic type's codec takes a function for each of its type
+    /// parameters, `writeT` or `readT` (ADR 0080): their names, which the
+    /// codec's type parameters now stand for.
+    fn codec_params(&mut self, args: ty::GenericArgsRef<'tcx>, prefix: &str) -> Vec<js::Pattern> {
+        self.codec_params = Vec::new();
+        let mut params = Vec::new();
+        for t in args.types() {
+            if let ty::Param(p) = t.kind() {
+                let name = self.fresh(&format!("{prefix}{}", p.name));
+                self.codec_params.push((t, name.clone()));
+                params.push(name.into());
+            }
+        }
+        params
+    }
+
+    /// The function that writes a `ty` value, `(value, json) => ..`: a
+    /// generic codec's parameter, the crate's own type's `serialize`, or
+    /// the steps for it.
+    fn json_writer(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        let ty = ty.peel_refs();
+        if let Some((_, writer)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
+            return Ok(Expr::var(writer));
+        }
+        if let ty::Adt(_, args) = ty.kind()
+            && args.types().next().is_none()
+            && let Some(f) = self.serialize_fn(ty)
+        {
+            return Ok(self.fn_ref(f));
+        }
+        let (item, json) = (self.fresh("value"), self.fresh("json"));
+        let mut body = Vec::new();
+        self.write_json(Expr::var(&item), &json, ty, span, &mut body)?;
+        Ok(Expr::arrow(vec![item.into(), json.into()], body))
     }
 
     /// `json.method(args)` as a statement.
@@ -380,6 +409,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The steps that write `value`, a `ty`, as serde would.
     fn write_json(&mut self, value: Expr, json: &str, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
         let ty = ty.peel_refs();
+        // A type parameter: its writer's call.
+        if let Some((_, writer)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
+            let call = Expr::call(Expr::var(writer), vec![value, Expr::var(json)]);
+            out.push(StmtKind::Expr(call).at(js::Span::NONE));
+            return Ok(());
+        }
         if ty.is_unit() {
             self.emit(json, "raw", vec![Expr::str("null")], out);
             return Ok(());
@@ -404,11 +439,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.spill("value", value, out)
         };
         if let Some(inner) = self.option_of(ty) {
-            if self.boxed_payload(inner) {
-                return Err(self.unsupported(span, &format!("serializing `{ty}`")));
-            }
+            // Of a type parameter, a `Some` may be boxed (ADR 0051).
+            let payload = if self.boxed_payload(inner) {
+                self.runtime.insert(Helper::SomeValue);
+                Expr::call(Expr::var("$someValue"), vec![value.clone()])
+            } else {
+                value.clone()
+            };
             let mut some = Vec::new();
-            self.write_json(value.clone(), json, inner, span, &mut some)?;
+            self.write_json(payload, json, inner, span, &mut some)?;
             let mut none = Vec::new();
             self.emit(json, "raw", vec![Expr::str("null")], &mut none);
             let test = Expr::bin(Op::LooseEq, value, Expr::null());
@@ -418,6 +457,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
                 self.write_json(value, json, args.type_at(0), span, out)
+            }
+            // `{"Ok": ..}` or `{"Err": ..}`, as serde's impl writes one.
+            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("Result")) => {
+                let mut branches = Vec::new();
+                for (i, name) in ["Ok", "Err"].into_iter().enumerate() {
+                    let mut body = Vec::new();
+                    self.emit(json, "beginObject", Vec::new(), &mut body);
+                    self.emit(json, "key", vec![Expr::str(name)], &mut body);
+                    self.write_json(
+                        Expr::member(value.clone(), "_0"),
+                        json,
+                        args.type_at(i),
+                        span,
+                        &mut body,
+                    )?;
+                    self.emit(json, "endObject", Vec::new(), &mut body);
+                    branches.push(body);
+                }
+                let err = branches.pop().expect("an `Err` branch");
+                let ok = branches.pop().expect("an `Ok` branch");
+                let test = Expr::bin(Op::Eq, Expr::member(value, "TAG"), Expr::str("Ok"));
+                out.push(StmtKind::If(test, ok, Some(err)).at(js::Span::NONE));
+                Ok(())
             }
             ty::Adt(_, args) if self.is_vec_like(ty) || (self.is_set(ty) && !self.is_sorted(ty)) => {
                 self.write_items(value, json, args.type_at(0), span, out)
@@ -459,9 +521,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.emit(json, "endObject", Vec::new(), out);
                 Ok(())
             }
-            ty::Adt(..) if let Some(serialize) = self.serialize_fn(ty) => {
+            ty::Adt(_, args) if let Some(serialize) = self.serialize_fn(ty) => {
                 let callee = self.fn_ref(serialize);
-                out.push(StmtKind::Expr(Expr::call(callee, vec![value, Expr::var(json)])).at(js::Span::NONE));
+                let mut call_args = vec![value, Expr::var(json)];
+                for t in args.types() {
+                    call_args.push(self.json_writer(t, span)?);
+                }
+                out.push(StmtKind::Expr(Expr::call(callee, call_args)).at(js::Span::NONE));
                 Ok(())
             }
             _ => Err(self.unsupported(span, &format!("serializing `{ty}`"))),
@@ -514,6 +580,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     ) -> R<()> {
         let container = self.serde_attrs(adt.did())?;
         let ty = Ty::new_adt(self.tcx, adt, args);
+        // `#[serde(into = "T")]`: a clone of it, as a `T`, written as one.
+        if container.into {
+            let Some(target) = self.conversion(adt.did(), sym::Into, true) else {
+                return Err(self.unsupported(span, "this `#[serde(into)]`"));
+            };
+            let cloned = self.clone_value(value, ty, span, out)?;
+            let converted = self.convert(sym::From, target, ty, cloned, span)?;
+            return self.write_json(converted, json, target, span, out);
+        }
         if adt.is_struct() {
             let variant = adt.non_enum_variant();
             let fields: Vec<(Expr, Ty<'tcx>)> = (0..variant.fields.len())
@@ -768,6 +843,71 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if self.krate.fns.contains_key(&f) => Ok(Expr::call(self.fn_ref(f), vec![value])),
             _ => Err(self.unsupported(span, &format!("`skip_serializing_if = {path:?}` of `{ty}`"))),
         }
+    }
+
+    /// `#[serde(from = "T")]`, `try_from` or `into` on `adt`: `T`, from the
+    /// derive's call of `From::from`, `TryFrom::try_from` or `Into::into`
+    /// (the trait `convert` names), whose types rustc worked out.
+    fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
+        struct Finder<'tcx> {
+            tcx: TyCtxt<'tcx>,
+            types: &'tcx ty::TypeckResults<'tcx>,
+            convert: DefId,
+            found: Option<Ty<'tcx>>,
+        }
+        impl<'tcx> intravisit::Visitor<'tcx> for Finder<'tcx> {
+            fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+                if let hir::ExprKind::Path(ref path) = expr.kind
+                    && let hir::def::Res::Def(_, id) = self.types.qpath_res(path, expr.hir_id)
+                    && self.tcx.trait_of_assoc(id) == Some(self.convert)
+                {
+                    self.found = Some(self.types.node_args(expr.hir_id).type_at(1));
+                }
+                intravisit::walk_expr(self, expr);
+            }
+        }
+        let convert = self.tcx.get_diagnostic_item(convert)?;
+        for owner in self.tcx.hir_body_owners() {
+            let mut parent = self.tcx.opt_parent(owner.to_def_id());
+            while let Some(id) = parent
+                && super::analysis::serde_impl(self.tcx, id).is_none()
+            {
+                parent = self.tcx.opt_parent(id);
+            }
+            let Some(imp) = parent else { continue };
+            let self_ty = self.tcx.type_of(imp).instantiate_identity();
+            if super::analysis::serde_impl(self.tcx, imp) != Some(serialize)
+                || !matches!(self_ty.kind(), ty::Adt(a, _) if a.did() == adt)
+            {
+                continue;
+            }
+            let body = self.tcx.hir_body_owned_by(owner);
+            let mut finder = Finder {
+                tcx: self.tcx,
+                types: self.tcx.typeck_body(body.id()),
+                convert,
+                found: None,
+            };
+            intravisit::Visitor::visit_body(&mut finder, body);
+            if finder.found.is_some() {
+                return finder.found;
+            }
+        }
+        None
+    }
+
+    /// `<to as From<from>>::from(value)` (or `TryFrom`), of the crate's own impl.
+    fn convert(&mut self, convert: Symbol, to: Ty<'tcx>, from: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
+        let trait_id = self.tcx.get_diagnostic_item(convert).expect("std has it");
+        let method = self
+            .tcx
+            .associated_items(trait_id)
+            .in_definition_order()
+            .find(|item| item.is_fn())
+            .expect("a conversion method")
+            .def_id;
+        let args = self.tcx.mk_args(&[to.into(), from.into()]);
+        self.impl_call(method, args, vec![value], span)
     }
 
     /// Serde's derive has already asked rustc to resolve the predicate. Its

@@ -33,9 +33,9 @@ for (const [name, source, message, crate] of [
   ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],
   ["handwritten JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "element builders are compiler-only"],
-  ["a generic Serialize", '#[derive(serde::Serialize)] pub struct W<T> { pub x: T }\npub fn f() -> String { serde_json::to_string(&W { x: 1u32 }).unwrap() }', "`Serialize` of a generic type", "serde"],
+  ["serializing a type parameter", 'pub fn f<T: serde::Serialize>(t: &T) -> String { serde_json::to_string(t).unwrap() }', "serializing `T`", "serde"],
   ["#[serde(flatten)]", '#[derive(serde::Serialize)] pub struct In { pub a: u32 }\n#[derive(serde::Serialize)] pub struct Out { #[serde(flatten)] pub i: In }\npub fn f(o: &Out) -> String { serde_json::to_string(o).unwrap() }', "`#[serde(flatten)]`", "serde"],
-  ["a generic Deserialize", '#[derive(serde::Deserialize)] pub struct W<T> { pub x: T }\npub fn f(s: &str) -> bool { serde_json::from_str::<W<u32>>(s).is_ok() }', "`Deserialize` of a generic type", "serde"],
+  ["reading a type parameter", 'pub fn f<T: serde::de::DeserializeOwned>(s: &str) -> bool { serde_json::from_str::<T>(s).is_ok() }', "deserializing `T`", "serde"],
   ["reading a u64", 'pub fn f(s: &str) -> bool { serde_json::from_str::<u64>(s).is_ok() }', "does not support", "serde"],
   ["reading a borrowed str", 'pub fn f(s: &str) -> bool { serde_json::from_str::<&str>(s).is_ok() }', "deserializing `&str`", "serde"],
 ] as [string, string, string, string?][]) {

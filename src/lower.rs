@@ -262,6 +262,9 @@ struct FnCx<'a, 'tcx> {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
     writer: Option<(Option<LocalVarId>, String)>,
+    /// In a generic type's derived `serialize` or `deserialize` (ADR
+    /// 0080): each type parameter, and the parameter that writes or reads it.
+    codec_params: Vec<(Ty<'tcx>, String)>,
     /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
     /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
     /// in (ADR 0059). While it lives, nothing else can change that entry.
