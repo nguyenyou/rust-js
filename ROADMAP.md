@@ -121,6 +121,11 @@ pilot. No delivery dates are assigned yet.
   features, macros, and compiler metadata are supplied. Demonstrate rebuilds
   after shared-model edits. General Cargo dependency compilation is still
   outside the [module contract](docs/decisions/0019-one-js-file-per-module.md).
+  Added evidence: the [shared-source build recipe](tooling/README.md#share-model-source-with-native-rust)
+  and [independent-app test](test/shared-code.test.ts) compile common models and
+  validation into native Rust and JavaScript, exchange JSON in both directions,
+  reject malformed requests, and rebuild after a shared-source edit. The test
+  uses subprocess transport; a Cargo shared-crate build remains open.
 - [x] **M3.2 — Integrate Serde into application tooling.** The
   [native adapter](tooling/build.js) and Vite accept `bindings: ["react", "serde"]`.
   They build locked Serde dependencies with the pinned toolchain and discover

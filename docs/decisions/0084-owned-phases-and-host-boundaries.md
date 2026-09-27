@@ -77,6 +77,10 @@ record the additional temporaries needed to retain evaluation order.
 `test/emission.test.ts` covers copied-body source origins and native output
 ownership. `test/manifest.test.ts` rejects malformed/incompatible manifests and
 compiles an independent temporary application through the build adapter.
+`test/shared-code.test.ts` builds a separate native executable and generated JS
+from one shared model/validation module, checks JSON exchanges and malformed
+requests, and verifies rebuilds after shared-source edits. This proves source
+sharing through modules, not a Cargo dependency graph or an HTTP/browser pilot.
 `test/host-boundaries.test.ts` covers WASI host ownership, staging failure and
 untrusted preview payloads. `test/playground.test.ts` checks a real worker,
 cancellation followed by recovery, the preview origin boundary, and freshly

@@ -51,6 +51,36 @@ cross-crate JavaScript linking remain unsupported. The resource bundle currently
 uses the repository's binding build scripts and source layout; a standalone
 installable distribution is not yet provided.
 
+## Share model source with native Rust
+
+For now, compile shared source as a module in each target. For example, keep
+`shared/model.rs` beside `client/lib.rs` and `server/main.rs`, and include it
+from both entry points:
+
+```rust
+#[path = "../shared/model.rs"]
+mod model;
+```
+
+The shared module can contain supported Serde models and portable validation
+functions. Keep native I/O in the server entry point and browser APIs in the
+client. Configure the client builder with `bindings: ["serde"]` (plus `"react"`
+for React). The native server uses ordinary Serde dependencies; use matching
+versions and derive features when comparing JSON contracts.
+
+The compiler manifest lists the loaded shared file in `sources`. Watch that
+list and rebuild the client when shared source changes; rebuild the native
+server separately. Arbitrary Cargo dependencies, build scripts, features and
+procedural macros are not automatically prepared by this adapter. Its Serde
+recipe supplies the bundled dependency versions and derive support.
+
+[`test/shared-code.test.ts`](../test/shared-code.test.ts) creates an app outside
+the repository, compiles the same models and validation for both targets, and
+passes client-produced JSON through a native executable and back to the client.
+It checks malformed requests and rebuilds both targets after changing a shared
+validation rule. The test uses a subprocess for transport; HTTP, a browser UI,
+and a deployed full-stack pilot remain separate integration work.
+
 `manifest.js` validates the compiler's version-1 build result and remaps structured
 path fields. `publish.js` commits a completed WASI result to the host filesystem.
 Callers supply only a successful compiler result and serialize builds targeting
