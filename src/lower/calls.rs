@@ -11,7 +11,7 @@ use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 use crate::runtime::Helper;
 use rustc_ast::LitKind;
-use rustc_hir::LangItem;
+use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
@@ -86,6 +86,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(callee.or_at(fun_span), args));
         }
         if is_binding(self.tcx, def_id) {
+            // An `#[eii]` function is declared in an `extern` block too, but
+            // it's Rust's, linked to its implementation, not JS's.
+            if find_attr!(self.tcx, def_id, RustcEiiForeignItem) {
+                return Err(self.unsupported(span, "externally implementable items, `#[eii]`,"));
+            }
             match js_form(self.tcx, def_id) {
                 JsForm::Jsx(tag) => return self.jsx(&tag, args, span, out),
                 JsForm::Prop(name) => return self.jsx_prop(name.as_deref(), args, span, out),

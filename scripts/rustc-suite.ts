@@ -4,14 +4,16 @@
 //
 //   bun scripts/rustc-suite.ts            # check against the known failures
 //   bun scripts/rustc-suite.ts --bless    # rewrite the known failures
-//   bun scripts/rustc-suite.ts path/to/test.rs ..   # run some, and say why
+//   bun scripts/rustc-suite.ts derives/ path/to/test.rs    # run some, and say how each did
+//   bun scripts/rustc-suite.ts --shard=2/4 --out=r2.json   # every fourth test, from the second
+//   bun scripts/rustc-suite.ts --merge r1.json r2.json ..  # the shards, checked as one run
 //
 // A test rust-js gets wrong is listed, with its first error, in
 // test/rustc-known-failures.txt. One that isn't listed must pass, and one
 // that is must still fail: when it passes, it's taken off, so the list only
 // shrinks.
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 
@@ -156,15 +158,15 @@ function readKnown(): Map<string, string> {
   return known;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const bless = args.includes("--bless");
-  const only = args.filter((a) => !a.startsWith("--"));
-  const ui = rustcTests();
-  if (!existsSync(compiler)) throw new Error("build rust-js first: cargo build");
-  mkdirSync(work, { recursive: true });
-  const tests = only.length > 0 ? only.map((t) => join(ui, t)) : findTests(ui);
+/** Every `run-pass` test under `dir`, or `dir` itself if it's one. */
+function testsUnder(ui: string, selector: string): string[] {
+  const path = join(ui, selector);
+  if (!existsSync(path)) throw new Error(`no test or directory ${selector} in tests/ui`);
+  return statSync(path).isDirectory() ? findTests(path) : [path];
+}
 
+async function runAll(ui: string, tests: string[]): Promise<Result[]> {
+  mkdirSync(work, { recursive: true });
   const results: Result[] = [];
   let next = 0;
   const worker = async () => {
@@ -175,13 +177,14 @@ async function main() {
     }
   };
   await Promise.all(Array.from({ length: availableParallelism() }, worker));
-  results.sort((a, b) => a.test.localeCompare(b.test));
+  return results.sort((a, b) => a.test.localeCompare(b.test));
+}
 
+function summarize(results: Result[]) {
   const count = (status: string) => results.filter((r) => r.status === status).length;
   const skipped = new Map<string, number>();
-  for (const r of results) if (r.status === "skip") skipped.set(r.reason, (skipped.get(r.reason) ?? 0) + 1);
-  const summary = {
-    commit: dirname(dirname(ui)).split("/").pop(),
+  for (const r of results) if ("reason" in r && r.status === "skip") skipped.set(r.reason, (skipped.get(r.reason) ?? 0) + 1);
+  return {
     tests: results.length,
     inScope: count("pass") + count("fail"),
     pass: count("pass"),
@@ -189,28 +192,106 @@ async function main() {
     skipped: Object.fromEntries([...skipped].sort((a, b) => b[1] - a[1]).filter(([reason]) => !reason.startsWith("rustc: "))),
     skippedByRustc: [...skipped].filter(([reason]) => reason.startsWith("rustc: ")).reduce((n, [, k]) => n + k, 0),
   };
-  console.log(JSON.stringify(summary, null, 2));
+}
 
-  if (only.length > 0) {
-    for (const r of results) console.log(`${r.status}\t${r.test}${"reason" in r ? `\t${r.reason}` : ""}`);
-    return;
-  }
-  // The whole run's results, which a run of some tests leaves as they were.
-  writeFileSync(join(work, "results.json"), JSON.stringify(results, null, 2));
+/** Markdown for a GitHub run's page, when there is one. */
+function toSummary(lines: string[]) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (file) writeFileSync(file, lines.join("\n") + "\n", { flag: "a" });
+}
+
+const cell = (s: string) => s.replaceAll("|", "\\|").replaceAll("\n", " ");
+
+/** A whole run's results, against the known failures: rewritten with
+ * `bless`, else checked, and the process fails if they've changed. */
+function report(results: Result[], bless: boolean) {
+  const summary = summarize(results);
+  console.log(JSON.stringify(summary, null, 2));
+  toSummary([
+    "## rustc run-pass tests",
+    "",
+    `**${summary.pass}** of ${summary.inScope} in scope pass; ${summary.tests - summary.inScope} out of scope.`,
+    "",
+  ]);
   const failing = results.filter((r): r is Result & { reason: string } => r.status === "fail");
   if (bless) {
     const header = "# rustc run-pass UI tests rust-js gets wrong, and its first error (ADR 0089).\n# Rewritten by `bun scripts/rustc-suite.ts --bless`.\n";
     writeFileSync(knownFile, header + failing.map((r) => `${r.test}\t${r.reason}\n`).join(""));
     console.log(`wrote ${failing.length} known failures`);
+    toSummary([`Wrote ${failing.length} known failures.`]);
     return;
   }
   const { regressions, fixed } = ratchet(results, readKnown());
   for (const r of regressions) console.log(`FAILS\t${r.test}\t${r.reason}`);
   for (const r of fixed) console.log(`PASSES\t${r.test}\tremove it from test/rustc-known-failures.txt`);
-  if (regressions.length > 0 || fixed.length > 0) {
-    console.log(`${regressions.length} newly failing, ${fixed.length} newly passing: run with --bless once they're intended`);
-    process.exit(1);
+  if (regressions.length === 0 && fixed.length === 0) {
+    toSummary(["The known failures are as listed."]);
+    return;
   }
+  toSummary([
+    "| Test | Now | |",
+    "|---|---|---|",
+    ...regressions.map((r) => `| ${r.test} | fails | ${cell(r.reason)} |`),
+    ...fixed.map((r) => `| ${r.test} | passes | take it off the known failures |`),
+  ]);
+  console.log(`${regressions.length} newly failing, ${fixed.length} newly passing: run with --bless once they're intended`);
+  process.exitCode = 1;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const bless = args.includes("--bless");
+  const option = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+  const out = option("out");
+  const shard = option("shard");
+  // `--merge a.json b.json`: the shards' results, as one run.
+  if (args.includes("--merge")) {
+    const files = args.filter((a) => !a.startsWith("--"));
+    const results = files.flatMap((f) => JSON.parse(readFileSync(f, "utf8")) as Result[]);
+    report(results.sort((a, b) => a.test.localeCompare(b.test)), bless);
+    return;
+  }
+  const selectors = args.filter((a) => !a.startsWith("--"));
+  const ui = rustcTests();
+  if (!existsSync(compiler)) throw new Error("build rust-js first: cargo build");
+  let tests = selectors.length > 0 ? [...new Set(selectors.flatMap((s) => testsUnder(ui, s)))] : findTests(ui);
+  // `--shard=2/4`: every fourth test, from the second.
+  if (shard) {
+    const [i, n] = shard.split("/").map(Number);
+    if (!(n > 0 && i >= 1 && i <= n)) throw new Error(`--shard=${shard}: say which of how many, as 2/4`);
+    tests = tests.filter((_, k) => k % n === i - 1);
+  }
+  const results = await runAll(ui, tests);
+  if (out) writeFileSync(out, JSON.stringify(results));
+  if (shard) {
+    console.log(JSON.stringify(summarize(results), null, 2));
+    return;
+  }
+  if (selectors.length > 0) {
+    // Some tests: each, and whether it's what the known failures say.
+    const known = readKnown();
+    const rows = results.map((r) => {
+      const expected = known.has(r.test) ? "fail" : "pass";
+      const surprise = r.status !== "skip" && r.status !== expected;
+      return { r, surprise };
+    });
+    for (const { r, surprise } of rows) {
+      console.log(`${r.status}\t${r.test}${"reason" in r ? `\t${r.reason}` : ""}${surprise ? "\t(not as the known failures say)" : ""}`);
+    }
+    console.log(JSON.stringify(summarize(results), null, 2));
+    toSummary([
+      `## ${results.length} rustc tests`,
+      "",
+      "| Test | Result | Reason |",
+      "|---|---|---|",
+      ...rows.map(({ r, surprise }) => `| ${r.test} | ${r.status}${surprise ? " ⚠️ not as listed" : ""} | ${"reason" in r ? cell(r.reason) : ""} |`),
+    ]);
+    if (rows.some((row) => row.surprise)) process.exitCode = 1;
+    return;
+  }
+  // The whole run's results, which a run of some tests leaves as they were.
+  writeFileSync(join(work, "results.json"), JSON.stringify(results, null, 2));
+  report(results, bless);
 }
 
 if (import.meta.main) await main();

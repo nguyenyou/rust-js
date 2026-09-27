@@ -120,6 +120,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// could tell a clone from it, and otherwise a copy of the parts that
     /// could, calling each hand-written `clone` on the way.
     pub(super) fn clone_value(&mut self, place: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        // A closure is its JS function, which shares what it captured: a
+        // clone can be the same function only if nothing could tell, that
+        // is, if it never changes what it holds, and holds no `Cell`.
+        if let ty::Closure(_, args) = ty.kind() {
+            let closure = args.as_closure();
+            let shared = closure.kind() == ty::ClosureKind::Fn
+                && closure
+                    .upvar_tys()
+                    .iter()
+                    .all(|t| t.is_freeze(self.tcx, self.typing_env));
+            return if shared {
+                Ok(place)
+            } else {
+                Err(self.unsupported(span, "cloning a closure that changes what it captured"))
+            };
+        }
         if !self.needs_clone(ty) {
             return Ok(place);
         }

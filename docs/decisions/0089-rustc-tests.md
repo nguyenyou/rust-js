@@ -44,6 +44,20 @@ and stderr, and return, under Bun and Node.
   - a crate that enables `decl_macro` or `stmt_expr_attributes` itself was
     rejected, since rust-js enabled them again;
   - an edition after `--` was rejected, as rust-js set 2024 too.
+
+  And eleven that compiled but answered wrongly, now right or rejected:
+  - a derived `PartialOrd` of a fieldless enum ordered by declaration, not
+    by discriminant, which may be negative (now right);
+  - a clone of a closure that changes what it captured shared its state
+    (rejected: a JS function can't be copied);
+  - a struct made to end in a `dyn`, `&Fat<dyn Trait>`, kept a field that
+    isn't one (rejected; one ending in a slice or a `dyn FnMut` is the same
+    value, and works);
+  - an `#[eii]` function, declared in an `extern` block, was called as a JS
+    global (rejected);
+  - a `const` of a std struct was its private fields, `iter::empty()` an
+    `[undefined]` and a `Cell` a `Cell` in a `Cell` (rejected, but a `Cell`
+    or a `RefCell` is its `{ value }`, new at each use).
 - **Every failure has a reason a person can act on:** 1,469 of the 1,507
   are a feature rust-js says it doesn't support yet, and counted, they say
   which to do first: std functions (261), types (209), std trait impls
@@ -60,14 +74,16 @@ and stderr, and return, under Bun and Node.
 
 ## Consequences
 
-- A full run takes minutes on Linux. On macOS, each new binary is checked
-  before its first run, which makes it about an hour unless the terminal is
-  a developer tool (System Settings › Privacy & Security › Developer Tools).
+- **The rustc tests workflow runs them on GitHub,** when it's started: all of
+  them, on six machines at once, checked as one run, or blessed into a new
+  list to download; or only the tests and directories named, each said to
+  be as the list says or not. Locally, on macOS, each new binary is checked
+  before its first run, which makes a full run an hour or more unless the
+  terminal is a developer tool (System Settings › Privacy & Security ›
+  Developer Tools).
 - rust-js compiles with the host's `cfg`, where `target_pointer_width` is
   64, but a `usize` is 32 bits (ADR 0025): tests that ask are among the
   failures, as a difference to decide on.
-- Thirteen tests compile but answer wrongly, and are listed with the rest;
-  they're the first to fix: derived `PartialOrd` of enums with explicit
-  discriminants, a cloned closure, DST trait objects, externally
-  implementable items (`eii`), and a const iterator; `const-negation` and
-  `bitwise-ops-platform` are the `usize` difference above.
+- Two tests compile and answer otherwise, `const-negation` and
+  `bitwise-ops-platform`: the `usize` difference above, which rustc's own
+  constants make worse, as `usize::MAX` is worked out at 64 bits.

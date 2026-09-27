@@ -449,6 +449,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
             return self.debug_string(value, self.pointee(source), span);
         }
+        // `&Fat<Bar>` to `&Fat<dyn ToBar>`: the struct's last field would
+        // be a `dyn`'s value and impl, or a `dyn Debug`'s string, which it
+        // isn't. One ending in a slice, or a `dyn FnMut`, the JS function,
+        // is the same value either way.
+        let pointee = self.pointee(target);
+        let tail = self.tcx.struct_tail_for_codegen(pointee, self.typing_env);
+        if pointee.is_adt()
+            && matches!(tail.kind(), ty::Dynamic(traits, ..)
+                if traits.principal_def_id().is_some_and(|id| id.is_local()) || self.is_dyn_debug(tail))
+        {
+            return Err(self.unsupported(span, &format!("a `{pointee}`, whose last field is a `dyn`")));
+        }
         if self.dynamic_trait(target).is_none() {
             return Ok(value);
         }

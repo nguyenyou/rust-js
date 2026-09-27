@@ -4,7 +4,6 @@
 //! parts compared in turn: `$cmp(a.x, b.x) || $cmp(a.y, b.y)`, since `Equal`
 //! is the one that's falsy.
 
-use super::bindings::variant_name;
 use super::recognition::OrderingCall;
 use super::representation::Num;
 use super::{FnCx, R, Shape};
@@ -121,13 +120,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ty::Adt(_, args) if self.is_vec_like(ty) => self.cmp_items(a, b, args.type_at(0), partial, span),
             ty::Array(item, _) | ty::Slice(item) => self.cmp_items(a, b, *item, partial, span),
-            // A fieldless enum: by the order its variants are declared in.
+            // A fieldless enum: by its discriminants, as the derive compares
+            // them, `Low = 1` before `High = 2` however they're declared.
             ty::Adt(adt, _) if adt.is_enum() && adt.variants().iter().all(|v| v.fields.is_empty()) => {
-                let names = adt
-                    .variants()
-                    .iter()
-                    .map(|v| Expr::str(variant_name(self.tcx, v)))
-                    .collect();
+                let mut variants = super::discriminants(self.tcx, *adt);
+                variants.sort_by_key(|&(_, value)| value);
+                let names = variants.into_iter().map(|(name, _)| Expr::str(name)).collect();
                 self.runtime.insert(Helper::CmpIn);
                 Ok(Expr::call(Expr::var("$cmpIn"), vec![Expr::array(names), a, b]))
             }

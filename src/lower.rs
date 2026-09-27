@@ -2405,20 +2405,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A fieldless enum is its variant's name (ADR 0013): its
             // discriminant, `["Red", "Green"].indexOf(color)` when they count
             // up from 0, and looked up by name otherwise.
-            let discriminants: Vec<(String, i128)> = adt
-                .discriminants(self.tcx)
-                .map(|(index, d)| {
-                    let variant = adt.variant(index);
-                    let value = d.val as i128;
-                    let value = if d.ty.is_signed() {
-                        let bits = d.ty.primitive_size(self.tcx).bits();
-                        (value << (128 - bits)) >> (128 - bits)
-                    } else {
-                        value
-                    };
-                    (bindings::variant_name(self.tcx, variant), value)
-                })
-                .collect();
+            let discriminants = discriminants(self.tcx, *adt);
             let counting = discriminants.iter().enumerate().all(|(i, &(_, d))| d == i as i128);
             // Each one fits the target type, so there's nothing to wrap.
             let (lo, hi) = target.range();
@@ -3233,7 +3220,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// copied where a use might change it: each use is a value of its own.
     /// Anyone else's, like `u32::MAX`, is its value, written in place.
     fn named_const(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        if self.krate.fns.contains_key(&def_id) {
+        // One holding a `Cell`, which changes through a shared reference, is
+        // its value, written in place: `{ value: 5 }` each time it's used.
+        if self.krate.fns.contains_key(&def_id) && ty.is_freeze(self.tcx, self.typing_env) {
             // `fn_ref` also records the use, which is what imports its module.
             let place = self.fn_ref(def_id);
             return Ok(if self.contains_mutated(ty) {
@@ -3475,6 +3464,23 @@ fn masked(e: &Expr) -> Option<i128> {
         js::ExprKind::Binary(Op::BitAnd, a, b) => b.as_bigint().or_else(|| a.as_bigint()),
         _ => None,
     }
+}
+
+/// A fieldless enum's variants, each its name and its discriminant, in the
+/// order they're declared: `Red = 1` is `("Red", 1)`.
+fn discriminants<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>) -> Vec<(String, i128)> {
+    adt.discriminants(tcx)
+        .map(|(index, d)| {
+            let value = d.val as i128;
+            let value = if d.ty.is_signed() {
+                let bits = d.ty.primitive_size(tcx).bits();
+                (value << (128 - bits)) >> (128 - bits)
+            } else {
+                value
+            };
+            (bindings::variant_name(tcx, adt.variant(index)), value)
+        })
+        .collect()
 }
 
 fn assign_op(op: AssignOp) -> BinOp {

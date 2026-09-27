@@ -27,7 +27,7 @@ tuple key it silently didn't sort.
 | a hand-written impl | `wordOrd_cmp(a, b)` |
 | a generic `T` | `TOrd.cmp(a, b)`, or `TPartialOrd.partial_cmp(a, b)` |
 | derived, a struct or tuple | `$cmp(a.major, b.major) \|\| $cmp(a.minor, b.minor)` |
-| derived, a fieldless enum | `$cmpIn(["Low", "Mid", "High"], a, b)`, by declaration order |
+| derived, a fieldless enum | `$cmpIn(["Low", "Mid", "High"], a, b)`, by discriminant, as the derive compares: `High = 2, Low = 1` is `["Low", "High"]` (ADR 0089 found the declaration order used before) |
 | `Option` | `None` first, then the values |
 | `Vec`, slices, arrays | `$cmpItems(a, b, cmp)`: item by item, then shorter first |
 

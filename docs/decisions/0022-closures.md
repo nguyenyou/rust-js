@@ -85,3 +85,6 @@ Captures:
   as a listener.
 - Not supported yet: a by-value capture of a place other than a variable and
   its fields (through a reference), `async` closures, and coroutines.
+- A closure's `clone()` is the same JS function, which shares what it
+  captured: only one that never changes what it holds, and holds no
+  `Cell` by value, can be cloned. Another is rejected (ADR 0089).

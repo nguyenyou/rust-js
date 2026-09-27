@@ -1,0 +1,87 @@
+name: rustc tests
+
+# rustc's own run-pass UI tests, run as JS (ADR 0089): the ones named, or,
+# with none named, all of them, split across machines and checked as one
+# run against test/rustc-known-failures.txt.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Tests or directories under tests/ui, separated by spaces, like "derives/ consts/std/iter.rs". Empty: all of them.'
+        required: false
+        default: ''
+      bless:
+        description: 'With all of them: write the known failures anew, as an artifact to commit.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rustc-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The tests named, each against what the known failures say of it.
+  some:
+    if: inputs.tests != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rustc-tests-setup
+      - name: Run the tests named
+        env:
+          TESTS: ${{ inputs.tests }}
+        # Split on spaces, with no globbing: each word is a test or a directory.
+        run: |
+          set -f
+          bun scripts/rustc-suite.ts $TESTS
+
+  # All of them: every sixth test on each of six machines.
+  shard:
+    if: inputs.tests == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rustc-tests-setup
+      - name: Run shard ${{ matrix.shard }} of 6
+        run: bun scripts/rustc-suite.ts --shard=${{ matrix.shard }}/6 --out=results-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: results-${{ matrix.shard }}
+          path: results-${{ matrix.shard }}.json
+          retention-days: 7
+
+  # The shards as one run: checked against the known failures, or blessed.
+  report:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: results-*
+          path: results
+          merge-multiple: true
+      - name: Check against the known failures
+        if: ${{ !inputs.bless }}
+        run: bun scripts/rustc-suite.ts --merge results/*.json
+      - name: Write the known failures anew
+        if: ${{ inputs.bless }}
+        run: bun scripts/rustc-suite.ts --merge --bless results/*.json
+      - if: ${{ inputs.bless }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustc-known-failures
+          path: test/rustc-known-failures.txt

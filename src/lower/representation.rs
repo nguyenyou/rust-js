@@ -811,6 +811,29 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
                     .collect(),
             ))
         }
+        // A std struct's fields are its own, not the JS value rust-js makes
+        // of it: `iter::empty()` is no `[undefined]`. Only a `PhantomData`, and
+        // `Reverse(x)`, `[x]`, are their fields.
+        // A `Cell` or a `RefCell` is `{ value }`, what its `UnsafeCell` holds,
+        // as one made at run time is.
+        ty::Adt(adt, _)
+            if ["Cell", "RefCell"]
+                .iter()
+                .any(|name| tcx.is_diagnostic_item(Symbol::intern(name), adt.did())) =>
+        {
+            let at = adt
+                .non_enum_variant()
+                .fields
+                .iter()
+                .position(|f| f.name == sym::value)?;
+            let unsafe_cell = *children()?.get(at)?;
+            let inner = match &*unsafe_cell.valtree {
+                ty::ValTreeKind::Branch(items) => items.first()?.try_to_value()?,
+                ty::ValTreeKind::Leaf(_) => return None,
+            };
+            Some(Expr::object(vec![Prop::Field("value".into(), const_js(tcx, inner)?)]))
+        }
+        ty::Adt(adt, _) if adt.is_struct() && !super::recognition::struct_is_its_fields(tcx, adt.did()) => None,
         ty::Adt(adt, _) if adt.is_struct() => {
             let variant = adt.non_enum_variant();
             let values = all(&children()?)?;

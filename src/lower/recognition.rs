@@ -1480,6 +1480,15 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     }
 }
 
+/// Is a struct's value its fields? The crate's own are, and std's
+/// `PhantomData` and `Reverse(x)`, `[x]`; any other of std's has fields of
+/// its own that aren't the JS value rust-js makes of it.
+pub(super) fn struct_is_its_fields(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    ![sym::std, sym::core, sym::alloc].contains(&tcx.crate_name(id.krate))
+        || tcx.is_lang_item(id, LangItem::PhantomData)
+        || tcx.item_name(id).as_str() == "Reverse"
+}
+
 pub(super) fn ordering_value(tcx: TyCtxt<'_>, enum_def: DefId, variant: Symbol) -> Option<i128> {
     if !tcx.is_lang_item(enum_def, LangItem::OrderingEnum) {
         return None;
