@@ -15,6 +15,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { runInNewContext } from "node:vm";
+import { build } from "vite";
 
 import { expected, same, type Outcome } from "./oracle";
 import { buildCompiler, compiler, fixture, root } from "./support";
@@ -131,9 +132,29 @@ const agree = (a: Run, b: Run) =>
   typeof b.outcome !== "string" &&
   same(a.outcome, b.outcome);
 
+/** The case's JS as a production build ships it: one file, bundled and
+ * minified by Vite, with Rolldown and Oxc, as an app's is. */
+async function bundle(js: string, dir: string): Promise<string> {
+  const outDir = join(dir, "production");
+  await build({
+    configFile: false,
+    logLevel: "silent",
+    root: dir,
+    build: {
+      outDir,
+      emptyOutDir: true,
+      minify: true,
+      target: "esnext",
+      lib: { entry: js, formats: ["es"], fileName: () => "case.min.js" },
+    },
+  });
+  return join(outDir, "case.min.js");
+}
+
 /** What's wrong with a case: nothing, if native Rust does what its
- * directives say and the JS does what native Rust does. */
-function check(file: string): string[] {
+ * directives say and the JS does what native Rust does, as it's compiled
+ * and as it's shipped. */
+async function check(file: string): Promise<string[]> {
   const want = directives(readFileSync(file, "utf8"));
   if (typeof want === "string") return [want];
   const dir = fixture(`corpus-${basename(file, ".rs")}`);
@@ -152,7 +173,11 @@ function check(file: string): string[] {
     return compiled.error.includes(want.text) ? [] : [`rust-js's error doesn't say \`${want.text}\`:\n${compiled.error}`];
   }
   const problems: string[] = [];
-  const runs: [string, Run][] = "js" in compiled ? runtimes.map(([name, cmd]) => [name, runJs(cmd, compiled.js, dir, name)]) : [];
+  const runs: [string, Run][] = [];
+  if ("js" in compiled) {
+    for (const [name, cmd] of runtimes) runs.push([name, runJs(cmd, compiled.js, dir, name)]);
+    runs.push(["node, minified", runJs([node ?? "node"], await bundle(compiled.js, dir), dir, "minified")]);
+  }
   if (want.kind === "ignore-rust-js") {
     const passes = runs.length > 0 && runs.every(([, run]) => agree(run, native));
     return passes ? [`it passes now: remove \`ignore-rust-js: ${want.reason}\``] : [];
@@ -180,34 +205,34 @@ test("the corpus has cases", () => {
 });
 
 for (const name of cases) {
-  test(name, () => {
-    expect(check(join(corpus, name))).toEqual([]);
+  test(name, async () => {
+    expect(await check(join(corpus, name))).toEqual([]);
   }, 120_000);
 }
 
 // Negative controls: each of these cases is wrong, and must be reported.
-function control(name: string, source: string): string[] {
+function control(name: string, source: string): Promise<string[]> {
   const file = join(fixture("corpus-control"), `${name}.rs`);
   writeFileSync(file, source);
   return check(file);
 }
 
-test("a directive native Rust disagrees with is reported", () => {
-  const problems = control("wrong-message", '//@ run-fail: attempt to divide by zero\nfn main() { panic!("another message") }\n');
+test("a directive native Rust disagrees with is reported", async () => {
+  const problems = await control("wrong-message", '//@ run-fail: attempt to divide by zero\nfn main() { panic!("another message") }\n');
   expect(problems).toEqual([expect.stringContaining("native Rust ended")]);
-  expect(control("unexpected-panic", "fn main() { let v: Vec<i32> = vec![]; v[0]; }\n")).toEqual([expect.stringContaining("native Rust ended")]);
+  expect(await control("unexpected-panic", "fn main() { let v: Vec<i32> = vec![]; v[0]; }\n")).toEqual([expect.stringContaining("native Rust ended")]);
 }, 120_000);
 
-test("an ignored case that passes is reported, so the list only shrinks", () => {
-  const problems = control("passes", '//@ ignore-rust-js: a reason\nfn main() { println!("fine"); }\n');
+test("an ignored case that passes is reported, so the list only shrinks", async () => {
+  const problems = await control("passes", '//@ ignore-rust-js: a reason\nfn main() { println!("fine"); }\n');
   expect(problems).toEqual(["it passes now: remove `ignore-rust-js: a reason`"]);
 }, 120_000);
 
-test("a compile-fail case rust-js compiles, or rejects for another reason, is reported", () => {
-  expect(control("compiles", "//@ compile-fail: does not support\nfn main() {}\n")).toEqual([
+test("a compile-fail case rust-js compiles, or rejects for another reason, is reported", async () => {
+  expect(await control("compiles", "//@ compile-fail: does not support\nfn main() {}\n")).toEqual([
     "rust-js compiled it, but `compile-fail` says it can't",
   ]);
-  expect(control("other-error", "//@ compile-fail: a text no error has\nfn main() { let x: u128 = 1; println!(\"{x}\"); }\n")).toEqual([
+  expect(await control("other-error", "//@ compile-fail: a text no error has\nfn main() { let x: u128 = 1; println!(\"{x}\"); }\n")).toEqual([
     expect.stringContaining("rust-js's error doesn't say"),
   ]);
 }, 120_000);

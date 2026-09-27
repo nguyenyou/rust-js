@@ -36,8 +36,11 @@ one corpus on every backend.
   message, a `TypeError` with the right one, `0` for `-0`, and `1` for `1n`.
 
 **The corpus, `test/corpus/`, is Rust programs, each a `fn main()`** as
-rustc's own tests are, run natively and as JS under Bun and Node. Each
-must print the same to stdout and stderr, byte for byte, and end the same.
+rustc's own tests are, run natively and as JS under Bun and Node, and as a
+production build ships it: bundled and minified by Vite, with Rolldown and
+Oxc, whose names are mangled and whose `new Error(..)` is `Error(..)`, and
+run under Node. Each must print the same to stdout and stderr, byte for
+byte, and end the same.
 What it expects is in a `//@` directive:
 
 | Directive | Means |
