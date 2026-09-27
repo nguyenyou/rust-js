@@ -30,7 +30,11 @@ makes the array longer, where Rust panics.
 - **`$at(v, i)` checks the index and returns it,** so a write is still an
   assignment, and it panics as Rust does.
 - **The array itself is indexed, never a copy of it:** `a[$at(a, 1)] = 9`.
-- **Rust runs the right side of `=` first,** and so does the JS.
+- **Rust runs the right side of `=` first,** and so does the JS. JS runs
+  `v[$at(v, i)]` before the right side, so a right side with effects is
+  taken first: `const value = f(); v[$at(v, i)] = value`, and `f` runs
+  even when `i` is out of bounds. Found by a generated program (seed
+  1476): an index checked first panicked where Rust's `% 0` does.
 - **An array that has elements written is a type that changes in place**
   (ADR 0020). A copy of it is `a.slice()`, or a copy of each item that
   changes too. `let b = a; a[1] = 9;` leaves `b` as it was.

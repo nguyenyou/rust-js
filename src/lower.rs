@@ -614,10 +614,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 place.write(value, span, out);
                 Ok(())
             }
-            // `v[i] = x` or `v[i].x = y`: Rust runs the right side first.
+            // `v[i] = x` or `v[i].x = y`: Rust runs the right side first, so
+            // a value with effects is taken before the index is checked.
             ExprKind::Assign { lhs, rhs } if self.place(lhs).is_none() && self.in_element(lhs) => {
                 let value = self.expr(rhs, out)?;
-                let target = self.element_target(lhs, out)?;
+                let mut place = Vec::new();
+                let target = self.element_target(lhs, &mut place)?;
+                let value = if (!place.is_empty() || target.has_effects()) && value.has_effects() {
+                    self.spill("value", value, out)
+                } else {
+                    value
+                };
+                out.extend(place);
                 out.push(StmtKind::Assign(target, value).at(span));
                 Ok(())
             }
