@@ -39,9 +39,9 @@ and stderr, and return, under Bun and Node.
 
 ## Why
 
-- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,182 of
-  the 2,686 tests in scope pass, each matching native Rust byte for byte;
-  1,082 are out of scope, each for a reason it prints.
+- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,193 of
+  the 2,685 tests in scope pass, each matching native Rust byte for byte;
+  1,083 are out of scope, each for a reason it prints.
 - **It found what no example had.** Its first run found, and this change
   fixes:
   - a shift of a narrower integer by an `i64` or a `u64` threw in JS;
@@ -63,9 +63,9 @@ and stderr, and return, under Bun and Node.
   - a `const` of a std struct was its private fields, `iter::empty()` an
     `[undefined]` and a `Cell` a `Cell` in a `Cell` (rejected, but a `Cell`
     or a `RefCell` is its `{ value }`, new at each use).
-- **Every failure has a reason a person can act on:** 1,480 of the 1,504
+- **Every failure has a reason a person can act on:** 1,483 of the 1,492
   are a feature rust-js says it doesn't support yet, and counted, they say
-  which to do first: std functions (262), types (206), std trait impls
+  which to do first: std functions (263), types (207), std trait impls
   (178), statics (156), expressions such as `[x; N]` (139), generic trait
   parameters (119), associated types (108).
 
