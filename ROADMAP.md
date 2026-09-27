@@ -120,11 +120,14 @@ pilot. No delivery dates are assigned yet.
   features, macros, and compiler metadata are supplied. Demonstrate rebuilds
   after shared-model edits. General Cargo dependency compilation is still
   outside the [module contract](docs/decisions/0019-one-js-file-per-module.md).
-- [ ] **M3.2 — Integrate Serde into application tooling.** Make the supported
-  workflow build its Serde metadata and invalidate it correctly. The
-  [default Vite path](vite-plugin/index.js) currently supplies React metadata;
-  Serde uses a [separate build script](serde/build.sh). A clean pilot build
-  must not require undocumented compiler flags or manual metadata repairs.
+- [x] **M3.2 — Integrate Serde into application tooling.** The
+  [native adapter](tooling/build.js) and Vite accept `bindings: ["react", "serde"]`.
+  They build locked Serde dependencies with the pinned toolchain and discover
+  metadata through Cargo's structured output, without manual rustc flags.
+  [Independent-app tests](test/manifest.test.ts) cover cache reuse, invalidation,
+  paths with spaces, source edits and failure preservation;
+  [Vite tests](test/vite.test.ts) cover combined React/Serde builds and refresh.
+  General Cargo graph support and browser Serde provisioning remain separate.
 - [ ] **M3.3 — Deliver a representative pilot.** Exercise routing, forms,
   validation, lists, async loading/errors, cancellation or stale-response
   handling, and at least one external npm component through the supported

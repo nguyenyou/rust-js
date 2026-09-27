@@ -44,10 +44,15 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   imported from rustc metadata. Virtual paths are remapped field by field.
 - `tooling/build.js` prepares native compilation. Vite owns scheduling, watching,
   overlays and refresh. Hosts can select compiler/resources/cache locations,
-  built-in React bindings, explicit extern metadata and rustc flags. React
+  built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,
   React version and options. A completion marker is written only after success.
   This is a binding cache, not a Cargo build cache.
+  Serde preparation invokes pinned Cargo with the bundled locked manifest and
+  reads artifact paths from JSON messages. It runs Cargo's freshness check on
+  reuse and includes the manifest, lockfile and preparation source in the cache
+  key. `bindings: ["react", "serde"]` is shared by native hosts and Vite; this
+  supplies only the already-supported Serde subset, not arbitrary Cargo crates.
 - The WASI build host publishes only manifest-listed artifacts and removes only
   stale files whose ownership fingerprints still match. It stages changes and
   publishes its manifest last, with rollback on ordinary I/O failure. It never

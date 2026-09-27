@@ -11,6 +11,7 @@ import { parseManifest } from "../tooling/manifest.js";
  * @param {object} [options]
  * @param {string[]} [options.crates] Crate roots relative to Vite's root.
  * @param {string} [options.rustJs] Compiler binary; defaults to this checkout.
+ * @param {string[]} [options.bindings] Built-in metadata recipes: react (default), serde.
  * @param {(job: { crate: string, output: string, manifest: string }) => Promise<void>} [options.compile]
  *   Compile a crate some other way, like the playground's with rust-js.wasm:
  *   write its JS beside it and a manifest (ADR 0042) to `manifest`, all paths

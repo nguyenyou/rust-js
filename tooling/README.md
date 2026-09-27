@@ -32,7 +32,19 @@ binding resource's default. The compiler bytes, binding source inputs, resource
 root, React version and compiler options identify the metadata cache directory.
 A build failure leaves no completion marker. Deleting the cache is safe.
 
-Only React is a built-in preparation recipe. Supply other matching metadata
+Use `bindings: ["react", "serde"]` for a React application that also uses
+`serde` derives and `serde_json`, or `["serde"]` for a non-React application.
+The adapter builds the locked Serde dependency set with the resource bundle's
+pinned toolchain and obtains artifact paths from Cargo's JSON output. Cargo
+checks freshness on every preparation; changes to the manifest, lockfile,
+binding source, compiler or options select a new cache directory. Paths with
+spaces are supported. Vite accepts the same `bindings` option:
+
+```js
+rustJs({ crates: ["src/App.rs"], bindings: ["react", "serde"] })
+```
+
+React and Serde are the built-in preparation recipes. Supply other matching metadata
 through `externs`; this does not make arbitrary dependency implementations
 available to the JavaScript backend. General Cargo dependency resolution and
 cross-crate JavaScript linking remain unsupported. The resource bundle currently

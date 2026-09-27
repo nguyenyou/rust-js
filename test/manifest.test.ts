@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, writeFileSync, rmSync, readFileSync, mkdirSync, copyFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseManifest, mapManifestPaths } from "../tooling/manifest.js";
 import { createNativeBuilder } from "../tooling/build.js";
-import { buildCompiler, compiler } from "./support";
+import { buildCompiler, compiler, root as repository } from "./support";
 
 const manifest = {
   version: 1, input: "/virtual/lib.rs", output: "/virtual/lib.js",
@@ -49,6 +49,49 @@ test("native build adapter compiles an independent application and preserves out
     const previous = readFileSync(output, "utf8");
     writeFileSync(source, "pub fn broken(");
     await expect(builder.compile({ crate: source, output, manifest: manifestPath })).rejects.toThrow();
+    expect(readFileSync(output, "utf8")).toBe(previous);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 600_000);
+
+test("build adapter prepares Serde for an independent app, reuses metadata, and rebuilds source edits", async () => {
+  buildCompiler();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js serde app ")));
+  try {
+    const source = join(root, "lib.rs");
+    const output = join(root, "lib.js");
+    const manifestPath = join(root, "manifest.json");
+    const resources = join(root, "resources");
+    mkdirSync(join(resources, "serde/src"), { recursive: true });
+    for (const file of ["rust-toolchain.toml", "serde/Cargo.toml", "serde/Cargo.lock", "serde/src/lib.rs"]) {
+      copyFileSync(join(repository, file), join(resources, file));
+    }
+    const options = { root, resources, rustJs: compiler, bindings: ["serde"], cacheDir: join(root, "cache with spaces") };
+    const program = (offset: number) => `
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Message { pub count: u32 }
+pub fn roundtrip(text: &str) -> String {
+    let mut message: Message = serde_json::from_str(text).unwrap();
+    message.count += ${offset};
+    serde_json::to_string(&message).unwrap()
+}`;
+    writeFileSync(source, program(1));
+    const builder = createNativeBuilder(options);
+    const prepared = await builder.prepare();
+    expect(prepared.flags.some(flag => flag.startsWith("serde="))).toBe(true);
+    expect(builder.watchFiles.some(file => file.endsWith("serde/Cargo.lock"))).toBe(true);
+    await builder.compile({ crate: source, output, manifest: manifestPath });
+    expect((await import(output)).roundtrip('{"count":41}')).toBe('{"count":42}');
+    // A new host process has no in-memory cache. Cargo must report the same artifacts.
+    const reused = createNativeBuilder(options);
+    expect((await reused.prepare()).flags).toEqual(prepared.flags);
+    appendFileSync(join(resources, "serde/src/lib.rs"), "\n// Changed binding resource.\n");
+    expect((await reused.prepare()).flags).not.toEqual(prepared.flags);
+    writeFileSync(source, program(2));
+    await reused.compile({ crate: source, output, manifest: manifestPath });
+    expect((await import(output + "?updated")).roundtrip('{"count":41}')).toBe('{"count":43}');
+    const previous = readFileSync(output, "utf8");
+    writeFileSync(source, program(2).replace("message.count += 2", 'message.count += "bad"'));
+    await expect(reused.compile({ crate: source, output, manifest: manifestPath })).rejects.toThrow();
     expect(readFileSync(output, "utf8")).toBe(previous);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);

@@ -21,8 +21,11 @@ test("Vite builds and refreshes affected crates, recovers from errors and module
   const source = `#![allow(non_snake_case)]
 use react::{Element, use_state};
 mod text;
+#[derive(serde::Deserialize)]
+pub struct Saved { pub count: i32 }
 pub fn App() -> Element {
-    let (count, set_count) = use_state(0);
+    let saved: Saved = serde_json::from_str(r#"{"count":0}"#).unwrap();
+    let (count, set_count) = use_state(saved.count);
     jsx! { <button onClick={move |_| set_count.update(|n| n + 1)}>{text::label()}{count}</button> }
 }
 `;
@@ -43,7 +46,7 @@ unlinkSync(lock);
 process.exit(code);
 `);
   chmodSync(wrapper, 0o755);
-  const plugins = () => [rustJs({ crates: ["src/App.rs", "other/lib.rs"], rustJs: wrapper }), react()];
+  const plugins = () => [rustJs({ crates: ["src/App.rs", "other/lib.rs"], rustJs: wrapper, bindings: ["react", "serde"] }), react()];
   await build({ root: dir, configFile: false, plugins: plugins(), logLevel: "silent" });
   expect(readFileSync(join(dir, "dist/index.html"), "utf8")).toContain("/assets/");
   const server = await createServer({ root: dir, configFile: false, plugins: plugins(), logLevel: "silent", server: { port: 0 } });
