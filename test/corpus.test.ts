@@ -4,7 +4,7 @@
 //
 //   //@ run-pass                   main returns (the default)
 //   //@ run-fail: <message>        main panics with exactly this message (\n for a newline)
-//   //@ compile-fail: <text>       rust-js rejects it, with this in its error
+//   //@ compile-fail: <text>       rust-js rejects it, with this in its first error
 //   //@ ignore-rust-js: <reason>   rust-js gets it wrong for now; passing is an error
 //
 //   case.rs ─┬─ rustc ──► native ─────────────────┐
@@ -83,7 +83,9 @@ async function check(file: string): Promise<string[]> {
   const compiled = compileJs(file, dir);
   if (want.kind === "compile-fail") {
     if ("js" in compiled) return ["rust-js compiled it, but `compile-fail` says it can't"];
-    return compiled.error.includes(want.text) ? [] : [`rust-js's error doesn't say \`${want.text}\`:\n${compiled.error}`];
+    // The first error, so an error of rustc's own can't hide before rust-js's.
+    const first = compiled.error.split("\n").find((line) => line.startsWith("error")) ?? "";
+    return first.includes(want.text) ? [] : [`rust-js's first error doesn't say \`${want.text}\`:\n${compiled.error}`];
   }
   const problems: string[] = [];
   const runs: [string, Run][] = [];
@@ -146,7 +148,7 @@ test("a compile-fail case rust-js compiles, or rejects for another reason, is re
     "rust-js compiled it, but `compile-fail` says it can't",
   ]);
   expect(await control("other-error", "//@ compile-fail: a text no error has\nfn main() { let x: u128 = 1; println!(\"{x}\"); }\n")).toEqual([
-    expect.stringContaining("rust-js's error doesn't say"),
+    expect.stringContaining("rust-js's first error doesn't say"),
   ]);
 }, 120_000);
 
@@ -243,4 +245,25 @@ test("a crate's own features are read from its syntax, not its text", () => {
   // Only text: rust-js still enables what it needs.
   expect(compiles("commented", "// Enable it with #![feature(decl_macro)] if you need it.\n")).toEqual(["commented", "compiles"]);
   expect(compiles("quoted", 'pub const S: &str = "#![feature(decl_macro)]";\n')).toEqual(["quoted", "compiles"]);
+});
+
+// A `cfg` rustc doesn't expect, `FALSE` for `false`, is rustc's warning to
+// give, once. rust-js's own early look at a crate root's `cfg`s raised it for
+// no node, and rustc panicked. Found by rustc's `cfg-macros-notfoo`.
+test("an unexpected cfg is rustc's warning, not a panic", () => {
+  const dir = fixture("corpus-unexpected-cfg");
+  const file = join(dir, "root.rs");
+  writeFileSync(file, '#[cfg(FALSE)]\nmod shape {}\n#[cfg(not(FALSE))]\nmod shape {\n    pub fn name() -> &\'static str {\n        "shown"\n    }\n}\npub fn f() -> &\'static str {\n    shape::name()\n}\n');
+  const js = join(dir, "root.js");
+  const p = Bun.spawnSync([compiler, file, "-o", js], { cwd: root, stderr: "pipe" });
+  const stderr = p.stderr.toString();
+  expect(stderr).not.toContain("panicked");
+  // As many as rustc gives, checking the same cfgs: one for each `FALSE`.
+  const warnings = (text: string) => text.match(/warning: unexpected `cfg` condition name: `FALSE`/g)?.length;
+  const native = Bun.spawnSync(["rustc", "--crate-type=lib", "--emit=metadata", "--check-cfg=cfg(browser, test, rust_js)", file, "-o", join(dir, "root.rmeta")], { cwd: root, stderr: "pipe" });
+  expect(warnings(native.stderr.toString())).toBe(2);
+  expect(warnings(stderr)).toBe(2);
+  expect(p.exitCode).toBe(0);
+  const run = Bun.spawnSync([process.execPath, "-e", `import(${JSON.stringify(js)}).then((m) => console.log(m.f()))`]);
+  expect(run.stdout.toString()).toBe("shown\n");
 });

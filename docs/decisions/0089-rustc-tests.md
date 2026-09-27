@@ -34,8 +34,8 @@ and stderr, and return, under Bun and Node.
 - **How a test fails is kept too:** `rejected`, rust-js's own clear error,
   `crashed`, another compile error such as rustc's panic, or `wrong`, JS
   that ran otherwise. A test listed as rejected that now crashes or answers
-  wrongly fails the run, as a failure that got worse. The list is 1,489
-  rejected, 15 crashed and none wrong.
+  wrongly fails the run, as a failure that got worse. The list is 1,492
+  rejected and none crashed or wrong.
 
 ## Why
 
@@ -101,3 +101,22 @@ and stderr, and return, under Bun and Node.
   `#![feature (x)]` with a space is one, and a comment or a string that
   says `#![feature(x)]` isn't; a substring match had both wrong. Found in
   review.
+- **The fifteen that crashed now pass, twelve of them, or are rejected:**
+  - a `cfg` rustc doesn't expect, in a crate root, left a warning from
+    rust-js's own early look at its `cfg`s that belonged to no item, and
+    rustc panicked;
+  - a `for<'a>` bound, `T: Named<'a>`, and a method with lifetimes of
+    its own, `fn pick<'b>(&self, x: &'b u8)`, panicked in rustc when
+    rust-js made their dictionaries (ADR 0049);
+  - an `async fn` in a trait panicked where it's now rejected;
+  - a chain of twenty enums, each holding the next, took minutes to
+    compile: whether a type can be written in JS, is changed in place, or
+    needs a clone was asked again for each path to it, and is now asked
+    once;
+  - a `const` too large for rustc's value tree, 100,000 nodes, was
+    rustc's error; it's now rust-js's, that it doesn't support it;
+  - a test rust-js takes over two minutes to compile is said to, where it
+    had been a crash with no reason.
+
+  A `compile-fail` case in the corpus must say its text in its first
+  error, so an error of rustc's own can't come before it unseen.

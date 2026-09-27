@@ -244,6 +244,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
+        // Each type once: a type met along two paths isn't walked twice. It
+        // ends at a `Box`, which is `Other`, so no answer depends on another.
+        if let Some(&mutated) = self.mutated_types.borrow().get(&ty) {
+            return mutated;
+        }
+        let mutated = self.contains_mutated_uncached(ty);
+        self.mutated_types.borrow_mut().insert(ty, mutated);
+        mutated
+    }
+
+    fn contains_mutated_uncached(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Param(_))
             || self.mutated_itself(ty)
             || match self.shape(ty) {
@@ -569,9 +580,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => {}
         }
-        if seen.contains(&ty) {
+        if let Some(&found) = self.representable.borrow().get(&ty) {
+            return found;
+        }
+        // Inside itself, `Tree` in `Box<Tree>`: fine, if it is where it's
+        // being walked further out, so what's found under that is only as
+        // sure as the walk out there is.
+        if let Some(at) = seen.iter().position(|&t| t == ty) {
+            self.assumed.set(self.assumed.get().min(at));
             return None;
         }
+        let depth = seen.len();
+        let outer = self.assumed.replace(usize::MAX);
         seen.push(ty);
         let found = match (ty.kind(), self.shape(ty)) {
             // An enum with fields (ADR 0033): every variant's fields.
@@ -585,6 +605,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => Some(ty),
         };
         seen.pop();
+        let assumed = self.assumed.get();
+        self.assumed.set(outer.min(assumed));
+        // What it can't be is sure; that it's fine is, unless the walk under
+        // it took a type further out as fine.
+        if found.is_some() || assumed >= depth {
+            self.representable.borrow_mut().insert(ty, found);
+        }
         found
     }
 
@@ -731,17 +758,15 @@ pub(super) fn eval_const<'tcx>(
     span: Span,
 ) -> Option<ty::Value<'tcx>> {
     let instance = ty::Instance::try_resolve(tcx, typing_env, def_id, args).ok()??;
-    let valtree = tcx
-        .const_eval_global_id_for_typeck(
-            typing_env,
-            GlobalId {
-                instance,
-                promoted: None,
-            },
-            span,
-        )
-        .ok()?
-        .ok()?;
+    // The query itself, not `const_eval_global_id_for_typeck`, which
+    // reports a constant too large for a value tree as rustc's own error
+    // where rust-js reports it as unsupported.
+    let cid = GlobalId {
+        instance,
+        promoted: None,
+    };
+    let inputs = tcx.erase_and_anonymize_regions(typing_env.with_post_analysis_normalized(tcx).as_query_input(cid));
+    let valtree = tcx.at(span).eval_to_valtree(inputs).ok()?;
     let ty = tcx.type_of(def_id).instantiate(tcx, args);
     Some(ty::Value {
         ty: tcx.normalize_erasing_regions(typing_env, ty),

@@ -9,6 +9,7 @@ use crate::runtime::Helper;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::def_id::{DefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Retained functions and their dependencies, grouped for output.
@@ -153,6 +154,11 @@ pub fn lower_crate<'tcx>(
             boxes: HashSet::new(),
             cloning: Vec::new(),
             item: def_id,
+            representable: RefCell::new(HashMap::new()),
+            assumed: Cell::new(usize::MAX),
+            mutated_types: RefCell::new(HashMap::new()),
+            clones: RefCell::new(HashMap::new()),
+            clone_assumed: Cell::new(usize::MAX),
         };
         let result = match body {
             Some(body) => cx.lower_fn(body),

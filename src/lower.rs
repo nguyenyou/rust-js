@@ -13,7 +13,7 @@
 //! integer arithmetic wraps. Division by zero and `MIN / -1` still panic,
 //! because Rust panics on those in every profile.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -247,6 +247,18 @@ struct FnCx<'a, 'tcx> {
     cloning: Vec<(Ty<'tcx>, String)>,
     /// The item being lowered: what `fn_ref` records as using its target.
     item: DefId,
+    /// What `unsupported_in` found of each struct and enum it looked into, so
+    /// one met again, along another path through a type, isn't walked again:
+    /// `Foo2(Foo1, Foo1)` of `Foo1(Foo0, Foo0)` is walked once, not 2^n times.
+    representable: RefCell<HashMap<Ty<'tcx>, Option<Ty<'tcx>>>>,
+    /// While `unsupported_in` walks a type: how far out, among the types it's
+    /// inside, is the one a walk took as fine, being inside itself.
+    assumed: Cell<usize>,
+    /// What `contains_mutated` and `needs_clone_in` found of each type, for
+    /// the same reason, and how far out `needs_clone_in` assumed.
+    mutated_types: RefCell<HashMap<Ty<'tcx>, bool>>,
+    clones: RefCell<HashMap<Ty<'tcx>, bool>>,
+    clone_assumed: Cell<usize>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {

@@ -354,14 +354,20 @@ fn configured_attrs(sess: &Session, attrs: &ast::AttrVec) -> Option<ast::AttrVec
             None
         }
     }
-    StripUnconfigured {
+    // A lint this raises, such as `unexpected_cfgs`, is rustc's to raise when
+    // it configures the crate itself, for the node it's about. Raised here,
+    // for none, it's never emitted, and rustc's check that each was fails.
+    let raised = sess.psess.buffered_lints.with_lock(|lints| lints.len());
+    let configured = StripUnconfigured {
         sess,
         features: None,
         config_tokens: false,
         lint_node_id: ast::DUMMY_NODE_ID,
     }
     .configure(Attributes(attrs.clone()))
-    .map(|attrs| attrs.0)
+    .map(|attrs| attrs.0);
+    sess.psess.buffered_lints.with_lock(|lints| lints.truncate(raised));
+    configured
 }
 
 fn template(sess: &Session, source: String, span: Span) -> rustc_ast::tokenstream::TokenStream {

@@ -70,10 +70,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.contains_mutated(ty) {
             return true;
         }
-        // A recursive type: its other fields decide.
-        if seen.contains(&ty) {
+        if let Some(&needs) = self.clones.borrow().get(&ty) {
+            return needs;
+        }
+        // A recursive type: its other fields decide, so what's found under
+        // it is only as sure as the walk further out, as in `unsupported_in`.
+        if let Some(at) = seen.iter().position(|&t| t == ty) {
+            self.clone_assumed.set(self.clone_assumed.get().min(at));
             return false;
         }
+        let depth = seen.len();
+        let outer = self.clone_assumed.replace(usize::MAX);
         seen.push(ty);
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         let needs = match ty.kind() {
@@ -99,6 +106,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => false,
         };
         seen.pop();
+        let assumed = self.clone_assumed.get();
+        self.clone_assumed.set(outer.min(assumed));
+        if needs || assumed >= depth {
+            self.clones.borrow_mut().insert(ty, needs);
+        }
         needs
     }
 

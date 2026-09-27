@@ -92,6 +92,11 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
                 }
             }
             for item in tcx.associated_items(id).in_definition_order() {
+                // The type rustc makes of an `async fn`'s future has no name,
+                // and no place in a dictionary.
+                if item.is_impl_trait_in_trait() {
+                    continue;
+                }
                 let name = bindings::fn_name(tcx, item.def_id);
                 if name == "__proto__" || !names.insert(name) {
                     tcx.dcx().span_err(
@@ -115,7 +120,9 @@ pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tc
         result.push(ty::TraitRef::identity(tcx, trait_id));
     }
     for (clause, _) in tcx.predicates_of(id).instantiate_identity(tcx) {
-        let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder() else {
+        // A higher-ranked bound, `for<'a> T: Foo<'a>`, is one dictionary:
+        // lifetimes aren't in the JS, so its own are erased, not left bound.
+        let ty::ClauseKind::Trait(predicate) = tcx.instantiate_bound_regions_with_erased(clause.kind()) else {
             continue;
         };
         let mut tr = predicate.trait_ref;
@@ -534,7 +541,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return Err(self.unsupported(self.tcx.def_span(item.def_id), "generic trait methods"));
             }
-            let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, item.def_id, tr.args)?
+            // The method's own parameters, which are lifetimes, `fn bar<'b>`,
+            // are erased: they aren't in the JS, but rustc resolves with them.
+            let args = tr
+                .args
+                .extend_to(self.tcx, item.def_id, |_, _| self.tcx.lifetimes.re_erased.into());
+            let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, item.def_id, args)?
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
             let method = instance.def_id();
             if !self.krate.fns.contains_key(&method) {

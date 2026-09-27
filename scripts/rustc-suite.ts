@@ -135,6 +135,7 @@ async function runTest(ui: string, file: string): Promise<Result> {
     writeFileSync(lib, `${source}\n/// The test's main, for the JS to call.\npub fn entry() {\n    main()\n}\n`);
     const js = join(dir, "case.js");
     const compiled = await spawn([compiler, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
+    if (compiled.killed) return { test, status: "fail", reason: "rust-js didn't finish compiling it in 120s" };
     if (compiled.code !== 0) return { test, status: "fail", reason: firstError(compiled.stderr) };
     for (const [name, runtime] of [["bun", process.execPath], ["node", "node"]]) {
       const outcomeFile = join(dir, `${name}.json`);
