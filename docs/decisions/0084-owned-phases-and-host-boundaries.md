@@ -57,8 +57,10 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   before operands are lowered. Value/Number inherent methods produce typed
   operations too, including an explicit unsupported operation for useful
   diagnostics. Emission consumes those operations without method-name dispatch.
-  Other feature-specific recognition and conversion representation decisions
-  still need further separation.
+  Value conversion and scalar comparison categories also come from recognition;
+  emission constructs the selected representation and recursively lowers container
+  conversions. The Option type predicate is shared with ordinary lowering. Other
+  feature-specific recognition still needs further separation.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature

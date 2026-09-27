@@ -129,10 +129,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `T`, for an `Option<T>`.
     pub(super) fn option_of(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
-        match ty.kind() {
-            ty::Adt(adt, args) if self.tcx.is_lang_item(adt.did(), LangItem::Option) => args.types().next(),
-            _ => None,
-        }
+        self.recognition().option_of(ty)
     }
 
     /// What an `Option<T>`'s `T` is in JS: through references, `Box` and `Rc`,

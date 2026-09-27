@@ -871,3 +871,71 @@ impl JsonMethod {
         }
     }
 }
+
+/// The established Value representation for one source type. Container elements
+/// are recognized recursively when lowering their conversion functions.
+pub(super) enum JsonConversion<'tcx> {
+    Tag(&'static str),
+    Null,
+    Float,
+    Integer,
+    Same,
+    Vector(Ty<'tcx>),
+    Option(Ty<'tcx>),
+}
+
+impl<'a, 'tcx> Recognition<'a, 'tcx> {
+    /// `T`, for an `Option<T>`.
+    pub(super) fn option_of(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+        match ty.kind() {
+            ty::Adt(adt, args) if self.tcx.is_lang_item(adt.did(), LangItem::Option) => args.types().next(),
+            _ => None,
+        }
+    }
+
+    pub(super) fn json_conversion(&self, from: Ty<'tcx>) -> Option<JsonConversion<'tcx>> {
+        let from = from.peel_refs();
+        if self.is_string_like(from) && !from.is_char() {
+            return Some(JsonConversion::Tag("String"));
+        }
+        if from.is_bool() {
+            return Some(JsonConversion::Tag("Bool"));
+        }
+        if from.is_unit() {
+            return Some(JsonConversion::Null);
+        }
+        match Num::of(from) {
+            Some(Num::F64) => return Some(JsonConversion::Float),
+            Some(_) => return Some(JsonConversion::Integer),
+            None => {}
+        }
+        match self.json_type(from) {
+            Some(Json::Map) => return Some(JsonConversion::Tag("Object")),
+            Some(Json::Number) => return Some(JsonConversion::Tag("Number")),
+            Some(Json::Value) => return Some(JsonConversion::Same),
+            None => {}
+        }
+        if let ty::Adt(_, args) = from.kind()
+            && self.is_std_adt(from, sym::Vec)
+        {
+            return Some(JsonConversion::Vector(args.type_at(0)));
+        }
+        self.option_of(from).map(JsonConversion::Option)
+    }
+
+    /// The scalar comparison category used by serde_json's PartialEq impls.
+    pub(super) fn json_comparison(&self, other: Ty<'tcx>) -> Option<&'static str> {
+        let other = other.peel_refs();
+        if self.is_string_like(other) {
+            Some("String")
+        } else if other.is_bool() {
+            Some("Bool")
+        } else {
+            match Num::of(other)? {
+                Num::F64 => Some("f64"),
+                n if n.signed() => Some("i64"),
+                _ => Some("u64"),
+            }
+        }
+    }
+}

@@ -5,14 +5,14 @@
 //! `"i"`nteger or `"f"`loat, as serde_json keeps one.
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
-use crate::lower::recognition::{Json, JsonCall, JsonMethod};
+use crate::lower::recognition::{Json, JsonCall, JsonConversion, JsonMethod};
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R};
 use crate::runtime::Helper;
 use rustc_middle::thir::ExprId;
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `serde_json::Value`, `Number` or `Map`.
@@ -212,26 +212,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Prop::Field("_0".into(), value),
             ])
         };
-        if self.is_string_like(from) && !from.is_char() {
-            return Ok(variant("String", value));
-        }
-        if from.is_bool() {
-            return Ok(variant("Bool", value));
-        }
-        if from.is_unit() {
-            return Ok(Expr::str("Null"));
-        }
-        match Num::of(from) {
-            Some(Num::F64) => return Ok(Expr::call(Expr::var("$jsonFloat"), vec![value])),
-            Some(_) => return Ok(variant("Number", Expr::call(Expr::var("$jsonInt"), vec![value]))),
-            None => {}
-        }
-        match self.json_type(from) {
-            Some(Json::Map) => return Ok(variant("Object", value)),
-            Some(Json::Number) => return Ok(variant("Number", value)),
-            Some(Json::Value) => return Ok(value),
-            None => {}
-        }
         // A `Vec` of what makes one, or an `Option` of one: `Null` for `None`.
         let convert = |this: &mut Self, item: Ty<'tcx>| -> R<Expr> {
             let x = this.fresh("x");
@@ -241,17 +221,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 vec![StmtKind::Return(Some(converted)).at(js::Span::NONE)],
             ))
         };
-        if let ty::Adt(_, args) = from.kind()
-            && self.is_std_adt(from, sym::Vec)
-        {
-            let arrow = convert(self, args.type_at(0))?;
-            return Ok(variant("Array", Expr::call(Expr::member(value, "map"), vec![arrow])));
-        }
-        if let Some(inner) = self.option_of(from) {
-            let arrow = convert(self, inner)?;
-            return Ok(Expr::call(Expr::var("$jsonOption"), vec![value, arrow]));
-        }
-        Err(self.unsupported(span, &format!("`Value::from` of `{from}`")))
+        Ok(match self.recognition().json_conversion(from) {
+            Some(JsonConversion::Tag(tag)) => variant(tag, value),
+            Some(JsonConversion::Null) => Expr::str("Null"),
+            Some(JsonConversion::Float) => Expr::call(Expr::var("$jsonFloat"), vec![value]),
+            Some(JsonConversion::Integer) => variant("Number", Expr::call(Expr::var("$jsonInt"), vec![value])),
+            Some(JsonConversion::Same) => value,
+            Some(JsonConversion::Vector(item)) => {
+                let arrow = convert(self, item)?;
+                variant("Array", Expr::call(Expr::member(value, "map"), vec![arrow]))
+            }
+            Some(JsonConversion::Option(item)) => {
+                let arrow = convert(self, item)?;
+                Expr::call(Expr::var("$jsonOption"), vec![value, arrow])
+            }
+            None => return Err(self.unsupported(span, &format!("`Value::from` of `{from}`"))),
+        })
     }
 
     /// `value == x` of a `Value` and a string, a number or a `bool`, as
@@ -265,18 +250,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     ) -> R<Expr> {
         self.use_value();
         let other_ty = other_ty.peel_refs();
-        let kind = if self.is_string_like(other_ty) {
-            "String"
-        } else if other_ty.is_bool() {
-            "Bool"
-        } else {
-            match Num::of(other_ty) {
-                Some(Num::F64) => "f64",
-                Some(n) if n.signed() => "i64",
-                Some(_) => "u64",
-                None => return Err(self.unsupported(span, &format!("`==` of a `Value` and a `{other_ty}`"))),
-            }
-        };
+        let kind = self
+            .recognition()
+            .json_comparison(other_ty)
+            .ok_or_else(|| self.unsupported(span, &format!("`==` of a `Value` and a `{other_ty}`")))?;
         Ok(Expr::call(
             Expr::var("$jsonValueEq"),
             vec![value, other, Expr::str(kind)],

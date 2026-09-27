@@ -40,9 +40,10 @@ Standard-library and Serde Value call recognition use only immutable type and
 trait inputs in `src/lower/recognition.rs`, separate from function emission state.
 Serde calls produce explicit operations before lowering evaluates operands or
 selects runtime helpers. Value/Number methods also produce typed operations;
-method names and unsupported-method classification stay in recognition. Other
-feature-specific dispatch and conversion representation decisions still need
-further separation; recognition is not yet unified across every library family.
+method names and unsupported-method classification stay in recognition. Value
+conversion categories and scalar comparison categories are recognized there too,
+including nested Vec/Option element types. Other feature-specific dispatch still
+needs further separation; recognition is not yet unified across every library family.
 
 **The entire target architecture is not yet delivered.** General Cargo graph
 resolution and cross-crate JS linkage, a supported distribution outside this

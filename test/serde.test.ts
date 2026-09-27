@@ -12,6 +12,11 @@ beforeAll(() => {
 
 const cases = [
   {
+    name: "nested Value conversions preserve vectors, optional values and nulls",
+    definitions: "",
+    value: `serde_json::Value::from(vec![Some(vec![1_i32, -2]), None, Some(Vec::<i32>::new())])`,
+  },
+  {
     name: "Value comparisons preserve operand order in both directions",
     definitions: `pub fn json(log: &mut String) -> serde_json::Value {
     log.push_str("v");
