@@ -578,8 +578,9 @@ test("options are the value or undefined", async () => {
   // `==` on options is `==`: `null` from JS equals `undefined` from Rust.
   expect(js).toContain("  return a == b;");
   // `map` puts the closure's body in place, on the option read once.
-  expect(js).toContain("    h != null ? double(h) : undefined,\n    h != null ? h > 2 : undefined,");
-  expect(js).toContain("    option != null ? Math.imul(option[0], option[1]) : undefined,");
+  expect(js).toContain("h != null ? double(h) : undefined");
+  expect(js).toContain("h != null ? h > 2 : undefined");
+  expect(js).toContain("option != null ? Math.imul(option[0], option[1]) : undefined");
   // Let chains (ADR 0048): one test when the parts need nothing else,
   expect(js).toContain("  const h = half(n);\n  if (h != null && h > 2) {\n    return h;\n  } else {\n    return -1;");
   // an `if` inside for a `let` of a call, only made once the rest held, and
@@ -883,8 +884,8 @@ pub fn read_only(v: &Vec<u32>, p: &Point) -> (Vec<u32>, Point) {
 test("== calls a hand-written eq wherever it's inside, and generics take a dictionary", async () => {
   const js = await Bun.file(join(target, "std_traits.js")).text();
   expect(js).toContain("export function same(a, b, TPartialEq) {\n  return TPartialEq.eq(a, b);");
-  expect(js).toContain("    versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),");
-  expect(js).toContain("    !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),");
+  expect(js).toContain("versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes)");
+  expect(js).toContain("!(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes))");
   expect(js).toContain("    left.TAG === \"Bump\"\n      ? right.TAG === \"Bump\" && versionPartialEq_eq(left._0, right._0)\n      : $eq(left, right");
   // A fieldless variant is a string: only itself is equal to it.
   expect(js).toContain("} === \"Nothing\"");

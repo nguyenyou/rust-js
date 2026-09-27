@@ -10,6 +10,9 @@ import { expectSnapshot, root, run } from "./support";
 import { decodeMappings, lookup } from "./sourcemap";
 
 const wasm = join(root, "wasm/target/wasm32-wasip1/release/rust-js.wasm");
+if (process.env.RUST_JS_REQUIRE_WASM && !existsSync(wasm)) {
+  throw new Error("WASM parity is required: build the compiler from the candidate sources with bun run wasm");
+}
 
 // The site is compiled by rust-js.wasm, and the snapshot by the native
 // compiler (test/snapshots.test.ts): the same source should give the same JS.
@@ -43,6 +46,8 @@ test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and s
     const url = printed.match(/https?:\/\/\S+/)![0];
     const page = await browser.newPage();
     const errors: string[] = [];
+    const workers: string[] = [];
+    page.on("worker", worker => workers.push(worker.url()));
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(url);
     // React rendered the page, and the old code found its parts in it.
@@ -50,8 +55,22 @@ test.skipIf(!existsSync(wasm))("the playground loads, compiles, runs tests and s
     const status = page.locator("#status");
     await status.filter({ hasText: "Ready." }).waitFor({ timeout: 60_000 });
     expect(await page.locator(".cm-editor").count()).toBe(2);
+    // Cancel immediately after worker creation, then compile successfully again.
+    const started = page.waitForEvent("worker");
+    await page.locator("#compile").click();
+    await started;
+    await page.locator("#cancel-compile").evaluate((button: HTMLButtonElement) => button.click());
+    await status.filter({ hasText: "Failed" }).waitFor({ timeout: 60_000 });
+    await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "Compilation cancelled" }).waitFor();
     await page.locator("#test").click();
     await status.filter({ hasText: "Tests: 5 passed, 0 failed." }).waitFor({ timeout: 60_000 });
+    expect(workers.some(url => url.includes("compiler-worker"))).toBe(true);
+    expect(await page.locator("#result").getAttribute("sandbox")).toBe("allow-scripts");
+    const preview = await page.locator("#result").elementHandle();
+    const previewFrame = await preview!.contentFrame();
+    expect(await previewFrame!.evaluate(() => {
+      try { void parent.document; return false; } catch { return true; }
+    })).toBe(true);
     await page.locator("#example").selectOption("modules");
     await page.locator("#source-files li", { hasText: "stats.rs" }).waitFor();
     await page.locator("#compile").click();

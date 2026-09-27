@@ -21,6 +21,10 @@ test("React components are hand-written JSX, and React runs them", () => {
   expect(js).toContain("const left = useMemo(() => todos.filter((t) => !t.done).length, [todos]);");
   // A handler of one call stays in the JSX; one with statements is named first.
   expect(js).toContain("onChange={(e) => setDraft(e.target.value)}\n          onKeyDown={onKeyDown}\n        />");
+  const todos = js.slice(js.indexOf("export function Todos()"), js.indexOf("export function Clock()"));
+  expect(todos).not.toMatch(/const\s+\S+\s*=\s*\(?\s*</);
+  expect(todos).toMatch(/<Card title="Todos">\s*<>\s*<input/);
+  expect(todos).toContain("<ul>{items}</ul>");
   expect(js).toContain("const onKeyDown = (e) => {");
   // A list, with its keys.
   expect(js).toContain("return (\n      <li key={t.id} className={t.done ? \"done\" : \"\"} onClick={onClick}>\n        {t.text}\n      </li>");
@@ -90,12 +94,41 @@ pub fn Capture() -> Element {
         <div onClick={move |_| { record(count); record(count + 1); }} />
     }
 }
+pub fn Siblings(flag: bool, inner: bool) -> Element {
+    let mut n = 1;
+    jsx! {
+        <div>
+            <span title={record(1).to_string()}>{n}</span>
+            {if flag { Some(jsx! {
+                <b>{if inner { jsx! { <i>{record(2)}</i> } } else { jsx! { <em>{record(3)}</em> } }}</b>
+            }) } else { None }}
+            {{ n = record(4); n }}
+        </div>
+    }
+}
+pub struct Attrs { pub title: String }
+unsafe extern "Rust" {
+    #[link_name = "globalThis.attributes"]
+    safe fn attributes() -> Attrs;
+}
+pub fn SpreadOrder() -> Element {
+    let attrs = attributes();
+    jsx! { <div><span {...attrs} />{{ let n = record(9); n }}</div> }
+}
+pub fn First() -> Element { jsx! { <b>{"first"}</b> } }
+pub fn Second() -> Element { jsx! { <i>{"second"}</i> } }
+pub fn ComponentOrder() -> Element {
+    let mut Selected: fn() -> Element = First;
+    jsx! { <div><Selected {...()} />{{ Selected = Second; record(9) }}<Selected {...()} /></div> }
+}
 `);
   run([compiler, input, "-o", join(dir, "lib.js"), "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   const result = await import(join(dir, "lib.jsx"));
   const log: number[] = [];
   const old = globalThis.record;
+  const oldAttributes = globalThis.attributes;
   globalThis.record = (n: number) => { log.push(n); return n; };
+  globalThis.attributes = () => ({ get title() { log.push(8); return "snapshot"; } });
   try {
     result.Order();
     expect(log.splice(0)).toEqual([1, 2, 3, 4]);
@@ -112,6 +145,23 @@ pub fn Capture() -> Element {
     expect(log).toEqual([]);
     element.props.onClick();
     expect(log).toEqual([4, 5]);
+    log.splice(0);
+    for (const [flag, inner, expected] of [[false, false, [1, 4]], [true, false, [1, 3, 4]], [true, true, [1, 2, 4]]] as const) {
+      const tree = result.Siblings(flag, inner);
+      expect(log.splice(0)).toEqual([...expected]);
+      expect(tree.props.children[0].props.children).toBe(1);
+      expect(tree.props.children[2]).toBe(4);
+    }
+    const spread = result.SpreadOrder();
+    expect(log.splice(0)).toEqual([8, 9]);
+    expect(spread.props.children[0].props.title).toBe("snapshot");
+    const components = result.ComponentOrder();
+    expect(log.splice(0)).toEqual([9]);
+    expect(components.props.children[0].type).toBe(result.First);
+    expect(components.props.children[2].type).toBe(result.Second);
+    const code = await Bun.file(join(dir, "lib.jsx")).text();
+    const siblings = code.slice(code.indexOf("export function Siblings("), code.indexOf("export function SpreadOrder("));
+    expect(siblings).not.toMatch(/(?:const\s+\S+|\b\w+)\s*=\s*\(?\s*</);
     const map = await Bun.file(join(dir, "lib.jsx.map")).json();
     const { decodeMappings } = await import("./sourcemap");
     expect(map.sourcesContent).toEqual([await Bun.file(input).text()]);
@@ -119,6 +169,8 @@ pub fn Capture() -> Element {
   } finally {
     if (old === undefined) delete globalThis.record;
     else globalThis.record = old;
+    if (oldAttributes === undefined) delete globalThis.attributes;
+    else globalThis.attributes = oldAttributes;
   }
 });
 

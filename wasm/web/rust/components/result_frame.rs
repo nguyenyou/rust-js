@@ -20,8 +20,8 @@ unsafe extern "Rust" {
     safe fn content_window(this: &HtmlIFrameElement) -> Option<&'static JsObject>;
     #[link_name = "get source"]
     safe fn message_source(this: &Event) -> Option<&'static JsObject>;
-    #[link_name = "get data"]
-    safe fn message_data(this: &Event) -> Option<Report>;
+    #[link_name = "../frame-report.js#readReport"]
+    safe fn message_data(event: &Event) -> Option<Report>;
     #[link_name = "Object.is"]
     safe fn same_object(a: Option<&JsObject>, b: Option<&JsObject>) -> bool;
 }
@@ -59,8 +59,8 @@ pub fn ResultFrame(ResultFrameProps { program, on_outcome }: ResultFrameProps) -
                             Some(report) if from_frame && report.run == Some(run) => report,
                             _ => return,
                         };
-                        heard.set(true);
                         if let Some(outcome) = outcome(report) {
+                            heard.set(true);
                             told(outcome);
                         }
                     }),
@@ -97,6 +97,7 @@ pub fn ResultFrame(ResultFrameProps { program, on_outcome }: ResultFrameProps) -
                 id="result"
                 className="block h-[280px] w-full rounded-md border border-line bg-page"
                 title="Result"
+                sandbox="allow-scripts"
                 srcDoc={page}
             />
         </section>

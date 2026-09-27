@@ -95,16 +95,23 @@ pilot. No delivery dates are assigned yet.
   and main updates, and require successful checks before merging. Include
   formatting, Clippy, Rust tests, differential tests, snapshots, browser tests,
   and the production example build. Today [Check](.github/workflows/check.yml)
-  runs only on a schedule or manual dispatch.
+  now runs on pull requests and pushes as well as scheduled/manual runs.
+  Branch-protection enforcement still needs repository configuration.
 - [ ] **M2.2 — Require fresh native/browser parity.** Build or fetch WASM for
   the exact candidate sources and run parity plus playground behavior tests
   as a release gate. Missing artifacts must fail that gate. Today
-  [playground tests](test/playground.test.ts) skip without WASM; deployment
-  checks parity, but the nightly workflow does not provision WASM.
+  [playground tests](test/playground.test.ts) may skip without WASM locally;
+  Check's WASM parity job builds candidate sources and sets
+  `RUST_JS_REQUIRE_WASM=1`, making a missing artifact fatal. Qualification of
+  the distributed release artifacts remains open.
 - [ ] **M2.3 — Expand adversarial regression coverage.** Add reproducible
   generated/property-based cases for supported constructs, effect order,
   aliasing, Unicode, numeric boundaries, and malformed input. Retain minimized
   regressions. Require diagnostics and preserved output for rejected programs.
+  Added evidence: [nested lowering regressions](test/semantics.rs) and their
+  [native comparisons](test/semantics.test.ts) cover struct updates, effect
+  order, and used inner results inside discarded calls. Generated/property-based
+  coverage remains open.
 
 ### M3 — Prove a complete application
 

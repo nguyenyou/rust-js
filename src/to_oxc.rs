@@ -50,7 +50,14 @@ pub struct Output {
 ///
 /// `source_path` is how the map names the Rust file (relative to the map),
 /// and `js_file_name` is the output's file name, for `sourceMappingURL`.
-pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name: &str) -> Output {
+pub fn emit(
+    module: &Module,
+    sources: &crate::program::Sources,
+    source_paths: &[String],
+    source_path: &str,
+    js_file_name: &str,
+) -> Output {
+    let rust_source = sources.text.as_str();
     let allocator = Allocator::default();
     let cx = Cx {
         b: AstBuilder::new(&allocator),
@@ -210,6 +217,7 @@ pub fn emit(module: &Module, rust_source: &str, source_path: &str, js_file_name:
         previous = Some(line);
     }
     let map = generated.map.expect("a source map, since source_map_path is set");
+    let map = restore_sources(&map, sources, source_paths, source_path);
     let mut map = shift_lines(&map, &places, js_file_name);
     // Laid out as oxfmt lays it out, the map moved to match.
     let shifted = SourceMap::from_json_string(&map).expect("the map just built");
@@ -605,6 +613,7 @@ impl<'a> Cx<'a> {
             ExprKind::Str(s) => Expression::new_string_literal(sp, self.allocator.alloc_str(s), None, b),
             ExprKind::Undefined => Expression::new_identifier(sp, "undefined", b),
             ExprKind::Null => Expression::new_null_literal(sp, b),
+            ExprKind::Symbol(_) => unreachable!("linking resolves every module symbol before emission"),
             ExprKind::Var(name) => Expression::new_identifier(sp, self.name(name), b),
             ExprKind::Member(object, property) => {
                 // `5.toString()` would read `5.` as a number: `(5).toString()`.
@@ -981,4 +990,39 @@ fn template_raw(text: &str) -> String {
         }
     }
     raw
+}
+
+/// Replace the temporary concatenated source with the actual source files.
+fn restore_sources<'a>(
+    map: &'a SourceMap<'a>,
+    sources: &'a crate::program::Sources,
+    paths: &'a [String],
+    primary: &str,
+) -> SourceMap<'a> {
+    let mut out = SourceMapBuilder::default();
+    let mut ids = std::collections::HashMap::new();
+    if let Some(i) = paths.iter().position(|path| path == primary) {
+        ids.insert(i, out.set_source_and_content(&paths[i], &sources.files[i].text));
+    }
+    let names: Vec<_> = map.get_names().map(|name| out.add_name(name)).collect();
+    for token in map.get_tokens() {
+        if token.get_source_id().is_none() {
+            out.add_token(token.get_dst_line(), token.get_dst_col(), 0, 0, None, None);
+            continue;
+        }
+        let position = sources.files.partition_point(|file| file.line <= token.get_src_line());
+        let Some(i) = position.checked_sub(1) else { continue };
+        let id = *ids
+            .entry(i)
+            .or_insert_with(|| out.set_source_and_content(&paths[i], &sources.files[i].text));
+        out.add_token(
+            token.get_dst_line(),
+            token.get_dst_col(),
+            token.get_src_line() - sources.files[i].line,
+            token.get_src_col(),
+            Some(id),
+            token.get_name_id().map(|id| names[id as usize]),
+        );
+    }
+    out.into_sourcemap()
 }

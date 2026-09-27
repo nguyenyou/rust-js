@@ -32,8 +32,11 @@ mod format;
 mod js;
 mod jsx_syntax;
 mod lower;
+mod manifest;
 mod output;
 mod prepare;
+mod program;
+mod publish;
 mod runtime;
 mod to_oxc;
 
@@ -67,15 +70,19 @@ impl Callbacks for RustJs {
         if tcx.dcx().has_errors().is_none()
             && let Some(lowered) = lower::lower_crate(tcx, &bodies, &serde_attrs)
             && tcx.dcx().has_errors().is_none()
-            && let Err(err) = self.output.write(
-                lowered,
-                tcx.sess
-                    .source_map()
-                    .files()
-                    .iter()
-                    .filter_map(|file| file.name.clone().into_local_path())
-                    .collect(),
-            )
+            && let Err(err) = self
+                .output
+                .plan(
+                    lowered,
+                    tcx.sess
+                        .source_map()
+                        .files()
+                        .iter()
+                        .filter(|file| file.src.is_some())
+                        .filter_map(|file| file.name.clone().into_local_path())
+                        .collect(),
+                )
+                .and_then(|plan| plan.publish())
         {
             tcx.dcx().err(format!("rust-js: {err}"));
         }
@@ -87,6 +94,14 @@ impl Callbacks for RustJs {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["--version"] {
+        let compiler = manifest::Compiler::current();
+        println!(
+            "rust-js {} ({}; ABI {})",
+            compiler.version, compiler.toolchain, compiler.abi
+        );
+        return ExitCode::SUCCESS;
+    }
     if args.first().is_some_and(|arg| arg == "--format-jsx") {
         let input = match args.as_slice() {
             [_] => "-",

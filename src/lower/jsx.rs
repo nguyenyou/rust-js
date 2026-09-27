@@ -2,14 +2,101 @@
 
 use super::{FnCx, R, Shape, camel_case, js_ident};
 use crate::js;
-use crate::js::{Expr, Prop, Stmt};
+use crate::js::{Expr, Prop, Stmt, StmtKind};
 use rustc_ast::LitKind;
+use rustc_hir::def::DefKind;
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty;
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Element construction is inert (ADR 0040). Capture its inputs at the
+    /// original evaluation point while leaving the element in the JSX tree.
+    pub(super) fn capture_jsx(&mut self, value: &mut Expr, out: &mut Vec<Stmt>) -> bool {
+        match &mut value.kind {
+            js::ExprKind::Jsx(jsx) => {
+                if let js::JsxTag::Component(tag) = &mut jsx.tag {
+                    self.capture_jsx_input("Component", tag, out);
+                }
+                for prop in &mut jsx.props {
+                    match prop {
+                        Prop::Field(name, value) => self.capture_jsx_input(&js_ident(name), value, out),
+                        Prop::Spread(value) => {
+                            // JSX spreads read properties now, not when the
+                            // later element is built. Preserve getters too.
+                            let old = std::mem::replace(value, Expr::undefined());
+                            *value = self.spill("props", Expr::object(vec![Prop::Spread(old)]), out);
+                        }
+                    }
+                }
+                for child in &mut jsx.children {
+                    self.capture_jsx_input("children", child, out);
+                }
+                true
+            }
+            js::ExprKind::Cond(test, yes, no) if jsx_tree(yes) || jsx_tree(no) => {
+                self.capture_jsx_input("condition", test, out);
+                let mut then = Vec::new();
+                let mut otherwise = Vec::new();
+                self.capture_jsx_input("children", yes, &mut then);
+                self.capture_jsx_input("children", no, &mut otherwise);
+                // Keep branch computations conditional. Only their result
+                // bindings are visible to the deferred JSX expression.
+                for statement in then.iter_mut().chain(&mut otherwise) {
+                    match &mut statement.kind {
+                        StmtKind::Const(name, value) | StmtKind::Let(name, Some(value)) => {
+                            out.push(StmtKind::Let(name.clone(), None).at(statement.span));
+                            statement.kind = StmtKind::Assign(Expr::var(name), value.clone());
+                        }
+                        StmtKind::Let(name, None) => {
+                            out.push(StmtKind::Let(name.clone(), None).at(statement.span));
+                        }
+                        _ => {}
+                    }
+                }
+                then.retain(|s| !matches!(s.kind, StmtKind::Let(_, None)));
+                otherwise.retain(|s| !matches!(s.kind, StmtKind::Let(_, None)));
+                if !then.is_empty() || !otherwise.is_empty() {
+                    out.push(StmtKind::If(*test.clone(), then, Some(otherwise)).at(value.span));
+                }
+                true
+            }
+            js::ExprKind::Array(items) if items.iter().any(jsx_tree) => {
+                for item in items {
+                    self.capture_jsx_input("children", item, out);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn capture_jsx_input(&mut self, base: &str, value: &mut Expr, out: &mut Vec<Stmt>) {
+        let stable = match &value.kind {
+            js::ExprKind::Symbol(_) | js::ExprKind::Arrow(..) | js::ExprKind::AsyncArrow(..) => true,
+            js::ExprKind::Var(name) => {
+                self.vars
+                    .values()
+                    .any(|var| !var.mutable && matches!(&var.place.kind, js::ExprKind::Var(n) if n == name))
+                    || out
+                        .iter()
+                        .any(|s| matches!(&s.kind, StmtKind::Const(n, _) if n == name))
+                    || self.krate.fns.iter().any(|(id, f)| {
+                        f.module == self.module
+                            && &f.name == name
+                            && matches!(self.tcx.def_kind(*id), DefKind::Fn | DefKind::AssocFn)
+                    })
+            }
+            _ => value.is_constant(),
+        };
+        if !stable && !self.capture_jsx(value, out) {
+            let map = matches!(&value.kind, js::ExprKind::Call(f, _) if matches!(&f.kind, js::ExprKind::Member(_, name) if name == "map"));
+            let old = std::mem::replace(value, Expr::undefined());
+            *value = self.spill(if map { "items" } else { base }, old, out);
+        }
+    }
+
     // ── JSX (ADR 0040) ──────────────────────────────────────────────────
 
     /// A JSX element, from a binding whose `link_name` is its tag: `<div>`
@@ -20,7 +107,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (tag, props, children) = match (tag, args) {
             ("*", &[component, props]) => {
                 let tag = self.expr(component, out)?;
-                if !matches!(tag.kind, js::ExprKind::Var(_) | js::ExprKind::Member(..)) {
+                if !matches!(
+                    tag.kind,
+                    js::ExprKind::Var(_) | js::ExprKind::Symbol(_) | js::ExprKind::Member(..)
+                ) {
                     return Err(self.unsupported(
                         self.thir[component].span,
                         "a JSX component other than a named function or module member",
@@ -28,9 +118,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 // JSX reads a lowercase name as a DOM element's, and Fast
                 // Refresh only keeps the state of a capitalized component.
-                if let js::ExprKind::Var(name) = &tag.kind
-                    && let name = super::link::export_name(name)
-                    && !name.starts_with(|c: char| c.is_ascii_uppercase())
+                if let Some(name) = match &tag.kind {
+                    js::ExprKind::Var(name) => Some(name.as_str()),
+                    js::ExprKind::Symbol(symbol) => Some(symbol.export.as_str()),
+                    _ => None,
+                } && !name.starts_with(|c: char| c.is_ascii_uppercase())
                 {
                     let message =
                         format!("rust-js: a React component's name starts with an uppercase letter, not `{name}`");
@@ -247,5 +339,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             });
         }
         Ok(element)
+    }
+}
+
+/// JSX syntax evaluated here, rather than inside a callback passed elsewhere.
+fn jsx_tree(value: &Expr) -> bool {
+    match &value.kind {
+        js::ExprKind::Jsx(_) => true,
+        js::ExprKind::Cond(_, yes, no) => jsx_tree(yes) || jsx_tree(no),
+        js::ExprKind::Array(items) => items.iter().any(jsx_tree),
+        _ => false,
     }
 }

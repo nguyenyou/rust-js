@@ -10,7 +10,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use react::{Element, use_effect, use_memo, use_ref, use_state, use_transition};
-use web::{reg_exp, spawn, window};
+use web::{Promise, reg_exp, spawn, window};
 
 use super::editor::Editor;
 use super::file_tree::FileTree;
@@ -21,11 +21,16 @@ use super::status_line::{Status, Tone};
 use super::toolbar::Toolbar;
 use crate::codemirror::{EditorView, editor_state, output_state, source_state};
 use crate::compiler::{
-    Example, JsMap, Loaded, Stat, compile, load, load_example, mb, ms, set_last_result, text_entries,
+    Compiled, Example, JsMap, Loaded, Stat, load, load_example, mb, ms, set_last_result, text_entries,
 };
 use crate::programs::{Outcome, Prepared, Program, prepare};
 use crate::projects::{Project, js_name};
 use crate::tree::build_tree;
+
+unsafe extern "Rust" {
+    #[link_name = "../compiler-client.js#compileInWorker"]
+    safe fn compile(loaded: &Loaded, sources: &JsMap, root: &str, test: bool) -> Promise<Compiled>;
+}
 
 /// What the JavaScript side shows.
 pub enum Output {
@@ -320,6 +325,7 @@ pub fn App() -> Element {
                 example={example.clone()}
                 onExample={on_example}
                 ready={loaded.is_some() && !compiling}
+                compiling={compiling}
                 onCompile={on_compile}
                 status={status}
             />

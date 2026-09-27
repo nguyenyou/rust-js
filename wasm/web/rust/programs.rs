@@ -4,10 +4,8 @@
 // (see `link`), preserving live bindings and cycles, and the page reports
 // back what happened, so the status line always says.
 //
-// The frame isn't sandboxed. Chrome runs a sandboxed frame in a process of
-// its own, and some setups then don't draw it until something else changes
-// the layout: the program ran, but the frame stayed blank. The program is
-// the one in the editor, so it may share this page's origin.
+// The frame has an opaque origin and allows scripts only. Programs can report
+// results through postMessage, but cannot access the editor's DOM or storage.
 
 use web::{JsObject, RegExp, reg_exp};
 

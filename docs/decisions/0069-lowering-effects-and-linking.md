@@ -36,13 +36,21 @@ Keep the compiler in one crate, with these narrower contracts:
 - **Return dependencies with each lowered function.** `CrateFacts` has no
   interior-mutability fields. Each function owns its dependency accumulator,
   including dependencies discovered in closures and copied trait bodies.
-- **Lower once, then link.** Cross-module references use temporary symbolic
-  identifiers, which cannot collide with source identifiers. After removing
+- **Keep expression scratch state local.** A struct update's saved fields
+  belong to that invocation of `adt`, since its base can contain another
+  struct literal or update. Whether a call's result is discarded is an
+  explicit argument to call lowering; it does not apply to the call's own
+  arguments. Neither belongs in shared function state.
+- **Lower once, then link.** Cross-module references use explicit `js::Symbol`
+  values, which cannot collide with source identifiers. After removing
   unused derived Debug implementations, `lower/link.rs` assigns aliases for
   actual dependencies and resolves those identifiers. No unresolved symbol
   may leave lowering. Alias allocation considers nested bindings and variable
   references; locals keep their names and imports receive suffixes as needed.
   Reachability uses adjacency lists rather than repeated scans of all edges.
+
+[ADR 0084](0084-owned-phases-and-host-boundaries.md) makes operand prerequisites,
+owned source origins, runtime dependency closure, and host publication explicit.
 
 The JS AST and printer stay independent of rustc identities. Linking is a
 small lowering phase; it does not change filesystem publication or the
@@ -53,6 +61,10 @@ manifest schema. Snapshots record the intentional alias and map-write changes.
 `test/semantics.test.ts` compares generated JS directly with native release
 Rust, including values, side-effect order, zero/one/many clones and panics.
 It also checks unsupported key diagnostics and preservation of previous output.
+Nested struct literals, conditional updates, and structs inside base blocks
+compare field values and effect order with native Rust. Nested map insertions
+and mutable-reference calls verify that discarding an outer result preserves
+the inner result and mutations.
 `test/link.test.ts` covers alias shadowing and sparse module cycles. Existing
 trait tests cover copied defaults, cycles, JSX extensions and source locations.
 

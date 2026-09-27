@@ -114,7 +114,59 @@ pub enum Helper {
     Position,
 }
 
+/// Resolve helper dependencies once at the linking boundary, in stable order.
+pub fn resolve(requested: impl IntoIterator<Item = Helper>) -> Vec<Helper> {
+    let mut helpers = std::collections::BTreeSet::new();
+    let mut pending: Vec<_> = requested.into_iter().collect();
+    while let Some(helper) = pending.pop() {
+        if helpers.insert(helper) {
+            pending.extend(helper.dependencies());
+        }
+    }
+    helpers.into_iter().collect()
+}
+
 impl Helper {
+    fn dependencies(self) -> &'static [Helper] {
+        match self {
+            Helper::DebugF64 => &[Helper::DisplayF64],
+            Helper::CmpIn => &[Helper::Cmp],
+            Helper::CmpItems => &[Helper::Cmp],
+            Helper::MaxBy => &[Helper::Some],
+            Helper::MinBy => &[Helper::Some],
+            Helper::UnwrapOk => &[Helper::Debug],
+            Helper::UnwrapErr => &[Helper::Debug],
+            Helper::SomeValue => &[Helper::Some],
+            Helper::SomeAt => &[Helper::Some],
+            Helper::Pop => &[Helper::Some],
+            Helper::Iterator => &[Helper::SomeValue],
+            Helper::RemEuclid => &[Helper::Rem],
+            Helper::DivEuclid => &[Helper::Div],
+            Helper::NextSome => &[Helper::Some],
+            Helper::JsonError => &[Helper::DebugStr],
+            Helper::FromJson => &[
+                Helper::JsonFail,
+                Helper::DebugStr,
+                Helper::SortedEntries,
+                Helper::Cmp,
+                Helper::Some,
+            ],
+            Helper::JsonValue => &[
+                Helper::SortedEntries,
+                Helper::Cmp,
+                Helper::ToJson,
+                Helper::JsonFail,
+                Helper::DebugStr,
+            ],
+            Helper::ToJson => &[Helper::JsonFail],
+            Helper::HeapPush => &[Helper::SiftUp],
+            Helper::HeapPop => &[Helper::SiftUp],
+            Helper::HeapSorted => &[Helper::SiftDown],
+            Helper::HeapFrom => &[Helper::SiftDown],
+            _ => &[],
+        }
+    }
+
     pub fn source(self) -> &'static str {
         match self {
             Helper::Index => {
@@ -238,31 +290,7 @@ function $cmp(a, b) {
             // Rust does. JS's `toFixed` rounds a tie up, and past 1e21 it
             // switches to an exponent.
             Helper::ToFixed => {
-                r#"
-function $toFixed(value, digits) {
-  if (Number.isNaN(value)) return "NaN";
-  if (value === Infinity) return "inf";
-  if (value === -Infinity) return "-inf";
-  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
-  const view = new DataView(new ArrayBuffer(8));
-  view.setFloat64(0, Math.abs(value));
-  const bits = view.getBigUint64(0);
-  const exponent = Number((bits >> 52n) & 2047n);
-  const fraction = bits & ((1n << 52n) - 1n);
-  const significand = exponent === 0 ? fraction : fraction | (1n << 52n);
-  const shift = exponent === 0 ? -1074 : exponent - 1075;
-  // |value| * 10^digits, as a fraction.
-  let numerator = significand * 10n ** BigInt(digits);
-  let denominator = 1n;
-  if (shift >= 0) numerator <<= BigInt(shift);
-  else denominator <<= BigInt(-shift);
-  let rounded = numerator / denominator;
-  const twice = 2n * (numerator % denominator);
-  if (twice > denominator || (twice === denominator && rounded % 2n === 1n)) rounded += 1n;
-  const text = rounded.toString().padStart(digits + 1, "0");
-  return sign + (digits === 0 ? text : text.slice(0, -digits) + "." + text.slice(-digits));
-}
-"#
+                include_str!("runtime/to_fixed.js")
             }
             // `{:?}` of an `f64`: `1.0`, and `1e16` or `1e-5` past `[1e-4, 1e16)`.
             Helper::DebugF64 => {
@@ -994,92 +1022,7 @@ function $jsonNumber(x) {
             // and it lays them out as serde_json's compact or pretty
             // formatter does.
             Helper::ToJson => {
-                r#"
-function $jsonWriter(pretty) {
-  // For each array or object open: whether nothing is in it yet.
-  const empty = [];
-  const next = (json) => {
-    const first = empty[empty.length - 1];
-    empty[empty.length - 1] = false;
-    if (pretty) json.text += (first ? "\n" : ",\n") + "  ".repeat(empty.length);
-    else if (!first) json.text += ",";
-  };
-  const open = (json, bracket) => {
-    empty.push(true);
-    json.text += bracket;
-  };
-  const close = (json, bracket) => {
-    if (!empty.pop() && pretty) json.text += "\n" + "  ".repeat(empty.length);
-    json.text += bracket;
-  };
-  return {
-    text: "",
-    null() { this.text += "null"; },
-    bool(b) { this.text += String(b); },
-    int(n) { this.text += String(n); },
-    number(x) { this.text += $jsonNumber(x); },
-    char(c) { this.text += JSON.stringify(c); },
-    string(s) { this.text += JSON.stringify(s); },
-    // An externally tagged unit variant: its name.
-    variant(name) { this.string(name); },
-    beginArray() { open(this, "["); },
-    beginTuple() { open(this, "["); },
-    beginTupleStruct() { open(this, "["); },
-    element() { next(this); },
-    endArray() { close(this, "]"); },
-    beginObject() { open(this, "{"); },
-    key(k) {
-      next(this);
-      this.text += JSON.stringify(k) + (pretty ? ": " : ":");
-    },
-    endObject() { close(this, "}"); },
-    // `#[serde(flatten)]`: `value`'s entries, among the object's own.
-    flat(value, write) { write(value, $jsonFlat(this)); },
-  };
-}
-// serde's `FlatMapSerializer`: a struct's or a map's entries go into the
-// object `into` is writing; a variant is an entry of its name; `None` and
-// `()` are nothing; and anything else can't be flattened.
-function $jsonFlat(into) {
-  let depth = 0;
-  const top = (what) => {
-    if (depth === 0) throw $jsonError(`can only flatten structs and maps (got ${what})`);
-  };
-  const flat = {
-    null() { if (depth > 0) into.null(); },
-    bool(b) { top("a boolean"); into.bool(b); },
-    int(n) { top("an integer"); into.int(n); },
-    number(x) { top("a float"); into.number(x); },
-    char(c) { top("a char"); into.char(c); },
-    string(s) { top("a string"); into.string(s); },
-    variant(name) {
-      if (depth > 0) return into.variant(name);
-      into.key(name);
-      into.null();
-    },
-    beginArray() { top("a sequence"); depth++; into.beginArray(); },
-    beginTuple() { top("a tuple"); depth++; into.beginTuple(); },
-    beginTupleStruct() { top("a tuple struct"); depth++; into.beginTupleStruct(); },
-    element() { into.element(); },
-    endArray() { depth--; into.endArray(); },
-    beginObject() { if (depth++ > 0) into.beginObject(); },
-    key(k) { into.key(k); },
-    endObject() { if (--depth > 0) into.endObject(); },
-    flat(value, write) { write(value, $jsonFlat(this)); },
-  };
-  return flat;
-}
-function $toJson(value, write, pretty) {
-  const json = $jsonWriter(pretty);
-  try {
-    write(value, json);
-  } catch (e) {
-    if (e instanceof $JsonError) return { TAG: "Err", _0: { message: e.message, line: e.line, column: e.column } };
-    throw e;
-  }
-  return { TAG: "Ok", _0: json.text };
-}
-"#
+                include_str!("runtime/to_json.js")
             }
             // `scan(init, f)`: `f` changes the state through its box, and gives
             // each item out, until it gives `None`.

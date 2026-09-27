@@ -3,7 +3,7 @@
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-export type Segment = { jsLine: number; jsCol: number; srcLine: number; srcCol: number };
+export type Segment = { jsLine: number; jsCol: number; source: number; srcLine: number; srcCol: number };
 
 export function decodeMappings(mappings: string): Segment[] {
   const segments: Segment[] = [];
@@ -31,7 +31,7 @@ export function decodeMappings(mappings: string): Segment[] {
         srcLine += fields[2];
         srcCol += fields[3];
         if (fields.length >= 5) name += fields[4];
-        segments.push({ jsLine, jsCol, srcLine, srcCol });
+        segments.push({ jsLine, jsCol, source, srcLine, srcCol });
       }
     }
   });

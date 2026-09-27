@@ -20,7 +20,7 @@ WASM=wasm/target/wasm32-wasip1/release/rust-js.wasm
 STAMP=$WASM.inputs
 # Everything that can change the binary. The toolchain and the rustc commit
 # are pinned inside build.sh, so they're covered too.
-INPUTS=(src wasm/Cargo.toml wasm/Cargo.lock wasm/.cargo wasm/patches wasm/build.sh)
+INPUTS=(src Cargo.toml rust-toolchain.toml wasm/Cargo.toml wasm/Cargo.lock wasm/.cargo wasm/patches wasm/build.sh)
 
 die() {
   echo "prebuilt.sh: $*" >&2

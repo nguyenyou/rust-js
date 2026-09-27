@@ -184,6 +184,13 @@ pub struct Expr {
     pub span: Span,
 }
 
+/// A cross-module reference, resolved before preparation or printing.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Symbol {
+    pub module: u32,
+    pub export: String,
+}
+
 #[derive(Clone)]
 pub enum ExprKind {
     Num(f64),
@@ -193,6 +200,7 @@ pub enum ExprKind {
     /// Only to test against: `o != null` (ADR 0030).
     Null,
     Var(String),
+    Symbol(Symbol),
     /// `object.property`, e.g. `Math.imul` or `math.add`.
     Member(Box<Expr>, String),
     /// `object[index]`, e.g. `pair[0]`.
@@ -461,6 +469,7 @@ impl Expr {
             | ExprKind::Undefined
             | ExprKind::Null
             | ExprKind::Var(_)
+            | ExprKind::Symbol(_)
             | ExprKind::Regex(_) => false,
         }
     }
@@ -553,6 +562,7 @@ impl Expr {
             | ExprKind::Str(_)
             | ExprKind::Undefined
             | ExprKind::Null
+            | ExprKind::Symbol(_)
             | ExprKind::Regex(_) => self.kind.clone(),
         };
         Some(Expr { kind, span: self.span })
@@ -563,6 +573,7 @@ impl Expr {
     fn mentions(&self, names: &[&str]) -> bool {
         match &self.kind {
             ExprKind::Var(n) => names.contains(&n.as_str()),
+            ExprKind::Symbol(_) => false,
             ExprKind::Member(object, _) => object.mentions(names),
             _ => !self.is_constant(),
         }
@@ -585,7 +596,7 @@ impl Expr {
     /// constant: what can be written twice.
     pub fn reads_same(&self) -> bool {
         match &self.kind {
-            ExprKind::Var(_) => true,
+            ExprKind::Var(_) | ExprKind::Symbol(_) => true,
             ExprKind::Member(object, _) => object.reads_same(),
             ExprKind::Index(object, index) => object.reads_same() && index.is_constant(),
             _ => self.is_constant(),
@@ -601,6 +612,7 @@ impl Expr {
             | ExprKind::Undefined
             | ExprKind::Null
             | ExprKind::Var(_)
+            | ExprKind::Symbol(_)
             | ExprKind::Regex(_)
             | ExprKind::Arrow(..)
             | ExprKind::AsyncArrow(..) => false,

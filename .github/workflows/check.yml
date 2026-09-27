@@ -1,6 +1,8 @@
 name: Check
 
 on:
+  pull_request:
+  push:
   schedule:
     # 02:17 in Vietnam (UTC+7), away from the busy start of the hour.
     - cron: '17 19 * * *'
@@ -31,3 +33,39 @@ jobs:
       - run: cargo test --locked
       - run: bun test
       - run: bun run --cwd examples/vite-react build
+
+  wasm-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install pinned toolchain and targets
+        run: |
+          rustup show
+          rustup target add wasm32-wasip1 wasm32-unknown-unknown
+      - name: Prepare the pinned rustc frontend
+        run: |
+          git init -q wasm/rustc
+          git -C wasm/rustc remote add origin https://github.com/rust-lang/rust.git
+          git -C wasm/rustc sparse-checkout set --cone compiler library/proc_macro
+          git -C wasm/rustc fetch -q --depth=1 --filter=blob:none origin 362211dc29abc4e8f8cfc384740237f144929b03
+          git -C wasm/rustc checkout -q FETCH_HEAD
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            wasm/target
+          key: wasm-check-${{ runner.os }}-${{ hashFiles('wasm/Cargo.lock', 'wasm/patches/*', 'wasm/.cargo/config.toml', 'rust-toolchain.toml') }}
+          restore-keys: wasm-check-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bunx --bun playwright install --with-deps chromium
+      - name: Build WASM from the candidate sources
+        run: bun run wasm
+      - name: Require native snapshots and browser parity
+        env:
+          RUST_JS_REQUIRE_WASM: '1'
+        run: bun test test/snapshots.test.ts test/playground.test.ts

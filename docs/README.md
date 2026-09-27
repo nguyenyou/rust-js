@@ -49,7 +49,11 @@ This folder is where we write those choices down.
 | `src/runtime/from_json.js` | serde_json's reader, ported to JS |
 | `src/runtime.rs` | Runtime helpers emitted on demand |
 | `src/prepare.rs` | JSX readability preparation after lowering |
-| `src/output.rs` | Filename validation, manifests and artifact publication |
+| `src/program.rs`, `src/lower/sources.rs` | Owned linked modules and multi-file source origins |
+| `src/output.rs`, `src/manifest.rs` | Validated artifact plans and the versioned build result |
+| `src/publish.rs` | Native publication, ownership and rollback |
+| `tooling/` | Native build adapter, manifest consumers and WASI host publication |
+| `wasm/web/compiler-client.js`, `wasm/web/compiler-worker.js` | Browser compiler lifecycle and recovery |
 | `src/js.rs` | Our small JS AST; every node carries a Rust span |
 | `src/to_oxc.rs` | Converts to oxc's AST, prints, builds the source map |
 | `src/format.rs` | Formats the printed JS as oxfmt does, and moves the source map to match |
@@ -178,3 +182,7 @@ Copy the shape of an existing record: **Context → Decision → Why →
 Alternatives → Consequences**. Number it next in sequence. If a new decision
 replaces an old one, don't delete the old one. Set its status to
 `Superseded by NNNN`, so the history of *why* survives.
+
+**Architecture boundaries**
+
+- [0084 Owned compiler phases and explicit host boundaries](decisions/0084-owned-phases-and-host-boundaries.md)

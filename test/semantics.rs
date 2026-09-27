@@ -8,6 +8,68 @@ fn mark(log: &Cell<i32>, digit: i32) -> i32 {
     digit
 }
 
+struct Fields { a: i32, b: i32, c: i32 }
+
+pub fn nested_struct_literal(n: i32) -> Vec<i32> {
+    let value = Fields { a: n, ..Fields { a: 20, b: 30, c: 40 } };
+    vec![value.a, value.b, value.c]
+}
+
+pub fn nested_struct_updates(branch: bool) -> Vec<i32> {
+    let log = Cell::new(0);
+    let value = Fields {
+        a: mark(&log, 1),
+        ..if branch {
+            Fields {
+                b: mark(&log, 2),
+                ..Fields { a: mark(&log, 3), b: 20, c: mark(&log, 4) }
+            }
+        } else {
+            Fields { c: mark(&log, 5), a: mark(&log, 6), b: mark(&log, 7) }
+        }
+    };
+    vec![log.get(), value.a, value.b, value.c]
+}
+
+pub fn struct_in_base_block(n: i32) -> Vec<i32> {
+    let log = Cell::new(0);
+    let value = Fields {
+        b: mark(&log, 1),
+        ..{
+            let pair = (mark(&log, 2), n);
+            Fields { a: pair.0, b: mark(&log, 3), c: pair.1 }
+        }
+    };
+    vec![log.get(), value.a, value.b, value.c]
+}
+
+pub fn discarded_nested_insert(present: bool) -> Vec<i32> {
+    let mut inner = HashMap::new();
+    if present { inner.insert(1, 10); }
+    let mut outer = HashMap::new();
+    outer.insert(2, inner.insert(1, 20).unwrap_or(30));
+    vec![outer[&2], inner[&1]]
+}
+
+fn replace_number(value: &mut i32, next: i32) -> i32 {
+    let previous = *value;
+    *value = next;
+    previous
+}
+
+pub fn discarded_nested_box(n: i32) -> Vec<i32> {
+    let mut a = n;
+    let mut b = n + 1;
+    replace_number(&mut a, replace_number(&mut b, 30));
+    vec![a, b]
+}
+
+pub fn operand_prerequisites(n: i32) -> Vec<i32> {
+    let log = Cell::new(0);
+    let result = (mark(&log, 1), Some(mark(&log, 2)).map(|value| value + n));
+    vec![log.get(), result.0, result.1.unwrap()]
+}
+
 pub fn entry_eager(present: bool) -> Vec<i32> {
     let log = Cell::new(0);
     let mut map = HashMap::new();

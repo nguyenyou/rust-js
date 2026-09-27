@@ -276,9 +276,10 @@ export function tree() {
   const option = Value.get(v, "name");
   const s = option != null ? Value.as_str(option) : undefined;
   const name = s != null ? s.toUpperCase() : undefined;
+  const tmp = price(v);
+  const tmp$1 = Value.depth(v);
   const option$1 = Value.get(v, "missing");
-  const arg = price(v);
-  out += `${arg == null ? "None" : `Some(${$debugF64(arg)})`} ${name == null ? "None" : `Some(${$debugStr(name)})`} ${Value.depth(v)} ${option$1 == null || Value.is_null(option$1)}\n`;
+  out += `${tmp == null ? "None" : `Some(${$debugF64(tmp)})`} ${name == null ? "None" : `Some(${$debugStr(name)})`} ${tmp$1} ${option$1 == null || Value.is_null(option$1)}\n`;
   const cloneValue = (value) =>
     value.TAG === "List"
       ? { ...value, _0: value._0.map((item) => cloneValue(item)) }

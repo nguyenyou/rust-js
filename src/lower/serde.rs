@@ -367,7 +367,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `serde_json::to_string(&v)` and `to_string_pretty`: `$toJson((json) =>
     /// { .. }, pretty)`, the steps for `v` in a function the writer calls.
     pub(super) fn json_text(&mut self, value: Expr, ty: Ty<'tcx>, pretty: bool, span: Span) -> R<Expr> {
-        self.runtime.extend([Helper::ToJson, Helper::JsonFail]);
+        self.runtime.insert(Helper::ToJson);
         let write = self.json_writer(ty, span)?;
         Ok(Expr::call(Expr::var("$toJson"), vec![value, write, Expr::bool(pretty)]))
     }

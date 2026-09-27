@@ -14,7 +14,8 @@ mod components;
 // What the components use: loading and running the compiler, the Result
 // frame's page, CodeMirror, and the crate being edited.
 mod codemirror;
-mod compiler;
+// Also called by compiler-worker.js through the generated module's public API.
+pub mod compiler;
 mod dark_mode;
 mod listen;
 mod programs;

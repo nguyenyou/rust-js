@@ -22,22 +22,21 @@ export function Literals() {
 export function Expressions(show) {
   const pair = [1, 2];
   const list = [3, 4];
-  const tmp = show ? <b>yes</b> : undefined;
-  let tmp$1;
+  let tmp;
   if (show === true) {
-    tmp$1 = "on";
+    tmp = "on";
   } else {
-    tmp$1 = "off";
+    tmp = "off";
   }
-  const tmp$2 = tmp$1;
+  const tmp$1 = tmp;
   const n = 5;
   return (
     <section>
       {pair[0]}
       {pair[1]}
       {list}
-      {tmp}
-      {tmp$2}
+      {show ? <b>yes</b> : undefined}
+      {tmp$1}
       {(n + 1) | 0}
     </section>
   );

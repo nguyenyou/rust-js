@@ -354,18 +354,24 @@ export function equalities() {
   const r1 = { version: version(1, "a"), notes: ["x"] };
   const r2 = { version: version(1, "b"), notes: ["x"] };
   const r3 = { version: version(1, "c"), notes: [] };
+  const tmp = versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes);
+  const tmp$1 = !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes));
+  const tmp$2 = same(version(2, "a"), version(3, "a"), versionPartialEq());
   const left = { TAG: "Bump", _0: version(4, "a") };
   const right = { TAG: "Bump", _0: version(4, "b") };
+  const tmp$3 =
+    left.TAG === "Bump"
+      ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0)
+      : $eq(left, right);
+  const tmp$4 = { TAG: "Note", _0: "n" } === "Nothing";
   const left$1 = version(5, "a");
   const right$1 = version(5, "b");
   return [
-    versionPartialEq_eq(r1.version, r2.version) && $eq(r1.notes, r2.notes),
-    !(versionPartialEq_eq(r1.version, r3.version) && $eq(r1.notes, r3.notes)),
-    same(version(2, "a"), version(3, "a"), versionPartialEq()),
-    left.TAG === "Bump"
-      ? right.TAG === "Bump" && versionPartialEq_eq(left._0, right._0)
-      : $eq(left, right),
-    { TAG: "Note", _0: "n" } === "Nothing",
+    tmp,
+    tmp$1,
+    tmp$2,
+    tmp$3,
+    tmp$4,
     left$1 == null || right$1 == null ? left$1 == right$1 : versionPartialEq_eq(left$1, right$1),
   ];
 }
@@ -495,17 +501,21 @@ export function orderings() {
   const b = { major: 1, minor: 10 };
   let all = [b, { major: 0, minor: 9 }, a];
   all.sort((a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
+  const tmp = ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) < 0;
+  const tmp$1 = $eq(($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) > 0 ? a : b, b);
+  const tmp$2 = ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) === -1;
   const v = largest(
     all,
     { cmp: (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor) },
     { copy: (value) => ({ ...value }) },
   );
+  const tmp$3 = (v != null ? v.minor : undefined) ?? 0;
   const v$1 = $minBy(all, (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor));
   return [
-    ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) < 0,
-    $eq(($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) > 0 ? a : b, b),
-    ($cmp(a.major, b.major) || $cmp(a.minor, b.minor)) === -1,
-    (v != null ? v.minor : undefined) ?? 0,
+    tmp,
+    tmp$1,
+    tmp$2,
+    tmp$3,
     (v$1 != null ? v$1.minor : undefined) ?? 0,
     all.map((v) => v.minor),
   ];
@@ -565,14 +575,23 @@ export function debugged(x, TDebug) {
 export function debugs(n) {
   const p = { x: n, y: -2.5 };
   const r = n > 1 ? { TAG: "Ok", _0: n } : { TAG: "Err", _0: "small" };
+  const tmp = posDebug_fmt(p);
+  const tmp$1 = `${dimsDebug_fmt([n, 2])} ${nothingDebug_fmt(undefined)} ${glyphDebug_fmt("Dot")}`;
+  const tmp$2 = `${glyphDebug_fmt({ TAG: "Ring", _0: 1.5 })} ${glyphDebug_fmt({
+    TAG: "Box",
+    w: n,
+    h: 3,
+  })}`;
+  const tmp$3 = sixDebug_fmt({ a: 1, b: 2, c: 3, d: 4, e: 5, f: "x" });
+  const tmp$4 = `${boxedDebug_fmt({ item: p }, posDebug())} ${boxedDebug_fmt({ item: "s" }, { fmt: (value) => (value == null ? "None" : `Some(${$debugStr(value)})`) })}`;
   const arg = [n, "a", "'"];
   const arg$1 = [5];
   return [
-    posDebug_fmt(p),
-    `${dimsDebug_fmt([n, 2])} ${nothingDebug_fmt(undefined)} ${glyphDebug_fmt("Dot")}`,
-    `${glyphDebug_fmt({ TAG: "Ring", _0: 1.5 })} ${glyphDebug_fmt({ TAG: "Box", w: n, h: 3 })}`,
-    sixDebug_fmt({ a: 1, b: 2, c: 3, d: 4, e: 5, f: "x" }),
-    `${boxedDebug_fmt({ item: p }, posDebug())} ${boxedDebug_fmt({ item: "s" }, { fmt: (value) => (value == null ? "None" : `Some(${$debugStr(value)})`) })}`,
+    tmp,
+    tmp$1,
+    tmp$2,
+    tmp$3,
+    tmp$4,
     `Some(${$debugF64(1)}) None (${arg[0]}, ${$debugStr(arg[1])}, ${$debugStr(arg[2], "'")}) (${arg$1[0]},)`,
     `[${[p, p].map((item) => posDebug_fmt(item)).join(", ")}] ${r.TAG === "Ok" ? `Ok(${r._0})` : `Err(${$debugStr(r._0)})`} ${
       ["Less", "Equal", "Greater"][$cmp(n, 1) + 1]

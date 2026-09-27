@@ -60,8 +60,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn use_reader(&mut self) {
-        self.runtime
-            .extend([Helper::FromJson, Helper::JsonFail, Helper::DebugStr]);
+        self.runtime.insert(Helper::FromJson);
     }
 
     /// `serde_json::from_str::<T>(s)`: `$fromJson(s, read)`, with `read` the

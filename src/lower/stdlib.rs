@@ -1208,7 +1208,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         let item = target.walk().nth(1).and_then(|a| a.as_type()).expect("a heap's item");
                         self.heap_of(item, span)?;
                         let compare = self.cmp_fn(item, false, span)?;
-                        self.runtime.extend([Helper::HeapFrom, Helper::SiftDown]);
+                        self.runtime.insert(Helper::HeapFrom);
                         Expr::call(Expr::var("$heapFrom"), vec![items, compare])
                     }
                     _ => items,

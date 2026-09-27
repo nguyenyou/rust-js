@@ -9,12 +9,14 @@
 //                        crate's it uses (ADR 0024)
 //   /out/manifest.json   what it read and wrote (ADR 0042)
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { ConsoleStdout, Directory, File, type Inode, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";
 
 import { buildReactCrate, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
+import { publishArtifacts } from "../../tooling/publish.js";
+import { mapManifestPaths, parseManifest } from "../../tooling/manifest.js";
 
 const rustDir = join(import.meta.dir, "rust");
 const cratesDir = join(import.meta.dir, "../../target/playground-crates");
@@ -39,13 +41,6 @@ function filesIn(dir: Directory, prefix = "", found = new Map<string, Uint8Array
     else if (entry instanceof File) found.set(`${prefix}${name}`, entry.data);
   }
   return found;
-}
-
-/** The files under `dir` on disk, by their paths from there. */
-function pathsIn(dir: string, prefix = ""): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-    entry.isDirectory() ? pathsIn(join(dir, entry.name), `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`],
-  );
 }
 
 /**
@@ -98,26 +93,22 @@ export async function compileRust(job: { manifest?: string } = {}) {
   // Warnings, on success.
   if (stderr.length > 0) console.warn(stderr.join("\n"));
 
-  // A module with JSX is a `.jsx` file (ADR 0040). A file whose content is
-  // the same is left alone, so Vite doesn't update what didn't change; one an
-  // earlier build wrote that this one didn't goes.
-  const written = /\.jsx?(\.map)?$/;
-  const outputs = new Map([...filesIn(crateDir.dir)].filter(([path]) => written.test(path)));
-  for (const path of pathsIn(rustDir).filter((p) => written.test(p) && !outputs.has(p))) rmSync(join(rustDir, path));
-  for (const [name, data] of outputs) {
-    const path = join(rustDir, name);
-    if (existsSync(path) && Buffer.from(readFileSync(path)).equals(Buffer.from(data))) continue;
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, data);
+  const manifest = out.dir.contents.get("manifest.json");
+  if (!(manifest instanceof File)) throw new Error("rust-js wrote no manifest");
+  const parsed = parseManifest(new TextDecoder().decode(manifest.data));
+  const localPath = (path: string) => {
+    if (!path.startsWith(virtual + "/")) throw new Error("Unexpected virtual path: " + path);
+    return join(rustDir, path.slice(virtual.length + 1));
+  };
+  const mapped = mapManifestPaths(parsed, localPath);
+  const virtualFiles = filesIn(crateDir.dir);
+  const outputs = new Map<string, Uint8Array>();
+  for (const artifact of parsed.artifacts) {
+    const data = virtualFiles.get(artifact.file.slice(virtual.length + 1));
+    if (!data) throw new Error("Missing WASI artifact: " + artifact.file);
+    outputs.set(localPath(artifact.file), data);
   }
-
-  if (job.manifest) {
-    const manifest = out.dir.contents.get("manifest.json");
-    if (!(manifest instanceof File)) throw new Error("rust-js wrote no manifest");
-    // The compiler saw the crate at /wasm/web/rust; it's at rustDir.
-    const text = new TextDecoder().decode(manifest.data).replaceAll(`"${virtual}/`, `"${rustDir}/`);
-    writeFileSync(job.manifest, text);
-  }
+  publishArtifacts(job.manifest ?? join(cratesDir, "playground-manifest.json"), mapped, outputs);
 }
 
 // `bun compile-rust.ts` on its own.

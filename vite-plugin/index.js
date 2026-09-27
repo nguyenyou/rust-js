@@ -1,30 +1,11 @@
 // Compile Rust to ordinary JS/JSX files; Vite and plugin-react own bundling
 // and Fast Refresh. The compiler manifest owns dependencies and output paths.
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const target = join(repo, "target");
-const metadataInputs = [
-  "rust-toolchain.toml", "react/build.sh", "react/cfg.ts", "react/versions.json",
-  "react/src/lib.rs", "react/src/event.rs", "react/src/dom.rs", "react/src/elements.rs",
-  "web/build.sh", "web/src/lib.rs",
-].map(p => join(repo, p));
-
-function run(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ["ignore", "ignore", "pipe"] });
-    let errors = "";
-    child.stderr.setEncoding("utf8").on("data", chunk => { errors += chunk; });
-    child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve() : reject(new Error(errors || `${command} exited with ${code}`)));
-  });
-}
+import { createNativeBuilder, defaultCompiler } from "../tooling/build.js";
+import { parseManifest } from "../tooling/manifest.js";
 
 /**
  * @param {object} [options]
@@ -35,8 +16,8 @@ function run(command, args, cwd) {
  *   write its JS beside it and a manifest (ADR 0042) to `manifest`, all paths
  *   absolute, or throw rustc's errors. It builds the crates it needs itself.
  */
-export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, "debug/rust-js"), compile: custom } = {}) {
-  let root, server, closed = false, metadataKey;
+export default function rustJs({ crates = ["src/App.rs"], rustJs = defaultCompiler, compile: custom, resources, rustcFlags = [], cacheDir, bindings, externs } = {}) {
+  let root, server, builder, closed = false;
   let active;
   const pending = new Set();
   const manifests = new Map();
@@ -45,52 +26,15 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
   const maps = new Set();
   // Committed files used without rust-js, whose maps may not be committed.
   const committed = new Set();
-  const manifestPath = crate => join(target, "vite", createHash("sha256").update(resolve(root, crate)).digest("hex") + ".json");
-
-  // The React the project has installed, whose API the react crate is built
-  // with (ADR 0043): what a later React added doesn't compile. `null` without
-  // one, which gets the latest's.
-  function installedReact() {
-    try {
-      const require = createRequire(join(root, "package.json"));
-      return JSON.parse(readFileSync(require.resolve("react/package.json"), "utf8")).version;
-    } catch {
-      return null;
-    }
-  }
-
-  // web's and react's metadata for that React, each version in its own folder.
-  let metadata, react;
-  async function buildMetadata() {
-    if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: run bun run build in the rust-js repository`);
-    react = installedReact();
-    metadata = join(target, "react", react ?? "latest");
-    const compiler = await stat(rustJs);
-    const hash = createHash("sha256").update(`${compiler.mtimeMs}:${compiler.size}:${react}`);
-    for (const path of metadataInputs) hash.update(await readFile(path));
-    const key = hash.digest("hex");
-    if (metadataKey === key && existsSync(join(metadata, "libreact.rmeta")) && existsSync(join(metadata, "libweb.rmeta"))) return;
-    await mkdir(metadata, { recursive: true });
-    await run(join(repo, "react/build.sh"), ["-o", join(metadata, "libreact.rmeta"), ...(react ? ["--react", react] : [])], repo);
-    metadataKey = key;
-  }
+  const manifestPath = crate => join(cacheDir ?? join(root, "node_modules/.cache/rust-js"), "vite", createHash("sha256").update(resolve(root, crate)).digest("hex") + ".json");
 
   async function compile(crate) {
     const manifest = manifestPath(crate);
     await mkdir(dirname(manifest), { recursive: true });
-    try {
-      const output = crate.replace(/\.rs$/, ".js");
-      if (custom) await custom({ crate: resolve(root, crate), output: resolve(root, output), manifest });
-      else await run(rustJs, [crate, "-o", output, "--manifest", manifest,
-        "--", "--extern", `react=${join(metadata, "libreact.rmeta")}`, "-L", metadata], root);
-    } catch (error) {
-      // rustc names the version an item needs; say which one is installed.
-      if (react && error.message.includes("configured out")) {
-        error.message += `\nnote: this project has React ${react}; an item gated \`react = "X.Y"\` needs React X.Y or later\n`;
-      }
-      throw error;
-    }
-    const result = JSON.parse(await readFile(manifest, "utf8"));
+    const output = crate.replace(/\.rs$/, ".js");
+    if (custom) await custom({ crate: resolve(root, crate), output: resolve(root, output), manifest });
+    else await builder.compile({ crate, output, manifest });
+    const result = parseManifest(await readFile(manifest, "utf8"));
     const old = manifests.get(crate);
     manifests.set(crate, result);
     failures.delete(crate);
@@ -120,14 +64,9 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
       await new Promise(resolve => setTimeout(resolve, 30));
       const batch = [...pending];
       pending.clear();
-      try {
-        if (!custom) await buildMetadata();
-        for (const crate of batch) {
-          try { await compile(crate); }
-          catch (error) { failures.set(crate, error.message); }
-        }
-      } catch (error) {
-        for (const crate of batch) failures.set(crate, error.message);
+      for (const crate of batch) {
+        try { await compile(crate); }
+        catch (error) { failures.set(crate, error.message); }
       }
     }
     if (server && !closed) {
@@ -151,7 +90,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
   function changed(event, path) {
     if (closed) return;
     const file = resolve(path);
-    const common = file === resolve(rustJs) || metadataInputs.includes(file);
+    const common = builder?.watchFiles.includes(file);
     if (!common && !file.endsWith(".rs")) return;
     const affected = crates.filter(crate => {
       if (common || manifests.get(crate)?.sources.includes(file) || resolve(root, crate) === file) return true;
@@ -168,6 +107,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
     configResolved(config) {
       root = config.root;
       rustJs = resolve(root, rustJs);
+      if (!custom) builder = createNativeBuilder({ root, rustJs, resources, rustcFlags, cacheDir, bindings, externs });
     },
     async buildStart() {
       // The generated JS is committed, as ReScript recommends (ADR 0041), so
@@ -217,7 +157,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = join(target, 
     },
     configureServer(value) {
       server = value;
-      server.watcher.add([...metadataInputs, rustJs, ...crates.map(crate => dirname(resolve(root, crate)))]);
+      server.watcher.add([...(builder?.watchFiles ?? []), ...crates.map(crate => dirname(resolve(root, crate)))]);
       server.watcher.on("all", changed);
     },
     async closeBundle() {

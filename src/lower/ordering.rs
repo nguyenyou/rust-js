@@ -128,7 +128,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .iter()
                     .map(|v| Expr::str(variant_name(self.tcx, v)))
                     .collect();
-                self.runtime.extend([Helper::CmpIn, Helper::Cmp]);
+                self.runtime.insert(Helper::CmpIn);
                 Ok(Expr::call(Expr::var("$cmpIn"), vec![Expr::array(names), a, b]))
             }
             ty::Adt(adt, _) if adt.is_enum() => Err(self.unsupported(span, &format!("comparing `{ty}`s"))),
@@ -177,7 +177,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Two sequences, item by item, then by length: `$cmpItems(a, b, $cmp)`.
     fn cmp_items(&mut self, a: Expr, b: Expr, item: Ty<'tcx>, partial: bool, span: Span) -> R<Expr> {
         let compare = self.cmp_fn(item, partial, span)?;
-        self.runtime.extend([Helper::CmpItems, Helper::Cmp]);
+        self.runtime.insert(Helper::CmpItems);
         Ok(Expr::call(Expr::var("$cmpItems"), vec![a, b, compare]))
     }
 

@@ -8,6 +8,10 @@ const cases: [string, boolean | number][] = [
     [false, true].map(present => [name, present] as [string, boolean])),
   ...["generic_clones", "clones", "rebuilt_clones", "clone_evaluation"].flatMap(name =>
     [0, 1, 3].map(n => [name, n] as [string, number])),
+  ...["nested_struct_literal", "struct_in_base_block", "discarded_nested_box", "operand_prerequisites"].flatMap(name =>
+    [0, 10].map(n => [name, n] as [string, number])),
+  ...["nested_struct_updates", "discarded_nested_insert"].flatMap(name =>
+    [false, true].map(value => [name, value] as [string, boolean])),
 ];
 let generated: Record<string, (arg: any) => number[]>;
 let expected: (number[] | "panic")[];

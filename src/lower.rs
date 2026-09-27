@@ -30,7 +30,7 @@ use rustc_middle::thir::{
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
-use rustc_span::{BytePos, DesugaringKind, ErrorGuaranteed, SourceFile, Span, Symbol, sym};
+use rustc_span::{DesugaringKind, ErrorGuaranteed, SourceFile, Span, Symbol, sym};
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 
@@ -48,11 +48,13 @@ mod numbers;
 mod ordering;
 mod representation;
 mod serde;
+mod sources;
 mod std_impls;
 mod stdlib;
 mod text;
 mod traits;
 
+use crate::program::{Lowered, LoweredImport, LoweredModule, TestFn};
 use crate::runtime::Helper;
 pub use analysis::{collect_bodies, lower_crate};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
@@ -69,51 +71,6 @@ pub struct Body<'tcx> {
     def_id: LocalDefId,
     thir: Thir<'tcx>,
     expr: ExprId,
-}
-
-/// One Rust module's functions: a future JS file (ADR 0019).
-pub struct LoweredModule {
-    /// The module's path below the crate root: `[]` for the root itself,
-    /// `["math", "stats"]` for `crate::math::stats`.
-    pub path: Vec<String>,
-    /// The `.rs` file the module's code lives in.
-    pub file: Arc<SourceFile>,
-    /// What it imports from JS modules (ADR 0028), with the modules' names
-    /// as written in `#[link_name]`.
-    pub packages: Vec<js::Package>,
-    pub imports: Vec<LoweredImport>,
-    pub namespaces: Vec<js::Namespace>,
-    pub consts: Vec<js::Const>,
-    pub functions: Vec<js::Function>,
-    pub caches: Vec<String>,
-    /// Runtime helpers its functions use.
-    pub runtime: Vec<Helper>,
-    /// Whether it has JSX, so it's a `.jsx` file (ADR 0040).
-    pub jsx: bool,
-}
-
-/// Named exports used from one Rust module, before its JS path is resolved.
-pub struct LoweredImport {
-    pub path: Vec<String>,
-    pub named: Vec<(String, String)>,
-}
-
-/// A `#[test]` function (ADR 0026).
-pub struct TestFn {
-    /// The module it's in, and its JS name there.
-    pub module: Vec<String>,
-    pub name: String,
-    /// What the runner calls it: `tests::adds`.
-    pub label: String,
-    /// `#[should_panic]`, with its `expected` substring if any.
-    pub should_panic: Option<Option<String>>,
-    pub ignore: bool,
-}
-
-/// The crate as JS: one module per Rust module, and the tests in test mode.
-pub struct Lowered {
-    pub modules: Vec<LoweredModule>,
-    pub tests: Vec<TestFn>,
 }
 
 /// Where a function or a `const` ends up in the JS: its module's file,
@@ -147,6 +104,12 @@ pub struct LoweredFn {
     pub runtime: HashSet<Helper>,
     pub jsx: bool,
     dependencies: Dependencies,
+}
+
+/// An expression's prerequisite statements stay in its evaluation region.
+struct Evaluation {
+    statements: Vec<Stmt>,
+    value: Expr,
 }
 
 /// Where the value of a statement-lowered expression goes.
@@ -211,6 +174,7 @@ struct Loop {
 
 /// Immutable analysis inputs shared by function lowering.
 struct CrateFacts<'a, 'tcx> {
+    sources: &'a sources::CapturedSources,
     mutated: &'a HashSet<Ty<'tcx>>,
     changed_vecs: &'a HashSet<Ty<'tcx>>,
     closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
@@ -242,10 +206,6 @@ struct FnCx<'a, 'tcx> {
     self_args: Option<ty::GenericArgsRef<'tcx>>,
     /// While lowering a closure: the places it captured into snapshots.
     captures: HashMap<(LocalVarId, Vec<usize>), Var>,
-    /// The range, in rustc's global source map, of the `.rs` file this
-    /// function's module lives in, for `js_span`.
-    file_start: BytePos,
-    file_end: BytePos,
     thir: &'a Thir<'tcx>,
     /// The module receiving this function and its recorded dependencies.
     module: LocalModDefId,
@@ -280,11 +240,6 @@ struct FnCx<'a, 'tcx> {
     /// The recursive types being cloned, and the function each one's clone
     /// is (`clone_value`), which a clone inside it calls.
     cloning: Vec<(Ty<'tcx>, String)>,
-    /// A struct's fields, worked out before its `..base` (`adt`).
-    spilled_fields: Option<Vec<Expr>>,
-    /// The call being lowered is a statement of its own: its value isn't used,
-    /// so a map's `insert` is `m.set(k, v)` (ADR 0059).
-    discarded: bool,
     /// The item being lowered: what `fn_ref` records as using its target.
     item: DefId,
 }
@@ -677,10 +632,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(())
             }
             _ => {
-                // A call whose value goes nowhere says so, for `insert` (ADR 0059).
-                self.discarded =
-                    matches!(dest, Dest::Discard) && matches!(self.thir[self.strip(e)].kind, ExprKind::Call { .. });
                 let value = match (dest, self.place(e)) {
+                    // Only this call's value goes nowhere, not its arguments'
+                    // values, so a map's `insert` is `m.set(k, v)` (ADR 0059).
+                    (Dest::Discard, _) if let ExprKind::Call { fun, ref args, .. } = expr.kind => {
+                        self.call(fun, args, true, expr.span, out)?.or_at(span)
+                    }
                     // Returning a place of this function's own hands its value
                     // over without a copy: every local dies here, so nothing is
                     // left to share it. One reached through a reference, or a
@@ -2030,7 +1987,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let v = self.expr(source, out)?;
                 self.cast(v, self.thir[source].ty, ty, span)
             }
-            ExprKind::Call { fun, ref args, .. } => self.call(fun, args, span, out),
+            ExprKind::Call { fun, ref args, .. } => self.call(fun, args, false, span, out),
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.as_await(e) => {
                 Ok(Expr::await_(self.expr(awaited, out)?))
@@ -2085,34 +2042,40 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
-    /// Lower operands left to right. If a later operand needs statements,
-    /// earlier ones are saved in temporaries first, so Rust's evaluation
-    /// order is kept.
+    fn evaluated(&mut self, e: ExprId) -> R<Evaluation> {
+        let mut statements = Vec::new();
+        let value = self.expr(e, &mut statements)?;
+        Ok(Evaluation { statements, value })
+    }
+
+    /// Sequence actual lowering results, not a prediction of their effects.
+    /// Earlier operands are captured before a later operand's prerequisites.
     fn operands(&mut self, list: &[ExprId], out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
-        let last_complex = list.iter().rposition(|&e| !self.is_simple(e));
-        let mut values = Vec::new();
-        for (i, &e) in list.iter().enumerate() {
-            let v = self.expr(e, out)?;
-            // Constants, and places that can't change, read the same later.
-            // So are places that are borrowed: nothing can change or reassign
-            // them until the call, not even the later operands (`v.push(f(v.len()))`
-            // is a borrow error, and `&mut v` a two-phase borrow).
+        let mut values: Vec<(Expr, bool)> = Vec::new();
+        for &e in list {
+            let evaluated = self.evaluated(e)?;
+            if !evaluated.statements.is_empty() {
+                for (value, settled) in &mut values {
+                    if !*settled {
+                        if !self.capture_jsx(value, out) {
+                            let original = std::mem::replace(value, Expr::undefined());
+                            *value = self.spill("tmp", original, out);
+                        }
+                        *settled = true;
+                    }
+                }
+            }
+            out.extend(evaluated.statements);
+            // Borrowed or immutable places cannot change before the call.
             let borrowed =
                 matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. } if self.place(arg).is_some());
-            let settled = v.is_constant()
+            let settled = evaluated.value.is_constant()
                 || borrowed
                 || self.stable_place(self.strip_refs(e)).is_some()
                 || self.ref_place(e).is_some_and(|(_, mutable)| !mutable);
-            if last_complex.is_some_and(|k| i < k) && !settled {
-                let tmp = self.fresh("tmp");
-                let span = v.span;
-                out.push(StmtKind::Const(tmp.clone(), v).at(span));
-                values.push(Expr::var(&tmp));
-            } else {
-                values.push(v);
-            }
+            values.push((evaluated.value, settled));
         }
-        Ok(values)
+        Ok(values.into_iter().map(|(value, _)| value).collect())
     }
 
     /// Does calling `fun` become an assignment statement?
@@ -2709,6 +2672,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::undefined());
         }
         // `P { x, ..base }`: the fields not written come from `base`.
+        // Keep the saved fields local: lowering the base can itself lower
+        // another struct literal or update.
+        let mut spilled_fields = None;
         let base = match &adt.base {
             AdtExprBase::None => None,
             AdtExprBase::Base(fru) => match self.place(fru.base) {
@@ -2727,7 +2693,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         };
                         spilled.push(value);
                     }
-                    self.spilled_fields = Some(spilled);
+                    spilled_fields = Some(spilled);
                     let base = self.expr(fru.base, out)?;
                     // An object of constants, as a derived `Default` is, is read
                     // in place: its fields are those constants (`Expr::member`).
@@ -2747,7 +2713,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // them in declaration order, so every object of a type has the same
         // shape. If that reorders two calls, they go into `const`s first.
         let exprs: Vec<ExprId> = adt.fields.iter().map(|f| f.expr).collect();
-        let mut values = match self.spilled_fields.take() {
+        let mut values = match spilled_fields {
             Some(values) => values,
             None => self.operands(&exprs, out)?,
         };
@@ -3050,21 +3016,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    /// A rustc span as byte offsets into the root file, for the source map.
-    ///
-    /// rustc numbers bytes across *all* loaded files, so subtract the root
-    /// file's start. Code from a macro or desugaring maps to where it was
-    /// written (`source_callsite`). Anything outside the root file (say, a
-    /// `std` macro) gets no mapping.
+    /// Map the original callsite into the compiler-owned source arena.
     fn js_span(&self, span: Span) -> js::Span {
-        let span = span.source_callsite();
-        if span.lo() < self.file_start || span.hi() > self.file_end {
-            return js::Span::NONE;
-        }
-        js::Span {
-            lo: (span.lo() - self.file_start).0,
-            hi: (span.hi() - self.file_start).0,
-        }
+        self.krate.sources.span(span)
     }
 
     fn strip(&self, e: ExprId) -> ExprId {

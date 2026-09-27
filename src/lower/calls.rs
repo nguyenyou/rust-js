@@ -20,9 +20,14 @@ use rustc_span::{Span, sym};
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A call to one of our functions (local or imported by name),
     /// to JS (ADR 0021), or to one of the std functions rust-js knows (ADR 0023).
-    pub(super) fn call(&mut self, fun: ExprId, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
-        // Only this call's value is unused, not its arguments'.
-        let discarded = std::mem::take(&mut self.discarded);
+    pub(super) fn call(
+        &mut self,
+        fun: ExprId,
+        args: &[ExprId],
+        discarded: bool,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
         let fun_span = self.js_span(self.thir[fun].span);
         let f = &self.thir[self.strip(fun)];
         let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, generic_args)) = (&f.kind, f.ty.kind()) else {
@@ -385,7 +390,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Borrow => Expr::member(arg(), "value"),
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
             Std::Method("pop") if boxed => {
-                self.runtime.extend([Helper::Pop, Helper::Some]);
+                self.runtime.insert(Helper::Pop);
                 Expr::call(Expr::var("$pop"), vec![arg()])
             }
             Std::Method(name) => {
@@ -531,11 +536,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 {
                     return Ok(value.clone());
                 }
-                self.runtime.extend([Helper::UnwrapOk, Helper::Debug]);
+                self.runtime.insert(Helper::UnwrapOk);
                 Expr::call(Expr::var("$unwrapOk"), list)
             }
             Std::UnwrapErr => {
-                self.runtime.extend([Helper::UnwrapErr, Helper::Debug]);
+                self.runtime.insert(Helper::UnwrapErr);
                 let list = (0..args.len()).map(|_| arg()).collect();
                 Expr::call(Expr::var("$unwrapErr"), list)
             }
@@ -899,7 +904,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
     pub(super) fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
-        self.runtime.extend([Helper::SomeAt, Helper::Some]);
+        self.runtime.insert(Helper::SomeAt);
         Expr::call(Expr::var("$someAt"), vec![items, index])
     }
 
@@ -913,7 +918,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let export = target.owner.as_ref().unwrap_or(&target.name);
         let reference = if target.module != self.module {
-            Expr::var(&super::link::symbol(target.module, export))
+            Expr {
+                kind: js::ExprKind::Symbol(super::link::symbol(target.module, export)),
+                span: js::Span::NONE,
+            }
         } else {
             Expr::var(export)
         };

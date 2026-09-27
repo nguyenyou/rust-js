@@ -299,19 +299,19 @@ export function tour() {
     .map((v) => `${v.major}.${v.minor}.${v.patch}`)
     .map((item) => $debugStr(item))
     .join(", ")}]\n`;
-  const left = $index(vs, 1);
-  const right = $index(vs, 2);
-  const arg = $maxBy(
+  const tmp = $maxBy(
     vs,
     (a, b) => $cmp(a.major, b.major) || $cmp(a.minor, b.minor) || $cmp(a.patch, b.patch),
   );
-  out += `${arg == null ? "None" : `Some(${versionDebug_fmt(arg)})`} ${($cmp(left.major, right.major) || $cmp(left.minor, right.minor) || $cmp(left.patch, right.patch)) < 0}\n`;
+  const left = $index(vs, 1);
+  const right = $index(vs, 2);
+  out += `${tmp == null ? "None" : `Some(${versionDebug_fmt(tmp)})`} ${($cmp(left.major, right.major) || $cmp(left.minor, right.minor) || $cmp(left.patch, right.patch)) < 0}\n`;
   const c = { name: "svc", retries: 3, verbose: false, ratio: 0 };
   out += `${configDebug_fmt(c)}\n`;
-  const arg$1 = largest([3, 9, 2], { partial_cmp: $cmp }, { copy: (value) => value });
-  const arg$2 = largest([1.5, -2], { partial_cmp: $partialCmp }, { copy: (value) => value });
-  const arg$3 = largest([], { partial_cmp: $cmp }, { copy: (value) => value });
-  out += `${arg$1 == null ? "None" : `Some(${arg$1})`} ${arg$2 == null ? "None" : `Some(${$debugF64(arg$2)})`} ${arg$3 == null ? "None" : `Some(${arg$3})`}\n`;
+  const arg = largest([3, 9, 2], { partial_cmp: $cmp }, { copy: (value) => value });
+  const arg$1 = largest([1.5, -2], { partial_cmp: $partialCmp }, { copy: (value) => value });
+  const arg$2 = largest([], { partial_cmp: $cmp }, { copy: (value) => value });
+  out += `${arg == null ? "None" : `Some(${arg})`} ${arg$1 == null ? "None" : `Some(${$debugF64(arg$1)})`} ${arg$2 == null ? "None" : `Some(${arg$2})`}\n`;
   const running = $scan([1, 2, 3, 4], 0, (acc, x) => {
     acc.value = (acc.value + x) >>> 0;
     return acc.value;
@@ -323,8 +323,8 @@ export function tour() {
   let fs = [2.5, -1, 3.25, 0];
   fs.sort((a, b) => $totalCmp(a, b));
   const total = fs.reduce((a, b) => a + b, -0);
-  const arg$4 = $fromDigit(7, 10);
-  out += `[${fs.map((item) => $debugF64(item)).join(", ")}] ${$displayF64(total)} ${$lowerExp(1234.5)} ${$zeroPad($toFixed(-3.14159, 3), 8)} ${arg$4 == null ? "None" : `Some(${$debugStr(arg$4, "'")})`}\n`;
+  const arg$3 = $fromDigit(7, 10);
+  out += `[${fs.map((item) => $debugF64(item)).join(", ")}] ${$displayF64(total)} ${$lowerExp(1234.5)} ${$zeroPad($toFixed(-3.14159, 3), 8)} ${arg$3 == null ? "None" : `Some(${$debugStr(arg$3, "'")})`}\n`;
   const words = ["a", "b"];
   out += `${words.join("-")} ${words.join("")}\n`;
   return out;

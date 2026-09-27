@@ -3,14 +3,10 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
+use crate::manifest::{self, Manifest};
 
-use crate::{js, lower, to_oxc};
-
-struct Artifact {
-    path: PathBuf,
-    text: String,
-}
+use crate::publish::{Artifact, ArtifactPlan};
+use crate::{js, program, to_oxc};
 
 pub struct OutputPlan {
     pub input: PathBuf,
@@ -22,16 +18,15 @@ pub struct OutputPlan {
 
 impl OutputPlan {
     /// Write one `.js` and `.js.map` per module (ADR 0019).
-    fn generate(&self, modules: Vec<lower::LoweredModule>) -> Result<Vec<Artifact>, String> {
+    fn generate(
+        &self,
+        modules: Vec<program::LoweredModule>,
+        sources: &program::Sources,
+    ) -> Result<Vec<Artifact>, String> {
         let mut artifacts = Vec::new();
         for module in modules {
             let js_path = self.js_path(&module.path);
-            let rust_path = module
-                .file
-                .name
-                .clone()
-                .into_local_path()
-                .unwrap_or_else(|| self.input.clone());
+            let rust_path = module.file.clone().unwrap_or_else(|| self.input.clone());
             let imports = module
                 .imports
                 .iter()
@@ -64,15 +59,19 @@ impl OutputPlan {
 
             crate::prepare::module(&mut js_module);
             let dir = parent_dir(&js_path);
-            // rustc's copy of the source (with line endings normalized), so
-            // byte offsets in our spans line up with it exactly.
-            let source = module
-                .file
-                .src
-                .as_deref()
-                .ok_or_else(|| format!("no source for `{}`", rust_path.display()))?;
+            let source_paths: Vec<_> = sources
+                .files
+                .iter()
+                .map(|source| relative(dir, source.path.as_deref().unwrap_or(&self.input)))
+                .collect();
             let js_file_name = js_path.file_name().unwrap_or_default().to_string_lossy();
-            let output = to_oxc::emit(&js_module, source, &relative(dir, &rust_path), &js_file_name);
+            let output = to_oxc::emit(
+                &js_module,
+                sources,
+                &source_paths,
+                &relative(dir, &rust_path),
+                &js_file_name,
+            );
             let map_path = PathBuf::from(format!("{}.map", js_path.display()));
             for (path, text) in [(&js_path, &output.code), (&map_path, &output.map)] {
                 artifacts.push(Artifact {
@@ -87,7 +86,7 @@ impl OutputPlan {
     /// In test mode, `<output>.test.js` beside the output: one `test(..)`
     /// per `#[test]` function, for `bun test` (ADR 0026). `test` is the
     /// runner's global, so nothing here is specific to one runner.
-    fn tests(&self, tests: &[lower::TestFn]) -> Option<Artifact> {
+    fn tests(&self, tests: &[program::TestFn]) -> Option<Artifact> {
         if !self.test {
             return None;
         }
@@ -261,7 +260,7 @@ impl OutputPlan {
         }
     }
 
-    pub fn write(&mut self, lowered: lower::Lowered, sources: Vec<PathBuf>) -> Result<(), String> {
+    pub fn plan(&mut self, lowered: program::Lowered, sources: Vec<PathBuf>) -> Result<ArtifactPlan, String> {
         self.jsx = lowered
             .modules
             .iter()
@@ -281,11 +280,13 @@ impl OutputPlan {
                 .iter()
                 .map(|import| absolute(&self.js_path(&import.path)))
                 .collect::<Result<Vec<_>, _>>()?;
-            modules.push(json!({
-                "module": module.path, "file": file, "map": map,
-                "source": module.file.name.clone().into_local_path().as_deref().map(absolute).transpose()?,
-                "imports": imports,
-            }));
+            modules.push(manifest::Module {
+                module: module.path.clone(),
+                file,
+                map,
+                source: module.file.as_deref().map(absolute).transpose()?,
+                imports,
+            });
         }
         let test_artifact = self.tests(&lowered.tests);
         if let Some(test) = &test_artifact {
@@ -307,7 +308,7 @@ impl OutputPlan {
             }
         }
 
-        let mut artifacts = self.generate(lowered.modules)?;
+        let mut artifacts = self.generate(lowered.modules, &lowered.sources)?;
         artifacts.extend(test_artifact);
         for artifact in &mut artifacts {
             artifact.path = absolute(&artifact.path)?;
@@ -318,39 +319,42 @@ impl OutputPlan {
             // Only remove files owned by this input/output pair, still containing
             // exactly the bytes this compiler wrote. User edits are preserved.
             if path.exists() {
-                let previous: Value = serde_json::from_slice(&std::fs::read(&path).map_err(|e| e.to_string())?)
+                let previous = Manifest::read(&std::fs::read(&path).map_err(|e| e.to_string())?)
                     .map_err(|e| format!("invalid manifest `{}`: {e}", path.display()))?;
-                if previous["version"] != 1 || previous["input"] != json!(input) || previous["output"] != json!(output)
-                {
+                if previous.input != input || previous.output != output {
                     return Err(format!("manifest `{}` belongs to another compilation", path.display()));
                 }
-                if let Some(files) = previous["artifacts"].as_array() {
-                    for file in files {
-                        if let (Some(name), Some(hash)) = (file["file"].as_str(), file["hash"].as_str()) {
-                            let old = absolute(Path::new(name))?;
-                            let generated = ["js", "jsx", "map"]
-                                .iter()
-                                .any(|ext| old.extension().is_some_and(|e| e == *ext));
-                            if generated
-                                && old.starts_with(parent_dir(&output))
-                                && !sources.contains(&old)
-                                && !paths.contains(&old)
-                                && old != input
-                                && std::fs::read(&old).is_ok_and(|bytes| fingerprint(&bytes) == hash)
-                            {
-                                stale.push(old);
-                            }
-                        }
+                for file in previous.artifacts {
+                    let old = absolute(&file.file)?;
+                    let generated = ["js", "jsx", "map"]
+                        .iter()
+                        .any(|ext| old.extension().is_some_and(|e| e == *ext));
+                    if generated
+                        && old.starts_with(parent_dir(&output))
+                        && !sources.contains(&old)
+                        && !paths.contains(&old)
+                        && old != input
+                        && std::fs::read(&old).is_ok_and(|bytes| fingerprint(&bytes) == file.hash)
+                    {
+                        stale.push(old);
                     }
                 }
             }
-            let manifest = json!({
-                "version": 1, "input": input, "output": output,
-                "sources": sources, "modules": modules,
-                "artifacts": artifacts.iter().map(|a| json!({
-                    "file": a.path, "hash": fingerprint(a.text.as_bytes()),
-                })).collect::<Vec<_>>(),
-            });
+            let manifest = Manifest {
+                version: manifest::VERSION,
+                compiler: Some(manifest::Compiler::current()),
+                input,
+                output,
+                sources,
+                modules,
+                artifacts: artifacts
+                    .iter()
+                    .map(|a| manifest::Artifact {
+                        file: a.path.clone(),
+                        hash: fingerprint(a.text.as_bytes()),
+                    })
+                    .collect(),
+            };
             artifacts.push(Artifact {
                 path,
                 text: format!(
@@ -359,7 +363,7 @@ impl OutputPlan {
                 ),
             });
         }
-        publish(&artifacts, &stale)
+        Ok(ArtifactPlan { artifacts, stale })
     }
 }
 
@@ -385,87 +389,4 @@ fn fingerprint(bytes: &[u8]) -> String {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     });
     format!("{hash:016x}")
-}
-
-fn publish(artifacts: &[Artifact], stale: &[PathBuf]) -> Result<(), String> {
-    // WASI compiles into a fresh, disposable virtual filesystem. The browser
-    // shim does not provide native rename semantics; callers expose files only
-    // after success. Validation and generation above still finish before writes.
-    if cfg!(target_os = "wasi") {
-        for a in artifacts {
-            std::fs::create_dir_all(parent_dir(&a.path)).map_err(|e| e.to_string())?;
-            std::fs::write(&a.path, &a.text).map_err(|e| e.to_string())?;
-        }
-        return Ok(());
-    }
-    let artifacts: Vec<&Artifact> = artifacts
-        .iter()
-        .filter(|a| !std::fs::read(&a.path).is_ok_and(|bytes| bytes == a.text.as_bytes()))
-        .collect();
-    // Stage every file next to its destination before replacing any output.
-    // Keep originals for rollback on an I/O error. This is not a multi-file
-    // transaction against process crashes; the manifest is committed last.
-    let mut staged = Vec::new();
-    let result = (|| -> Result<(), String> {
-        for a in &artifacts {
-            let dir = parent_dir(&a.path);
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-            let mut number = 0;
-            let temp = loop {
-                let candidate = dir.join(format!(".rust-js-stage-{number}"));
-                match std::fs::create_dir(&candidate) {
-                    Ok(()) => break candidate,
-                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => number += 1,
-                    Err(e) => return Err(format!("cannot stage in {}: {e}", dir.display())),
-                }
-            };
-            staged.push(temp.clone());
-            std::fs::write(temp.join("next"), &a.text).map_err(|e| e.to_string())?;
-        }
-        let originals: Vec<(PathBuf, Option<Vec<u8>>)> = artifacts
-            .iter()
-            .map(|a| &a.path)
-            .chain(stale)
-            .map(|path| {
-                let bytes = match std::fs::read(path) {
-                    Ok(bytes) => Some(bytes),
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                    Err(e) => return Err(e.to_string()),
-                };
-                Ok((path.clone(), bytes))
-            })
-            .collect::<Result<_, String>>()?;
-        let commit = (|| -> std::io::Result<()> {
-            // Publish the manifest last, after removal of obsolete artifacts.
-            for path in stale {
-                std::fs::remove_file(path)?;
-            }
-            for (a, temp) in artifacts.iter().zip(&staged) {
-                std::fs::rename(temp.join("next"), &a.path)?;
-            }
-            Ok(())
-        })();
-        if let Err(error) = commit {
-            let mut failures = Vec::new();
-            for (path, bytes) in originals {
-                let restored = match bytes {
-                    Some(bytes) => std::fs::write(&path, bytes),
-                    None if path.exists() => std::fs::remove_file(&path),
-                    None => Ok(()),
-                };
-                if let Err(e) = restored {
-                    failures.push(format!("{}: {e}", path.display()));
-                }
-            }
-            return Err(format!(
-                "cannot publish output: {error}; rollback errors: {}",
-                failures.join(", ")
-            ));
-        }
-        Ok(())
-    })();
-    for dir in staged {
-        let _ = std::fs::remove_dir_all(dir);
-    }
-    result
 }

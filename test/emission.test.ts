@@ -2,6 +2,30 @@ import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { root, target, run, buildReact } from "./support";
 
+test("copied trait defaults map to their original source file", async () => {
+  const { buildCompiler, fixture, compiler } = await import("./support");
+  const { writeFileSync, readFileSync } = await import("node:fs");
+  const { decodeMappings } = await import("./sourcemap");
+  buildCompiler();
+  const dir = fixture("source-origins");
+  writeFileSync(join(dir, "lib.rs"), `mod contract; mod implementation;
+    pub fn answer() -> i32 { implementation::answer() }`);
+  const contract = `pub trait Value { fn value(&self) -> i32 { 42 } }`;
+  writeFileSync(join(dir, "contract.rs"), contract);
+  writeFileSync(join(dir, "implementation.rs"), `use crate::contract::Value;
+    pub struct Item;
+    impl Value for Item {}
+    pub fn answer() -> i32 { Item.value() }`);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  expect((await import(join(dir, "lib.js"))).answer()).toBe(42);
+  const map = JSON.parse(readFileSync(join(dir, "implementation.js.map"), "utf8"));
+  const source = map.sources.findIndex(path => path.endsWith("contract.rs"));
+  expect(source).toBeGreaterThanOrEqual(0);
+  expect(map.sourcesContent[source]).toBe(contract);
+  expect(decodeMappings(map.mappings).some(segment => segment.source === source
+    && contract.slice(segment.srcCol).startsWith("42"))).toBe(true);
+});
+
 beforeAll(() => {
   buildReact();
   run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);

@@ -306,7 +306,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(value);
         }
         if num == Some(Num::F64) {
-            self.runtime.extend([Helper::DebugF64, Helper::DisplayF64]);
+            self.runtime.insert(Helper::DebugF64);
             return Ok(Expr::call(Expr::var("$debugF64"), vec![value]));
         }
         if num.is_some() || ty.is_bool() {
@@ -324,7 +324,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$debugStr"), vec![value]));
         }
         if self.is_json_error(ty) {
-            self.runtime.extend([Helper::JsonError, Helper::DebugStr]);
+            self.runtime.insert(Helper::JsonError);
             return Ok(Expr::call(Expr::var("$debugJsonError"), vec![value]));
         }
         // A parse error is its message (ADR 0063), which says its kind.

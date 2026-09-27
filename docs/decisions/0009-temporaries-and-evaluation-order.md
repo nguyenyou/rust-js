@@ -23,6 +23,10 @@ If `a()` and `b()` have side effects, we've changed the program.
 
 ## Decision
 
+Amended by [ADR 0084](0084-owned-phases-and-host-boundaries.md): operand
+sequencing now uses actual prerequisite statements, not `is_simple` predictions.
+The evaluation-order contract below is unchanged.
+
 1. **`is_simple(e)`** answers: "Can `e` become a JS expression with no
    statements before it?" Literals, variables, operators, calls with simple
    arguments, simple ternaries and blocks with no statements are simple.

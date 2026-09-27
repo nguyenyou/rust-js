@@ -116,6 +116,7 @@ pub fn lower_crate<'tcx>(
     all_bodies: &[Body<'tcx>],
     serde_attrs: &super::SerdeAttributes,
 ) -> Option<Lowered> {
+    let sources = super::sources::CapturedSources::new(tcx);
     if !bindings::validate(tcx) || !traits::validate(tcx) || !super::jsx_api::validate(tcx) {
         return None;
     }
@@ -245,16 +246,12 @@ pub fn lower_crate<'tcx>(
             continue;
         };
         let info = &fns[&def_id.to_def_id()];
-        let file = module_file(tcx, info.module);
         let span = span.source_callsite();
         const_items.entry(info.module).or_default().push(js::Const {
             name: info.name.clone(),
             value,
             export: tcx.visibility(def_id).is_public() || called_from_elsewhere.contains(&def_id.to_def_id()),
-            span: js::Span {
-                lo: (span.lo() - file.start_pos).0,
-                hi: (span.hi() - file.start_pos).0,
-            },
+            span: sources.span(span),
         });
     }
 
@@ -266,6 +263,7 @@ pub fn lower_crate<'tcx>(
     // the link step knows exactly which imports and local names survive.
     let mut lowered_items = Vec::new();
     let crate_facts = CrateFacts {
+        sources: &sources,
         mutated: &mutated,
         changed_vecs: &changed_vecs,
         closures: &closures,
@@ -302,7 +300,6 @@ pub fn lower_crate<'tcx>(
         let (def_id, body) = work[next];
         next += 1;
         let module = fns[&def_id].module;
-        let file = module_file(tcx, module);
         let mut cx = FnCx {
             tcx,
             typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
@@ -311,8 +308,6 @@ pub fn lower_crate<'tcx>(
             krate: &crate_facts,
             dependencies: Default::default(),
             captures: HashMap::new(),
-            file_start: file.start_pos,
-            file_end: file.end_position(),
             thir: body.map_or(&no_body, |body| &body.thir),
             module,
             vars: HashMap::new(),
@@ -330,8 +325,6 @@ pub fn lower_crate<'tcx>(
             iterators: HashSet::new(),
             boxes: HashSet::new(),
             cloning: Vec::new(),
-            spilled_fields: None,
-            discarded: false,
             item: def_id,
         };
         let result = match body {
@@ -417,16 +410,12 @@ pub fn lower_crate<'tcx>(
                     _ => Expr::call(Expr::arrow(Vec::new(), function.body), Vec::new()),
                 };
                 let info = &fns[&key.to_def_id()];
-                let file = module_file(tcx, info.module);
                 let span = tcx.def_span(key).source_callsite();
                 pass.local_consts.entry(info.module).or_default().push(js::Const {
                     name: info.name.clone(),
                     value,
                     export: tcx.visibility(key).is_public() || called_from_elsewhere.contains(&key.to_def_id()),
-                    span: js::Span {
-                        lo: (span.lo() - file.start_pos).0,
-                        hi: (span.hi() - file.start_pos).0,
-                    },
+                    span: sources.span(span),
                 });
                 pass.runtime.entry(module).or_default().extend(lowered.runtime);
                 if lowered.jsx {
@@ -535,11 +524,10 @@ pub fn lower_crate<'tcx>(
                     });
                 }
             }
-            let mut helpers: Vec<Helper> = pass.runtime.remove(&module).unwrap_or_default().into_iter().collect();
-            helpers.sort();
+            let helpers = crate::runtime::resolve(pass.runtime.remove(&module).unwrap_or_default());
             let mut lowered = LoweredModule {
                 path: paths[&module].clone(),
-                file: module_file(tcx, module),
+                file: module_file(tcx, module).name.clone().into_local_path(),
                 packages,
                 imports: Vec::new(),
                 namespaces: pass.namespaces.remove(&module).unwrap_or_default(),
@@ -560,6 +548,7 @@ pub fn lower_crate<'tcx>(
         })
         .collect();
     tcx.dcx().has_errors().is_none().then_some(Lowered {
+        sources: sources.output,
         modules: lowered,
         tests,
     })

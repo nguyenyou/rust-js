@@ -9,12 +9,18 @@ use super::status_line::{Status, StatusLine};
 use crate::compiler::Example;
 use crate::styles::CONTROL;
 
+unsafe extern "Rust" {
+    #[link_name = "../compiler-client.js#cancelCompile"]
+    safe fn cancel_compile();
+}
+
 pub struct ToolbarProps {
     pub examples: &'static [Example],
     pub example: String,
     pub on_example: Rc<dyn Fn(String)>,
     /// Whether Compile and Test can run: loaded, and not compiling already.
     pub ready: bool,
+    pub compiling: bool,
     /// Compile, or with `true`, compile the tests and run them.
     pub on_compile: Rc<dyn Fn(bool)>,
     pub status: &'static Status,
@@ -26,6 +32,7 @@ pub fn Toolbar(
         example,
         on_example,
         ready,
+        compiling,
         on_compile,
         status,
     }: ToolbarProps,
@@ -47,6 +54,9 @@ pub fn Toolbar(
                 {"Test"}
             </button>
             <kbd className="font-mono text-xs text-muted">{"⌘/Ctrl-Enter"}</kbd>
+            <button id="cancel-compile" className={CONTROL} hidden={!compiling} onClick={move |_| cancel_compile()}>
+                {"Cancel"}
+            </button>
             <StatusLine status={status} />
         </div>
     }

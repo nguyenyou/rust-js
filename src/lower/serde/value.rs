@@ -94,7 +94,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let value = self.expr(args[0], out)?;
             let reader = self.json_reader(ty, span)?;
             self.use_value();
-            self.runtime.extend([Helper::FromJson, Helper::DebugStr]);
+            self.runtime.insert(Helper::FromJson);
             return Ok(Some(Expr::call(Expr::var("$fromJsonValue"), vec![value, reader])));
         }
         if let Some(trait_id) = tcx.trait_of_assoc(def_id) {
