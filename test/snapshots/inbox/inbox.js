@@ -101,12 +101,273 @@ function $jsonNumber(x) {
   return fixed.includes(".") ? fixed : `${fixed}.0`;
 }
 
+// What serde's impls and derives read, the same whatever they read from:
+// the text (`$JsonReader`), or a value already read (`$JsonContent`), which
+// is how serde reads a tagged or an untagged enum.
+class $JsonDecoder {
+  // An integer type, named as serde names it, from `min` to `max`.
+  int(name, min, max) {
+    return this.deserializeNumber(name, (n) => {
+      if (n.kind === "f")
+        throw $jsonError(
+          `invalid type: floating point \`${$jsonNumber(n.value)}\`, expected ${name}`,
+        );
+      if (n.kind === "u" ? n.value > max : n.value < min) {
+        throw $jsonError(`invalid value: integer \`${n.value}\`, expected ${name}`);
+      }
+      return Number(n.value);
+    });
+  }
+
+  f64() {
+    return this.deserializeNumber("f64", (n) => Number(n.value));
+  }
+
+  string() {
+    return this.deserializeStr("a string", (s) => s);
+  }
+
+  char() {
+    return this.deserializeStr("a character", $jsonChar);
+  }
+
+  vec(read) {
+    return this.deserializeSeq("a sequence", (seq) => {
+      const items = [];
+      while (seq.next()) items.push(seq.value(read));
+      return items;
+    });
+  }
+
+  tuple(reads) {
+    const expected = `a tuple of size ${reads.length}`;
+    return this.deserializeSeq(expected, (seq) =>
+      reads.map((read, i) => seq.element(read, i, expected)),
+    );
+  }
+
+  array(length, read) {
+    const expected = length === 0 ? "an empty array" : `an array of length ${length}`;
+    return this.deserializeSeq(expected, (seq) =>
+      Array.from({ length }, (_, i) => seq.element(read, i, expected)),
+    );
+  }
+
+  map(readKey, read) {
+    return this.deserializeMap("a map", (map) => {
+      const entries = new Map();
+      while (map.next()) {
+        const key = readKey(map.key());
+        entries.set(key, map.value(read));
+      }
+      return entries;
+    });
+  }
+
+  // A struct's fields: `[name, read]`, or `[[name, ...aliases], read]`, and
+  // `missing`, the value it has when it's not there, for `#[serde(default)]`.
+  // `build` makes the struct of their values.
+  struct(expected, fields, build, options = {}) {
+    return this.deserializeMap(
+      options.expecting ?? expected,
+      (map) => this.structMap(map, fields, build, options),
+      (seq) => this.structSeq(seq, expected, fields, build, options),
+    );
+  }
+
+  // An untagged struct variant, which serde reads from an object only.
+  untaggedStruct(expected, fields, build, options = {}) {
+    return this.deserializeAny(options.expecting ?? expected, {
+      map: (map) => this.structMap(map, fields, build, options),
+    });
+  }
+
+  structMap(map, fields, build, { deny = false, container } = {}) {
+    const values = new Array(fields.length);
+    const seen = new Array(fields.length).fill(false);
+    while (map.next()) {
+      const i = $jsonField(map.key().string(), fields, deny);
+      if (i < 0) {
+        map.value((json) => json.ignoreValue());
+        continue;
+      }
+      if (seen[i]) throw $jsonError(`duplicate field \`${$jsonName(fields[i][0])}\``);
+      values[i] = map.value(fields[i][1]);
+      seen[i] = true;
+    }
+    const defaults = container?.();
+    fields.forEach(([names, read, missing], i) => {
+      if (!seen[i])
+        values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
+    });
+    return build(values, defaults);
+  }
+
+  structSeq(seq, expected, fields, build, { container, expecting } = {}) {
+    const length =
+      expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
+    const defaults = container?.();
+    const values = fields.map(([, read, missing], i) =>
+      seq.element(read, i, length, missing, defaults),
+    );
+    return build(values, defaults);
+  }
+
+  // A tuple struct's fields: `read`, or `[read, missing]`.
+  tupleStruct(expected, fields, build = (values) => values, { container, expecting } = {}) {
+    const length =
+      expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
+    return this.deserializeSeq(expecting ?? expected, (seq) => {
+      const defaults = container?.();
+      const values = fields.map((field, i) => {
+        const [read, missing] = typeof field === "function" ? [field] : field;
+        return seq.element(read, i, length, missing, defaults);
+      });
+      return build(values, defaults);
+    });
+  }
+
+  // An internally tagged enum's unit variant, whose other fields are
+  // ignored (serde's `InternallyTaggedUnitVisitor`).
+  taggedUnit(expected) {
+    return this.deserializeAny(expected, {
+      seq: () => undefined,
+      map: (map) => {
+        while (map.next()) {
+          map.key().ignore();
+          map.value((json) => json.ignoreValue());
+        }
+        return undefined;
+      },
+    });
+  }
+
+  // An untagged unit variant: `null` (serde's `UntaggedUnitVisitor`).
+  untaggedUnit(expected) {
+    return this.deserializeAny(expected, { unit: () => undefined });
+  }
+
+  // `#[serde(tag = "type")]`: the tag, found among the other fields, which
+  // are kept for the variant to read (serde's `TaggedContentVisitor`).
+  internallyTagged(tag, expected, variants, visit, other) {
+    const [variant, rest] = this.deserializeAny(expected, {
+      seq: (seq) => {
+        if (!seq.next()) throw $jsonError(`missing field \`${tag}\``);
+        const variant = seq.value((json) => json.identifier(variants, other));
+        const items = [];
+        while (seq.next()) items.push(seq.value((json) => json.content()));
+        return [variant, { type: "seq", value: items }];
+      },
+      map: (map) => {
+        let variant;
+        const entries = [];
+        while (map.next()) {
+          const key = map.key().string();
+          if (key !== tag) {
+            entries.push([{ type: "str", value: key }, map.value((json) => json.content())]);
+            continue;
+          }
+          if (variant !== undefined) throw $jsonError(`duplicate field \`${tag}\``);
+          variant = map.value((json) => json.identifier(variants, other));
+        }
+        if (variant === undefined) throw $jsonError(`missing field \`${tag}\``);
+        return [variant, { type: "map", value: entries }];
+      },
+    });
+    return visit(variant, new $JsonContent(rest, true));
+  }
+
+  // `#[serde(tag = "t", content = "c")]`, as serde's derive reads one: the
+  // tag, then the content, or the content first, kept until the tag says
+  // how to read it.
+  adjacentlyTagged(tag, content, expected, variants, visit, { deny = false, other } = {}) {
+    const variantOf = (json) =>
+      json.enum(
+        variants,
+        (name, access) => {
+          access.unit();
+          return name;
+        },
+        other,
+      );
+    // The next key that's the tag or the content, skipping any other.
+    const relevant = (map) => {
+      while (map.next()) {
+        const key = map.key().string();
+        if (key === tag) return "tag";
+        if (key === content) return "content";
+        if (deny) {
+          throw $jsonError(
+            `invalid value: string ${$debugStr(key)}, expected ${$debugStr(tag)} or ${$debugStr(content)}`,
+          );
+        }
+        map.value((json) => json.ignoreValue());
+      }
+      return undefined;
+    };
+    const finish = (map, value) => {
+      const key = relevant(map);
+      if (key !== undefined)
+        throw $jsonError(`duplicate field \`${key === "tag" ? tag : content}\``);
+      return value;
+    };
+    return this.deserializeMap(
+      expected,
+      (map) => {
+        const first = relevant(map);
+        if (first === "tag") {
+          const variant = map.value(variantOf);
+          const second = relevant(map);
+          if (second === "tag") throw $jsonError(`duplicate field \`${tag}\``);
+          if (second === "content")
+            return finish(
+              map,
+              map.value((json) => visit(variant, json)),
+            );
+          return visit(variant, new $JsonMissing(content));
+        }
+        if (first === "content") {
+          const buffered = map.value((json) => json.content());
+          const second = relevant(map);
+          if (second === "tag") {
+            const variant = map.value(variantOf);
+            return finish(map, visit(variant, new $JsonContent(buffered, true)));
+          }
+          if (second === "content") throw $jsonError(`duplicate field \`${content}\``);
+        }
+        throw $jsonError(`missing field \`${tag}\``);
+      },
+      (seq) => {
+        if (!seq.next()) throw $jsonError(`invalid length 0, expected ${expected}`);
+        const variant = seq.value((json) => json.identifier(variants, other));
+        if (!seq.next()) throw $jsonError(`invalid length 1, expected ${expected}`);
+        return seq.value((json) => visit(variant, json));
+      },
+    );
+  }
+
+  // `#[serde(untagged)]`: the value, read once and kept, then each way of
+  // reading it in turn, the first that works.
+  untagged(message, attempts) {
+    const content = this.content();
+    for (const attempt of attempts) {
+      try {
+        return attempt(new $JsonContent(content, false));
+      } catch (e) {
+        if (!(e instanceof $JsonError)) throw e;
+      }
+    }
+    throw $jsonError(message);
+  }
+}
+
 // serde_json's reader (ADR 0078): its `Deserializer`, ported step for step,
 // with its methods' names. It reads the text's UTF-8 bytes, as serde_json
 // does, so a mistake is found at the same byte, with the same message, and
 // its column counts bytes.
-class $JsonReader {
+class $JsonReader extends $JsonDecoder {
   constructor(text) {
+    super();
     this.bytes = new TextEncoder().encode(text);
     this.index = 0;
     this.remainingDepth = 128;
@@ -694,7 +955,7 @@ class $JsonReader {
     }
   }
 
-  // What serde's own impls read.
+  // What serde's own impls read, from the text.
 
   bool() {
     const peek = this.parseWhitespace();
@@ -716,32 +977,6 @@ class $JsonReader {
     }
   }
 
-  // An integer type, named as serde names it, from `min` to `max`.
-  int(name, min, max) {
-    return this.deserializeNumber(name, (n) => {
-      if (n.kind === "f")
-        throw $jsonError(
-          `invalid type: floating point \`${$jsonNumber(n.value)}\`, expected ${name}`,
-        );
-      if (n.kind === "u" ? n.value > max : n.value < min) {
-        throw $jsonError(`invalid value: integer \`${n.value}\`, expected ${name}`);
-      }
-      return Number(n.value);
-    });
-  }
-
-  f64() {
-    return this.deserializeNumber("f64", (n) => Number(n.value));
-  }
-
-  string() {
-    return this.deserializeStr("a string", (s) => s);
-  }
-
-  char() {
-    return this.deserializeStr("a character", $jsonChar);
-  }
-
   unit(expected = "unit") {
     const peek = this.parseWhitespace();
     if (peek === -1) throw this.peekError("EOF while parsing a value");
@@ -755,6 +990,10 @@ class $JsonReader {
     }
   }
 
+  unitStruct(expected) {
+    return this.unit(expected);
+  }
+
   option(read) {
     if (this.parseWhitespace() !== 110) return read(this);
     this.index++;
@@ -762,90 +1001,82 @@ class $JsonReader {
     return undefined;
   }
 
-  vec(read) {
-    return this.deserializeSeq("a sequence", (seq) => {
-      const items = [];
-      while (seq.next()) items.push(read(this));
-      return items;
-    });
-  }
-
-  tuple(reads) {
-    const expected = `a tuple of size ${reads.length}`;
-    return this.deserializeSeq(expected, (seq) =>
-      reads.map((read, i) => seq.element(read, i, expected)),
-    );
-  }
-
-  array(length, read) {
-    const expected = length === 0 ? "an empty array" : `an array of length ${length}`;
-    return this.deserializeSeq(expected, (seq) =>
-      Array.from({ length }, (_, i) => seq.element(read, i, expected)),
-    );
-  }
-
-  map(readKey, read) {
-    return this.deserializeMap("a map", (map) => {
-      const entries = new Map();
-      while (map.next()) {
-        const key = readKey(new $JsonKey(this));
-        entries.set(key, map.value(read));
+  // `deserialize_any`: whatever's there, for the `visitor` method of its
+  // kind (`unit`, `bool`, `number`, `string`, `seq` or `map`), which is
+  // `expected` if the visitor has none.
+  deserializeAny(expected, visitor) {
+    const peek = this.parseWhitespace();
+    if (peek === -1) throw this.peekError("EOF while parsing a value");
+    const invalid = (unexpected) => $jsonError(`invalid type: ${unexpected}, expected ${expected}`);
+    try {
+      if (peek === 110) {
+        this.index++;
+        this.parseIdent("ull");
+        if (visitor.unit) return visitor.unit();
+        throw invalid("null");
       }
-      return entries;
-    });
-  }
-
-  // What serde's derives read.
-
-  // A struct's fields: `[name, read]`, or `[[name, ...aliases], read]`, and
-  // `missing`, the value it has when it's not there, for `#[serde(default)]`.
-  // `build` makes the struct of their values.
-  struct(expected, fields, build, { deny = false, container, expecting } = {}) {
-    const length =
-      expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
-    return this.deserializeMap(
-      expecting ?? expected,
-      (map) => {
-        const values = new Array(fields.length);
-        const seen = new Array(fields.length).fill(false);
-        while (map.next()) {
-          const i = $jsonField(new $JsonKey(this).string(), fields, deny);
-          if (i < 0) {
-            map.value((json) => json.ignoreValue());
-            continue;
-          }
-          if (seen[i]) throw $jsonError(`duplicate field \`${$jsonName(fields[i][0])}\``);
-          values[i] = map.value(fields[i][1]);
-          seen[i] = true;
-        }
-        const defaults = container?.();
-        fields.forEach(([names, read, missing], i) => {
-          if (!seen[i])
-            values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
-        });
-        return build(values, defaults);
-      },
-      (seq) => {
-        const defaults = container?.();
-        const values = fields.map(([, read, missing], i) =>
-          seq.element(read, i, length, missing, defaults),
+      if (peek === 116 || peek === 102) {
+        this.index++;
+        this.parseIdent(peek === 116 ? "rue" : "alse");
+        if (visitor.bool) return visitor.bool(peek === 116);
+        throw invalid(`boolean \`${peek === 116}\``);
+      }
+      if (peek === 45 || (peek >= 48 && peek <= 57)) {
+        if (peek === 45) this.index++;
+        const n = this.parseInteger(peek !== 45);
+        if (visitor.number) return visitor.number(n);
+        throw invalid($jsonUnexpectedNumber(n));
+      }
+      if (peek === 34) {
+        this.index++;
+        const s = this.parseStr();
+        if (visitor.string) return visitor.string(s);
+        throw invalid(`string ${$debugStr(s)}`);
+      }
+      if (peek === 91) {
+        return this.nested(
+          () => {
+            if (!visitor.seq) throw invalid("sequence");
+            return visitor.seq(new $JsonSeq(this));
+          },
+          () => this.endSeq(),
         );
-        return build(values, defaults);
-      },
-    );
+      }
+      if (peek === 123) {
+        return this.nested(
+          () => {
+            if (!visitor.map) throw invalid("map");
+            return visitor.map(new $JsonMap(this));
+          },
+          () => this.endMap(),
+        );
+      }
+      throw this.peekError("expected value");
+    } catch (e) {
+      throw this.fixPosition(e);
+    }
   }
 
-  // A tuple struct's fields: `read`, or `[read, missing]`.
-  tupleStruct(expected, fields, build = (values) => values, { container, expecting } = {}) {
-    const length =
-      expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
-    return this.deserializeSeq(expecting ?? expected, (seq) => {
-      const defaults = container?.();
-      const values = fields.map((field, i) => {
-        const [read, missing] = typeof field === "function" ? [field] : field;
-        return seq.element(read, i, length, missing, defaults);
-      });
-      return build(values, defaults);
+  // serde's `ContentVisitor`: the value, read into a `{ type, value }`.
+  content() {
+    return this.deserializeAny("any value", {
+      unit: () => ({ type: "unit" }),
+      bool: (value) => ({ type: "bool", value }),
+      number: (value) => ({ type: "num", value }),
+      string: (value) => ({ type: "str", value }),
+      seq: (seq) => {
+        const items = [];
+        while (seq.next()) items.push(seq.value((json) => json.content()));
+        return { type: "seq", value: items };
+      },
+      map: (map) => {
+        const entries = [];
+        while (map.next()) {
+          const key = map.key().content();
+          entries.push([key, map.value((json) => json.content())]);
+        }
+        return { type: "map", value: entries };
+      },
     });
   }
 
@@ -853,7 +1084,7 @@ class $JsonReader {
   // variant's name and a `$JsonVariant` to read what it holds.
   enum(variants, visit, other) {
     const peek = this.parseWhitespace();
-    if (peek === 34) return visit(this.variant(variants, other), new $JsonVariant(this, true));
+    if (peek === 34) return visit(this.identifier(variants, other), new $JsonVariant(this, true));
     if (peek !== 123)
       throw this.peekError(peek === -1 ? "EOF while parsing a value" : "expected value");
     if (--this.remainingDepth === 0) throw this.peekError("recursion limit exceeded");
@@ -870,7 +1101,7 @@ class $JsonReader {
               : "key must be a string",
         );
       }
-      const name = this.variant(variants, other);
+      const name = this.identifier(variants, other);
       this.parseObjectColon();
       value = visit(name, new $JsonVariant(this, false));
     } finally {
@@ -884,22 +1115,133 @@ class $JsonReader {
     throw this.error(c === -1 ? "EOF while parsing an object" : "expected value");
   }
 
-  // A variant's name, from the reader at its opening quote.
-  variant(variants, other) {
-    try {
-      this.index++;
-      const name = this.parseStr();
-      for (const names of variants) {
-        if (typeof names === "string" ? names === name : names.includes(name))
-          return $jsonName(names);
-      }
-      if (other !== undefined) return other;
-      throw variants.length === 0
-        ? $jsonError(`unknown variant \`${name}\`, there are no variants`)
-        : $jsonError(`unknown variant \`${name}\`, expected ${$jsonOneOf(variants)}`);
-    } catch (e) {
-      throw this.fixPosition(e);
+  // A variant's name, from a string.
+  identifier(variants, other) {
+    return this.deserializeStr("variant identifier", (name) =>
+      $jsonVariantNamed(name, variants, other),
+    );
+  }
+}
+
+// A value already read (serde's `ContentDeserializer`, or when not `owned`,
+// its `ContentRefDeserializer`): `{ type, value }`, where `type` is `unit`,
+// `bool`, `num`, `str`, `seq` or `map`.
+class $JsonContent extends $JsonDecoder {
+  constructor(content, owned) {
+    super();
+    this.data = content;
+    this.owned = owned;
+  }
+
+  invalid(expected) {
+    return $jsonError(`invalid type: ${$jsonUnexpectedContent(this.data)}, expected ${expected}`);
+  }
+
+  deserializeNumber(expected, visit) {
+    if (this.data.type === "num") return visit(this.data.value);
+    throw this.invalid(expected);
+  }
+
+  deserializeStr(expected, visit) {
+    if (this.data.type === "str") return visit(this.data.value);
+    throw this.invalid(expected);
+  }
+
+  visitSeq(visit) {
+    const seq = new $JsonContentSeq(this.data.value, this.owned);
+    const value = visit(seq);
+    seq.end();
+    return value;
+  }
+
+  visitMap(visit) {
+    const map = new $JsonContentMap(this.data.value, this.owned);
+    const value = visit(map);
+    map.end();
+    return value;
+  }
+
+  deserializeSeq(expected, visit) {
+    if (this.data.type === "seq") return this.visitSeq(visit);
+    throw this.invalid(expected);
+  }
+
+  deserializeMap(expected, visitMap, visitSeq) {
+    if (this.data.type === "seq" && visitSeq) return this.visitSeq(visitSeq);
+    if (this.data.type === "map") return this.visitMap(visitMap);
+    throw this.invalid(expected);
+  }
+
+  deserializeAny(expected, visitor) {
+    const { type, value } = this.data;
+    if (type === "seq" && visitor.seq) return this.visitSeq(visitor.seq);
+    if (type === "map" && visitor.map) return this.visitMap(visitor.map);
+    const visit = {
+      unit: visitor.unit,
+      bool: visitor.bool,
+      num: visitor.number,
+      str: visitor.string,
+    }[type];
+    if (visit) return visit(value);
+    throw this.invalid(expected);
+  }
+
+  bool() {
+    if (this.data.type === "bool") return this.data.value;
+    throw this.invalid("a boolean");
+  }
+
+  unit(expected = "unit") {
+    const { type, value } = this.data;
+    // An owned one takes `{}` for a unit, as a newtype variant of `()`.
+    if (type === "unit" || (this.owned && type === "map" && value.length === 0)) return undefined;
+    throw this.invalid(expected);
+  }
+
+  unitStruct(expected) {
+    const { type, value } = this.data;
+    if (type === "unit" || (this.owned && (type === "map" || type === "seq") && value.length === 0))
+      return undefined;
+    throw this.invalid(expected);
+  }
+
+  option(read) {
+    return this.data.type === "unit" ? undefined : read(this);
+  }
+
+  ignoreValue() {}
+
+  content() {
+    return this.data;
+  }
+
+  enum(variants, visit, other) {
+    const { type, value } = this.data;
+    let variant;
+    let held;
+    if (type === "map") {
+      if (value.length !== 1)
+        throw $jsonError("invalid value: map, expected map with a single key");
+      [[variant, held]] = value;
+    } else if (type === "str") {
+      variant = this.data;
+    } else {
+      throw this.invalid("string or map");
     }
+    const name = new $JsonContent(variant, this.owned).identifier(variants, other);
+    return visit(name, new $JsonContentVariant(held, this.owned));
+  }
+
+  // A variant's name, or its index among the variants.
+  identifier(variants, other) {
+    const { type, value } = this.data;
+    if (type === "str") return $jsonVariantNamed(value, variants, other);
+    if (type !== "num" || value.kind !== "u") throw this.invalid("variant identifier");
+    if (value.value < variants.length) return $jsonName(variants[Number(value.value)]);
+    if (other !== undefined) return other;
+    throw $jsonError(
+      `invalid value: integer \`${value.value}\`, expected variant index 0 <= i < ${variants.length}`,
+    );
   }
 }
 
@@ -928,11 +1270,47 @@ class $JsonSeq {
     return true;
   }
 
+  value(read) {
+    return read(this.reader);
+  }
+
   // The `i`th of `expected`'s items.
   element(read, i, expected, missing, defaults) {
-    if (this.next()) return read(this.reader);
+    if (this.next()) return this.value(read);
     if (missing) return missing(defaults);
     throw $jsonError(`invalid length ${i}, expected ${expected}`);
+  }
+}
+
+// The items of a value already read.
+class $JsonContentSeq {
+  constructor(items, owned) {
+    this.items = items;
+    this.owned = owned;
+    this.count = 0;
+  }
+
+  next() {
+    return this.count < this.items.length && ++this.count > 0;
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.items[this.count - 1], this.owned));
+  }
+
+  element(read, i, expected, missing, defaults) {
+    return $JsonSeq.prototype.element.call(this, read, i, expected, missing, defaults);
+  }
+
+  // Items left over: the length is wrong.
+  end() {
+    const length = this.items.length;
+    if (this.count < length) {
+      const count = this.count;
+      throw $jsonError(
+        `invalid length ${length}, expected ${count} element${count === 1 ? "" : "s"} in sequence`,
+      );
+    }
   }
 }
 
@@ -967,9 +1345,44 @@ class $JsonMap {
     );
   }
 
+  key() {
+    return new $JsonKey(this.reader);
+  }
+
   value(read) {
     this.reader.parseObjectColon();
     return read(this.reader);
+  }
+}
+
+// The entries of a value already read.
+class $JsonContentMap {
+  constructor(entries, owned) {
+    this.entries = entries;
+    this.owned = owned;
+    this.count = 0;
+  }
+
+  next() {
+    return this.count < this.entries.length && ++this.count > 0;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entries[this.count - 1][0], this.owned);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entries[this.count - 1][1], this.owned));
+  }
+
+  end() {
+    const length = this.entries.length;
+    if (this.count < length) {
+      const count = this.count;
+      throw $jsonError(
+        `invalid length ${length}, expected ${count} element${count === 1 ? "" : "s"} in map`,
+      );
+    }
   }
 }
 
@@ -987,6 +1400,14 @@ class $JsonKey {
 
   char() {
     return $jsonChar(this.string());
+  }
+
+  ignore() {
+    this.string();
+  }
+
+  content() {
+    return { type: "str", value: this.string() };
   }
 
   number(read) {
@@ -1022,6 +1443,36 @@ class $JsonKey {
   }
 }
 
+// A key already read: it's read as any other value is, so a number in
+// quotes isn't a number, as in serde.
+class $JsonContentKey {
+  constructor(key, owned) {
+    this.key = new $JsonContent(key, owned);
+  }
+
+  string() {
+    return this.key.string();
+  }
+
+  char() {
+    return this.key.char();
+  }
+
+  bool() {
+    return this.key.bool();
+  }
+
+  ignore() {}
+
+  content() {
+    return this.key.content();
+  }
+
+  number(read) {
+    return read(this.key);
+  }
+}
+
 // `VariantAccess` of `{"Name": ..}`, or of `"Name"` (`unit`), which holds
 // nothing.
 class $JsonVariant {
@@ -1050,14 +1501,52 @@ class $JsonVariant {
   }
 }
 
+// The same, of a value already read: what a variant holds, if anything.
+class $JsonContentVariant {
+  constructor(held, owned) {
+    this.held = held;
+    this.owned = owned;
+  }
+
+  reader(kind, types) {
+    if (this.held === undefined) throw $jsonError(`invalid type: unit variant, expected ${kind}`);
+    if (types && !types.includes(this.held.type)) {
+      throw $jsonError(`invalid type: ${$jsonUnexpectedContent(this.held)}, expected ${kind}`);
+    }
+    return new $JsonContent(this.held, this.owned);
+  }
+
+  unit() {
+    if (this.held !== undefined) new $JsonContent(this.held, this.owned).unit();
+  }
+
+  newtype(read) {
+    return read(this.reader("newtype variant"));
+  }
+
+  tuple(expected, fields, build, options) {
+    return this.reader("tuple variant", ["seq"]).tupleStruct(expected, fields, build, options);
+  }
+
+  struct(expected, fields, build, options) {
+    return this.reader("struct variant", ["map", "seq"]).struct(expected, fields, build, options);
+  }
+}
+
 // serde's `missing_field`: what a field that isn't there reads as, which is
-// `None` for an `Option`, and otherwise an error.
+// `None` for an `Option`, and otherwise an error. An adjacently tagged
+// enum's content that isn't there is read so too, and is nothing for a
+// unit variant.
 class $JsonMissing {
   constructor(name) {
     this.name = name;
   }
 
   option() {
+    return undefined;
+  }
+
+  untaggedUnit() {
     return undefined;
   }
 }
@@ -1068,13 +1557,19 @@ for (const method of [
   "string",
   "char",
   "unit",
+  "unitStruct",
   "vec",
   "tuple",
   "array",
   "map",
   "struct",
+  "untaggedStruct",
   "tupleStruct",
   "enum",
+  "taggedUnit",
+  "internallyTagged",
+  "adjacentlyTagged",
+  "untagged",
 ]) {
   $JsonMissing.prototype[method] = function () {
     throw $jsonError(`missing field \`${this.name}\``);
@@ -1108,6 +1603,26 @@ function $jsonUnexpectedNumber(n) {
 function $jsonChar(s) {
   if ([...s].length === 1) return s;
   throw $jsonError(`invalid value: string ${$debugStr(s)}, expected a character`);
+}
+
+// serde's `Unexpected` of a value already read.
+function $jsonUnexpectedContent({ type, value }) {
+  if (type === "unit") return "null";
+  if (type === "bool") return `boolean \`${value}\``;
+  if (type === "num") return $jsonUnexpectedNumber(value);
+  if (type === "str") return `string ${$debugStr(value)}`;
+  return type === "seq" ? "sequence" : "map";
+}
+
+// The variant a name names, or `other`'s, as a derive's variant visitor finds it.
+function $jsonVariantNamed(name, variants, other) {
+  for (const names of variants) {
+    if (typeof names === "string" ? names === name : names.includes(name)) return $jsonName(names);
+  }
+  if (other !== undefined) return other;
+  throw variants.length === 0
+    ? $jsonError(`unknown variant \`${name}\`, there are no variants`)
+    : $jsonError(`unknown variant \`${name}\`, expected ${$jsonOneOf(variants)}`);
 }
 
 function $jsonName(names) {
@@ -2363,6 +2878,587 @@ export function report() {
   } else {
     out += `err ${$displayJsonError(match$174._0)} / ${$debugJsonError(match$174._0)}\n`;
   }
+  const match$175 = $fromJson('{"type":"started"}', updateDeserialize_deserialize);
+  if (match$175.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$175._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$175._0)} / ${$debugJsonError(match$175._0)}\n`;
+  }
+  const match$176 = $fromJson('{"type":"started","extra":1}', updateDeserialize_deserialize);
+  if (match$176.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$176._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$176._0)} / ${$debugJsonError(match$176._0)}\n`;
+  }
+  const match$177 = $fromJson('{"extra":[1,{}],"type":"started"}', updateDeserialize_deserialize);
+  if (match$177.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$177._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$177._0)} / ${$debugJsonError(match$177._0)}\n`;
+  }
+  const match$178 = $fromJson('{"type":"moved","dx":1,"dy":2}', updateDeserialize_deserialize);
+  if (match$178.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$178._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$178._0)} / ${$debugJsonError(match$178._0)}\n`;
+  }
+  const match$179 = $fromJson('{"dx":1,"type":"moved","dy":2}', updateDeserialize_deserialize);
+  if (match$179.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$179._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$179._0)} / ${$debugJsonError(match$179._0)}\n`;
+  }
+  const match$180 = $fromJson('{"type":"moved","dx":1}', updateDeserialize_deserialize);
+  if (match$180.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$180._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$180._0)} / ${$debugJsonError(match$180._0)}\n`;
+  }
+  const match$181 = $fromJson(
+    '{"type":"moved","dx":1,"dy":2,"dz":3}',
+    updateDeserialize_deserialize,
+  );
+  if (match$181.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$181._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$181._0)} / ${$debugJsonError(match$181._0)}\n`;
+  }
+  const match$182 = $fromJson('{"type":"moved","dx":"1","dy":2}', updateDeserialize_deserialize);
+  if (match$182.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$182._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$182._0)} / ${$debugJsonError(match$182._0)}\n`;
+  }
+  const match$183 = $fromJson('{"type":"placed","id":5}', updateDeserialize_deserialize);
+  if (match$183.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$183._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$183._0)} / ${$debugJsonError(match$183._0)}\n`;
+  }
+  const match$184 = $fromJson('{"type":"placed","id":5,"note":"x"}', updateDeserialize_deserialize);
+  if (match$184.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$184._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$184._0)} / ${$debugJsonError(match$184._0)}\n`;
+  }
+  const match$185 = $fromJson('{"type":"placed"}', updateDeserialize_deserialize);
+  if (match$185.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$185._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$185._0)} / ${$debugJsonError(match$185._0)}\n`;
+  }
+  const match$186 = $fromJson('{"type":"marked"}', updateDeserialize_deserialize);
+  if (match$186.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$186._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$186._0)} / ${$debugJsonError(match$186._0)}\n`;
+  }
+  const match$187 = $fromJson('{"type":"marked","x":1}', updateDeserialize_deserialize);
+  if (match$187.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$187._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$187._0)} / ${$debugJsonError(match$187._0)}\n`;
+  }
+  const match$188 = $fromJson('{"type":"count"}', updateDeserialize_deserialize);
+  if (match$188.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$188._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$188._0)} / ${$debugJsonError(match$188._0)}\n`;
+  }
+  const match$189 = $fromJson('{"type":"keys","map":{"1":2}}', updateDeserialize_deserialize);
+  if (match$189.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$189._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$189._0)} / ${$debugJsonError(match$189._0)}\n`;
+  }
+  const match$190 = $fromJson('{"type":"nope"}', updateDeserialize_deserialize);
+  if (match$190.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$190._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$190._0)} / ${$debugJsonError(match$190._0)}\n`;
+  }
+  const match$191 = $fromJson("{}", updateDeserialize_deserialize);
+  if (match$191.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$191._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$191._0)} / ${$debugJsonError(match$191._0)}\n`;
+  }
+  const match$192 = $fromJson('{"type":1}', updateDeserialize_deserialize);
+  if (match$192.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$192._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$192._0)} / ${$debugJsonError(match$192._0)}\n`;
+  }
+  const match$193 = $fromJson('{"type":"started","type":"moved"}', updateDeserialize_deserialize);
+  if (match$193.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$193._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$193._0)} / ${$debugJsonError(match$193._0)}\n`;
+  }
+  const match$194 = $fromJson('["moved",1,2]', updateDeserialize_deserialize);
+  if (match$194.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$194._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$194._0)} / ${$debugJsonError(match$194._0)}\n`;
+  }
+  const match$195 = $fromJson('["started"]', updateDeserialize_deserialize);
+  if (match$195.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$195._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$195._0)} / ${$debugJsonError(match$195._0)}\n`;
+  }
+  const match$196 = $fromJson('["started",1]', updateDeserialize_deserialize);
+  if (match$196.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$196._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$196._0)} / ${$debugJsonError(match$196._0)}\n`;
+  }
+  const match$197 = $fromJson("[]", updateDeserialize_deserialize);
+  if (match$197.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$197._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$197._0)} / ${$debugJsonError(match$197._0)}\n`;
+  }
+  const match$198 = $fromJson('"started"', updateDeserialize_deserialize);
+  if (match$198.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$198._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$198._0)} / ${$debugJsonError(match$198._0)}\n`;
+  }
+  const match$199 = $fromJson("5", updateDeserialize_deserialize);
+  if (match$199.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$199._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$199._0)} / ${$debugJsonError(match$199._0)}\n`;
+  }
+  const match$200 = $fromJson("null", updateDeserialize_deserialize);
+  if (match$200.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$200._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$200._0)} / ${$debugJsonError(match$200._0)}\n`;
+  }
+  const match$201 = $fromJson('{"type":"moved","dx":1,"dy":2} x', updateDeserialize_deserialize);
+  if (match$201.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$201._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$201._0)} / ${$debugJsonError(match$201._0)}\n`;
+  }
+  const match$202 = $fromJson('{"type":"moved","dx":1,"dy":2', updateDeserialize_deserialize);
+  if (match$202.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$202._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$202._0)} / ${$debugJsonError(match$202._0)}\n`;
+  }
+  const match$203 = $fromJson(
+    '{\n  "type": "placed",\n  "id": 1.5\n}',
+    updateDeserialize_deserialize,
+  );
+  if (match$203.TAG === "Ok") {
+    out += `ok ${updateDebug_fmt(match$203._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$203._0)} / ${$debugJsonError(match$203._0)}\n`;
+  }
+  const match$204 = $fromJson(
+    '[{"type":"started"},{"type":"moved","dx":1}]',
+    $json.vec(updateDeserialize_deserialize),
+  );
+  if (match$204.TAG === "Ok") {
+    out += `ok [${match$204._0.map((item) => updateDebug_fmt(item)).join(", ")}]\n`;
+  } else {
+    out += `err ${$displayJsonError(match$204._0)} / ${$debugJsonError(match$204._0)}\n`;
+  }
+  const match$205 = $fromJson('[{"type":"started"}, 5]', $json.vec(updateDeserialize_deserialize));
+  if (match$205.TAG === "Ok") {
+    out += `ok [${match$205._0.map((item) => updateDebug_fmt(item)).join(", ")}]\n`;
+  } else {
+    out += `err ${$displayJsonError(match$205._0)} / ${$debugJsonError(match$205._0)}\n`;
+  }
+  const match$206 = $fromJson('{"t":"Ping"}', chatDeserialize_deserialize);
+  if (match$206.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$206._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$206._0)} / ${$debugJsonError(match$206._0)}\n`;
+  }
+  const match$207 = $fromJson('{"t":"Ping","c":null}', chatDeserialize_deserialize);
+  if (match$207.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$207._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$207._0)} / ${$debugJsonError(match$207._0)}\n`;
+  }
+  const match$208 = $fromJson('{"t":"Ping","c":1}', chatDeserialize_deserialize);
+  if (match$208.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$208._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$208._0)} / ${$debugJsonError(match$208._0)}\n`;
+  }
+  const match$209 = $fromJson('{"t":"Text","c":"hi"}', chatDeserialize_deserialize);
+  if (match$209.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$209._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$209._0)} / ${$debugJsonError(match$209._0)}\n`;
+  }
+  const match$210 = $fromJson('{"c":"hi","t":"Text"}', chatDeserialize_deserialize);
+  if (match$210.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$210._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$210._0)} / ${$debugJsonError(match$210._0)}\n`;
+  }
+  const match$211 = $fromJson('{"t":"Text"}', chatDeserialize_deserialize);
+  if (match$211.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$211._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$211._0)} / ${$debugJsonError(match$211._0)}\n`;
+  }
+  const match$212 = $fromJson('{"t":"Maybe"}', chatDeserialize_deserialize);
+  if (match$212.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$212._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$212._0)} / ${$debugJsonError(match$212._0)}\n`;
+  }
+  const match$213 = $fromJson('{"t":"Pair","c":[1,2]}', chatDeserialize_deserialize);
+  if (match$213.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$213._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$213._0)} / ${$debugJsonError(match$213._0)}\n`;
+  }
+  const match$214 = $fromJson('{"c":[1,2],"t":"Pair"}', chatDeserialize_deserialize);
+  if (match$214.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$214._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$214._0)} / ${$debugJsonError(match$214._0)}\n`;
+  }
+  const match$215 = $fromJson('{"c":[1,2,3],"t":"Pair"}', chatDeserialize_deserialize);
+  if (match$215.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$215._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$215._0)} / ${$debugJsonError(match$215._0)}\n`;
+  }
+  const match$216 = $fromJson('{"t":"Pair","c":[1,2,3]}', chatDeserialize_deserialize);
+  if (match$216.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$216._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$216._0)} / ${$debugJsonError(match$216._0)}\n`;
+  }
+  const match$217 = $fromJson('{"t":"Move","c":{"x":1}}', chatDeserialize_deserialize);
+  if (match$217.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$217._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$217._0)} / ${$debugJsonError(match$217._0)}\n`;
+  }
+  const match$218 = $fromJson('{"t":"Move","c":[1]}', chatDeserialize_deserialize);
+  if (match$218.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$218._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$218._0)} / ${$debugJsonError(match$218._0)}\n`;
+  }
+  const match$219 = $fromJson('{"c":[1],"t":"Move"}', chatDeserialize_deserialize);
+  if (match$219.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$219._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$219._0)} / ${$debugJsonError(match$219._0)}\n`;
+  }
+  const match$220 = $fromJson('{"t":"Text","c":"a","t":"Ping"}', chatDeserialize_deserialize);
+  if (match$220.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$220._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$220._0)} / ${$debugJsonError(match$220._0)}\n`;
+  }
+  const match$221 = $fromJson('{"t":"Text","c":"a","c":"b"}', chatDeserialize_deserialize);
+  if (match$221.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$221._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$221._0)} / ${$debugJsonError(match$221._0)}\n`;
+  }
+  const match$222 = $fromJson('{"c":1}', chatDeserialize_deserialize);
+  if (match$222.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$222._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$222._0)} / ${$debugJsonError(match$222._0)}\n`;
+  }
+  const match$223 = $fromJson('{"x":1,"t":"Ping"}', chatDeserialize_deserialize);
+  if (match$223.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$223._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$223._0)} / ${$debugJsonError(match$223._0)}\n`;
+  }
+  const match$224 = $fromJson('{"t":"Nope"}', chatDeserialize_deserialize);
+  if (match$224.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$224._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$224._0)} / ${$debugJsonError(match$224._0)}\n`;
+  }
+  const match$225 = $fromJson('["Text","hi"]', chatDeserialize_deserialize);
+  if (match$225.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$225._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$225._0)} / ${$debugJsonError(match$225._0)}\n`;
+  }
+  const match$226 = $fromJson('["Text"]', chatDeserialize_deserialize);
+  if (match$226.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$226._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$226._0)} / ${$debugJsonError(match$226._0)}\n`;
+  }
+  const match$227 = $fromJson("[]", chatDeserialize_deserialize);
+  if (match$227.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$227._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$227._0)} / ${$debugJsonError(match$227._0)}\n`;
+  }
+  const match$228 = $fromJson('{"t":{"Text":null},"c":"x"}', chatDeserialize_deserialize);
+  if (match$228.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$228._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$228._0)} / ${$debugJsonError(match$228._0)}\n`;
+  }
+  const match$229 = $fromJson('{"t":5}', chatDeserialize_deserialize);
+  if (match$229.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$229._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$229._0)} / ${$debugJsonError(match$229._0)}\n`;
+  }
+  const match$230 = $fromJson('{"c":"hi","t":"Ping"}', chatDeserialize_deserialize);
+  if (match$230.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$230._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$230._0)} / ${$debugJsonError(match$230._0)}\n`;
+  }
+  const match$231 = $fromJson('{"c":{},"t":"Ping"}', chatDeserialize_deserialize);
+  if (match$231.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$231._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$231._0)} / ${$debugJsonError(match$231._0)}\n`;
+  }
+  const match$232 = $fromJson('"Ping"', chatDeserialize_deserialize);
+  if (match$232.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$232._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$232._0)} / ${$debugJsonError(match$232._0)}\n`;
+  }
+  const match$233 = $fromJson("{}", chatDeserialize_deserialize);
+  if (match$233.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$233._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$233._0)} / ${$debugJsonError(match$233._0)}\n`;
+  }
+  const match$234 = $fromJson('{"t":"Maybe","c":null}', chatDeserialize_deserialize);
+  if (match$234.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$234._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$234._0)} / ${$debugJsonError(match$234._0)}\n`;
+  }
+  const match$235 = $fromJson('{"c":null,"t":"Maybe"}', chatDeserialize_deserialize);
+  if (match$235.TAG === "Ok") {
+    out += `ok ${chatDebug_fmt(match$235._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$235._0)} / ${$debugJsonError(match$235._0)}\n`;
+  }
+  const match$236 = $fromJson('{"t":"A","c":1,"x":2}', strictChatDeserialize_deserialize);
+  if (match$236.TAG === "Ok") {
+    out += `ok ${strictChatDebug_fmt(match$236._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$236._0)} / ${$debugJsonError(match$236._0)}\n`;
+  }
+  const match$237 = $fromJson('{"t":"B"}', strictChatDeserialize_deserialize);
+  if (match$237.TAG === "Ok") {
+    out += `ok ${strictChatDebug_fmt(match$237._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$237._0)} / ${$debugJsonError(match$237._0)}\n`;
+  }
+  const match$238 = $fromJson('{"x":2}', strictChatDeserialize_deserialize);
+  if (match$238.TAG === "Ok") {
+    out += `ok ${strictChatDebug_fmt(match$238._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$238._0)} / ${$debugJsonError(match$238._0)}\n`;
+  }
+  const match$239 = $fromJson("1.5", anythingDeserialize_deserialize);
+  if (match$239.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$239._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$239._0)} / ${$debugJsonError(match$239._0)}\n`;
+  }
+  const match$240 = $fromJson('"w"', anythingDeserialize_deserialize);
+  if (match$240.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$240._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$240._0)} / ${$debugJsonError(match$240._0)}\n`;
+  }
+  const match$241 = $fromJson("[1,true]", anythingDeserialize_deserialize);
+  if (match$241.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$241._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$241._0)} / ${$debugJsonError(match$241._0)}\n`;
+  }
+  const match$242 = $fromJson('{"x":1,"y":2}', anythingDeserialize_deserialize);
+  if (match$242.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$242._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$242._0)} / ${$debugJsonError(match$242._0)}\n`;
+  }
+  const match$243 = $fromJson("null", anythingDeserialize_deserialize);
+  if (match$243.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$243._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$243._0)} / ${$debugJsonError(match$243._0)}\n`;
+  }
+  const match$244 = $fromJson("[1,2,3]", anythingDeserialize_deserialize);
+  if (match$244.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$244._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$244._0)} / ${$debugJsonError(match$244._0)}\n`;
+  }
+  const match$245 = $fromJson("true", anythingDeserialize_deserialize);
+  if (match$245.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$245._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$245._0)} / ${$debugJsonError(match$245._0)}\n`;
+  }
+  const match$246 = $fromJson('{"x":1}', anythingDeserialize_deserialize);
+  if (match$246.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$246._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$246._0)} / ${$debugJsonError(match$246._0)}\n`;
+  }
+  const match$247 = $fromJson("[1]", anythingDeserialize_deserialize);
+  if (match$247.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$247._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$247._0)} / ${$debugJsonError(match$247._0)}\n`;
+  }
+  const match$248 = $fromJson("-3", anythingDeserialize_deserialize);
+  if (match$248.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$248._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$248._0)} / ${$debugJsonError(match$248._0)}\n`;
+  }
+  const match$249 = $fromJson('{"x":1,"y":2,"z":3}', anythingDeserialize_deserialize);
+  if (match$249.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$249._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$249._0)} / ${$debugJsonError(match$249._0)}\n`;
+  }
+  const match$250 = $fromJson("[1,true,3]", anythingDeserialize_deserialize);
+  if (match$250.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$250._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$250._0)} / ${$debugJsonError(match$250._0)}\n`;
+  }
+  const match$251 = $fromJson("{}", anythingDeserialize_deserialize);
+  if (match$251.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$251._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$251._0)} / ${$debugJsonError(match$251._0)}\n`;
+  }
+  const match$252 = $fromJson("[]", anythingDeserialize_deserialize);
+  if (match$252.TAG === "Ok") {
+    out += `ok ${anythingDebug_fmt(match$252._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$252._0)} / ${$debugJsonError(match$252._0)}\n`;
+  }
+  const match$253 = $fromJson('{"A":1}', eitherDeserialize_deserialize);
+  if (match$253.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$253._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$253._0)} / ${$debugJsonError(match$253._0)}\n`;
+  }
+  const match$254 = $fromJson('{"B":{"x":2}}', eitherDeserialize_deserialize);
+  if (match$254.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$254._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$254._0)} / ${$debugJsonError(match$254._0)}\n`;
+  }
+  const match$255 = $fromJson('"raw"', eitherDeserialize_deserialize);
+  if (match$255.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$255._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$255._0)} / ${$debugJsonError(match$255._0)}\n`;
+  }
+  const match$256 = $fromJson("7", eitherDeserialize_deserialize);
+  if (match$256.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$256._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$256._0)} / ${$debugJsonError(match$256._0)}\n`;
+  }
+  const match$257 = $fromJson('{"C":1}', eitherDeserialize_deserialize);
+  if (match$257.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$257._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$257._0)} / ${$debugJsonError(match$257._0)}\n`;
+  }
+  const match$258 = $fromJson("[1]", eitherDeserialize_deserialize);
+  if (match$258.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$258._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$258._0)} / ${$debugJsonError(match$258._0)}\n`;
+  }
+  const match$259 = $fromJson('{"A":1,"B":2}', eitherDeserialize_deserialize);
+  if (match$259.TAG === "Ok") {
+    out += `ok ${eitherDebug_fmt(match$259._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$259._0)} / ${$debugJsonError(match$259._0)}\n`;
+  }
+  const match$260 = $fromJson('{"type":"started"}', wrapperDeserialize_deserialize);
+  if (match$260.TAG === "Ok") {
+    out += `ok ${wrapperDebug_fmt(match$260._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$260._0)} / ${$debugJsonError(match$260._0)}\n`;
+  }
+  const match$261 = $fromJson('{"t":"Text","c":"x"}', wrapperDeserialize_deserialize);
+  if (match$261.TAG === "Ok") {
+    out += `ok ${wrapperDebug_fmt(match$261._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$261._0)} / ${$debugJsonError(match$261._0)}\n`;
+  }
+  const match$262 = $fromJson('{"type":"keys","map":{}}', wrapperDeserialize_deserialize);
+  if (match$262.TAG === "Ok") {
+    out += `ok ${wrapperDebug_fmt(match$262._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$262._0)} / ${$debugJsonError(match$262._0)}\n`;
+  }
+  const match$263 = $fromJson("1", wrapperDeserialize_deserialize);
+  if (match$263.TAG === "Ok") {
+    out += `ok ${wrapperDebug_fmt(match$263._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$263._0)} / ${$debugJsonError(match$263._0)}\n`;
+  }
+  const match$264 = $fromJson(
+    '{"events":[{"type":"moved","dx":1}],"loose":1}',
+    batchDeserialize_deserialize,
+  );
+  if (match$264.TAG === "Ok") {
+    out += `ok ${batchDebug_fmt(match$264._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$264._0)} / ${$debugJsonError(match$264._0)}\n`;
+  }
+  const match$265 = $fromJson('{"events":[],"loose":true}', batchDeserialize_deserialize);
+  if (match$265.TAG === "Ok") {
+    out += `ok ${batchDebug_fmt(match$265._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$265._0)} / ${$debugJsonError(match$265._0)}\n`;
+  }
+  const match$266 = $fromJson(
+    '{"events":[{"type":"started"}],"loose":[4,5]}',
+    batchDeserialize_deserialize,
+  );
+  if (match$266.TAG === "Ok") {
+    out += `ok ${batchDebug_fmt(match$266._0)}\n`;
+  } else {
+    out += `err ${$displayJsonError(match$266._0)} / ${$debugJsonError(match$266._0)}\n`;
+  }
+  for (const text$1 of ['{"kind":"Tagged","id":1}', '{"id":1}', '{"kind":5,"id":1}']) {
+    const match$267 = $fromJson(text$1, taggedDeserialize_deserialize);
+    if (match$267.TAG === "Ok") {
+      out += `ok ${taggedDebug_fmt(match$267._0)}\n`;
+    } else {
+      out += `err ${$displayJsonError(match$267._0)}\n`;
+    }
+    const match$268 = $fromJson(text$1, strictTaggedDeserialize_deserialize);
+    if (match$268.TAG === "Ok") {
+      out += `ok ${strictTaggedDebug_fmt(match$268._0)}\n`;
+    } else {
+      out += `err ${$displayJsonError(match$268._0)}\n`;
+    }
+  }
   return out;
 }
 
@@ -2471,6 +3567,104 @@ function holderDebug_fmt(holder) {
   return $debugFields("Holder", names, values);
 }
 
+function detailsDebug_fmt(details) {
+  return `Details { id: ${details.id}, note: ${details.note == null ? "None" : `Some(${$debugStr(details.note)})`} }`;
+}
+
+function markerDebug_fmt(marker) {
+  return "Marker";
+}
+
+function updateDebug_fmt(update) {
+  if (update === "Started") {
+    return "Started";
+  } else if (update.TAG === "Moved") {
+    return `Moved { dx: ${update.dx}, dy: ${update.dy} }`;
+  } else if (update.TAG === "Placed") {
+    return `Placed(${detailsDebug_fmt(update._0)})`;
+  } else if (update.TAG === "Marked") {
+    return `Marked(${markerDebug_fmt(update._0)})`;
+  } else if (update.TAG === "Count") {
+    return `Count(${update._0 == null ? "None" : `Some(${update._0})`})`;
+  } else if (update.TAG === "Keys") {
+    return `Keys { map: {${Array.from($sortedEntries(update.map, $cmp))
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(", ")}} }`;
+  } else {
+    return "Unknown";
+  }
+}
+
+function chatDebug_fmt(chat) {
+  if (chat === "Ping") {
+    return "Ping";
+  } else if (chat.TAG === "Text") {
+    return `Text(${$debugStr(chat._0)})`;
+  } else if (chat.TAG === "Pair") {
+    return `Pair(${chat._0}, ${chat._1})`;
+  } else if (chat.TAG === "Move") {
+    return `Move { x: ${chat.x} }`;
+  } else {
+    return `Maybe(${chat._0 == null ? "None" : `Some(${chat._0})`})`;
+  }
+}
+
+function strictChatDebug_fmt(strictChat) {
+  if (strictChat.TAG === "A") {
+    return `A(${strictChat._0})`;
+  } else {
+    return "B";
+  }
+}
+
+function anythingDebug_fmt(anything) {
+  if (anything.TAG === "Num") {
+    return `Num(${$debugF64(anything._0)})`;
+  } else if (anything.TAG === "Word") {
+    return `Word(${$debugStr(anything._0)})`;
+  } else if (anything.TAG === "Pair") {
+    return `Pair(${anything._0}, ${anything._1})`;
+  } else if (anything.TAG === "Point") {
+    return `Point { x: ${anything.x}, y: ${anything.y} }`;
+  } else if (anything === "Nothing") {
+    return "Nothing";
+  } else {
+    return `Many([${anything._0.map((item) => String(item)).join(", ")}])`;
+  }
+}
+
+function eitherDebug_fmt(either) {
+  if (either.TAG === "A") {
+    return `A(${either._0})`;
+  } else if (either.TAG === "B") {
+    return `B { x: ${either.x} }`;
+  } else if (either.TAG === "Raw") {
+    return `Raw(${$debugStr(either._0)})`;
+  } else {
+    return `Other(${either._0})`;
+  }
+}
+
+function wrapperDebug_fmt(wrapper) {
+  if (wrapper.TAG === "Tagged") {
+    return `Tagged(${updateDebug_fmt(wrapper._0)})`;
+  } else {
+    return `Plain(${chatDebug_fmt(wrapper._0)})`;
+  }
+}
+
+function batchDebug_fmt(batch) {
+  return `Batch { events: [${batch.events.map((item) => updateDebug_fmt(item)).join(", ")}], loose: ${anythingDebug_fmt(batch.loose)} }`;
+}
+
+function taggedDebug_fmt(tagged) {
+  return `Tagged { id: ${tagged.id} }`;
+}
+
+function strictTaggedDebug_fmt(strictTagged) {
+  return `StrictTagged { id: ${strictTagged.id} }`;
+}
+
 function orderDeserialize_deserialize(json) {
   return json.struct(
     "struct Order",
@@ -2531,7 +3725,7 @@ function pointDeserialize_deserialize(json) {
 }
 
 function unitDeserialize_deserialize(json) {
-  return json.unit("unit struct Unit");
+  return json.unitStruct("unit struct Unit");
 }
 
 function metersDeserialize_deserialize(json) {
@@ -2679,5 +3873,180 @@ function holderDeserialize_deserialize(json) {
       nested,
     }),
   );
+}
+
+function updateDeserialize_deserialize(json) {
+  return json.internallyTagged(
+    "type",
+    "internally tagged enum Update",
+    ["started", "moved", "placed", "marked", "count", "keys", "unknown"],
+    (variant, content) => {
+      if (variant === "started") {
+        content.taggedUnit("unit variant Update::Started");
+        return "Started";
+      } else if (variant === "moved") {
+        return content.struct(
+          "struct variant Update::Moved",
+          [
+            ["dx", $json.i32],
+            ["dy", $json.i32],
+          ],
+          ([dx, dy]) => ({ TAG: "Moved", dx, dy }),
+        );
+      } else if (variant === "placed") {
+        return { TAG: "Placed", _0: detailsDeserialize_deserialize(content) };
+      } else if (variant === "marked") {
+        return { TAG: "Marked", _0: markerDeserialize_deserialize(content) };
+      } else if (variant === "count") {
+        return { TAG: "Count", _0: $json.option($json.u32)(content) };
+      } else if (variant === "keys") {
+        return content.struct(
+          "struct variant Update::Keys",
+          [["map", $json.map($json.key.number($json.u32), $json.u8)]],
+          ([map]) => ({ TAG: "Keys", map }),
+        );
+      } else {
+        content.taggedUnit("unit variant Update::Unknown");
+        return "Unknown";
+      }
+    },
+    "unknown",
+  );
+}
+
+function chatDeserialize_deserialize(json) {
+  return json.adjacentlyTagged(
+    "t",
+    "c",
+    "adjacently tagged enum Chat",
+    ["Ping", "Text", "Pair", "Move", "Maybe"],
+    (variant, content) => {
+      if (variant === "Ping") {
+        content.untaggedUnit("unit variant Chat::Ping");
+        return "Ping";
+      } else if (variant === "Text") {
+        return { TAG: "Text", _0: $json.string(content) };
+      } else if (variant === "Pair") {
+        return content.tupleStruct(
+          "tuple variant Chat::Pair",
+          [$json.u8, $json.u8],
+          ([_0, _1]) => ({ TAG: "Pair", _0, _1 }),
+        );
+      } else if (variant === "Move") {
+        return content.untaggedStruct("struct variant Chat::Move", [["x", $json.i32]], ([x]) => ({
+          TAG: "Move",
+          x,
+        }));
+      } else {
+        return { TAG: "Maybe", _0: $json.option($json.u8)(content) };
+      }
+    },
+  );
+}
+
+function strictChatDeserialize_deserialize(json) {
+  return json.adjacentlyTagged(
+    "t",
+    "c",
+    "adjacently tagged enum StrictChat",
+    ["A", "B"],
+    (variant, content) => {
+      if (variant === "A") {
+        return { TAG: "A", _0: $json.u8(content) };
+      } else {
+        content.untaggedUnit("unit variant StrictChat::B");
+        return "B";
+      }
+    },
+    { deny: true },
+  );
+}
+
+function anythingDeserialize_deserialize(json) {
+  return json.untagged("data did not match any variant of untagged enum Anything", [
+    (content) => ({ TAG: "Num", _0: $json.f64(content) }),
+    (content) => ({ TAG: "Word", _0: $json.string(content) }),
+    (content) =>
+      content.tupleStruct("tuple variant Anything::Pair", [$json.u8, $json.bool], ([_0, _1]) => ({
+        TAG: "Pair",
+        _0,
+        _1,
+      })),
+    (content) =>
+      content.untaggedStruct(
+        "struct variant Anything::Point",
+        [
+          ["x", $json.i32],
+          ["y", $json.i32],
+        ],
+        ([x, y]) => ({ TAG: "Point", x, y }),
+      ),
+    (content) => {
+      content.untaggedUnit("unit variant Anything::Nothing");
+      return "Nothing";
+    },
+    (content) => ({ TAG: "Many", _0: $json.vec($json.u8)(content) }),
+  ]);
+}
+
+function eitherDeserialize_deserialize(json) {
+  return json.untagged("data did not match any variant of untagged enum Either", [
+    (content) =>
+      content.enum(["A", "B"], (variant, content$1) => {
+        if (variant === "A") {
+          return { TAG: "A", _0: content$1.newtype($json.u8) };
+        } else {
+          return content$1.struct("struct variant Either::B", [["x", $json.u8]], ([x]) => ({
+            TAG: "B",
+            x,
+          }));
+        }
+      }),
+    (content) => ({ TAG: "Raw", _0: $json.string(content) }),
+    (content) => ({ TAG: "Other", _0: $json.u32(content) }),
+  ]);
+}
+
+function wrapperDeserialize_deserialize(json) {
+  return json.untagged("data did not match any variant of untagged enum Wrapper", [
+    (content) => ({ TAG: "Tagged", _0: updateDeserialize_deserialize(content) }),
+    (content) => ({ TAG: "Plain", _0: chatDeserialize_deserialize(content) }),
+  ]);
+}
+
+function batchDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Batch",
+    [
+      ["events", $json.vec(updateDeserialize_deserialize)],
+      ["loose", anythingDeserialize_deserialize],
+    ],
+    ([events, loose]) => ({ events, loose }),
+  );
+}
+
+function taggedDeserialize_deserialize(json) {
+  return json.struct("struct Tagged", [["id", $json.u32]], ([id]) => ({ id }));
+}
+
+function strictTaggedDeserialize_deserialize(json) {
+  return json.struct("struct StrictTagged", [["id", $json.u32]], ([id]) => ({ id }), {
+    deny: true,
+  });
+}
+
+function detailsDeserialize_deserialize(json) {
+  return json.struct(
+    "struct Details",
+    [
+      ["id", $json.u32],
+      ["note", $json.option($json.string)],
+    ],
+    ([id, note]) => ({ id, note }),
+  );
+}
+
+function markerDeserialize_deserialize(json) {
+  return json.unitStruct("unit struct Marker");
 }
 //# sourceMappingURL=inbox.js.map

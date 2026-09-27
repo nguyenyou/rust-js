@@ -80,8 +80,8 @@ function orderDeserialize_deserialize(json) {
   `expecting`.
 - **An enum is read externally tagged:** `"Dot"`, or `{"Circle": 1.5}`, by
   its variants' names, then as its variant holds: nothing, a value, a
-  tuple or a struct. Reading an internally or adjacently tagged enum, or an
-  untagged one, is still an error.
+  tuple or a struct. Its other representations are [ADR
+  0079](0079-serde-tagged-enums.md).
 - `serde_json::from_str` is `$fromJson(text, read)`: a `Result` of what
   `read` reads, if it's all the text holds.
 

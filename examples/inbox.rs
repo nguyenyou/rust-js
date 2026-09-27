@@ -1,8 +1,9 @@
-// A client reading what its server sends, as serde_json reads it (ADR
-// 0078): each case prints the value `from_str` gives, or its error, whose
-// message and place must be native Rust's to the byte. Structs, enums,
-// renames, aliases, defaults, unknown fields, and JSON that's wrong in
-// every way serde_json tells apart.
+// A client reading what its server sends, as serde_json reads it (ADRs
+// 0078 and 0079): each case prints the value `from_str` gives, or its
+// error, whose message and place must be native Rust's to the byte.
+// Structs, enums, renames, aliases, defaults, unknown fields, every enum
+// representation, and JSON that's wrong in every way serde_json tells
+// apart.
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -141,6 +142,91 @@ pub struct Holder {
     pub nested: Option<Vec<Option<Pt>>>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Details {
+    pub id: u32,
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Marker;
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Update {
+    Started,
+    Moved { dx: i32, dy: i32 },
+    Placed(Details),
+    Marked(Marker),
+    Count(Option<u32>),
+    Keys { map: BTreeMap<u32, u8> },
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "t", content = "c")]
+pub enum Chat {
+    Ping,
+    Text(String),
+    Pair(u8, u8),
+    Move { x: i32 },
+    Maybe(Option<u8>),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "t", content = "c", deny_unknown_fields)]
+pub enum StrictChat {
+    A(u8),
+    B,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Anything {
+    Num(f64),
+    Word(String),
+    Pair(u8, bool),
+    Point { x: i32, y: i32 },
+    Nothing,
+    Many(Vec<u8>),
+}
+
+#[derive(Deserialize, Debug)]
+pub enum Either {
+    A(u8),
+    B { x: u8 },
+    #[serde(untagged)]
+    Raw(String),
+    #[serde(untagged)]
+    Other(u32),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Wrapper {
+    Tagged(Update),
+    Plain(Chat),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Batch {
+    pub events: Vec<Update>,
+    pub loose: Anything,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "kind")]
+pub struct Tagged {
+    pub id: u32,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub struct StrictTagged {
+    pub id: u32,
+}
+
 macro_rules! show {
     ($out:ident, $ty:ty, $($text:expr),*) => {
         $(
@@ -251,5 +337,45 @@ pub fn report() -> String {
     let text = String::from("[1, 2]");
     show!(out, Pt, &text);
     show!(out, Vec<u32>, "[1,\n2,\n  x]", "[\r\n1\t,2  ]", "\n\n  [1,2", "[1]\n\n  ,");
+    show!(out, Update,
+        r#"{"type":"started"}"#, r#"{"type":"started","extra":1}"#, r#"{"extra":[1,{}],"type":"started"}"#,
+        r#"{"type":"moved","dx":1,"dy":2}"#, r#"{"dx":1,"type":"moved","dy":2}"#, r#"{"type":"moved","dx":1}"#,
+        r#"{"type":"moved","dx":1,"dy":2,"dz":3}"#, r#"{"type":"moved","dx":"1","dy":2}"#,
+        r#"{"type":"placed","id":5}"#, r#"{"type":"placed","id":5,"note":"x"}"#, r#"{"type":"placed"}"#,
+        r#"{"type":"marked"}"#, r#"{"type":"marked","x":1}"#, r#"{"type":"count"}"#,
+        r#"{"type":"keys","map":{"1":2}}"#, r#"{"type":"nope"}"#, "{}", r#"{"type":1}"#,
+        r#"{"type":"started","type":"moved"}"#, r#"["moved",1,2]"#, r#"["started"]"#, r#"["started",1]"#, "[]",
+        r#""started""#, "5", "null", r#"{"type":"moved","dx":1,"dy":2} x"#, r#"{"type":"moved","dx":1,"dy":2"#,
+        "{\n  \"type\": \"placed\",\n  \"id\": 1.5\n}"
+    );
+    show!(out, Vec<Update>, r#"[{"type":"started"},{"type":"moved","dx":1}]"#, r#"[{"type":"started"}, 5]"#);
+    show!(out, Chat,
+        r#"{"t":"Ping"}"#, r#"{"t":"Ping","c":null}"#, r#"{"t":"Ping","c":1}"#, r#"{"t":"Text","c":"hi"}"#,
+        r#"{"c":"hi","t":"Text"}"#, r#"{"t":"Text"}"#, r#"{"t":"Maybe"}"#, r#"{"t":"Pair","c":[1,2]}"#,
+        r#"{"c":[1,2],"t":"Pair"}"#, r#"{"c":[1,2,3],"t":"Pair"}"#, r#"{"t":"Pair","c":[1,2,3]}"#,
+        r#"{"t":"Move","c":{"x":1}}"#, r#"{"t":"Move","c":[1]}"#, r#"{"c":[1],"t":"Move"}"#,
+        r#"{"t":"Text","c":"a","t":"Ping"}"#, r#"{"t":"Text","c":"a","c":"b"}"#, r#"{"c":1}"#,
+        r#"{"x":1,"t":"Ping"}"#, r#"{"t":"Nope"}"#, r#"["Text","hi"]"#, r#"["Text"]"#, "[]",
+        r#"{"t":{"Text":null},"c":"x"}"#, r#"{"t":5}"#, r#"{"c":"hi","t":"Ping"}"#, r#"{"c":{},"t":"Ping"}"#,
+        r#""Ping""#, "{}", r#"{"t":"Maybe","c":null}"#, r#"{"c":null,"t":"Maybe"}"#
+    );
+    show!(out, StrictChat, r#"{"t":"A","c":1,"x":2}"#, r#"{"t":"B"}"#, r#"{"x":2}"#);
+    show!(out, Anything, "1.5", r#""w""#, "[1,true]", r#"{"x":1,"y":2}"#, "null", "[1,2,3]", "true",
+        r#"{"x":1}"#, "[1]", "-3", r#"{"x":1,"y":2,"z":3}"#, "[1,true,3]", "{}", "[]");
+    show!(out, Either, r#"{"A":1}"#, r#"{"B":{"x":2}}"#, r#""raw""#, "7", r#"{"C":1}"#, "[1]", r#"{"A":1,"B":2}"#);
+    show!(out, Wrapper, r#"{"type":"started"}"#, r#"{"t":"Text","c":"x"}"#, r#"{"type":"keys","map":{}}"#, "1");
+    show!(out, Batch,
+        r#"{"events":[{"type":"moved","dx":1}],"loose":1}"#, r#"{"events":[],"loose":true}"#,
+        r#"{"events":[{"type":"started"}],"loose":[4,5]}"#);
+    for text in [r#"{"kind":"Tagged","id":1}"#, r#"{"id":1}"#, r#"{"kind":5,"id":1}"#] {
+        match serde_json::from_str::<Tagged>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?}\n", v)),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+        match serde_json::from_str::<StrictTagged>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?}\n", v)),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+    }
     out
 }

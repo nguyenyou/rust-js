@@ -16,8 +16,11 @@
 //!     );
 //!   }
 //! ```
+//!
+//! A tagged or untagged enum is read as serde reads one, through the value
+//! read first and kept (ADR 0079).
 
-use super::{Attrs, Rule, SerdeDefault, serde_trait};
+use super::{Attrs, Rule, SerdeDefault, Tagging, serde_trait};
 use crate::js::{self, Expr, Op, Pattern, Prop, Stmt, StmtKind};
 use crate::lower::bindings::variant_name;
 use crate::lower::representation::Num;
@@ -194,16 +197,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if adt.is_enum() {
             return self.read_enum(json, adt, args, &container, &type_name, span);
         }
-        if container.tag.is_some() {
-            return Err(self.unsupported(span, "deserializing a struct with `#[serde(tag)]`"));
-        }
         let variant = adt.non_enum_variant();
         let expected = |kind: &str| Expr::str(container.expecting.clone().unwrap_or(format!("{kind} {type_name}")));
         if container.transparent {
             return self.read_transparent(json, adt, variant, args, span);
         }
         match variant.ctor_kind() {
-            Some(CtorKind::Const) => Ok(method("unit", vec![expected("unit struct")])),
+            Some(CtorKind::Const) => Ok(method("unitStruct", vec![expected("unit struct")])),
             // A newtype is what it holds (`visit_newtype_struct`).
             Some(CtorKind::Fn) if variant.fields.len() == 1 => {
                 let field = variant.fields.iter().next().expect("a field");
@@ -416,8 +416,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// An externally tagged enum: `json.enum(names, (variant, content) => ..)`,
-    /// each variant read by its name, as its style reads it.
+    /// An enum, read as its tagging reads it (serde's "enum
+    /// representations"), each variant by its name. Variants marked
+    /// `#[serde(untagged)]`, which come last, are tried after the others.
     fn read_enum(
         &mut self,
         json: &str,
@@ -428,26 +429,88 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
     ) -> R<Expr> {
         let tagging = match (&container.tag, &container.content, container.untagged) {
-            (_, _, true) => Some("an untagged enum"),
-            (Some(_), Some(_), _) => Some("an adjacently tagged enum"),
-            (Some(_), None, _) => Some("an internally tagged enum"),
-            _ => None,
+            (_, _, true) => Tagging::Untagged,
+            (Some(tag), Some(content), _) => Tagging::Adjacent(tag.clone(), content.clone()),
+            (Some(tag), None, _) => Tagging::Internal(tag.clone()),
+            _ => Tagging::External,
         };
-        if let Some(tagging) = tagging {
-            return Err(self.unsupported(span, &format!("deserializing {tagging}")));
-        }
-        let (variant_var, content) = (self.fresh("variant"), self.fresh("content"));
-        let mut names = Vec::new();
-        let mut other = None;
-        let mut branches = Vec::new();
+        let mut tagged = Vec::new();
+        let mut untagged = Vec::new();
         for variant in adt.variants() {
             let attrs = self.serde_attrs(variant.def_id)?;
-            if attrs.untagged {
-                return Err(self.unsupported(span, "deserializing an `#[serde(untagged)]` variant"));
-            }
             if attrs.skip_deserializing {
                 continue;
             }
+            if tagging == Tagging::Untagged || attrs.untagged {
+                untagged.push((variant, attrs));
+            } else {
+                tagged.push((variant, attrs));
+            }
+        }
+        if untagged.is_empty() {
+            return self.read_tagged(json, &tagging, &tagged, adt, args, container, type_name, span);
+        }
+        // `json.untagged(message, [(content) => .., ..])`: the tagged
+        // variants first, all at once, then each untagged one. Each is its own
+        // function, so each can use the same names.
+        let mut attempts = Vec::new();
+        let names = self.names.clone();
+        if !tagged.is_empty() {
+            let reader = self.fresh("content");
+            let value = self.read_tagged(&reader, &tagging, &tagged, adt, args, container, type_name, span)?;
+            let body = vec![StmtKind::Return(Some(value)).at(js::Span::NONE)];
+            attempts.push(Expr::arrow(vec![reader.into()], body));
+            self.names = names.clone();
+        }
+        for (variant, attrs) in &untagged {
+            let reader = self.fresh("content");
+            let rule = attrs.de_rename_all.or(container.de_rename_all_fields);
+            let body = self.read_variant(
+                &reader,
+                Form::Untagged,
+                adt,
+                variant,
+                args,
+                rule,
+                container,
+                type_name,
+                span,
+            )?;
+            attempts.push(Expr::arrow(vec![reader.into()], body));
+            self.names = names.clone();
+        }
+        let message = container
+            .expecting
+            .clone()
+            .unwrap_or(format!("data did not match any variant of untagged enum {type_name}"));
+        let call_args = vec![Expr::str(message), Expr::array(attempts)];
+        Ok(Expr::call(Expr::member(Expr::var(json), "untagged"), call_args))
+    }
+
+    /// The tagged variants: `json.enum(names, (variant, content) => ..)`, or
+    /// `json.internallyTagged(tag, ..)`, or `json.adjacentlyTagged(tag, content, ..)`.
+    #[allow(clippy::too_many_arguments)]
+    fn read_tagged(
+        &mut self,
+        json: &str,
+        tagging: &Tagging,
+        variants: &[(&ty::VariantDef, Attrs)],
+        adt: ty::AdtDef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
+        container: &Attrs,
+        type_name: &str,
+        span: Span,
+    ) -> R<Expr> {
+        let (variant_var, content) = (self.fresh("variant"), self.fresh("content"));
+        let form = match tagging {
+            Tagging::External => Form::External,
+            Tagging::Internal(_) => Form::Internal,
+            _ => Form::Untagged,
+        };
+        let mut names = Vec::new();
+        let mut other = None;
+        let mut branches = Vec::new();
+        for (variant, attrs) in variants {
             let rust_name = variant.name.to_string();
             let name = attrs.de_rename.clone().unwrap_or_else(|| {
                 container
@@ -459,7 +522,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 other = Some(name.clone());
             }
             let rule = attrs.de_rename_all.or(container.de_rename_all_fields);
-            let body = self.read_variant(&content, adt, variant, args, rule, container, type_name, span)?;
+            // What one variant's reading names is its own.
+            let names = self.names.clone();
+            let body = self.read_variant(&content, form, adt, variant, args, rule, container, type_name, span)?;
+            self.names = names;
             branches.push((name, body));
         }
         // `if (variant === "Dot") { .. } else if ..`, the last one without a test.
@@ -474,17 +540,54 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             });
         }
         let visit = Expr::arrow(vec![variant_var.into(), content.into()], chain.unwrap_or_default());
-        let mut call_args = vec![Expr::array(names), visit];
-        call_args.extend(other.map(Expr::str));
-        Ok(Expr::call(Expr::member(Expr::var(json), "enum"), call_args))
+        let expected = |kind: &str| Expr::str(container.expecting.clone().unwrap_or(format!("{kind} {type_name}")));
+        let method = |name: &str, args: Vec<Expr>| Expr::call(Expr::member(Expr::var(json), name), args);
+        Ok(match tagging {
+            Tagging::Internal(tag) => {
+                let mut call_args = vec![
+                    Expr::str(tag.as_str()),
+                    expected("internally tagged enum"),
+                    Expr::array(names),
+                    visit,
+                ];
+                call_args.extend(other.map(Expr::str));
+                method("internallyTagged", call_args)
+            }
+            Tagging::Adjacent(tag, body) => {
+                let mut options = Vec::new();
+                if container.deny_unknown_fields {
+                    options.push(Prop::Field("deny".into(), Expr::bool(true)));
+                }
+                if let Some(other) = other {
+                    options.push(Prop::Field("other".into(), Expr::str(other)));
+                }
+                let mut call_args = vec![
+                    Expr::str(tag.as_str()),
+                    Expr::str(body.as_str()),
+                    expected("adjacently tagged enum"),
+                    Expr::array(names),
+                    visit,
+                ];
+                if !options.is_empty() {
+                    call_args.push(Expr::object(options));
+                }
+                method("adjacentlyTagged", call_args)
+            }
+            _ => {
+                let mut call_args = vec![Expr::array(names), visit];
+                call_args.extend(other.map(Expr::str));
+                method("enum", call_args)
+            }
+        })
     }
 
     /// One variant, from `content`, what it holds: nothing, one value, a
-    /// tuple's or a struct's.
+    /// tuple's or a struct's, as the enum's tagging reads it.
     #[allow(clippy::too_many_arguments)]
     fn read_variant(
         &mut self,
         content: &str,
+        form: Form,
         adt: ty::AdtDef<'tcx>,
         variant: &ty::VariantDef,
         args: ty::GenericArgsRef<'tcx>,
@@ -503,7 +606,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .unwrap_or(format!("{kind} {type_name}::{}", variant.name)),
             )
         };
-        let unit = StmtKind::Expr(method("unit", Vec::new())).at(js::Span::NONE);
+        // A unit variant's check that it holds nothing.
+        let unit = {
+            let expected = Expr::str(format!("unit variant {type_name}::{}", variant.name));
+            let check = match form {
+                Form::External => method("unit", Vec::new()),
+                Form::Internal => method("taggedUnit", vec![expected]),
+                Form::Untagged => method("untaggedUnit", vec![expected]),
+            };
+            StmtKind::Expr(check).at(js::Span::NONE)
+        };
         Ok(match variant.ctor_kind() {
             Some(CtorKind::Const) => vec![unit, ret(self.construct(adt, variant, args, Vec::new()))],
             Some(CtorKind::Fn) if variant.fields.len() == 1 => {
@@ -520,20 +632,44 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     vec![unit, ret(self.construct(adt, variant, args, vec![value]))]
                 } else {
                     let read = self.json_reader(field_ty, span)?;
-                    let value = method("newtype", vec![read]);
+                    let value = match form {
+                        Form::External => method("newtype", vec![read]),
+                        _ => Expr::call(read, vec![Expr::var(content)]),
+                    };
                     vec![ret(self.construct(adt, variant, args, vec![value]))]
                 }
             }
             Some(CtorKind::Fn) => {
                 let table = self.field_table(adt, variant, args, None, container, span)?;
-                vec![ret(method("tuple", table.args(expected("tuple variant"))))]
+                let name = match form {
+                    Form::External => "tuple",
+                    Form::Untagged => "tupleStruct",
+                    // serde_derive rejects it.
+                    Form::Internal => return Err(self.unsupported(span, "an internally tagged tuple variant")),
+                };
+                vec![ret(method(name, table.args(expected("tuple variant"))))]
             }
             None => {
                 let table = self.field_table(adt, variant, args, rule, container, span)?;
-                vec![ret(method("struct", table.args(expected("struct variant"))))]
+                let name = if form == Form::Untagged {
+                    "untaggedStruct"
+                } else {
+                    "struct"
+                };
+                vec![ret(method(name, table.args(expected("struct variant"))))]
             }
         })
     }
+}
+
+/// How an enum's tagging reads a variant's content: serde's
+/// `VariantAccess` of `{"Name": ..}` (external), what's left of an object
+/// beside its tag (internal), or the value itself (untagged, and adjacent).
+#[derive(Clone, Copy, PartialEq)]
+enum Form {
+    External,
+    Internal,
+    Untagged,
 }
 
 impl Table {

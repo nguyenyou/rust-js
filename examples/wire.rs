@@ -2,7 +2,8 @@
 // them (ADR 0077): `rename_all`, `rename`, `skip`, `skip_serializing_if`,
 // every enum representation, newtypes, `transparent`, maps and floats. The
 // server compiles this with serde; rust-js reads its `#[serde]` attributes
-// and writes the same bytes.
+// and writes the same bytes, and reads its enums back as serde does (ADR
+// 0079).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -149,10 +150,17 @@ pub fn report() -> String {
         paid: false,
         cache: 0,
     };
+    // And read back, as the server reads them: every enum representation.
+    let events: Vec<Event> = serde_json::from_str(&serde_json::to_string(&e.events).unwrap()).unwrap();
+    let msgs: Vec<Msg> = serde_json::from_str(&serde_json::to_string(&e.msgs).unwrap()).unwrap();
+    let loose: Vec<Loose> = serde_json::from_str(&serde_json::to_string(&e.loose).unwrap()).unwrap();
     format!(
-        "{}\n{}\n{}\n",
+        "{}\n{}\n{}\n{:?}\n{:?}\n{:?}\n",
         serde_json::to_string(&e).unwrap(),
         serde_json::to_string_pretty(&e).unwrap(),
-        serde_json::to_string(&order).unwrap()
+        serde_json::to_string(&order).unwrap(),
+        events,
+        msgs,
+        loose
     )
 }

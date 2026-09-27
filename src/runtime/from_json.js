@@ -1,10 +1,254 @@
 
+// What serde's impls and derives read, the same whatever they read from:
+// the text (`$JsonReader`), or a value already read (`$JsonContent`), which
+// is how serde reads a tagged or an untagged enum.
+class $JsonDecoder {
+  // An integer type, named as serde names it, from `min` to `max`.
+  int(name, min, max) {
+    return this.deserializeNumber(name, (n) => {
+      if (n.kind === "f") throw $jsonError(`invalid type: floating point \`${$jsonNumber(n.value)}\`, expected ${name}`);
+      if (n.kind === "u" ? n.value > max : n.value < min) {
+        throw $jsonError(`invalid value: integer \`${n.value}\`, expected ${name}`);
+      }
+      return Number(n.value);
+    });
+  }
+
+  f64() {
+    return this.deserializeNumber("f64", (n) => Number(n.value));
+  }
+
+  string() {
+    return this.deserializeStr("a string", (s) => s);
+  }
+
+  char() {
+    return this.deserializeStr("a character", $jsonChar);
+  }
+
+  vec(read) {
+    return this.deserializeSeq("a sequence", (seq) => {
+      const items = [];
+      while (seq.next()) items.push(seq.value(read));
+      return items;
+    });
+  }
+
+  tuple(reads) {
+    const expected = `a tuple of size ${reads.length}`;
+    return this.deserializeSeq(expected, (seq) => reads.map((read, i) => seq.element(read, i, expected)));
+  }
+
+  array(length, read) {
+    const expected = length === 0 ? "an empty array" : `an array of length ${length}`;
+    return this.deserializeSeq(expected, (seq) =>
+      Array.from({ length }, (_, i) => seq.element(read, i, expected)),
+    );
+  }
+
+  map(readKey, read) {
+    return this.deserializeMap("a map", (map) => {
+      const entries = new Map();
+      while (map.next()) {
+        const key = readKey(map.key());
+        entries.set(key, map.value(read));
+      }
+      return entries;
+    });
+  }
+
+  // A struct's fields: `[name, read]`, or `[[name, ...aliases], read]`, and
+  // `missing`, the value it has when it's not there, for `#[serde(default)]`.
+  // `build` makes the struct of their values.
+  struct(expected, fields, build, options = {}) {
+    return this.deserializeMap(
+      options.expecting ?? expected,
+      (map) => this.structMap(map, fields, build, options),
+      (seq) => this.structSeq(seq, expected, fields, build, options),
+    );
+  }
+
+  // An untagged struct variant, which serde reads from an object only.
+  untaggedStruct(expected, fields, build, options = {}) {
+    return this.deserializeAny(options.expecting ?? expected, {
+      map: (map) => this.structMap(map, fields, build, options),
+    });
+  }
+
+  structMap(map, fields, build, { deny = false, container } = {}) {
+    const values = new Array(fields.length);
+    const seen = new Array(fields.length).fill(false);
+    while (map.next()) {
+      const i = $jsonField(map.key().string(), fields, deny);
+      if (i < 0) {
+        map.value((json) => json.ignoreValue());
+        continue;
+      }
+      if (seen[i]) throw $jsonError(`duplicate field \`${$jsonName(fields[i][0])}\``);
+      values[i] = map.value(fields[i][1]);
+      seen[i] = true;
+    }
+    const defaults = container?.();
+    fields.forEach(([names, read, missing], i) => {
+      if (!seen[i]) values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
+    });
+    return build(values, defaults);
+  }
+
+  structSeq(seq, expected, fields, build, { container, expecting } = {}) {
+    const length = expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
+    const defaults = container?.();
+    const values = fields.map(([, read, missing], i) => seq.element(read, i, length, missing, defaults));
+    return build(values, defaults);
+  }
+
+  // A tuple struct's fields: `read`, or `[read, missing]`.
+  tupleStruct(expected, fields, build = (values) => values, { container, expecting } = {}) {
+    const length = expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
+    return this.deserializeSeq(expecting ?? expected, (seq) => {
+      const defaults = container?.();
+      const values = fields.map((field, i) => {
+        const [read, missing] = typeof field === "function" ? [field] : field;
+        return seq.element(read, i, length, missing, defaults);
+      });
+      return build(values, defaults);
+    });
+  }
+
+  // An internally tagged enum's unit variant, whose other fields are
+  // ignored (serde's `InternallyTaggedUnitVisitor`).
+  taggedUnit(expected) {
+    return this.deserializeAny(expected, {
+      seq: () => undefined,
+      map: (map) => {
+        while (map.next()) {
+          map.key().ignore();
+          map.value((json) => json.ignoreValue());
+        }
+        return undefined;
+      },
+    });
+  }
+
+  // An untagged unit variant: `null` (serde's `UntaggedUnitVisitor`).
+  untaggedUnit(expected) {
+    return this.deserializeAny(expected, { unit: () => undefined });
+  }
+
+  // `#[serde(tag = "type")]`: the tag, found among the other fields, which
+  // are kept for the variant to read (serde's `TaggedContentVisitor`).
+  internallyTagged(tag, expected, variants, visit, other) {
+    const [variant, rest] = this.deserializeAny(expected, {
+      seq: (seq) => {
+        if (!seq.next()) throw $jsonError(`missing field \`${tag}\``);
+        const variant = seq.value((json) => json.identifier(variants, other));
+        const items = [];
+        while (seq.next()) items.push(seq.value((json) => json.content()));
+        return [variant, { type: "seq", value: items }];
+      },
+      map: (map) => {
+        let variant;
+        const entries = [];
+        while (map.next()) {
+          const key = map.key().string();
+          if (key !== tag) {
+            entries.push([{ type: "str", value: key }, map.value((json) => json.content())]);
+            continue;
+          }
+          if (variant !== undefined) throw $jsonError(`duplicate field \`${tag}\``);
+          variant = map.value((json) => json.identifier(variants, other));
+        }
+        if (variant === undefined) throw $jsonError(`missing field \`${tag}\``);
+        return [variant, { type: "map", value: entries }];
+      },
+    });
+    return visit(variant, new $JsonContent(rest, true));
+  }
+
+  // `#[serde(tag = "t", content = "c")]`, as serde's derive reads one: the
+  // tag, then the content, or the content first, kept until the tag says
+  // how to read it.
+  adjacentlyTagged(tag, content, expected, variants, visit, { deny = false, other } = {}) {
+    const variantOf = (json) =>
+      json.enum(
+        variants,
+        (name, access) => {
+          access.unit();
+          return name;
+        },
+        other,
+      );
+    // The next key that's the tag or the content, skipping any other.
+    const relevant = (map) => {
+      while (map.next()) {
+        const key = map.key().string();
+        if (key === tag) return "tag";
+        if (key === content) return "content";
+        if (deny) {
+          throw $jsonError(`invalid value: string ${$debugStr(key)}, expected ${$debugStr(tag)} or ${$debugStr(content)}`);
+        }
+        map.value((json) => json.ignoreValue());
+      }
+      return undefined;
+    };
+    const finish = (map, value) => {
+      const key = relevant(map);
+      if (key !== undefined) throw $jsonError(`duplicate field \`${key === "tag" ? tag : content}\``);
+      return value;
+    };
+    return this.deserializeMap(
+      expected,
+      (map) => {
+        const first = relevant(map);
+        if (first === "tag") {
+          const variant = map.value(variantOf);
+          const second = relevant(map);
+          if (second === "tag") throw $jsonError(`duplicate field \`${tag}\``);
+          if (second === "content") return finish(map, map.value((json) => visit(variant, json)));
+          return visit(variant, new $JsonMissing(content));
+        }
+        if (first === "content") {
+          const buffered = map.value((json) => json.content());
+          const second = relevant(map);
+          if (second === "tag") {
+            const variant = map.value(variantOf);
+            return finish(map, visit(variant, new $JsonContent(buffered, true)));
+          }
+          if (second === "content") throw $jsonError(`duplicate field \`${content}\``);
+        }
+        throw $jsonError(`missing field \`${tag}\``);
+      },
+      (seq) => {
+        if (!seq.next()) throw $jsonError(`invalid length 0, expected ${expected}`);
+        const variant = seq.value((json) => json.identifier(variants, other));
+        if (!seq.next()) throw $jsonError(`invalid length 1, expected ${expected}`);
+        return seq.value((json) => visit(variant, json));
+      },
+    );
+  }
+
+  // `#[serde(untagged)]`: the value, read once and kept, then each way of
+  // reading it in turn, the first that works.
+  untagged(message, attempts) {
+    const content = this.content();
+    for (const attempt of attempts) {
+      try {
+        return attempt(new $JsonContent(content, false));
+      } catch (e) {
+        if (!(e instanceof $JsonError)) throw e;
+      }
+    }
+    throw $jsonError(message);
+  }
+}
+
 // serde_json's reader (ADR 0078): its `Deserializer`, ported step for step,
 // with its methods' names. It reads the text's UTF-8 bytes, as serde_json
 // does, so a mistake is found at the same byte, with the same message, and
 // its column counts bytes.
-class $JsonReader {
+class $JsonReader extends $JsonDecoder {
   constructor(text) {
+    super();
     this.bytes = new TextEncoder().encode(text);
     this.index = 0;
     this.remainingDepth = 128;
@@ -560,7 +804,7 @@ class $JsonReader {
     }
   }
 
-  // What serde's own impls read.
+  // What serde's own impls read, from the text.
 
   bool() {
     const peek = this.parseWhitespace();
@@ -582,29 +826,6 @@ class $JsonReader {
     }
   }
 
-  // An integer type, named as serde names it, from `min` to `max`.
-  int(name, min, max) {
-    return this.deserializeNumber(name, (n) => {
-      if (n.kind === "f") throw $jsonError(`invalid type: floating point \`${$jsonNumber(n.value)}\`, expected ${name}`);
-      if (n.kind === "u" ? n.value > max : n.value < min) {
-        throw $jsonError(`invalid value: integer \`${n.value}\`, expected ${name}`);
-      }
-      return Number(n.value);
-    });
-  }
-
-  f64() {
-    return this.deserializeNumber("f64", (n) => Number(n.value));
-  }
-
-  string() {
-    return this.deserializeStr("a string", (s) => s);
-  }
-
-  char() {
-    return this.deserializeStr("a character", $jsonChar);
-  }
-
   unit(expected = "unit") {
     const peek = this.parseWhitespace();
     if (peek === -1) throw this.peekError("EOF while parsing a value");
@@ -618,6 +839,10 @@ class $JsonReader {
     }
   }
 
+  unitStruct(expected) {
+    return this.unit(expected);
+  }
+
   option(read) {
     if (this.parseWhitespace() !== 110) return read(this);
     this.index++;
@@ -625,83 +850,76 @@ class $JsonReader {
     return undefined;
   }
 
-  vec(read) {
-    return this.deserializeSeq("a sequence", (seq) => {
-      const items = [];
-      while (seq.next()) items.push(read(this));
-      return items;
-    });
-  }
-
-  tuple(reads) {
-    const expected = `a tuple of size ${reads.length}`;
-    return this.deserializeSeq(expected, (seq) => reads.map((read, i) => seq.element(read, i, expected)));
-  }
-
-  array(length, read) {
-    const expected = length === 0 ? "an empty array" : `an array of length ${length}`;
-    return this.deserializeSeq(expected, (seq) =>
-      Array.from({ length }, (_, i) => seq.element(read, i, expected)),
-    );
-  }
-
-  map(readKey, read) {
-    return this.deserializeMap("a map", (map) => {
-      const entries = new Map();
-      while (map.next()) {
-        const key = readKey(new $JsonKey(this));
-        entries.set(key, map.value(read));
+  // `deserialize_any`: whatever's there, for the `visitor` method of its
+  // kind (`unit`, `bool`, `number`, `string`, `seq` or `map`), which is
+  // `expected` if the visitor has none.
+  deserializeAny(expected, visitor) {
+    const peek = this.parseWhitespace();
+    if (peek === -1) throw this.peekError("EOF while parsing a value");
+    const invalid = (unexpected) => $jsonError(`invalid type: ${unexpected}, expected ${expected}`);
+    try {
+      if (peek === 110) {
+        this.index++;
+        this.parseIdent("ull");
+        if (visitor.unit) return visitor.unit();
+        throw invalid("null");
       }
-      return entries;
-    });
+      if (peek === 116 || peek === 102) {
+        this.index++;
+        this.parseIdent(peek === 116 ? "rue" : "alse");
+        if (visitor.bool) return visitor.bool(peek === 116);
+        throw invalid(`boolean \`${peek === 116}\``);
+      }
+      if (peek === 45 || (peek >= 48 && peek <= 57)) {
+        if (peek === 45) this.index++;
+        const n = this.parseInteger(peek !== 45);
+        if (visitor.number) return visitor.number(n);
+        throw invalid($jsonUnexpectedNumber(n));
+      }
+      if (peek === 34) {
+        this.index++;
+        const s = this.parseStr();
+        if (visitor.string) return visitor.string(s);
+        throw invalid(`string ${$debugStr(s)}`);
+      }
+      if (peek === 91) {
+        return this.nested(() => {
+          if (!visitor.seq) throw invalid("sequence");
+          return visitor.seq(new $JsonSeq(this));
+        }, () => this.endSeq());
+      }
+      if (peek === 123) {
+        return this.nested(() => {
+          if (!visitor.map) throw invalid("map");
+          return visitor.map(new $JsonMap(this));
+        }, () => this.endMap());
+      }
+      throw this.peekError("expected value");
+    } catch (e) {
+      throw this.fixPosition(e);
+    }
   }
 
-  // What serde's derives read.
-
-  // A struct's fields: `[name, read]`, or `[[name, ...aliases], read]`, and
-  // `missing`, the value it has when it's not there, for `#[serde(default)]`.
-  // `build` makes the struct of their values.
-  struct(expected, fields, build, { deny = false, container, expecting } = {}) {
-    const length = expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
-    return this.deserializeMap(
-      expecting ?? expected,
-      (map) => {
-        const values = new Array(fields.length);
-        const seen = new Array(fields.length).fill(false);
+  // serde's `ContentVisitor`: the value, read into a `{ type, value }`.
+  content() {
+    return this.deserializeAny("any value", {
+      unit: () => ({ type: "unit" }),
+      bool: (value) => ({ type: "bool", value }),
+      number: (value) => ({ type: "num", value }),
+      string: (value) => ({ type: "str", value }),
+      seq: (seq) => {
+        const items = [];
+        while (seq.next()) items.push(seq.value((json) => json.content()));
+        return { type: "seq", value: items };
+      },
+      map: (map) => {
+        const entries = [];
         while (map.next()) {
-          const i = $jsonField(new $JsonKey(this).string(), fields, deny);
-          if (i < 0) {
-            map.value((json) => json.ignoreValue());
-            continue;
-          }
-          if (seen[i]) throw $jsonError(`duplicate field \`${$jsonName(fields[i][0])}\``);
-          values[i] = map.value(fields[i][1]);
-          seen[i] = true;
+          const key = map.key().content();
+          entries.push([key, map.value((json) => json.content())]);
         }
-        const defaults = container?.();
-        fields.forEach(([names, read, missing], i) => {
-          if (!seen[i]) values[i] = missing ? missing(defaults) : read(new $JsonMissing($jsonName(names)));
-        });
-        return build(values, defaults);
+        return { type: "map", value: entries };
       },
-      (seq) => {
-        const defaults = container?.();
-        const values = fields.map(([, read, missing], i) => seq.element(read, i, length, missing, defaults));
-        return build(values, defaults);
-      },
-    );
-  }
-
-  // A tuple struct's fields: `read`, or `[read, missing]`.
-  tupleStruct(expected, fields, build = (values) => values, { container, expecting } = {}) {
-    const length = expecting ?? `${expected} with ${fields.length} element${fields.length === 1 ? "" : "s"}`;
-    return this.deserializeSeq(expecting ?? expected, (seq) => {
-      const defaults = container?.();
-      const values = fields.map((field, i) => {
-        const [read, missing] = typeof field === "function" ? [field] : field;
-        return seq.element(read, i, length, missing, defaults);
-      });
-      return build(values, defaults);
     });
   }
 
@@ -709,7 +927,7 @@ class $JsonReader {
   // variant's name and a `$JsonVariant` to read what it holds.
   enum(variants, visit, other) {
     const peek = this.parseWhitespace();
-    if (peek === 34) return visit(this.variant(variants, other), new $JsonVariant(this, true));
+    if (peek === 34) return visit(this.identifier(variants, other), new $JsonVariant(this, true));
     if (peek !== 123) throw this.peekError(peek === -1 ? "EOF while parsing a value" : "expected value");
     if (--this.remainingDepth === 0) throw this.peekError("recursion limit exceeded");
     this.index++;
@@ -721,7 +939,7 @@ class $JsonReader {
           c === 125 ? "expected value" : c === -1 ? "EOF while parsing an object" : "key must be a string",
         );
       }
-      const name = this.variant(variants, other);
+      const name = this.identifier(variants, other);
       this.parseObjectColon();
       value = visit(name, new $JsonVariant(this, false));
     } finally {
@@ -735,21 +953,122 @@ class $JsonReader {
     throw this.error(c === -1 ? "EOF while parsing an object" : "expected value");
   }
 
-  // A variant's name, from the reader at its opening quote.
-  variant(variants, other) {
-    try {
-      this.index++;
-      const name = this.parseStr();
-      for (const names of variants) {
-        if (typeof names === "string" ? names === name : names.includes(name)) return $jsonName(names);
-      }
-      if (other !== undefined) return other;
-      throw variants.length === 0
-        ? $jsonError(`unknown variant \`${name}\`, there are no variants`)
-        : $jsonError(`unknown variant \`${name}\`, expected ${$jsonOneOf(variants)}`);
-    } catch (e) {
-      throw this.fixPosition(e);
+  // A variant's name, from a string.
+  identifier(variants, other) {
+    return this.deserializeStr("variant identifier", (name) => $jsonVariantNamed(name, variants, other));
+  }
+}
+
+// A value already read (serde's `ContentDeserializer`, or when not `owned`,
+// its `ContentRefDeserializer`): `{ type, value }`, where `type` is `unit`,
+// `bool`, `num`, `str`, `seq` or `map`.
+class $JsonContent extends $JsonDecoder {
+  constructor(content, owned) {
+    super();
+    this.data = content;
+    this.owned = owned;
+  }
+
+  invalid(expected) {
+    return $jsonError(`invalid type: ${$jsonUnexpectedContent(this.data)}, expected ${expected}`);
+  }
+
+  deserializeNumber(expected, visit) {
+    if (this.data.type === "num") return visit(this.data.value);
+    throw this.invalid(expected);
+  }
+
+  deserializeStr(expected, visit) {
+    if (this.data.type === "str") return visit(this.data.value);
+    throw this.invalid(expected);
+  }
+
+  visitSeq(visit) {
+    const seq = new $JsonContentSeq(this.data.value, this.owned);
+    const value = visit(seq);
+    seq.end();
+    return value;
+  }
+
+  visitMap(visit) {
+    const map = new $JsonContentMap(this.data.value, this.owned);
+    const value = visit(map);
+    map.end();
+    return value;
+  }
+
+  deserializeSeq(expected, visit) {
+    if (this.data.type === "seq") return this.visitSeq(visit);
+    throw this.invalid(expected);
+  }
+
+  deserializeMap(expected, visitMap, visitSeq) {
+    if (this.data.type === "seq" && visitSeq) return this.visitSeq(visitSeq);
+    if (this.data.type === "map") return this.visitMap(visitMap);
+    throw this.invalid(expected);
+  }
+
+  deserializeAny(expected, visitor) {
+    const { type, value } = this.data;
+    if (type === "seq" && visitor.seq) return this.visitSeq(visitor.seq);
+    if (type === "map" && visitor.map) return this.visitMap(visitor.map);
+    const visit = { unit: visitor.unit, bool: visitor.bool, num: visitor.number, str: visitor.string }[type];
+    if (visit) return visit(value);
+    throw this.invalid(expected);
+  }
+
+  bool() {
+    if (this.data.type === "bool") return this.data.value;
+    throw this.invalid("a boolean");
+  }
+
+  unit(expected = "unit") {
+    const { type, value } = this.data;
+    // An owned one takes `{}` for a unit, as a newtype variant of `()`.
+    if (type === "unit" || (this.owned && type === "map" && value.length === 0)) return undefined;
+    throw this.invalid(expected);
+  }
+
+  unitStruct(expected) {
+    const { type, value } = this.data;
+    if (type === "unit" || (this.owned && (type === "map" || type === "seq") && value.length === 0)) return undefined;
+    throw this.invalid(expected);
+  }
+
+  option(read) {
+    return this.data.type === "unit" ? undefined : read(this);
+  }
+
+  ignoreValue() {}
+
+  content() {
+    return this.data;
+  }
+
+  enum(variants, visit, other) {
+    const { type, value } = this.data;
+    let variant;
+    let held;
+    if (type === "map") {
+      if (value.length !== 1) throw $jsonError("invalid value: map, expected map with a single key");
+      [[variant, held]] = value;
+    } else if (type === "str") {
+      variant = this.data;
+    } else {
+      throw this.invalid("string or map");
     }
+    const name = new $JsonContent(variant, this.owned).identifier(variants, other);
+    return visit(name, new $JsonContentVariant(held, this.owned));
+  }
+
+  // A variant's name, or its index among the variants.
+  identifier(variants, other) {
+    const { type, value } = this.data;
+    if (type === "str") return $jsonVariantNamed(value, variants, other);
+    if (type !== "num" || value.kind !== "u") throw this.invalid("variant identifier");
+    if (value.value < variants.length) return $jsonName(variants[Number(value.value)]);
+    if (other !== undefined) return other;
+    throw $jsonError(`invalid value: integer \`${value.value}\`, expected variant index 0 <= i < ${variants.length}`);
   }
 }
 
@@ -778,11 +1097,45 @@ class $JsonSeq {
     return true;
   }
 
+  value(read) {
+    return read(this.reader);
+  }
+
   // The `i`th of `expected`'s items.
   element(read, i, expected, missing, defaults) {
-    if (this.next()) return read(this.reader);
+    if (this.next()) return this.value(read);
     if (missing) return missing(defaults);
     throw $jsonError(`invalid length ${i}, expected ${expected}`);
+  }
+}
+
+// The items of a value already read.
+class $JsonContentSeq {
+  constructor(items, owned) {
+    this.items = items;
+    this.owned = owned;
+    this.count = 0;
+  }
+
+  next() {
+    return this.count < this.items.length && ++this.count > 0;
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.items[this.count - 1], this.owned));
+  }
+
+  element(read, i, expected, missing, defaults) {
+    return $JsonSeq.prototype.element.call(this, read, i, expected, missing, defaults);
+  }
+
+  // Items left over: the length is wrong.
+  end() {
+    const length = this.items.length;
+    if (this.count < length) {
+      const count = this.count;
+      throw $jsonError(`invalid length ${length}, expected ${count} element${count === 1 ? "" : "s"} in sequence`);
+    }
   }
 }
 
@@ -813,9 +1166,42 @@ class $JsonMap {
     );
   }
 
+  key() {
+    return new $JsonKey(this.reader);
+  }
+
   value(read) {
     this.reader.parseObjectColon();
     return read(this.reader);
+  }
+}
+
+// The entries of a value already read.
+class $JsonContentMap {
+  constructor(entries, owned) {
+    this.entries = entries;
+    this.owned = owned;
+    this.count = 0;
+  }
+
+  next() {
+    return this.count < this.entries.length && ++this.count > 0;
+  }
+
+  key() {
+    return new $JsonContentKey(this.entries[this.count - 1][0], this.owned);
+  }
+
+  value(read) {
+    return read(new $JsonContent(this.entries[this.count - 1][1], this.owned));
+  }
+
+  end() {
+    const length = this.entries.length;
+    if (this.count < length) {
+      const count = this.count;
+      throw $jsonError(`invalid length ${length}, expected ${count} element${count === 1 ? "" : "s"} in map`);
+    }
   }
 }
 
@@ -833,6 +1219,14 @@ class $JsonKey {
 
   char() {
     return $jsonChar(this.string());
+  }
+
+  ignore() {
+    this.string();
+  }
+
+  content() {
+    return { type: "str", value: this.string() };
   }
 
   number(read) {
@@ -867,6 +1261,36 @@ class $JsonKey {
   }
 }
 
+// A key already read: it's read as any other value is, so a number in
+// quotes isn't a number, as in serde.
+class $JsonContentKey {
+  constructor(key, owned) {
+    this.key = new $JsonContent(key, owned);
+  }
+
+  string() {
+    return this.key.string();
+  }
+
+  char() {
+    return this.key.char();
+  }
+
+  bool() {
+    return this.key.bool();
+  }
+
+  ignore() {}
+
+  content() {
+    return this.key.content();
+  }
+
+  number(read) {
+    return read(this.key);
+  }
+}
+
 // `VariantAccess` of `{"Name": ..}`, or of `"Name"` (`unit`), which holds
 // nothing.
 class $JsonVariant {
@@ -895,8 +1319,42 @@ class $JsonVariant {
   }
 }
 
+// The same, of a value already read: what a variant holds, if anything.
+class $JsonContentVariant {
+  constructor(held, owned) {
+    this.held = held;
+    this.owned = owned;
+  }
+
+  reader(kind, types) {
+    if (this.held === undefined) throw $jsonError(`invalid type: unit variant, expected ${kind}`);
+    if (types && !types.includes(this.held.type)) {
+      throw $jsonError(`invalid type: ${$jsonUnexpectedContent(this.held)}, expected ${kind}`);
+    }
+    return new $JsonContent(this.held, this.owned);
+  }
+
+  unit() {
+    if (this.held !== undefined) new $JsonContent(this.held, this.owned).unit();
+  }
+
+  newtype(read) {
+    return read(this.reader("newtype variant"));
+  }
+
+  tuple(expected, fields, build, options) {
+    return this.reader("tuple variant", ["seq"]).tupleStruct(expected, fields, build, options);
+  }
+
+  struct(expected, fields, build, options) {
+    return this.reader("struct variant", ["map", "seq"]).struct(expected, fields, build, options);
+  }
+}
+
 // serde's `missing_field`: what a field that isn't there reads as, which is
-// `None` for an `Option`, and otherwise an error.
+// `None` for an `Option`, and otherwise an error. An adjacently tagged
+// enum's content that isn't there is read so too, and is nothing for a
+// unit variant.
 class $JsonMissing {
   constructor(name) {
     this.name = name;
@@ -905,8 +1363,16 @@ class $JsonMissing {
   option() {
     return undefined;
   }
+
+  untaggedUnit() {
+    return undefined;
+  }
 }
-for (const method of ["bool", "int", "f64", "string", "char", "unit", "vec", "tuple", "array", "map", "struct", "tupleStruct", "enum"]) {
+for (const method of [
+  "bool", "int", "f64", "string", "char", "unit", "unitStruct", "vec", "tuple", "array", "map",
+  "struct", "untaggedStruct", "tupleStruct", "enum", "taggedUnit", "internallyTagged",
+  "adjacentlyTagged", "untagged",
+]) {
   $JsonMissing.prototype[method] = function () {
     throw $jsonError(`missing field \`${this.name}\``);
   };
@@ -939,6 +1405,26 @@ function $jsonUnexpectedNumber(n) {
 function $jsonChar(s) {
   if ([...s].length === 1) return s;
   throw $jsonError(`invalid value: string ${$debugStr(s)}, expected a character`);
+}
+
+// serde's `Unexpected` of a value already read.
+function $jsonUnexpectedContent({ type, value }) {
+  if (type === "unit") return "null";
+  if (type === "bool") return `boolean \`${value}\``;
+  if (type === "num") return $jsonUnexpectedNumber(value);
+  if (type === "str") return `string ${$debugStr(value)}`;
+  return type === "seq" ? "sequence" : "map";
+}
+
+// The variant a name names, or `other`'s, as a derive's variant visitor finds it.
+function $jsonVariantNamed(name, variants, other) {
+  for (const names of variants) {
+    if (typeof names === "string" ? names === name : names.includes(name)) return $jsonName(names);
+  }
+  if (other !== undefined) return other;
+  throw variants.length === 0
+    ? $jsonError(`unknown variant \`${name}\`, there are no variants`)
+    : $jsonError(`unknown variant \`${name}\`, expected ${$jsonOneOf(variants)}`);
 }
 
 function $jsonName(names) {
