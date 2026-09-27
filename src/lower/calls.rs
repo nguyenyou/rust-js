@@ -35,6 +35,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Err(self.unsupported(f.span, "calling this"));
         };
+        // serde_json's `Value` and what makes one (ADR 0083).
+        if let Some(value) = self.json_call(def_id, generic_args, args, span, out)? {
+            return Ok(value);
+        }
         // `x.into()` is the `From::from(x)` it calls, when that's the crate's
         // own (ADR 0052).
         let (def_id, generic_args) = self
@@ -517,8 +521,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::str("Ok"),
             ),
             Std::UnwrapOk => {
+                let list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
+                // An `Ok(x)` just made, as a `to_value` that can't fail is: `x`.
+                if let js::ExprKind::Object(props) = &list[0].kind
+                    && let [Prop::Field(tag, name), Prop::Field(field, value)] = props.as_slice()
+                    && (tag.as_str(), field.as_str()) == ("TAG", "_0")
+                    && matches!(&name.kind, js::ExprKind::Str(s) if s == "Ok")
+                    && list[1..].iter().all(|e| !e.has_effects())
+                {
+                    return Ok(value.clone());
+                }
                 self.runtime.extend([Helper::UnwrapOk, Helper::Debug]);
-                let list = (0..args.len()).map(|_| arg()).collect();
                 Expr::call(Expr::var("$unwrapOk"), list)
             }
             Std::UnwrapErr => {

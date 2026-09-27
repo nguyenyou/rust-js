@@ -56,11 +56,13 @@ pub(super) enum Part {
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A `HashMap`, `HashSet`, `BTreeMap` or `BTreeSet`: a JS `Map` or `Set`.
+    /// serde_json's `Map` is one too, a `BTreeMap` (ADR 0083).
     pub(super) fn is_map(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
         ["HashMap", "HashSet", "BTreeMap", "BTreeSet"]
             .into_iter()
             .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || self.is_json_map(ty)
     }
 
     /// A `HashSet` or `BTreeSet`: a JS `Set`.
@@ -72,7 +74,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A `BTreeMap` or `BTreeSet`, whose order is its keys' (ADR 0059).
     pub(super) fn is_sorted(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        self.is_std_adt(ty, Symbol::intern("BTreeMap")) || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
+        self.is_std_adt(ty, Symbol::intern("BTreeMap"))
+            || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
+            || self.is_json_map(ty)
     }
 
     /// What goes over a map or a set, in order: `m` itself for a hashed one,

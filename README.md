@@ -154,8 +154,8 @@ rust-js supports a growing subset of Rust aimed at JavaScript applications:
 - strings, formatting, and `async` / `await`
 - ES modules, JavaScript imports, and DOM bindings generated from WebIDL
 - React, JSX, Vite, Fast Refresh, and source maps
-- serde-compatible JSON writing and reading (see the
-  [design decisions](docs/README.md))
+- serde-compatible JSON writing and reading, `serde_json::Value` and `json!`
+  included (see the [design decisions](docs/README.md))
 
 Support is specific to each feature. For example, generic trait methods remain
 unsupported, map keys must have a supported value-based representation, and

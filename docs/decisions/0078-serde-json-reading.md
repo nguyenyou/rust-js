@@ -115,7 +115,11 @@ it, a round at a time, in the order they're declared.
 
 ## Consequences
 
-- `&str` and other borrowed types, a `BinaryHeap`, `u64`, `i64` and `f32`
-  can't be read yet; each is an error.
+- A `&str` is read as serde_json reads one, borrowed from the text: a
+  string with an escape in it is `invalid type: .., expected a borrowed
+  string`. A value kept for a tagged enum (ADR 0079) keeps whether it
+  could be borrowed, as serde's `Content::Str` does.
+- A `BinaryHeap`, `u64`, `i64` and `f32` can't be read yet; each is an
+  error.
 - `usize` is 32 bits, as on wasm32 (ADR 0025): `5000000000` is too big
   for it, as it would be there.

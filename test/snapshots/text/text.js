@@ -75,35 +75,6 @@ function $displayF64(value) {
   throw new Error("No f64 round-trip decimal found");
 }
 
-function $debug(v) {
-  if (typeof v === "string") {
-    return JSON.stringify(v);
-  }
-  if (Array.isArray(v)) {
-    return "[" + v.map($debug).join(", ") + "]";
-  }
-  if (v === undefined) {
-    return "()";
-  }
-  // A `HashMap` and a `HashSet` (ADR 0059), in braces as Rust shows them.
-  if (v instanceof Map) {
-    return "{" + [...v].map(([k, x]) => $debug(k) + ": " + $debug(x)).join(", ") + "}";
-  }
-  if (v instanceof Set) {
-    return "{" + [...v].map($debug).join(", ") + "}";
-  }
-  if (typeof v === "object" && v !== null) {
-    return (
-      "{ " +
-      Object.entries(v)
-        .map(([k, x]) => k + ": " + $debug(x))
-        .join(", ") +
-      " }"
-    );
-  }
-  return String(v);
-}
-
 function $toDigit(c, radix) {
   const digit = parseInt(c, 36);
   return digit < radix ? digit : undefined;
@@ -177,13 +148,6 @@ function $slice(items, start, end = items.length) {
   return items.slice(start, end);
 }
 
-function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value") {
-  if (result.TAG === "Err") {
-    throw new Error(message + ": " + $debug(result._0));
-  }
-  return result._0;
-}
-
 function $debugF64(value) {
   const size = Math.abs(value);
   if (Number.isFinite(value) && size !== 0 && (size < 1e-4 || size >= 1e16)) {
@@ -255,7 +219,7 @@ export function parses(s) {
   const f = $parseF64(s);
   const b = $parseBool(s);
   const c = $parseChar(s);
-  const owned = $unwrapOk({ TAG: "Ok", _0: s });
+  const owned = s;
   const arg = i.TAG === "Err" ? { TAG: "Err", _0: i._0 } : i;
   return `${n.TAG === "Ok" ? `Ok(${n._0})` : `Err(${$debugStr(n._0)})`} ${arg.TAG === "Ok" ? `Ok(${arg._0})` : `Err(${$debugStr(arg._0)})`} ${f.TAG === "Ok" ? `Ok(${$debugF64(f._0)})` : `Err(${$debugStr(f._0)})`} ${b.TAG === "Ok" ? `Ok(${b._0})` : `Err(${$debugStr(b._0)})`} ${c.TAG === "Ok" ? `Ok(${$debugStr(c._0, "'")})` : `Err(${$debugStr(c._0)})`} ${$debugStr(owned)}`;
 }

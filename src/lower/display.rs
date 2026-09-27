@@ -237,6 +237,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::JsonError);
             return Ok(Expr::call(Expr::var("$displayJsonError"), vec![value]));
         }
+        // A `Value`'s JSON, or a `Number`'s (ADR 0083).
+        if let Some(shown) = self.json_value_display(value.clone(), ty, false) {
+            return Ok(shown);
+        }
         if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
             return Ok(shown_number(value));
         }
@@ -292,6 +296,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// derived or not, or `TDebug.fmt(x)` in generic code.
     pub(super) fn debug_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         let ty = ty.peel_refs();
+        // serde_json's own, `Object {"a": Number(1)}` (ADR 0083).
+        if let Some(shown) = self.json_value_debug(value.clone(), ty) {
+            return Ok(shown);
+        }
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         let num = Num::of(ty);
         if self.is_dyn_debug(ty) {

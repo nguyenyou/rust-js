@@ -153,6 +153,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0080 A generic type's codec takes its type parameters' codecs; `Result`, `from`, `try_from` and `into` are serde's](decisions/0080-serde-generics-and-conversions.md)
 - [0081 A `T: Serialize` bound's evidence is `T`'s writer, and `T: DeserializeOwned`'s its reader](decisions/0081-serde-bounds.md)
 - [0082 `#[serde(flatten)]` is serde's flat map: a field's entries among its struct's](decisions/0082-serde-flatten.md)
+- [0083 serde_json's `Value` is an enum like any other; its `Number` is `{ kind, value }` and its `Map` a `Map`](decisions/0083-serde-json-value.md)
 
 **Scope and process**
 

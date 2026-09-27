@@ -151,6 +151,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if precision.is_some() && num.is_none() => {
                 return Err(self.unsupported(span, &format!("a precision for a `{ty}`")));
             }
+            // `{:#}` of a `Value`: its pretty JSON (ADR 0083).
+            Std::FmtDisplay if spec.alternate && self.json_type(ty).is_some() => self
+                .json_value_display(value.clone(), ty, true)
+                .map_or_else(|| self.display_string(value, ty, span), Ok)?,
             Std::FmtDisplay => self.display_string(value, ty, span)?,
             // `{:#?}` breaks lines and indents: not yet.
             _ if spec.alternate => return Err(self.unsupported(span, "`{:#?}`")),

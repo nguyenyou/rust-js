@@ -1,7 +1,8 @@
 // An API's shared types, read and written as serde does (ADRs 0077 to
 // 0082): generic responses, `Result`s, types that convert to and from
 // what's on the wire, `#[serde(from, try_from, into)]`, flattened fields,
-// and generic functions that encode and decode any of them.
+// borrowed strings, and generic functions that encode and decode any of
+// them.
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -248,6 +249,39 @@ macro_rules! flat_round {
     };
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Req<'a> {
+    pub name: &'a str,
+    pub tags: Vec<&'a str>,
+    pub note: Option<&'a str>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "kind")]
+pub enum Cmd<'a> {
+    Say { text: &'a str },
+    Quit,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Word<'a> {
+    Borrowed(&'a str),
+    Owned(String),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Inner<'a> {
+    pub label: &'a str,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Outer<'a> {
+    pub id: u8,
+    #[serde(borrow, flatten)]
+    pub inner: Inner<'a>,
+}
+
 macro_rules! round {
     ($out:ident, $ty:ty, $($text:expr),*) => {
         $(
@@ -345,5 +379,34 @@ pub fn report() -> String {
     let listing = Listing { name: "p".into(), meta: Meta { page: 2, total: 3 }, extra: BTreeMap::new() };
     out.push_str(&serde_json::to_string_pretty(&Nested { listing, flag: false }).unwrap());
     out.push('\n');
+    for text in [
+        r#"{"name":"ann","tags":["a","b"],"note":null}"#,
+        r#"{"name":"a\nb","tags":[],"note":null}"#,
+        r#"{"name":"x","tags":["é"],"note":"n"}"#,
+        r#"{"name":5,"tags":[],"note":null}"#,
+    ] {
+        match serde_json::from_str::<Req>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?} -> {}\n", v, serde_json::to_string(&v).unwrap())),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+    }
+    for text in [r#"{"kind":"Say","text":"hi"}"#, r#"{"kind":"Say","text":"h\ti"}"#, r#"{"kind":"Quit"}"#] {
+        match serde_json::from_str::<Cmd>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?}\n", v)),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+    }
+    for text in [r#""plain""#, r#""esc\"aped""#, "1"] {
+        match serde_json::from_str::<Word>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?}\n", v)),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+    }
+    for text in [r#"{"id":1,"label":"l"}"#, r#"{"id":1,"label":"\/"}"#] {
+        match serde_json::from_str::<Outer>(text) {
+            Ok(v) => out.push_str(&format!("ok {:?}\n", v)),
+            Err(e) => out.push_str(&format!("err {}\n", e)),
+        }
+    }
     out
 }

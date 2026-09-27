@@ -49,6 +49,7 @@ pub enum Helper {
     JsonFail,
     ToJson,
     FromJson,
+    JsonValue,
     JsonError,
     LowerExp,
     FromDigit,
@@ -988,6 +989,7 @@ function $jsonNumber(x) {
 "#
             }
             Helper::FromJson => include_str!("runtime/from_json.js"),
+            Helper::JsonValue => include_str!("runtime/json_value.js"),
             // serde_json's writer (ADR 0077): `write` makes serde's calls on it,
             // and it lays them out as serde_json's compact or pretty
             // formatter does.

@@ -23,6 +23,9 @@
 //! in `de`.
 
 mod de;
+mod value;
+
+pub(super) use value::Json;
 
 use super::bindings::variant_name;
 use super::representation::{Num, variant_field};
@@ -305,6 +308,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 "try_from" => attrs.try_from = true,
                 "into" => attrs.into = true,
                 "flatten" => attrs.flatten = true,
+                // Lifetimes and bounds, which rustc has checked; JS has neither.
+                "borrow" | "bound" => {}
                 _ => return Err(self.unsupported(item.span, &format!("`#[serde({name})]`"))),
             }
         }
@@ -404,6 +409,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(writer) = self.serde_evidence(ty, true) {
             return Ok(writer);
         }
+        if let Some(writer) = self.json_value_writer(ty) {
+            return Ok(writer);
+        }
         if let ty::Adt(_, args) = ty.kind()
             && args.types().next().is_none()
             && let Some(f) = self.serialize_fn(ty)
@@ -426,7 +434,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn write_json(&mut self, value: Expr, json: &str, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
         let ty = ty.peel_refs();
         // A type parameter: its writer's call.
-        if let Some(writer) = self.serde_evidence(ty, true) {
+        if let Some(writer) = self.serde_evidence(ty, true).or_else(|| self.json_value_writer(ty)) {
             let call = Expr::call(writer, vec![value, Expr::var(json)]);
             out.push(StmtKind::Expr(call).at(js::Span::NONE));
             return Ok(());

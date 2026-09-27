@@ -122,6 +122,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_lang_adt(ty, LangItem::String) {
             return Ok(reader("string"));
         }
+        // serde_json's `Value` and `Number` (ADR 0083); its `Map` is a map.
+        if self.json_type(ty) == Some(super::value::Json::Value) {
+            self.runtime.insert(Helper::JsonValue);
+            return Ok(reader("value"));
+        }
+        if self.is_json_number(ty) {
+            return Ok(reader("number"));
+        }
+        // A `&str` borrows from the text.
+        if let ty::Ref(_, inner, _) = ty.kind()
+            && inner.is_str()
+        {
+            return Ok(reader("str"));
+        }
         if let Some(inner) = self.option_of(ty) {
             let read = self.json_reader(inner, span)?;
             // Of a type parameter, a `Some` that looks like `None` is boxed

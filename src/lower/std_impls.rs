@@ -154,6 +154,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if place.is_constant() {
             return Ok(place);
         }
+        // serde_json's `Value` and `Map`, inside themselves (ADR 0083).
+        if let Some(clone) = self.json_value_clone(place.clone(), ty) {
+            return Ok(clone);
+        }
         if self.is_copy(ty) {
             return Ok(self.copy(place, ty));
         }
@@ -369,6 +373,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.impl_call(method, self.args_of(default, ty), Vec::new(), span);
         }
         self.check_value_ty(ty, span)?;
+        // serde_json's `Value` is `Null` (ADR 0083).
+        if self.json_type(ty) == Some(super::serde::Json::Value) {
+            return Ok(Expr::str("Null"));
+        }
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         Ok(match ty.kind() {
             _ if Num::of(ty).is_some() => Expr::int(0),

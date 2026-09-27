@@ -33,6 +33,7 @@ let versions: Record<string, (...args: any[]) => unknown>;
 let wire: Record<string, (...args: any[]) => unknown>;
 let inbox: Record<string, (...args: any[]) => unknown>;
 let api: Record<string, (...args: any[]) => unknown>;
+let dynamic: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -96,6 +97,8 @@ beforeAll(async () => {
   inbox = await import(join(target, "inbox.js"));
   run([join(target, "debug", "rust-js"), "examples/api.rs", "-o", join(target, "api.js"), "--", ...buildSerde()]);
   api = await import(join(target, "api.js"));
+  run([join(target, "debug", "rust-js"), "examples/dynamic.rs", "-o", join(target, "dynamic.js"), "--", ...buildSerde()]);
+  dynamic = await import(join(target, "dynamic.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -220,6 +223,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "api") {
         return api[path[1]](...c.args);
+      }
+      if (path[0] === "dynamic") {
+        return dynamic[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);

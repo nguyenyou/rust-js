@@ -474,7 +474,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let local_key = adt("LocalKey");
         let arguments = self.is_lang_adt(owner, LangItem::FormatArguments);
         let argument = self.is_lang_adt(owner, LangItem::FormatArgument);
-        let (map, set) = (adt("HashMap") || adt("BTreeMap"), adt("HashSet") || adt("BTreeSet"));
+        let map = adt("HashMap") || adt("BTreeMap") || self.is_json_map(owner);
+        let set = adt("HashSet") || adt("BTreeSet");
         let entry = adt("HashMapEntry") || adt("BTreeEntry");
         let name = tcx.item_name(def_id);
         let (deque, heap) = (adt("VecDeque"), adt("BinaryHeap"));
