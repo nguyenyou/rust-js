@@ -919,7 +919,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let export = target.owner.as_ref().unwrap_or(&target.name);
         let reference = if target.module != self.module {
             Expr {
-                kind: js::ExprKind::Symbol(super::link::symbol(target.module, export)),
+                kind: js::ExprKind::Symbol(super::module_symbol(target.module, export)),
                 span: js::Span::NONE,
             }
         } else {

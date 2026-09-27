@@ -42,7 +42,6 @@ mod display;
 mod format_spec;
 mod jsx;
 mod jsx_api;
-mod link;
 mod maps;
 mod numbers;
 mod ordering;
@@ -55,7 +54,8 @@ mod stdlib;
 mod text;
 mod traits;
 
-use crate::program::{Lowered, LoweredImport, LoweredModule, TestFn};
+use crate::names::{fresh_in, js_ident};
+use crate::program::{Lowered, LoweredModule, TestFn};
 use crate::runtime::Helper;
 pub use analysis::{collect_bodies, lower_crate};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
@@ -3294,19 +3294,6 @@ fn assign_op(op: AssignOp) -> BinOp {
     }
 }
 
-/// Pick an unused name: `x`, then `x$1`, `x$2`, ... Rust identifiers can't
-/// contain `$`, so these never clash with a user's name.
-fn fresh_in(taken: &mut HashSet<String>, base: &str) -> String {
-    let base = js_ident(base);
-    if taken.insert(base.clone()) {
-        return base;
-    }
-    (1..)
-        .map(|k| format!("{base}${k}"))
-        .find(|name| taken.insert(name.clone()))
-        .unwrap()
-}
-
 /// A Rust variable's name as JS code writes it (ADR 0038): `set_count` is
 /// `setCount`. Leading and trailing underscores stay (`_unused`, `type_`),
 /// and so does a name with no lowercase letter, like a constant's.
@@ -3338,77 +3325,6 @@ fn lower_first(name: &str) -> String {
         .next()
         .map(|c| c.to_lowercase().chain(chars).collect())
         .unwrap_or_default()
-}
-
-/// Rust names that mean something else in JS get a `$` suffix.
-fn js_ident(name: &str) -> String {
-    const RESERVED: &[&str] = &[
-        "arguments",
-        "await",
-        "break",
-        "case",
-        "catch",
-        "class",
-        "const",
-        "continue",
-        "debugger",
-        "default",
-        "delete",
-        "do",
-        "else",
-        "enum",
-        "eval",
-        "export",
-        "extends",
-        "false",
-        "finally",
-        "for",
-        "function",
-        "if",
-        "implements",
-        "import",
-        "in",
-        "instanceof",
-        "interface",
-        "let",
-        "new",
-        "null",
-        "package",
-        "private",
-        "protected",
-        "public",
-        "return",
-        "static",
-        "super",
-        "switch",
-        "this",
-        "throw",
-        "true",
-        "try",
-        "typeof",
-        "var",
-        "void",
-        "while",
-        "with",
-        "yield",
-        "undefined",
-        "NaN",
-        "Infinity",
-        "Math",
-        "Error",
-        "String",
-        "WeakMap",
-        "DataView",
-        "ArrayBuffer",
-        "Number",
-        "BigInt",
-        "Object",
-    ];
-    if RESERVED.contains(&name) {
-        format!("{name}$")
-    } else {
-        name.to_string()
-    }
 }
 
 /// `(x, i) => [i, x]`, what `enumerate()` maps with.
@@ -3478,5 +3394,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             typing_env: self.typing_env,
             trait_impls: self.krate.trait_impls,
         }
+    }
+}
+
+/// Translate a frontend module identity into an owned link symbol.
+fn module_symbol(module: LocalModDefId, export: &str) -> crate::js::Symbol {
+    crate::js::Symbol {
+        module: module.to_def_id().index.as_u32(),
+        export: export.to_owned(),
     }
 }

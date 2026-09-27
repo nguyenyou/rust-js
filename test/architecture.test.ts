@@ -9,8 +9,14 @@ const files = directory => readdirSync(join(root, directory), { withFileTypes: t
   entry.isDirectory() ? files(`${directory}/${entry.name}`) : [`${directory}/${entry.name}`]);
 
 test("owned compiler output and downstream phases do not depend on rustc", () => {
-  for (const file of ["src/program.rs", "src/js.rs", "src/prepare.rs", "src/output.rs", "src/publish.rs", "src/manifest.rs", "src/to_oxc.rs", "src/format.rs"]) {
+  for (const file of ["src/link.rs", "src/names.rs", "src/program.rs", "src/js.rs", "src/prepare.rs", "src/output.rs", "src/publish.rs", "src/manifest.rs", "src/to_oxc.rs", "src/format.rs"]) {
     expect(read(file), file).not.toMatch(/(?:use\s+|\b)rustc_\w+::/);
+  }
+});
+
+test("linking uses owned output without lowering dependencies", () => {
+  for (const file of ["src/link.rs", "src/names.rs"]) {
+    expect(read(file), file).not.toMatch(/(?:crate|super)::lower\b/);
   }
 });
 

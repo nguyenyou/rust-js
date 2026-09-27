@@ -2,13 +2,14 @@
 
 use super::bindings;
 use super::bindings::{Export, is_binding, js_import, js_path, module_binding};
+use super::traits;
 use super::{
     Body, CrateFacts, FnCx, FnInfo, Lowered, LoweredModule, TestFn, camel_case, const_js, eval_const, fresh_in,
-    module_file, module_path, strip,
+    module_file, module_path, module_symbol, strip,
 };
-use super::{link, traits};
 use crate::js;
 use crate::js::{Expr, StmtKind};
+use crate::link;
 use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::find_attr;
@@ -541,7 +542,7 @@ pub fn lower_crate<'tcx>(
             imports.sort_by(|(a, an), (b, bn)| (&paths[a], an).cmp(&(&paths[b], bn)));
             let candidates: Vec<_> = imports
                 .into_iter()
-                .map(|(target, export)| (link::symbol(target, &export), export, paths[&target].clone()))
+                .map(|(target, export)| (module_symbol(target, &export), export, paths[&target].clone()))
                 .collect();
             link::resolve(&mut lowered, &candidates, taken[&module].clone());
             lowered

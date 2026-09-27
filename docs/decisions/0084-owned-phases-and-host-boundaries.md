@@ -15,7 +15,12 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
 - Cross-module expressions carry `js::Symbol`, never sentinel strings that
   resemble JavaScript names. Linking reserves local names, assigns imports,
   and consumes symbols before printing. An unresolved symbol is an internal
-  compiler invariant violation, never valid generated JavaScript.
+  compiler invariant violation, never valid generated JavaScript. The resolver
+  lives in `src/link.rs` and accepts only owned modules, symbols, import candidates
+  and reserved names. Lowering translates rustc module identities into symbols
+  before this boundary. `src/names.rs` owns the shared identifier and collision
+  policy. Neither linking nor name allocation depends on rustc or lowering; crate
+  analysis still orchestrates when these phases run.
 - Operand lowering produces prerequisite statements and a value. Sequencing
   uses those actual statements to capture earlier operands before executing
   later prerequisites. `is_simple` is no longer the operand-order oracle:

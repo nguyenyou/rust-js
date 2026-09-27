@@ -23,6 +23,12 @@ the downstream rustc/oxc dependency rules. See
 [ADR 0084](docs/decisions/0084-owned-phases-and-host-boundaries.md) for contracts
 and executable evidence.
 
+Import resolution now lives in `src/link.rs` and accepts only owned JavaScript
+modules, symbols, import candidates and reserved names. The frontend translates
+rustc module identities before calling it. Shared identifier policy lives in
+`src/names.rs`; neither module depends on lowering or rustc. Crate analysis still
+orchestrates reachability, lowering and linking.
+
 Standard-library and Serde Value call recognition use only immutable type and
 trait inputs in `src/lower/recognition.rs`, separate from function emission state.
 Serde calls produce explicit operations before lowering evaluates operands or
@@ -343,7 +349,7 @@ or release needs justify it. Existing files provide the starting points:
 | --- | --- |
 | Driver and syntax | `src/main.rs`, `src/jsx_syntax.rs` |
 | Analysis and lowering | `src/lower/analysis.rs`, `src/lower.rs`, `src/lower/` |
-| Linking and runtime | `src/lower/link.rs`, `src/runtime.rs`, `src/runtime/` |
+| Linking and runtime | `src/link.rs`, `src/names.rs`, `src/runtime.rs`, `src/runtime/` |
 | JS tree and presentation | `src/js.rs`, `src/prepare.rs`, `src/to_oxc.rs`, `src/format.rs` |
 | Owned modules and source origins | `src/program.rs`, `src/lower/sources.rs` |
 | Artifact planning, manifest and publication | `src/output.rs`, `src/manifest.rs`, `src/publish.rs` |

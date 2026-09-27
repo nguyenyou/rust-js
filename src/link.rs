@@ -2,19 +2,12 @@
 //! Locals keep their names; import aliases avoid every binding that could
 //! shadow them, including parameters of nested arrows and copied defaults.
 
-use super::{LoweredImport, LoweredModule, fresh_in};
 use crate::js::{Expr, ExprKind, Function, JsxTag, Pattern, Prop, Stmt, StmtKind};
-use rustc_span::def_id::LocalModDefId;
+use crate::names::fresh_in;
+use crate::program::{LoweredImport, LoweredModule};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub(super) fn symbol(module: LocalModDefId, export: &str) -> crate::js::Symbol {
-    crate::js::Symbol {
-        module: module.to_def_id().index.as_u32(),
-        export: export.to_owned(),
-    }
-}
-
-pub(super) fn resolve(
+pub(crate) fn resolve(
     module: &mut LoweredModule,
     imports: &[(crate::js::Symbol, String, Vec<String>)],
     mut names: HashSet<String>,
