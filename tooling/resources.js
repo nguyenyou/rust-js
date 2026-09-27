@@ -2,7 +2,7 @@
 // must travel with the bundle and participate in the metadata cache key.
 export const bindingInputs = {
   react: [
-    "react/build.sh", "react/cfg.ts", "react/versions.json",
+    "react/build.sh", "react/cfg.js", "react/versions.json",
     "react/src/lib.rs", "react/src/event.rs", "react/src/dom.rs", "react/src/elements.rs",
     "web/build.sh", "web/src/lib.rs",
   ],

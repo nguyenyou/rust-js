@@ -60,6 +60,15 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   the application's dependencies, with checkout fallback for development. The
   package test installs local tarballs offline through Bun, repeats with a frozen
   lockfile, and compiles through plugin hooks without a resource-path override.
+  A local `rust-js-native` package pairs the native executable with a JavaScript launcher
+  that locates pinned toolchain libraries. Hosts hash/watch the executable as
+  well as the launcher, including when configured through the `.bin` symlink.
+  This has development-host installation coverage, not clean-machine portability
+  or a qualified binary release.
+  Distributed tooling uses standard Node.js APIs and supports Node.js and Bun.
+  Hosts invoke the packaged launcher and React configuration helper with their
+  current runtime. Bun remains a repository development tool, not a distribution
+  requirement. Package tests execute each runtime while blocking the other on PATH.
   Hosts can select compiler/resources/cache locations,
   built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,

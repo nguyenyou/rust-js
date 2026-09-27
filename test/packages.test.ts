@@ -1,14 +1,23 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, chmodSync, realpathSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCompiler, compiler, root as repository } from "./support";
 
-test("Bun-installed hosts discover matching resources outside the repository layout", () => {
+const node = Bun.which("node");
+if (!node) throw new Error("Node.js is required for distribution runtime compatibility tests");
+
+for (const runtime of [process.execPath, node]) {
+test(`installed packages compile using ${runtime} without the other runtime`, () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js packages ")));
+  const blocked = join(root, "blocked-runtime");
+  mkdirSync(blocked);
+  const other = join(blocked, runtime === node ? "bun" : "node");
+  writeFileSync(other, "#!/bin/sh\necho 'Unexpected dependency on the other JS runtime' >&2\nexit 99\n");
+  chmodSync(other, 0o755);
   const run = (args: string[], cwd = root) => {
-    const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });
+    const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, PATH: `${blocked}:${process.env.PATH}` } });
     if (result.exitCode !== 0) throw new Error(result.stderr.toString());
     return result.stdout.toString();
   };
@@ -20,11 +29,13 @@ test("Bun-installed hosts discover matching resources outside the repository lay
     const resources = join(root, "node_modules/rust-js-resources");
     const resourceArchive = join(root, "resources.tgz");
     run([process.execPath, join(repository, "scripts/package-resources.ts"), resourceArchive]);
+    run([process.execPath, join(repository, "scripts/package-compiler.ts"), compiler, join(root, "native.tgz")]);
     writeFileSync(join(root, "package.json"), JSON.stringify({
       private: true, type: "module", dependencies: {
         "rust-js-build": "./rust-js-build.tgz",
         "vite-plugin-rust-js": "./vite-plugin-rust-js.tgz",
         "rust-js-resources": "./resources.tgz",
+        "rust-js-native": "./native.tgz",
       },
       overrides: { "rust-js-build": "./rust-js-build.tgz" },
     }));
@@ -35,6 +46,8 @@ test("Bun-installed hosts discover matching resources outside the repository lay
     run([...install, "--frozen-lockfile"]);
     const plugin = JSON.parse(readFileSync(join(root, "node_modules/vite-plugin-rust-js/package.json"), "utf8"));
     expect(plugin.dependencies["rust-js-build"]).toBe("0.1.0");
+    const installedCompiler = join(root, "node_modules/.bin/rust-js");
+    expect(JSON.parse(run([runtime, installedCompiler, "--version-json"]))).toEqual(JSON.parse(run([compiler, "--version-json"])));
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
     expect(resourcePackage.version).toBe(Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")).package.version);
     expect(readFileSync(join(resources, "rust-toolchain.toml"), "utf8")).toBe(readFileSync(join(repository, "rust-toolchain.toml"), "utf8"));
@@ -51,39 +64,47 @@ pub fn answer() -> u32 {
 use react::Element;
 pub fn App() -> Element { jsx! { <main><span>{"Packaged"}</span></main> } }
 `);
-    writeFileSync(join(root, "check.ts"), `
+    writeFileSync(join(root, "check.js"), `
 import rustJs from "vite-plugin-rust-js";
 import { parseManifest } from "rust-js-build/manifest";
 import { publishArtifacts } from "rust-js-build/publish";
+import { createNativeBuilder } from "rust-js-build/build";
 import { readFileSync, readdirSync } from "node:fs";
-const plugin = rustJs({ crates: ["lib.rs", "App.rs"], rustJs: ${JSON.stringify(compiler)}, bindings: ["react", "serde"], cacheDir: ${JSON.stringify(join(root, "cache"))} });
+const compiler = ${JSON.stringify(installedCompiler)};
+const inputs = createNativeBuilder({ root: ${JSON.stringify(root)}, rustJs: compiler }).watchFiles;
+const plugin = rustJs({ crates: ["lib.rs", "App.rs"], rustJs: compiler, bindings: ["react", "serde"], cacheDir: ${JSON.stringify(join(root, "cache"))} });
 plugin.configResolved({ root: ${JSON.stringify(root)} });
 const watched = [];
 await plugin.buildStart.call({ addWatchFile: file => watched.push(file), warn: message => { throw new Error(message); }, error: message => { throw new Error(message); } });
 const manifest = readdirSync("cache/vite").map(file => parseManifest(readFileSync("cache/vite/" + file, "utf8"))).find(value => value.input.endsWith("/lib.rs"));
 const { answer } = await import("./lib.js");
-console.log(JSON.stringify({ answer: answer(), watched, input: manifest.input, publisher: typeof publishArtifacts }));
+console.log(JSON.stringify({ answer: answer(), watched, inputs, input: manifest.input, publisher: typeof publishArtifacts }));
 `);
-    const result = JSON.parse(run([process.execPath, "check.ts"]));
+    const result = JSON.parse(run([runtime, "check.js"]));
     expect(result.answer).toBe(42);
     expect(result.watched).toContain(join(root, "lib.rs"));
     expect(result.input).toBe(join(root, "lib.rs"));
     expect(result.publisher).toBe("function");
+    expect(result.inputs).toContain(join(root, "node_modules/rust-js-native/bin/compiler"));
     const jsx = readFileSync(join(root, "App.jsx"), "utf8");
     expect(jsx).toContain("<main>");
     expect(jsx).toContain("<span>Packaged</span>");
     const previous = readFileSync(join(root, "lib.js"), "utf8");
     const resourceManifest = join(resources, "package.json");
     writeFileSync(resourceManifest, JSON.stringify({ ...resourcePackage, version: "999.0.0" }));
-    expect(() => run([process.execPath, "check.ts"])).toThrow("Incompatible rust-js resources");
+    expect(() => run([runtime, "check.js"])).toThrow("Incompatible rust-js resources");
     expect(readFileSync(join(root, "lib.js"), "utf8")).toBe(previous);
     writeFileSync(resourceManifest, JSON.stringify(resourcePackage));
     const pinPath = join(resources, "rust-toolchain.toml");
     const originalPin = readFileSync(pinPath, "utf8");
     writeFileSync(pinPath, originalPin.replace(/channel\s*=\s*"[^"]+"/, 'channel = "nightly-2000-01-01"'));
-    expect(() => run([process.execPath, "check.ts"])).toThrow("Install matching compiler and resources");
+    expect(() => run([runtime, "check.js"])).toThrow("Install matching compiler and resources");
     expect(readFileSync(join(root, "lib.js"), "utf8")).toBe(previous);
     writeFileSync(pinPath, originalPin);
-    expect(JSON.parse(run([process.execPath, "check.ts"])).answer).toBe(42);
+    expect(JSON.parse(run([runtime, "check.js"])).answer).toBe(42);
+    writeFileSync(join(root, "lib.rs"), "pub fn broken(");
+    expect(() => run([runtime, "check.js"])).toThrow("unclosed delimiter");
+    expect(readFileSync(join(root, "lib.js"), "utf8")).toBe(previous);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);
+}

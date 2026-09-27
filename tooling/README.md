@@ -3,6 +3,11 @@
 `build.js` prepares and invokes the native compiler. Vite delegates to it; other
 hosts can use it without importing the Vite plugin.
 
+Distributed tooling supports Node.js and Bun using standard Node.js APIs. Bun
+is used to develop, test, and create packages in this repository; users do not
+need it to run installed packages. Binding preparation and the native launcher
+use the host's current JavaScript runtime.
+
 ```js
 import { createNativeBuilder } from "rust-js-build/build";
 
@@ -36,6 +41,27 @@ path, then `rust-js-resources` resolved from the application's dependencies,
 then the development checkout. The compiler default still locates that checkout;
 compiler binaries and binding resources are not included in these host packages.
 
+Build and package a native compiler for the current macOS or Linux host:
+
+```sh
+cargo build --release --locked
+bun run pack:compiler target/release/rust-js /absolute/artifacts/rust-js-native.tgz
+```
+
+The private `rust-js-native` package contains the binary and a JavaScript launcher,
+with OS/architecture restrictions in its package manifest. Install the pinned
+Rust toolchain with `rustc-dev` on the destination machine first. The launcher
+asks that toolchain for its sysroot and sets the dynamic-library search path
+before forwarding arguments and exit status to the compiler. It does not install
+toolchains or modify global configuration. Set `rustJs` to the absolute path of
+`node_modules/rust-js-native/bin/rust-js` (or its installed `.bin` link).
+The host hashes and watches both the launcher and its compiler binary.
+
+This is a local packaging path, tested on the development host. It still depends
+on Node.js or Bun, rustup, and compatible native system libraries. Clean-machine testing,
+Linux/macOS version qualification, signing, and release checksums remain open;
+the archive is not a standalone portable compiler distribution.
+
 Create a separate resource tarball from the repository root:
 
 ```sh
@@ -49,12 +75,14 @@ Install it as `rust-js-resources`, or unpack it and set `resources` to the
 directory containing its `package.json` and `rust-toolchain.toml`.
 Build outputs go to the configured cache, outside the
 resource directory. The resource tarball contains source inputs, not prebuilt
-metadata, compiler binaries, or a Rust sysroot. Building still requires Bun,
+metadata, compiler binaries, or a Rust sysroot. Building still requires Node.js or Bun,
 Bash, and the pinned Rust toolchain; Cargo also needs its locked dependencies
 available locally or through its configured registry.
 
-For a local installation, add the three tarballs to the application's
-`package.json` using paths relative to that file, then run `bun install`:
+For a local installation, add the four tarballs to the application's
+`package.json` using paths relative to that file, then install with the application's
+package manager. The local tarball setup below is tested with `bun install`;
+running the installed packages does not depend on that choice:
 
 ```json
 {
@@ -62,6 +90,7 @@ For a local installation, add the three tarballs to the application's
     "vite": "8.3.0",
     "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js-0.1.0.tgz",
     "rust-js-build": "./artifacts/rust-js-build-0.1.0.tgz",
+    "rust-js-native": "./artifacts/rust-js-native.tgz",
     "rust-js-resources": "./artifacts/rust-js-resources.tgz"
   },
   "overrides": {
@@ -78,7 +107,13 @@ The isolated package test installs offline with lifecycle scripts disabled,
 repeats installation with a frozen lockfile, and exercises React/JSX and Serde
 using automatic resource discovery. It omits Vite's peer for its direct hook
 test; the separate Vite suite exercises the real bundler and Fast Refresh.
-Native compiler installation, release checksums, platform qualification,
+The installed launcher, host, and binding preparation are exercised under both
+Node.js and Bun, with a failing stub for the other runtime on `PATH` so a hidden
+dependency fails the test. The CLI uses a Node.js shebang; Bun-only users can run
+`bun node_modules/.bin/rust-js`. The build adapter invokes it with its own runtime.
+Direct use of `react/build.sh` defaults to Node.js; set `RUST_JS_JS_RUNTIME` to a
+Bun executable to run it with Bun. Hosts supply this automatically.
+Clean-machine compiler installation, release checksums, platform qualification,
 and published package installation remain separate distribution work.
 
 For packaged resources, the adapter queries `rust-js --version-json` before

@@ -15,6 +15,7 @@
     "setup": "bun install && bunx --bun playwright install chromium",
     "build": "cargo build && react/build.sh -o \"$PWD/target/libreact.rmeta\"",
     "pack:resources": "bun scripts/package-resources.ts",
+    "pack:compiler": "bun scripts/package-compiler.ts",
     "test": "bun test",
     "fmt": "bun scripts/format.ts",
     "fmt:check": "bun scripts/format.ts --check",

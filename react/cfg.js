@@ -2,22 +2,25 @@
 // `--cfg react="18.1"` and so on for every minor release up to it, so an
 // item gated `#[cfg(react = "19.2")]` exists only from React 19.2.
 //
-//   bun react/cfg.ts 18.2.0    prints one flag per line, for react/build.sh
+//   node react/cfg.js 18.2.0    prints one flag per line, for react/build.sh
 //
 // The releases are react/versions.json's, which react/generate.ts reads from
 // React itself.
 
-import versions from "./versions.json" with { type: "json" };
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const versions = JSON.parse(readFileSync(new URL("./versions.json", import.meta.url), "utf8"));
 
-export const releases: string[] = Object.keys(versions.releases);
-export const latest = releases.at(-1)!;
+export const releases = Object.keys(versions.releases);
+export const latest = releases.at(-1);
 
-function minor(version: string): number[] {
+function minor(version) {
   const [major, minor] = version.split(".").map(Number);
   return [major, minor];
 }
 
-function atMost(a: number[], b: number[]): boolean {
+function atMost(a, b) {
   return a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]);
 }
 
@@ -26,7 +29,7 @@ function atMost(a: number[], b: number[]): boolean {
  * the crate knows, which then gets the latest's API. Throws when it's older
  * than the first release the crate supports.
  */
-export function cfgFlags(version: string): { flags: string[]; warning?: string } {
+export function cfgFlags(version) {
   const wanted = minor(version);
   if (wanted.some(Number.isNaN)) throw new Error(`not a React version: ${version}`);
   if (!atMost(minor(releases[0]), wanted)) {
@@ -43,13 +46,13 @@ export function cfgFlags(version: string): { flags: string[]; warning?: string }
   return { flags, warning };
 }
 
-if (import.meta.main) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const { flags, warning } = cfgFlags(process.argv[2] ?? latest);
     if (warning) console.error(`warning: ${warning}`);
     console.log(flags.join("\n"));
   } catch (error) {
-    console.error(`error: ${(error as Error).message}`);
+    console.error(`error: ${error.message}`);
     process.exit(1);
   }
 }

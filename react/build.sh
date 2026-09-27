@@ -24,7 +24,8 @@ mkdir -p "$(dirname "$out")"
 dir=$(cd "$(dirname "$out")" && pwd)
 cd "$(dirname "$0")"
 cfg=()
-while IFS= read -r flag; do cfg+=("$flag"); done < <(bun cfg.ts $version)
+cfg_output=$("${RUST_JS_JS_RUNTIME:-node}" cfg.js ${version:+"$version"})
+while IFS= read -r flag; do cfg+=("$flag"); done <<< "$cfg_output"
 ../web/build.sh -o "$dir/libweb.rmeta" "$@"
 # The absolute path lets a program's errors quote this crate's source: a gated
 # item's `#[cfg(react = "..")]`.

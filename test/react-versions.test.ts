@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
 import rustJs from "../vite-plugin/index.js";
-import { cfgFlags, latest, releases } from "../react/cfg.ts";
+import { cfgFlags, latest, releases } from "../react/cfg.js";
 import versions from "../react/versions.json" with { type: "json" };
 import { buildCompiler, compiler, fixture, root, run, target } from "./support";
 

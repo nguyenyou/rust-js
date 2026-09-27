@@ -152,7 +152,12 @@ pilot. No delivery dates are assigned yet.
   Added evidence: `bun run pack:resources <output.tgz>` creates a versioned
   source-resource package; [package tests](test/packages.test.ts) compile React
   and Serde with unpacked host and resource tarballs outside the checkout.
-  Native compiler installation and clean-machine qualification remain open.
+  `bun run pack:compiler <compiler> <output.tgz>` also packages a native binary
+  and launcher for the current host. The installed launcher discovers the pinned
+  toolchain libraries and passes the package integration test. Clean-machine
+  installation, platform qualification, signing, and checksums remain open.
+  Distribution tests cover Node.js and Bun independently, including native
+  launching and React/Serde preparation; neither runtime requires the other.
 - [ ] **M4.2 — Decouple Vite from the source checkout.** Ship the plugin and
   binding assets with explicit versions and configuration. The
   [private plugin](vite-plugin/package.json) now declares its versioned

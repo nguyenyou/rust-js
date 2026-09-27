@@ -1,7 +1,7 @@
 // Native build preparation. Hosts provide scheduling and consume manifests.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -23,7 +23,7 @@ function installedResources(root) {
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, env: { ...process.env, RUST_JS_JS_RUNTIME: process.execPath }, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     let errors = "";
     child.stdout.setEncoding("utf8").on("data", chunk => { output += chunk; });
@@ -35,6 +35,15 @@ function run(command, args, cwd) {
 
 export function createNativeBuilder({ root, rustJs = defaultCompiler, resources = installedResources(root), cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
   const repo = resources;
+  const compilerPath = existsSync(rustJs) ? realpathSync(rustJs) : rustJs;
+  const compilerInputs = [...new Set([rustJs, compilerPath])];
+  const nativePackage = join(dirname(compilerPath), "../package.json");
+  const packaged = existsSync(nativePackage) && JSON.parse(readFileSync(nativePackage, "utf8")).name === "rust-js-native";
+  if (packaged) {
+    compilerInputs.push(nativePackage, join(dirname(compilerPath), "compiler"));
+  }
+  const compilerCommand = packaged ? process.execPath : rustJs;
+  const compilerArgs = packaged ? [compilerPath] : [];
   const metadataInputs = resourceInputs(bindings).map(p => join(repo, p));
   // The React the project has installed, whose API the react crate is built
   // with (ADR 0043): what a later React added doesn't compile. `null` without
@@ -50,14 +59,14 @@ export function createNativeBuilder({ root, rustJs = defaultCompiler, resources 
 
   // Each recipe uses the pinned resources and a content-keyed cache directory.
   async function prepare() {
-    if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: run bun run build in the rust-js repository`);
+    if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: configure rustJs with an installed compiler or build it with cargo build`);
     const react = bindings.includes("react") ? installedReact() : null;
     if (!bindings.length) return { flags: [], react };
     const packagePath = join(repo, "package.json");
     if (existsSync(packagePath)) {
       const resourcePackage = JSON.parse(await readFile(packagePath, "utf8"));
       if (resourcePackage.name === "rust-js-resources") {
-        const identity = parseCompilerIdentity(await run(rustJs, ["--version-json"], root));
+        const identity = parseCompilerIdentity(await run(compilerCommand, [...compilerArgs, "--version-json"], root));
         const pin = (await readFile(join(repo, "rust-toolchain.toml"), "utf8")).match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
         if (resourcePackage.version !== identity.version || pin !== identity.toolchain) {
           throw new Error(`Incompatible rust-js resources: compiler ${identity.version} (${identity.toolchain}), resources ${resourcePackage.version} (${pin ?? "missing Rust pin"}). Install matching compiler and resources.`);
@@ -65,7 +74,7 @@ export function createNativeBuilder({ root, rustJs = defaultCompiler, resources 
       }
     }
     const hash = createHash("sha256").update(JSON.stringify({ resources: resolve(resources), react, bindings, rustcFlags }));
-    hash.update(await readFile(rustJs));
+    for (const path of compilerInputs) hash.update(await readFile(path));
     for (const path of metadataInputs) hash.update(await readFile(path));
     const key = hash.digest("hex");
     const flags = [];
@@ -100,12 +109,12 @@ export function createNativeBuilder({ root, rustJs = defaultCompiler, resources 
   }
 
   return {
-    watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), rustJs, ...Object.values(externs)],
+    watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), ...compilerInputs, ...Object.values(externs)],
     prepare,
     async compile({ crate, output, manifest }) {
       const { flags, react } = await prepare();
       try {
-        await run(rustJs, [crate, "-o", output, "--manifest", manifest,
+        await run(compilerCommand, [...compilerArgs, crate, "-o", output, "--manifest", manifest,
           "--", ...flags,
           ...Object.entries(externs).flatMap(([name, file]) => ["--extern", `${name}=${file}`, "-L", dirname(file)]), ...rustcFlags], root);
       } catch (error) {

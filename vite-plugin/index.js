@@ -118,7 +118,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs = defaultCompil
         const files = crates.map(crate => [".jsx", ".js"].map(ext => crate.replace(/\.rs$/, ext)).find(file => existsSync(resolve(root, file))));
         if (files.every(Boolean)) {
           for (const file of files) committed.add(resolve(root, file));
-          this.warn(`no rust-js at ${rustJs}: using the committed ${files.join(", ")}. Build rust-js (bun run build) to compile the Rust.`);
+          this.warn(`no rust-js at ${rustJs}: using the committed ${files.join(", ")}. Install rust-js or build it with cargo build to compile the Rust.`);
           return;
         }
       }
