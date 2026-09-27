@@ -32,12 +32,17 @@ const inside = (ty: Ty, outer: "Vec" | "Option"): IntTy | undefined => {
   const m = new RegExp(`^${outer}<(\\w+)>$`).exec(ty);
   return m && isInt(m[1]) ? m[1] : undefined;
 };
-// What's `Copy` can be read as it is; a `Vec` is read through `clone()`, so
-// it's never moved from the variable that holds it.
-const isCopy = (ty: Ty) => inside(ty, "Vec") === undefined;
+// What's `Copy` can be read as it is; a `Vec`, a `String` or a map is read
+// through `clone()`, so it's never moved from the variable that holds it.
+const isCopy = (ty: Ty) => inside(ty, "Vec") === undefined && ty !== "String" && ty !== "Map";
 
 // The struct every program has, whose fields are of three widths.
 export const struct = { name: "S", fields: [["a", "i32"], ["b", "u8"], ["c", "i64"]] as [string, IntTy][] };
+
+// Text where UTF-8 and UTF-16 part: accents, `ß`, which upper-cases to two
+// letters, CJK, and an emoji, which is two UTF-16 units.
+const texts = ["", "a", "héllo", "ß", "日本", "🦀x", "  pad ", "A,b,,c", "Ω"];
+const chars = ["a", "Z", "é", "ß", "7", " ", "🦀", "日"];
 
 const bits = (ty: IntTy) => Number(ty.slice(1));
 const signed = (ty: IntTy) => ty.startsWith("i");
@@ -66,7 +71,12 @@ export type Expr =
   | { kind: "field"; ty: Ty; a: Expr; field: string }
   | { kind: "call"; ty: Ty; name: string; a: Expr }
   | { kind: "some"; ty: Ty; a: Expr }
-  | { kind: "use"; ty: Ty; form: string; a: Expr; b?: Expr };
+  | { kind: "use"; ty: Ty; form: string; a: Expr; b?: Expr; c?: Expr }
+  // A `String` or a `char` literal, a variant of `E`, and a `match` on one,
+  // whose arms bind what the variant holds.
+  | { kind: "text"; ty: Ty; value: string }
+  | { kind: "enum"; ty: Ty; variant: "A" | "B" | "C"; a?: Expr; b?: Expr }
+  | { kind: "match"; ty: Ty; a: Expr; whenA: Expr; bind: string; guard?: Expr; whenB: Expr; otherB?: Expr; x: string; y: string; whenC: Expr };
 
 export type Stmt =
   | { kind: "let"; name: string; ty: Ty; value: Expr }
@@ -78,7 +88,11 @@ export type Stmt =
   | { kind: "if-let"; name: string; value: Expr; then: Stmt[]; else: Stmt[] }
   | { kind: "vec-op"; name: string; op: "push" | "pop" | "sort" | "reverse"; value?: Expr }
   | { kind: "set"; name: string; index?: number; field?: string; value: Expr }
-  | { kind: "closure"; name: string; param: IntTy; body: Expr };
+  | { kind: "closure"; name: string; param: IntTy; body: Expr }
+  | { kind: "text-op"; name: string; op: "push_str" | "push"; value: Expr }
+  | { kind: "map-op"; name: string; op: "insert" | "remove" | "entry"; key: Expr; value?: Expr }
+  | { kind: "for-map"; key: string; item: string; map: string; body: Stmt[] }
+  | { kind: "if-let-b"; name: string; value: Expr; then: Stmt[]; else: Stmt[] };
 
 export type Program = Stmt[];
 
@@ -87,6 +101,14 @@ type Scope = { name: string; ty: Ty; mutable: boolean }[];
 
 function literal(r: Random, ty: Ty): Expr {
   if (ty === "bool") return { kind: "lit", ty, value: r.chance(0.5) };
+  if (ty === "String") return { kind: "text", ty, value: r.pick(texts) };
+  if (ty === "char") return { kind: "text", ty, value: r.pick(chars) };
+  if (ty === "E") {
+    const variant = r.pick(["A", "B", "C"] as const);
+    if (variant === "A") return { kind: "enum", ty, variant };
+    if (variant === "B") return { kind: "enum", ty, variant, a: literal(r, "i32") };
+    return { kind: "enum", ty, variant, a: literal(r, "u8"), b: literal(r, "bool") };
+  }
   if (!isInt(ty)) return { kind: "zero", ty };
   const [lo, hi] = range(ty);
   // Where JS and Rust are most likely to part: the edges.
@@ -126,7 +148,60 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
     }
     if (choice === 4) return { kind: "use", ty, form: r.pick(["is_some", "is_none"]), a: sub(`Option<${r.pick(intTypes)}>`) };
     if (choice === 5 && r.chance(0.5)) return { kind: "cmp", ty, op: r.pick(["==", "!="]), a: sub("S"), b: sub("S") };
+    // What text, a `char`, an `E` and a map can say.
+    if (r.chance(0.5)) {
+      switch (r.int(6)) {
+        case 0:
+          return { kind: "use", ty, form: r.pick(["str-contains", "starts_with"]), a: sub("String"), b: sub("String") };
+        case 1:
+          return { kind: "use", ty, form: "is_empty", a: sub("String") };
+        case 2:
+          return { kind: "use", ty, form: r.pick(["is_alphabetic", "is_numeric", "is_uppercase", "is_ascii_digit", "is_whitespace"]), a: sub("char") };
+        case 3: {
+          const t = r.pick(["String", "char", "E"]);
+          return { kind: "cmp", ty, op: t === "E" ? r.pick(["==", "!="]) : r.pick(["==", "!=", "<", ">="]), a: sub(t), b: sub(t) };
+        }
+        case 4:
+          return { kind: "use", ty, form: "matches-b", a: sub("E") };
+        default:
+          return { kind: "use", ty, form: "contains_key", a: sub("Map"), b: sub("u8") };
+      }
+    }
     return { kind: "if", ty, c: sub("bool"), a: sub("bool"), b: sub("bool") };
+  }
+  if (ty === "Map") return vars.length > 0 ? { kind: "var", ty, name: r.pick(vars).name } : { kind: "zero", ty };
+  if (ty === "String") {
+    switch (r.int(7)) {
+      case 0:
+        return { kind: "use", ty, form: r.pick(["to_uppercase", "to_lowercase", "trim", "rev"]), a: sub(ty) };
+      case 1:
+        return { kind: "use", ty, form: "replace", a: sub(ty), b: literal(r, ty), c: literal(r, ty) };
+      case 2:
+        return { kind: "use", ty, form: "concat", a: sub(ty), b: sub(r.pick(["String", "char"])) };
+      case 3:
+        return { kind: "use", ty, form: "pad", a: sub(ty) };
+      case 4:
+        return { kind: "use", ty, form: "to_string", a: sub(r.chance(0.6) ? r.pick(intTypes) : "char") };
+      default:
+        return { kind: "if", ty, c: sub("bool"), a: sub(ty), b: sub(ty) };
+    }
+  }
+  if (ty === "char") {
+    switch (r.int(4)) {
+      case 0:
+        return { kind: "use", ty, form: "first-char", a: sub("String"), b: sub("char") };
+      case 1:
+        return { kind: "use", ty, form: "to_ascii_uppercase", a: sub("char") };
+      case 2:
+        return { kind: "use", ty, form: "from-digit", a: sub("u32") };
+      default:
+        return { kind: "if", ty, c: sub("bool"), a: sub(ty), b: sub(ty) };
+    }
+  }
+  if (ty === "E") {
+    const variant = r.pick(["A", "B", "C"] as const);
+    if (variant === "A") return r.chance(0.5) ? { kind: "enum", ty, variant } : { kind: "if", ty, c: sub("bool"), a: sub(ty), b: sub(ty) };
+    return variant === "B" ? { kind: "enum", ty, variant, a: sub("i32") } : { kind: "enum", ty, variant, a: sub("u8"), b: sub("bool") };
   }
   const vecOf = inside(ty, "Vec");
   if (vecOf) {
@@ -160,7 +235,7 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
   // An integer.
   const int = ty as IntTy;
   const closures = scope.filter((v) => v.ty === `fn(${int})`);
-  switch (r.int(9)) {
+  switch (r.int(12)) {
     case 0:
     case 1:
       return { kind: "bin", ty, op: r.pick(["+", "-", "*", "/", "%", "&", "|", "^"]), a: sub(ty), b: sub(ty) };
@@ -193,6 +268,41 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
       if (closures.length > 0) return { kind: "call", ty, name: r.pick(closures).name, a: sub(ty) };
       return { kind: "if", ty, c: sub("bool"), a: sub(ty), b: sub(ty) };
     }
+    case 9:
+      // How many chars, or pieces between commas, a string has; a char's code.
+      if (r.chance(0.6)) return { kind: "use", ty, form: r.pick(["char-count", "split-count"]), a: sub("String") };
+      return { kind: "cast", ty, a: { kind: "use", ty: "u32", form: "char-code", a: sub("char") } };
+    case 10: {
+      // What a map holds.
+      if (int === "i32" && r.chance(0.6)) {
+        return r.chance(0.5)
+          ? { kind: "use", ty, form: "map-get", a: sub("Map"), b: sub("u8"), c: sub("i32") }
+          : { kind: "use", ty, form: "map-sum", a: sub("Map") };
+      }
+      return { kind: "use", ty, form: "map-len", a: sub("Map") };
+    }
+    case 11: {
+      // A `match` on an `E`, whose arms have what its variant holds, and
+      // sometimes a guard.
+      const n = r.int(1e6);
+      const bind = `m${n}`, x = `mx${n}`, y = `my${n}`;
+      const withB = [...scope, { name: bind, ty: "i32", mutable: false }];
+      const withC = [...scope, { name: x, ty: "u8", mutable: false }, { name: y, ty: "bool", mutable: false }];
+      const guarded = r.chance(0.4);
+      return {
+        kind: "match",
+        ty,
+        a: sub("E"),
+        whenA: sub(ty),
+        bind,
+        guard: guarded ? expr(r, "bool", withB, depth - 1) : undefined,
+        whenB: expr(r, ty, withB, depth - 1),
+        otherB: guarded ? sub(ty) : undefined,
+        x,
+        y,
+        whenC: expr(r, ty, withC, depth - 1),
+      };
+    }
     default:
       if (closures.length > 0 && r.chance(0.5)) return { kind: "call", ty, name: r.pick(closures).name, a: sub(ty) };
       return { kind: "if", ty, c: sub("bool"), a: sub(ty), b: sub(ty) };
@@ -202,11 +312,15 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
 // A value's type for a new variable: mostly integers, and the rest.
 function valueType(r: Random): Ty {
   const n = r.next();
-  if (n < 0.55) return r.pick(intTypes);
-  if (n < 0.65) return "bool";
-  if (n < 0.8) return `Vec<${r.pick(intTypes)}>`;
-  if (n < 0.92) return `Option<${r.pick(intTypes)}>`;
-  return "S";
+  if (n < 0.45) return r.pick(intTypes);
+  if (n < 0.52) return "bool";
+  if (n < 0.62) return `Vec<${r.pick(intTypes)}>`;
+  if (n < 0.7) return `Option<${r.pick(intTypes)}>`;
+  if (n < 0.75) return "S";
+  if (n < 0.85) return "String";
+  if (n < 0.89) return "char";
+  if (n < 0.95) return "E";
+  return "Map";
 }
 
 function block(r: Random, scope: Scope, depth: number, counter: { n: number }, size: number): Stmt[] {
@@ -215,7 +329,9 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
   for (let i = 0; i < size; i++) {
     const writable = inner.filter((v) => v.mutable);
     const vecs = writable.filter((v) => inside(v.ty, "Vec"));
-    const choice = r.int(14);
+    const texts = writable.filter((v) => v.ty === "String");
+    const maps = writable.filter((v) => v.ty === "Map");
+    const choice = r.int(18);
     if (choice < 3 || writable.length === 0) {
       const ty = valueType(r);
       const name = `v${counter.n++}`;
@@ -227,7 +343,15 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
       stmts.push({ kind: "assign", name: target.name, ty: target.ty, op: r.pick(ops), value: expr(r, target.ty, inner, 2) });
     } else if (choice < 8) {
       const ty = r.chance(0.7) ? r.pick(intTypes) : valueType(r);
-      const format = isInt(ty) ? r.pick(["{}", "{:?}", "{:x}", "{:#x}", "{:5}", "{:<4}|"]) : ty === "bool" ? r.pick(["{}", "{:?}"]) : "{:?}";
+      const format = isInt(ty)
+        ? r.pick(["{}", "{:?}", "{:x}", "{:#x}", "{:5}", "{:<4}|"])
+        : ty === "bool"
+          ? r.pick(["{}", "{:?}"])
+          : ty === "String"
+            ? r.pick(["{}", "{:?}", "{:>8}|", "{:<6}|", "{:^7}|"])
+            : ty === "char"
+              ? r.pick(["{}", "{:?}", "{:>3}|"])
+              : "{:?}";
       stmts.push({ kind: "print", format, value: expr(r, ty, inner, 3) });
     } else if (choice === 8 && vecs.length > 0) {
       const v = r.pick(vecs);
@@ -263,6 +387,28 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
         name,
         value: expr(r, `Option<${elem}>`, inner, 2),
         then: block(r, [...inner, { name, ty: elem, mutable: false }], depth - 1, counter, 1 + r.int(3)),
+        else: block(r, inner, depth - 1, counter, r.int(2)),
+      });
+    } else if (choice === 14 && texts.length > 0) {
+      const push = r.chance(0.5);
+      stmts.push({ kind: "text-op", name: r.pick(texts).name, op: push ? "push" : "push_str", value: expr(r, push ? "char" : "String", inner, 2) });
+    } else if (choice === 15 && maps.length > 0) {
+      const op = r.pick(["insert", "insert", "entry", "remove"] as const);
+      stmts.push({ kind: "map-op", name: r.pick(maps).name, op, key: expr(r, "u8", inner, 1), value: op === "remove" ? undefined : expr(r, "i32", inner, 2) });
+    } else if (choice === 16 && depth > 0) {
+      const all = inner.filter((v) => v.ty === "Map");
+      if (all.length > 0) {
+        const key = `k${counter.n++}`, item = `w${counter.n++}`;
+        const bound = [...inner, { name: key, ty: "u8", mutable: false }, { name: item, ty: "i32", mutable: false }];
+        stmts.push({ kind: "for-map", key, item, map: r.pick(all).name, body: block(r, bound, depth - 1, counter, 1 + r.int(3)) });
+      }
+    } else if (choice === 17 && depth > 0) {
+      const name = `m${counter.n++}`;
+      stmts.push({
+        kind: "if-let-b",
+        name,
+        value: expr(r, "E", inner, 2),
+        then: block(r, [...inner, { name, ty: "i32", mutable: false }], depth - 1, counter, 1 + r.int(3)),
         else: block(r, inner, depth - 1, counter, r.int(2)),
       });
     } else if (depth > 0) {
@@ -307,6 +453,10 @@ function show(e: Expr): string {
       if (inside(e.ty, "Vec")) return `Vec::<${inside(e.ty, "Vec")}>::new()`;
       if (inside(e.ty, "Option")) return `None::<${inside(e.ty, "Option")}>`;
       if (e.ty === "S") return "(S { a: 0, b: 0, c: 0 })";
+      if (e.ty === "String") return "String::new()";
+      if (e.ty === "char") return "'a'";
+      if (e.ty === "E") return "E::A";
+      if (e.ty === "Map") return "BTreeMap::<u8, i32>::new()";
       return e.ty === "bool" ? "false" : `id(0${e.ty})`;
     case "var":
       return isCopy(e.ty) ? e.name : `${e.name}.clone()`;
@@ -336,9 +486,68 @@ function show(e: Expr): string {
       return `${e.name}(${show(e.a)})`;
     case "some":
       return `Some(${show(e.a)})`;
+    case "text":
+      return e.ty === "char" ? `'${e.value}'` : `String::from(${JSON.stringify(e.value)})`;
+    case "enum":
+      if (e.variant === "A") return "E::A";
+      // In parentheses, as a struct-like variant can't begin an `if`'s condition.
+      return e.variant === "B" ? `E::B(${show(e.a!)})` : `(E::C { x: ${show(e.a!)}, y: ${show(e.b!)} })`;
+    case "match": {
+      const arms = [
+        `E::A => ${show(e.whenA)}`,
+        `E::B(${e.bind})${e.guard ? ` if ${show(e.guard)}` : ""} => ${show(e.whenB)}`,
+        ...(e.otherB ? [`E::B(_) => ${show(e.otherB)}`] : []),
+        `E::C { x: ${e.x}, y: ${e.y} } => ${show(e.whenC)}`,
+      ];
+      return `(match ${show(e.a)} { ${arms.join(", ")} })`;
+    }
     case "use": {
-      const a = show(e.a), b = e.b ? show(e.b) : "";
+      const a = show(e.a), b = e.b ? show(e.b) : "", c = e.c ? show(e.c) : "";
       switch (e.form) {
+        case "to_uppercase":
+        case "to_lowercase":
+        case "to_ascii_uppercase":
+        case "is_alphabetic":
+        case "is_numeric":
+        case "is_uppercase":
+        case "is_ascii_digit":
+        case "is_whitespace":
+        case "to_string":
+          return `${a}.${e.form}()`;
+        case "trim":
+          return `${a}.trim().to_string()`;
+        case "rev":
+          return `${a}.chars().rev().collect::<String>()`;
+        case "replace":
+          return `${a}.replace(${b}.as_str(), ${c}.as_str())`;
+        case "concat":
+          return `format!("{}{}", ${a}, ${b})`;
+        case "pad":
+          return `format!("{:>6}", ${a})`;
+        case "first-char":
+          return `${a}.chars().next().unwrap_or(${b})`;
+        case "from-digit":
+          return `char::from_digit(${a} % 10, 10).unwrap_or('?')`;
+        case "char-count":
+          return `(${a}.chars().count() as ${e.ty})`;
+        case "split-count":
+          return `(${a}.split(',').count() as ${e.ty})`;
+        case "char-code":
+          return `(${a} as u32)`;
+        case "str-contains":
+          return `${a}.contains(${b}.as_str())`;
+        case "starts_with":
+          return `${a}.starts_with(${b}.as_str())`;
+        case "matches-b":
+          return `matches!(${a}, E::B(_))`;
+        case "contains_key":
+          return `${a}.contains_key(&${b})`;
+        case "map-len":
+          return `(${a}.len() as ${e.ty})`;
+        case "map-get":
+          return `${a}.get(&${b}).copied().unwrap_or(${c})`;
+        case "map-sum":
+          return `${a}.values().sum::<i32>()`;
         case "contains":
           return `${a}.contains(&${b})`;
         case "is_empty":
@@ -395,6 +604,16 @@ function lines(stmts: Stmt[], indent: string): string[] {
         return [`${indent}${s.name}${s.field !== undefined ? `.${s.field}` : `[id(${s.index}usize)]`} = ${show(s.value)};`];
       case "closure":
         return [`${indent}let ${s.name} = move |x: ${s.param}| -> ${s.param} { ${show(s.body)} };`];
+      case "text-op":
+        return [`${indent}${s.name}.${s.op}(${s.op === "push_str" ? `${show(s.value)}.as_str()` : show(s.value)});`];
+      case "map-op":
+        if (s.op === "remove") return [`${indent}${s.name}.remove(&${show(s.key)});`];
+        if (s.op === "insert") return [`${indent}${s.name}.insert(${show(s.key)}, ${show(s.value!)});`];
+        return [`${indent}*${s.name}.entry(${show(s.key)}).or_insert(0) += ${show(s.value!)};`];
+      case "for-map":
+        return [`${indent}for (${s.key}, ${s.item}) in ${s.map}.clone() {`, ...nested(s.body), `${indent}}`];
+      case "if-let-b":
+        return [`${indent}if let E::B(${s.name}) = ${show(s.value)} {`, ...nested(s.then), `${indent}} else {`, ...nested(s.else), `${indent}}`];
     }
   });
 }
@@ -406,6 +625,17 @@ export function print(program: Program, seed?: number): string {
     ...(seed === undefined ? [] : [`// Generated from seed ${seed}.`]),
     "fn id<T>(x: T) -> T {",
     "    x",
+    "}",
+    "",
+    "use std::collections::BTreeMap;",
+    "",
+    "type Map = BTreeMap<u8, i32>;",
+    "",
+    "#[derive(Debug, Clone, Copy, PartialEq)]",
+    "enum E {",
+    "    A,",
+    "    B(i32),",
+    "    C { x: u8, y: bool },",
     "}",
     "",
     "#[derive(Debug, Clone, Copy, PartialEq)]",
@@ -430,12 +660,12 @@ function* smaller(program: Program): Generator<Program> {
       const s = stmts[i];
       const put = (replacement: Stmt[]) => rebuild([...stmts.slice(0, i), ...replacement, ...stmts.slice(i + 1)]);
       yield put([]);
-      if (s.kind === "if" || s.kind === "if-let") {
+      if (s.kind === "if" || s.kind === "if-let" || s.kind === "if-let-b") {
         yield put(s.then);
         yield put(s.else);
         yield* inBlock(s.then, (next) => put([{ ...s, then: next }]));
         yield* inBlock(s.else, (next) => put([{ ...s, else: next }]));
-      } else if (s.kind === "for" || s.kind === "for-each") {
+      } else if (s.kind === "for" || s.kind === "for-each" || s.kind === "for-map") {
         yield put(s.body);
         yield* inBlock(s.body, (next) => put([{ ...s, body: next }]));
       }
@@ -482,7 +712,12 @@ export async function reduce(program: Program, fails: (p: Program) => Promise<bo
 /** How many statements a program has, at every depth. */
 export function size(program: Program): number {
   return program.reduce((n, s) => {
-    const inner = s.kind === "if" || s.kind === "if-let" ? size(s.then) + size(s.else) : s.kind === "for" || s.kind === "for-each" ? size(s.body) : 0;
+    const inner =
+      s.kind === "if" || s.kind === "if-let" || s.kind === "if-let-b"
+        ? size(s.then) + size(s.else)
+        : s.kind === "for" || s.kind === "for-each" || s.kind === "for-map"
+          ? size(s.body)
+          : 0;
     return n + 1 + inner;
   }, 0);
 }

@@ -29,6 +29,17 @@ time, valid and deterministic by construction:
   `unwrap_or`, `map`, `is_some`, and `if let Some(x)`. A `Copy` struct of
   three widths, made, compared, read and written. Closures, `move`, of
   what's `Copy`, called.
+- Text where UTF-8 and UTF-16 part: `String`s and `char`s of accents, `ß`,
+  CJK and an emoji, upper- and lower-cased, trimmed, replaced, reversed,
+  counted in `char`s and by `split`, compared, pushed to, and padded, as
+  `{:>8}` counts `char`s; a `char`'s questions, `as u32` and `from_digit`.
+- An enum, `E { A, B(i32), C { x: u8, y: bool } }`, made, compared, and
+  `match`ed, its arms binding what the variant holds, some with a guard;
+  `matches!` and `if let E::B(n)`.
+- A `BTreeMap<u8, i32>`, whose order is its keys', not a `HashMap`'s, which
+  changes from run to run natively: `insert`, `remove`, `entry(..)
+  .or_insert(0) +=`, `get`, `contains_key`, `len`, `values().sum()`, and
+  `for` over it.
 - It keeps to what the borrow checker allows: a `Vec` is read through
   `clone()`, never moved, and a closure takes copies, so a later write to
   what it captured doesn't conflict with it.
@@ -56,7 +67,10 @@ left is written with its seed to `target/fuzz/`, to become a corpus case.
 - **It found what the written tests hadn't:** seed 39, reduced from 17
   statements to one, printed `{:#x}` of a negative `i64` as `0x-80000000`,
   where Rust prints its 64 bits, `0xffffffff80000000`. It's fixed, and the
-  corpus keeps it (`radix_negative.rs`).
+  corpus keeps it (`radix_negative.rs`). Seed 79, reduced to one line,
+  replaced an empty pattern in `"🦀x"`: JS's `replaceAll` put the
+  replacement between the emoji's two UTF-16 units, where Rust puts it at
+  each char's boundary; `split("")` differed too (`empty_pattern.rs`).
 - **A failure is a few lines,** which say what's wrong, rather than a
   program of dozens.
 

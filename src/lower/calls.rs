@@ -409,7 +409,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::Method(name) => {
                 let this = arg();
-                let rest = (1..args.len()).map(|_| arg()).collect();
+                let rest: Vec<Expr> = (1..args.len()).map(|_| arg()).collect();
+                // A pattern that may be empty, which Rust matches at each
+                // char's boundary and JS between UTF-16 units (ADR 0063).
+                let may_be_empty = matches!(name, "replaceAll" | "split")
+                    && !generic_args.types().next().is_some_and(|p| p.is_char())
+                    && !matches!(&rest[0].kind, js::ExprKind::Str(s) if !s.is_empty());
+                if may_be_empty {
+                    self.runtime.insert(Helper::EmptyPattern);
+                    let helper = if name == "split" { "$split" } else { "$replace" };
+                    return Ok(Expr::call(Expr::var(helper), [vec![this], rest].concat()));
+                }
                 Expr::call(Expr::member(this, name), rest)
             }
             Std::StripPrefix | Std::StripSuffix | Std::SplitOnce | Std::RsplitOnce => {

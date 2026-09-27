@@ -67,6 +67,7 @@ pub enum Helper {
     BigRange,
     TryFromInt,
     Print,
+    EmptyPattern,
     ToJson,
     FromJson,
     JsonValue,
@@ -707,6 +708,20 @@ function $write(text, error) {
     });
   }
   $printed[error] = rest;
+}
+"#
+            }
+            // `s.replace(p, r)` and `s.split(p)` of a pattern that may be empty,
+            // which Rust matches at each char's boundary, both ends too, and JS
+            // between UTF-16 units, splitting an emoji (ADR 0063).
+            Helper::EmptyPattern => {
+                r#"
+function $replace(s, pattern, replacement) {
+  if (pattern !== "") return s.replaceAll(pattern, replacement);
+  return Array.from(s, (c) => replacement + c).join("") + replacement;
+}
+function $split(s, pattern) {
+  return pattern === "" ? ["", ...s, ""] : s.split(pattern);
 }
 "#
             }
