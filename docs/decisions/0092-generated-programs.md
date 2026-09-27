@@ -62,7 +62,10 @@ left is written with its seed to `target/fuzz/`, to become a corpus case.
 - `bun test` runs the first 12 seeds, which must compile and match: they
   did, so one rust-js rejects is a regression. `FUZZ_START` and
   `FUZZ_SEEDS` explore others, as many as there's time for, where a program
-  rust-js doesn't support is skipped.
+  rust-js doesn't support is skipped. A big batch runs on GitHub, where it
+  isn't slowed by macOS's scan of each new binary (AGENTS.md): the rustc
+  tests workflow with `fuzz_seeds` splits it across six machines and keeps
+  each reduced program as an artifact.
 
 ## Why
 

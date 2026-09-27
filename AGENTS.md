@@ -54,3 +54,26 @@ Use the pinned Rust toolchain and Bun for JavaScript tooling. See
 [package.json](package.json) for commands: `bun run build`, `bun test`, and
 `bun run fmt:check`. Rebuild with `bun run wasm` when validating compiler
 changes through the browser playground.
+
+## Tests that build many native programs
+
+On macOS, the system scans each newly built binary before its first run, one
+at a time. A run that builds hundreds of native test programs therefore takes
+an hour or more locally, though on Linux it takes minutes. For those runs,
+use the manually started [rustc tests workflow](.github/workflows/rustc-tests.yml)
+instead of running them locally:
+
+- rustc's own tests, all of them ([ADR 0089](docs/decisions/0089-rustc-tests.md)):
+  `gh workflow run "rustc tests" --repo rust-js-lang/rust-js`, with
+  `-f bless=true` to rewrite the known failures. The rewritten list is the
+  run's `rustc-known-failures` artifact; download it with `gh run download`
+  and review its diff before committing it.
+- Some of rustc's tests, by file or directory under `tests/ui`:
+  `-f tests="derives/ consts/std/iter.rs"`.
+- A batch of generated programs ([ADR 0092](docs/decisions/0092-generated-programs.md)):
+  `-f fuzz_start=1000 -f fuzz_seeds=600`. A program that differs is reduced,
+  and the reduced programs are the run's `fuzz` artifact.
+
+A handful of tests, such as the corpus in `bun test` or a few named rustc
+tests, is fine locally. Start the workflow, share the run's link, and read
+its results when it has finished.

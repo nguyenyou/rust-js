@@ -1,8 +1,10 @@
 name: rustc tests
 
-# rustc's own run-pass UI tests, run as JS (ADR 0089): the ones named, or,
-# with none named, all of them, split across machines and checked as one
-# run against test/rustc-known-failures.txt.
+# Tests that build a native program each, which macOS makes slow, run on
+# Linux (AGENTS.md): rustc's own run-pass UI tests, run as JS (ADR 0089), the
+# ones named or, with none named, all of them, split across machines and
+# checked as one run against test/rustc-known-failures.txt; or, with
+# `fuzz_seeds`, a batch of generated programs (ADR 0092), split the same way.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +16,14 @@ on:
         description: 'With all of them: write the known failures anew, as an artifact to commit.'
         type: boolean
         default: false
+      fuzz_seeds:
+        description: 'Instead: how many generated programs to run, like "600". Empty: none.'
+        required: false
+        default: ''
+      fuzz_start:
+        description: 'The first generated program''s seed.'
+        required: false
+        default: '1'
 
 permissions:
   contents: read
@@ -57,6 +67,7 @@ jobs:
   # All of them: every sixth test on each of six machines.
   shard:
     needs: build
+    if: inputs.fuzz_seeds == ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -108,3 +119,55 @@ jobs:
         with:
           name: rustc-known-failures
           path: test/rustc-known-failures.txt
+
+  # Generated programs, a sixth of the seeds on each of six machines, with
+  # the build job's rust-js. One that differs is reduced, and kept.
+  fuzz:
+    needs: build
+    if: inputs.fuzz_seeds != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rustc-tests-setup
+        with:
+          build: 'false'
+      - uses: actions/download-artifact@v8
+        with:
+          name: rust-js
+          path: bin
+      - run: chmod +x bin/rust-js
+      - name: Run part ${{ matrix.part }} of 6
+        env:
+          START: ${{ inputs.fuzz_start }}
+          SEEDS: ${{ inputs.fuzz_seeds }}
+          PART: ${{ matrix.part }}
+          RUST_JS_COMPILER: bin/rust-js
+          FUZZ_REPORT: '1'
+        run: |
+          per=$(( (SEEDS + 5) / 6 ))
+          first=$(( START + (PART - 1) * per ))
+          count=$(( SEEDS - (PART - 1) * per ))
+          if [ "$count" -gt "$per" ]; then count=$per; fi
+          if [ "$count" -le 0 ]; then echo "no seeds for this part"; exit 0; fi
+          set +e
+          FUZZ_START=$first FUZZ_SEEDS=$count bun test test/fuzz.test.ts > fuzz.log 2>&1
+          status=$?
+          cat fuzz.log
+          {
+            echo "### Seeds $first to $(( first + count - 1 ))"
+            echo
+            grep -E '^seed [0-9]+:' fuzz.log | awk '{ print $3 }' | sort | uniq -c | awk '{ print "- " $2 ": " $1 }'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-${{ matrix.part }}
+          path: target/fuzz/
+          if-no-files-found: ignore
+          retention-days: 7

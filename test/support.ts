@@ -1,10 +1,13 @@
 import { expect } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export const root = join(import.meta.dir, "..");
 export const target = join(root, "target");
-export const compiler = join(target, "debug", "rust-js");
+// This checkout's debug build, or with `RUST_JS_COMPILER`, another, as the
+// rustc tests workflow's build job makes one for its machines to share.
+const given = process.env.RUST_JS_COMPILER;
+export const compiler = given ? resolve(given) : join(target, "debug", "rust-js");
 
 export function run(cmd: string[]): string {
   const p = Bun.spawnSync(cmd, { cwd: root, stderr: "pipe" });
@@ -14,7 +17,7 @@ export function run(cmd: string[]): string {
 
 let built = false;
 export function buildCompiler() {
-  if (!built) {
+  if (!built && !given) {
     run(["cargo", "build", "--quiet"]);
     built = true;
   }
