@@ -30,6 +30,11 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   The result owns its collections and borrows captured THIR; it is not a second
   Rust IR or a frontend-independent artifact. The pipeline retains diagnostic
   accumulation and the existing demand-driven codec/reachability ordering.
+  Dependency traversal lives in `src/reachability.rs` with opaque identity inputs
+  and no rustc or emission dependencies. The pipeline chooses roots using the
+  existing derived-implementation policy; the traversal handles cycles and
+  transitive dependencies iteratively. This is not general dead-code elimination
+  or cross-crate linkage.
 - Operand lowering produces prerequisite statements and a value. Sequencing
   uses those actual statements to capture earlier operands before executing
   later prerequisites. `is_simple` is no longer the operand-order oracle:

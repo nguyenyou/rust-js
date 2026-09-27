@@ -187,24 +187,14 @@ pub fn lower_crate<'tcx>(
         .filter(|&&id| tcx.is_automatically_derived(id))
         .flat_map(|&id| std::iter::once(id).chain(tcx.associated_item_def_ids(id).iter().copied()))
         .collect();
-    let mut edges: HashMap<DefId, Vec<DefId>> = HashMap::new();
-    let mut todo = Vec::new();
-    for (_, lowered) in &lowered_items {
-        for &(from, to) in &lowered.dependencies.uses {
-            edges.entry(from).or_default().push(to);
-            if !derived.contains(&from) {
-                todo.push(to);
-            }
-        }
-    }
-    let mut reached = HashSet::new();
-    while let Some(id) = todo.pop() {
-        if reached.insert(id)
-            && let Some(targets) = edges.get(&id)
-        {
-            todo.extend(targets);
-        }
-    }
+    let edges = lowered_items
+        .iter()
+        .flat_map(|(_, item)| item.dependencies.uses.iter().copied());
+    let roots = edges
+        .clone()
+        .filter(|(from, _)| !derived.contains(from))
+        .map(|(_, to)| to);
+    let reached = crate::reachability::reachable(roots, edges);
     let mut pass = Pass::default();
     for (def_id, mut lowered) in lowered_items
         .into_iter()

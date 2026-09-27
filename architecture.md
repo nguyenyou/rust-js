@@ -32,7 +32,9 @@ function emission, reachability and symbolic module assembly. It returns an owne
 `Unlinked` value. The driver passes that value to the linker, which resolves
 imports and runtime-helper dependencies before producing `Lowered`, the input
 to output planning. The analysis result borrows captured THIR; the unlinked
-output contains no frontend references.
+output contains no frontend references. Dependency traversal lives in
+`src/reachability.rs` and treats item IDs as opaque values; the pipeline supplies
+roots and retains responsibility for Rust-specific derived-item policy.
 
 Standard-library and Serde Value call recognition use only immutable type and
 trait inputs in `src/lower/recognition.rs`, separate from function emission state.

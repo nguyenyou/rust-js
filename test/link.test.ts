@@ -44,3 +44,19 @@ test("a sparse cyclic graph emits only each module's actual imports", async () =
     expect(code).not.toContain("\0");
   }
 });
+
+test("derived Debug dependencies are retained transitively without unused implementations", async () => {
+  const dir = fixture("derived-reachability");
+  writeFileSync(join(dir, "lib.rs"), `
+    #[derive(Debug)] pub struct Leaf(u32);
+    #[derive(Debug)] pub struct Branch(Leaf);
+    #[derive(Debug)] pub struct Unused(u32);
+    pub fn report() -> String { format!("{:?}", Branch(Leaf(7))) }
+  `);
+  writeFileSync(join(dir, "native.rs"), 'mod lib; fn main() { println!("{}", lib::report()); }');
+  run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native")]);
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
+  const generated = await import(join(dir, "lib.js"));
+  expect(generated.report()).toBe(run([join(dir, "native")]).trim());
+  expect(readFileSync(join(dir, "lib.js"), "utf8")).not.toContain("Unused");
+});

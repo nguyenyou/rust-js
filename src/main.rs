@@ -39,6 +39,7 @@ mod output;
 mod prepare;
 mod program;
 mod publish;
+mod reachability;
 mod runtime;
 mod to_oxc;
 

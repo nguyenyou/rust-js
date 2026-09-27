@@ -45,6 +45,7 @@ This folder is where we write those choices down.
 | `src/jsx_syntax.rs`, `src/jsx_syntax/` | Load configured modules and expand JSX tokens into typed Rust before resolution; shared by native and WASM |
 | `src/lower/analysis.rs` | Collect named items, imports, trait and mutation facts |
 | `src/lower/pipeline.rs` | Orchestrate emission, reachability and owned symbolic module assembly |
+| `src/reachability.rs` | Traverse dependencies from caller-selected roots without frontend knowledge |
 | `src/link.rs`, `src/names.rs` | Resolve module imports, collision-free aliases and runtime dependencies after lowering |
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
 | `src/lower/serde.rs`, `src/lower/serde/`, `serde/` | `#[serde(..)]` attributes, and JSON written and read as serde_json does; the serde crates, built with the pinned toolchain |
