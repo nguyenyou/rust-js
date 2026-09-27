@@ -29,10 +29,11 @@ neither imports tooling through a path outside its own package.
 
 Both host packages remain private while distribution is being developed. Local
 tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
-The package test unpacks these tarballs into an independent application's
-`node_modules` and compiles through the plugin. No registry release is implied.
-When using unpacked packages, provide `rustJs` explicitly and provide `resources`
-when preparing built-in bindings. Defaults locate the development checkout;
+The package test installs these tarballs with Bun into an independent application
+and compiles through the plugin. No registry release is implied.
+Provide `rustJs` explicitly. Resource discovery first uses the supplied `resources`
+path, then `rust-js-resources` resolved from the application's dependencies,
+then the development checkout. The compiler default still locates that checkout;
 compiler binaries and binding resources are not included in these host packages.
 
 Create a separate resource tarball from the repository root:
@@ -44,15 +45,40 @@ bun run pack:resources /absolute/artifacts/rust-js-resources.tgz
 This stages `rust-js-resources` with the compiler's version, root toolchain pin,
 React/web binding sources and build scripts, and the locked Serde manifest and
 source. The resource package and metadata cache use the same input inventory.
-Unpack it and set `resources` to the directory containing its `package.json` and
-`rust-toolchain.toml`. Build outputs go to the configured cache, outside the
+Install it as `rust-js-resources`, or unpack it and set `resources` to the
+directory containing its `package.json` and `rust-toolchain.toml`.
+Build outputs go to the configured cache, outside the
 resource directory. The resource tarball contains source inputs, not prebuilt
 metadata, compiler binaries, or a Rust sysroot. Building still requires Bun,
 Bash, and the pinned Rust toolchain; Cargo also needs its locked dependencies
 available locally or through its configured registry.
 
-The isolated package test exercises both React/JSX and Serde using these unpacked
-resources. Native compiler installation, release checksums, platform qualification,
+For a local installation, add the three tarballs to the application's
+`package.json` using paths relative to that file, then run `bun install`:
+
+```json
+{
+  "devDependencies": {
+    "vite": "8.3.0",
+    "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js-0.1.0.tgz",
+    "rust-js-build": "./artifacts/rust-js-build-0.1.0.tgz",
+    "rust-js-resources": "./artifacts/rust-js-resources.tgz"
+  },
+  "overrides": {
+    "rust-js-build": "./artifacts/rust-js-build-0.1.0.tgz"
+  }
+}
+```
+
+The override routes the plugin's versioned dependency to the local tarball while
+the package is unpublished. Set `rustJs` to the compiler binary and select
+`bindings: ["react", "serde"]`; no resource path is needed for this installation.
+
+The isolated package test installs offline with lifecycle scripts disabled,
+repeats installation with a frozen lockfile, and exercises React/JSX and Serde
+using automatic resource discovery. It omits Vite's peer for its direct hook
+test; the separate Vite suite exercises the real bundler and Fast Refresh.
+Native compiler installation, release checksums, platform qualification,
 and published package installation remain separate distribution work.
 
 For packaged resources, the adapter queries `rust-js --version-json` before

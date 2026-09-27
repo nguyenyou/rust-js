@@ -157,9 +157,10 @@ pilot. No delivery dates are assigned yet.
   binding assets with explicit versions and configuration. The
   [private plugin](vite-plugin/package.json) now declares its versioned
   [build-host dependency](tooling/package.json); the
-  [package test](test/packages.test.ts) verifies unpacked tarballs compile an
-  independent app with an explicitly supplied compiler. Default compiler and
-  binding-resource discovery still assumes the development checkout. A fresh
+  [package test](test/packages.test.ts) verifies offline Bun installation and
+  frozen-lockfile reuse of local tarballs, then compiles an independent app with
+  an explicitly supplied compiler. Resources are discovered from the app's
+  dependencies. Default compiler discovery still assumes the checkout. A fresh
   app must eventually build using only documented installed dependencies.
 - [ ] **M4.3 — Provide a reproducible starter and upgrade path.** Document
   create/build/test/deploy commands, expose compiler/toolchain versions in

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, realpathSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCompiler, compiler, root as repository } from "./support";
 
-test("packed hosts and binding resources compile outside the repository layout", () => {
+test("Bun-installed hosts discover matching resources outside the repository layout", () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js packages ")));
   const run = (args: string[], cwd = root) => {
@@ -16,21 +16,28 @@ test("packed hosts and binding resources compile outside the repository layout",
     for (const [directory, name] of [["tooling", "rust-js-build"], ["vite-plugin", "vite-plugin-rust-js"]]) {
       const archive = join(root, `${name}.tgz`);
       run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", archive], join(repository, directory));
-      const destination = join(root, "node_modules", name);
-      mkdirSync(destination, { recursive: true });
-      run(["tar", "-xzf", archive, "--strip-components=1", "-C", destination]);
     }
-    const plugin = JSON.parse(readFileSync(join(root, "node_modules/vite-plugin-rust-js/package.json"), "utf8"));
-    expect(plugin.dependencies["rust-js-build"]).toBe("0.1.0");
     const resources = join(root, "node_modules/rust-js-resources");
     const resourceArchive = join(root, "resources.tgz");
     run([process.execPath, join(repository, "scripts/package-resources.ts"), resourceArchive]);
-    mkdirSync(resources, { recursive: true });
-    run(["tar", "-xzf", resourceArchive, "--strip-components=1", "-C", resources]);
+    writeFileSync(join(root, "package.json"), JSON.stringify({
+      private: true, type: "module", dependencies: {
+        "rust-js-build": "./rust-js-build.tgz",
+        "vite-plugin-rust-js": "./vite-plugin-rust-js.tgz",
+        "rust-js-resources": "./resources.tgz",
+      },
+      overrides: { "rust-js-build": "./rust-js-build.tgz" },
+    }));
+    // No registry access or lifecycle scripts. Real Vite is exercised by
+    // vite.test.ts; this test invokes its plugin hooks without the peer.
+    const install = [process.execPath, "install", "--offline", "--ignore-scripts", "--omit", "peer", "--backend", "copyfile"];
+    run(install);
+    run([...install, "--frozen-lockfile"]);
+    const plugin = JSON.parse(readFileSync(join(root, "node_modules/vite-plugin-rust-js/package.json"), "utf8"));
+    expect(plugin.dependencies["rust-js-build"]).toBe("0.1.0");
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
     expect(resourcePackage.version).toBe(Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")).package.version);
     expect(readFileSync(join(resources, "rust-toolchain.toml"), "utf8")).toBe(readFileSync(join(repository, "rust-toolchain.toml"), "utf8"));
-    writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
     writeFileSync(join(root, "lib.rs"), `
 #[derive(serde::Deserialize)]
 pub struct Message { pub count: u32 }
@@ -49,7 +56,7 @@ import rustJs from "vite-plugin-rust-js";
 import { parseManifest } from "rust-js-build/manifest";
 import { publishArtifacts } from "rust-js-build/publish";
 import { readFileSync, readdirSync } from "node:fs";
-const plugin = rustJs({ crates: ["lib.rs", "App.rs"], rustJs: ${JSON.stringify(compiler)}, resources: ${JSON.stringify(resources)}, bindings: ["react", "serde"], cacheDir: ${JSON.stringify(join(root, "cache"))} });
+const plugin = rustJs({ crates: ["lib.rs", "App.rs"], rustJs: ${JSON.stringify(compiler)}, bindings: ["react", "serde"], cacheDir: ${JSON.stringify(join(root, "cache"))} });
 plugin.configResolved({ root: ${JSON.stringify(root)} });
 const watched = [];
 await plugin.buildStart.call({ addWatchFile: file => watched.push(file), warn: message => { throw new Error(message); }, error: message => { throw new Error(message); } });

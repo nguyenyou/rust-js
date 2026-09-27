@@ -56,6 +56,10 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   invalidation share the inventory in `tooling/resources.js`. Isolated package
   tests compile JSX and Serde using the unpacked resources. Native compiler
   binaries, installation, and release qualification remain distribution work.
+  Hosts prefer explicit resource paths, then resolve the resource package from
+  the application's dependencies, with checkout fallback for development. The
+  package test installs local tarballs offline through Bun, repeats with a frozen
+  lockfile, and compiles through plugin hooks without a resource-path override.
   Hosts can select compiler/resources/cache locations,
   built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,

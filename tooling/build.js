@@ -12,6 +12,15 @@ import { parseCompilerIdentity } from "./manifest.js";
 export const defaultResources = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const defaultCompiler = join(defaultResources, "target/debug/rust-js");
 
+function installedResources(root) {
+  const require = createRequire(join(root, "package.json"));
+  try { return dirname(require.resolve("rust-js-resources/package.json")); }
+  catch (error) {
+    if (error.code !== "MODULE_NOT_FOUND") throw error;
+    return defaultResources;
+  }
+}
+
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
@@ -24,7 +33,7 @@ function run(command, args, cwd) {
   });
 }
 
-export function createNativeBuilder({ root, rustJs = defaultCompiler, resources = defaultResources, cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
+export function createNativeBuilder({ root, rustJs = defaultCompiler, resources = installedResources(root), cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
   const repo = resources;
   const metadataInputs = resourceInputs(bindings).map(p => join(repo, p));
   // The React the project has installed, whose API the react crate is built
