@@ -2369,9 +2369,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             UnOp::Neg => {
                 let num = self.num(ty, span)?;
-                // `-x` of a literal is just a negative literal.
+                // `-x` of a literal is just a negative literal, in range:
+                // `-129i8` is 127, as `-i8::MIN` is itself.
                 if let Some(n) = a.as_int().or_else(|| a.as_bigint()) {
-                    return Ok(num.literal(-n));
+                    return Ok(num.wrap(num.literal(-n)));
                 }
                 Ok(num.wrap(Expr::unary(UnaryOp::Neg, a)))
             }
@@ -2493,7 +2494,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             LitKind::Int(n, _) => {
                 let num = self.num(ty, span)?;
                 let n = n.get() as i128;
-                Ok(num.literal(if neg { -n } else { n }))
+                // One too big for its type, where `overflowing_literals` is
+                // allowed, wraps to it as rustc's does: `256u8` is 0.
+                Ok(num.wrap(num.literal(if neg { -n } else { n })))
             }
             LitKind::Byte(b) => Ok(Expr::int(b.into())),
             LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F64) => {

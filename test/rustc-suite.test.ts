@@ -29,7 +29,13 @@ test("a test is in scope unless a directive says it needs what a case can't have
 test("a failure's reason names no path of this machine's", () => {
   const stderr = `warning: x\nerror: rust-js does not support \`{closure@${homedir()}/w/target/rustc-suite/case-Ab12Cd/t.rs:3:9}\` yet\n`;
   expect(firstError(stderr)).toBe("error: rust-js does not support `{closure@<case>/t.rs:3:9}` yet");
-  expect(firstError(`error: internal compiler error: ${homedir()}/.rustup/x.rs:1:2: oops`)).toBe("error: internal compiler error: ~/.rustup/x.rs:1:2: oops");
+  expect(firstError(`error: internal compiler error: ${homedir()}/.rustup/toolchains/nightly-2026-03-25-x86_64-unknown-linux-gnu/lib/x.rs:1:2: oops`)).toBe(
+    "error: internal compiler error: ~/.rustup/toolchains/<toolchain>/lib/x.rs:1:2: oops",
+  );
+  // A thread's number is this run's.
+  expect(firstError("thread 'rustc' (17338662) panicked at /rustc-dev/abc/compiler/x.rs:3:9:")).toBe(
+    "thread 'rustc' panicked at /rustc-dev/abc/compiler/x.rs:3:9:",
+  );
 });
 
 test("the ratchet reports a new failure and a listed test that passes", () => {

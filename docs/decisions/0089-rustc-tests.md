@@ -75,7 +75,8 @@ and stderr, and return, under Bun and Node.
 ## Consequences
 
 - **The rustc tests workflow runs them on GitHub,** when it's started: all of
-  them, on six machines at once, checked as one run, or blessed into a new
+  them, on six machines at once, with a release build of rust-js made once
+  for all six, in about five minutes, checked as one run, or blessed into a new
   list to download; or only the tests and directories named, each said to
   be as the list says or not. Locally, on macOS, each new binary is checked
   before its first run, which makes a full run an hour or more unless the

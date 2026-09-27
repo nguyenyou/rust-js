@@ -7,6 +7,7 @@
 //   bun scripts/rustc-suite.ts derives/ path/to/test.rs    # run some, and say how each did
 //   bun scripts/rustc-suite.ts --shard=2/4 --out=r2.json   # every fourth test, from the second
 //   bun scripts/rustc-suite.ts --merge r1.json r2.json ..  # the shards, checked as one run
+//   bun scripts/rustc-suite.ts --compiler=target/release/rust-js ..
 //
 // A test rust-js gets wrong is listed, with its first error, in
 // test/rustc-known-failures.txt. One that isn't listed must pass, and one
@@ -15,12 +16,14 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
-const compiler = join(root, "target", "debug", "rust-js");
+// The rust-js that compiles each test; `--compiler=path` says another, like
+// a release build.
+let compiler = join(root, "target", "debug", "rust-js");
 const knownFile = join(root, "test", "rustc-known-failures.txt");
 const work = join(root, "target", "rustc-suite");
 
@@ -74,12 +77,15 @@ async function spawn(cmd: string[], cwd: string, timeout: number) {
   return { stdout, stderr, code: p.exitCode, killed: p.signalCode !== null };
 }
 
-/** A diagnostic's first line, as short as it can say it, with no path
- * that's this machine's: the list is the same wherever it's written. */
+/** A diagnostic's first line, as short as it can say it, with nothing of
+ * this machine's or this run's: its paths, its toolchain's host, a
+ * thread's number. The list is the same wherever it's written. */
 export const firstError = (stderr: string) =>
   (stderr.split("\n").find((line) => line.startsWith("error")) ?? stderr.trim().split("\n")[0] ?? "no output")
     .replaceAll(/\/[^\s`:]*\/rustc-suite\/case-[^/\s`:]*/g, "<case>")
     .replaceAll(homedir(), "~")
+    .replaceAll(/\.rustup\/toolchains\/[^/\s]+/g, ".rustup/toolchains/<toolchain>")
+    .replaceAll(/thread '([^']*)' \(\d+\)/g, "thread '$1'")
     .slice(0, 200);
 
 async function runTest(ui: string, file: string): Promise<Result> {
@@ -252,6 +258,7 @@ async function main() {
     return;
   }
   const selectors = args.filter((a) => !a.startsWith("--"));
+  compiler = resolve(option("compiler") ?? compiler);
   const ui = rustcTests();
   if (!existsSync(compiler)) throw new Error("build rust-js first: cargo build");
   let tests = selectors.length > 0 ? [...new Set(selectors.flatMap((s) => testsUnder(ui, s)))] : findTests(ui);

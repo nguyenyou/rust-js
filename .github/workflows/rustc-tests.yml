@@ -39,9 +39,34 @@ jobs:
           set -f
           bun scripts/rustc-suite.ts $TESTS
 
+  # rust-js, built once for the shards: a release build, as it's run some
+  # 2,700 times, and the binary finds the toolchain where every runner has it.
+  build:
+    if: inputs.tests == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+          key: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: cargo build --release --locked
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rust-js
+          path: target/release/rust-js
+          retention-days: 1
+
   # All of them: every sixth test on each of six machines.
   shard:
-    if: inputs.tests == ''
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -51,8 +76,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/rustc-tests-setup
+        with:
+          build: 'false'
+      - uses: actions/download-artifact@v8
+        with:
+          name: rust-js
+          path: bin
+      # An artifact keeps a file's contents, not its permissions.
+      - run: chmod +x bin/rust-js
       - name: Run shard ${{ matrix.shard }} of 6
-        run: bun scripts/rustc-suite.ts --shard=${{ matrix.shard }}/6 --out=results-${{ matrix.shard }}.json
+        run: bun scripts/rustc-suite.ts --compiler=bin/rust-js --shard=${{ matrix.shard }}/6 --out=results-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v7
         with:
           name: results-${{ matrix.shard }}
