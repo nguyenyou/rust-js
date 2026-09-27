@@ -375,6 +375,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // An `Rc` is the JS reference itself: the garbage collector does
             // its counting, so a clone is the same object.
             Std::Same => arg(),
+            Std::ToBig => Expr::call(Expr::var("BigInt"), vec![arg()]),
+            Std::TryFromInt { into } => {
+                let target = if into {
+                    generic_args.type_at(1)
+                } else {
+                    generic_args.type_at(0)
+                };
+                let num = self.num(target, span)?;
+                let (lo, hi) = num.range();
+                self.runtime.insert(Helper::TryFromInt);
+                Expr::call(Expr::var("$tryFromInt"), vec![arg(), num.literal(lo), num.literal(hi)])
+            }
             // A `Cell` or `RefCell` is `{ value }`, so everyone sharing it sees a change.
             Std::CellNew => Expr::object(vec![Prop::Field("value".into(), arg())]),
             Std::CellGet => self.copy_if_needed(Expr::member(arg(), "value"), generic_args.type_at(0)),
@@ -463,9 +475,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var("$cmp"), vec![arg(), arg()])
             }
             Std::MaxOf(max) => {
-                let callee = if Num::of(self.thir[args[0]].ty.peel_refs()) == Some(Num::F64) {
+                let num = Num::of(self.thir[args[0]].ty.peel_refs());
+                let callee = if num == Some(Num::F64) {
                     self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
                     Expr::var(if max { "$f64Max" } else { "$f64Min" })
+                } else if num.is_some_and(Num::big) {
+                    // `Math.max` takes numbers only.
+                    self.runtime.insert(Helper::BigMinMax);
+                    Expr::var(if max { "$bigMax" } else { "$bigMin" })
                 } else {
                     Expr::member(Expr::var("Math"), if max { "max" } else { "min" })
                 };
@@ -523,7 +540,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::str("Ok"),
             ),
             Std::UnwrapOk => {
-                let list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
+                let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
                 // An `Ok(x)` just made, as a `to_value` that can't fail is: `x`.
                 if let js::ExprKind::Object(props) = &list[0].kind
                     && let [Prop::Field(tag, name), Prop::Field(field, value)] = props.as_slice()
@@ -532,6 +549,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     && list[1..].iter().all(|e| !e.has_effects())
                 {
                     return Ok(value.clone());
+                }
+                // A parse error is its message (ADR 0063), which `$debug` would
+                // show as a string: its own `Debug`, `ParseIntError { kind: .. }`.
+                if let Some(error) = generic_args.types().nth(1)
+                    && self.is_parse_error(error)
+                {
+                    let e = self.fresh("e");
+                    let shown = self.debug_string(Expr::var(&e), error, span)?;
+                    if list.len() == 1 {
+                        list.push(Expr::undefined());
+                    }
+                    list.push(Expr::arrow(
+                        vec![e.into()],
+                        vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
+                    ));
                 }
                 self.runtime.insert(Helper::UnwrapOk);
                 Expr::call(Expr::var("$unwrapOk"), list)
@@ -862,6 +894,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Trim => Expr::call(Expr::member(x, "trim"), vec![]),
             Std::Method(method) => Expr::call(Expr::member(x, method), vec![]),
             Std::Same => x,
+            Std::ToBig => Expr::call(Expr::var("BigInt"), vec![x]),
             Std::ToString => self.display_string(x, input, span)?,
             Std::Text(TextOp::Is(regex)) => Expr::call(Expr::member(Expr::regex(regex), "test"), vec![x]),
             Std::Number(NumOp::Math(function)) => Expr::call(Expr::member(Expr::var("Math"), function), vec![x]),

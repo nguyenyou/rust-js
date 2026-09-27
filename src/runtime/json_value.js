@@ -96,6 +96,15 @@ function $jsonValueF64(value) {
 function $jsonNumberF64(n) {
   return Number(n.value);
 }
+// `as_u64()` and `as_i64()`: the integer, a BigInt, if it's of that kind
+// and fits.
+function $jsonNumberInt(n, kind) {
+  const fits = kind === "u64" ? n.kind === "u" : $jsonNumberIsI64(n);
+  return fits ? BigInt(n.value) : undefined;
+}
+function $jsonValueInt(value, kind) {
+  return value.TAG === "Number" ? $jsonNumberInt(value._0, kind) : undefined;
+}
 function $jsonNumberIsI64(n) {
   return n.kind === "i" || (n.kind === "u" && n.value <= 9223372036854775807n);
 }

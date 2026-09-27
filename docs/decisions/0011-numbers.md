@@ -1,6 +1,6 @@
 # 0011. Integers are JS numbers, wrapped like release Rust
 
-Status: Accepted
+Status: Accepted. Extended by [0086](0086-64-bit-integers.md): `i64` and `u64` are BigInts, and an `f64` cast to an integer saturates.
 
 ## Context
 
@@ -90,3 +90,5 @@ A future `--overflow-checks` flag could emit checked helpers.
   maps is a separate decision.
 - `usize` and `isize` were added later as 32-bit integers, as on `wasm32`
   (ADR 0025).
+- `i64` and `u64` were added later as BigInts, and `f64` → int casts as
+  Rust's saturating ones (ADR 0086).

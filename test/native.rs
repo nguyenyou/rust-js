@@ -44,6 +44,10 @@ mod api;
 #[allow(dead_code)]
 mod dynamic;
 
+#[path = "../examples/wide.rs"]
+#[allow(dead_code)]
+mod wide;
+
 #[path = "../examples/versions.rs"]
 #[allow(dead_code)]
 mod versions;
@@ -269,6 +273,11 @@ fn main() {
     case("inbox.report", &[], inbox::report);
     case("api.report", &[], api::report);
     case("dynamic.report", &[], dynamic::report);
+    // 64-bit integers past 2^53, to the digit, and their JSON.
+    case("wide.report", &[], wide::report);
+    for i in [0, 1, 2, 3] {
+        case("wide.panics", &[i as i64], || wide::panics(i));
+    }
     for i in [0, 1, 2] {
         case("versions.panics", &[i as i64], || versions::panics(i));
     }

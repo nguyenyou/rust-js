@@ -34,6 +34,7 @@ let wire: Record<string, (...args: any[]) => unknown>;
 let inbox: Record<string, (...args: any[]) => unknown>;
 let api: Record<string, (...args: any[]) => unknown>;
 let dynamic: Record<string, (...args: any[]) => unknown>;
+let wide: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -99,6 +100,8 @@ beforeAll(async () => {
   api = await import(join(target, "api.js"));
   run([join(target, "debug", "rust-js"), "examples/dynamic.rs", "-o", join(target, "dynamic.js"), "--", ...buildSerde()]);
   dynamic = await import(join(target, "dynamic.js"));
+  run([join(target, "debug", "rust-js"), "examples/wide.rs", "-o", join(target, "wide.js"), "--", ...buildSerde()]);
+  wide = await import(join(target, "wide.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -226,6 +229,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "dynamic") {
         return dynamic[path[1]](...c.args);
+      }
+      if (path[0] === "wide") {
+        return wide[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);
@@ -1027,6 +1033,25 @@ test("numbers are Math's, operators call their impl, and vec![x; n] fills", asyn
   // Numbers as JS writes them, and constants shown as their text.
   expect(js).toContain("$displayF64(2.220446049250313e-16)");
   expect(js).not.toContain("((tuple) =>");
+});
+
+// ADR 0086: an `i64` or a `u64` is a BigInt, wrapped once per expression,
+// and a JS caller passes and gets BigInts.
+test("64-bit integers are BigInts, wrapped as release Rust wraps them", async () => {
+  const js = await Bun.file(join(target, "wide.js")).text();
+  expect(js).toContain("BigInt.asUintN(64, (millis - 1288834974657n) << 22n) |");
+  expect(js).toContain("hash = BigInt.asUintN(64, hash * 1099511628211n);");
+  // What a mask keeps in range is a number without another wrap.
+  expect(js).toContain("return Number(id[0] & 4095n);");
+  expect(js).toContain("const worker$1 = BigInt(worker & 1023);");
+  // A division by what may be zero, or `-1` of `i64::MIN`, panics as Rust's.
+  expect(js).toContain("$bigDiv(7n, zero, -9223372036854775808n)");
+  const id = (wide.Id as any).new(1700000000123n, 5, 42);
+  expect(id).toEqual([1724551110972166186n]);
+  expect((wide.Id as any).millis(id)).toBe(1700000000123n);
+  expect((wide.Id as any).worker(id)).toBe(5);
+  expect(wide.fnv1a("a")).toBe(0xaf63dc4c8601ec8cn);
+  expect(wide.dollars(-9223372036854775808n)).toBe("-$92233720368547758.08");
 });
 
 // ADR 0067: `let ... else`, range patterns and `@`, and a `&mut` to a

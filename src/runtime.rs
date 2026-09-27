@@ -32,6 +32,7 @@ pub enum Helper {
     Lines,
     SplitBy,
     Pow,
+    CheckedPow,
     Powi,
     Round,
     Checked,
@@ -47,6 +48,24 @@ pub enum Helper {
     NextSome,
     Scan,
     JsonFail,
+    BigDiv,
+    BigRem,
+    F64ToInt,
+    F64ToBig,
+    BigAbs,
+    BigPow,
+    BigChecked,
+    BigCheckedDiv,
+    BigClamp,
+    BigRemEuclid,
+    BigDivEuclid,
+    BigSignum,
+    BigBits,
+    BigAbsDiff,
+    BigMinMax,
+    ParseBig,
+    BigRange,
+    TryFromInt,
     ToJson,
     FromJson,
     JsonValue,
@@ -197,6 +216,169 @@ function $traitImpl(cache, keys, make) {
 }
 "#
             }
+            // An `i64`'s or `u64`'s `/` and `%` (ADR 0086): a BigInt's truncates
+            // as Rust's does, and panics as Rust's does.
+            // `x as u8` of an `f64`: saturating, as Rust's `as` is. `NaN` is 0,
+            // and `-0` is 0.
+            Helper::F64ToInt => {
+                r#"
+function $f64ToInt(x, min, max) {
+  if (Number.isNaN(x)) return 0;
+  return Math.max(min, Math.min(max, Math.trunc(x))) + 0;
+}
+"#
+            }
+            // The same into an `i64` or `u64`: its range's ends aren't all
+            // exact as floats, so it's clamped before it's a BigInt.
+            Helper::F64ToBig => {
+                r#"
+function $f64ToBig(x, min, max) {
+  if (Number.isNaN(x)) return 0n;
+  if (x <= Number(min)) return min;
+  if (x >= Number(max)) return max;
+  return BigInt(Math.trunc(x));
+}
+"#
+            }
+            Helper::BigAbs => {
+                r#"
+function $bigAbs(x) {
+  return x < 0n ? -x : x;
+}
+"#
+            }
+            // `pow` of an `i64` or `u64`, modulo 2^64 at each step, as it wraps.
+            Helper::BigPow => {
+                r#"
+function $bigPow(base, exp) {
+  let result = 1n;
+  base = BigInt.asUintN(64, base);
+  for (let e = exp; e > 0; e >>>= 1) {
+    if (e & 1) result = BigInt.asUintN(64, result * base);
+    base = BigInt.asUintN(64, base * base);
+  }
+  return result;
+}
+"#
+            }
+            Helper::BigChecked => {
+                r#"
+function $bigChecked(value, lo, hi) {
+  return value >= lo && value <= hi ? value : undefined;
+}
+"#
+            }
+            Helper::BigCheckedDiv => {
+                r#"
+function $bigCheckedDiv(a, b, min) {
+  return b === 0n || (a === min && b === -1n) ? undefined : a / b;
+}
+"#
+            }
+            Helper::BigClamp => {
+                r#"
+function $bigClamp(value, lo, hi) {
+  return value < lo ? lo : value > hi ? hi : value;
+}
+"#
+            }
+            Helper::BigRemEuclid => {
+                r#"
+function $bigRemEuclid(a, b, min) {
+  const r = $bigRem(a, b, min);
+  return r < 0n ? (b < 0n ? r - b : r + b) : r;
+}
+"#
+            }
+            Helper::BigDivEuclid => {
+                r#"
+function $bigDivEuclid(a, b, min) {
+  const q = $bigDiv(a, b, min);
+  if (a % b < 0n) return b > 0n ? q - 1n : q + 1n;
+  return q;
+}
+"#
+            }
+            Helper::BigSignum => {
+                r#"
+function $bigSignum(x) {
+  return x > 0n ? 1n : x < 0n ? -1n : 0n;
+}
+"#
+            }
+            // What's counted of an `i64`'s or `u64`'s 64 bits: a `u32`, a number.
+            Helper::BigBits => {
+                r#"
+function $bigCountOnes(x) {
+  return BigInt.asUintN(64, x).toString(2).replaceAll("0", "").length;
+}
+function $bigLeadingZeros(x) {
+  const bits = BigInt.asUintN(64, x);
+  return bits === 0n ? 64 : 64 - bits.toString(2).length;
+}
+function $bigTrailingZeros(x) {
+  const bits = BigInt.asUintN(64, x).toString(2);
+  return x === 0n ? 64 : bits.length - 1 - bits.lastIndexOf("1");
+}
+"#
+            }
+            Helper::BigAbsDiff => {
+                r#"
+function $bigAbsDiff(a, b) {
+  return a > b ? a - b : b - a;
+}
+"#
+            }
+            Helper::BigMinMax => {
+                r#"
+function $bigMax(a, b) {
+  return b >= a ? b : a;
+}
+function $bigMin(a, b) {
+  return b < a ? b : a;
+}
+"#
+            }
+            // `s.parse::<u64>()`: what Rust reads, exactly, as a BigInt.
+            Helper::ParseBig => {
+                r#"
+function $parseBig(s, min, max) {
+  const error = (message) => ({ TAG: "Err", _0: message });
+  if (s === "") return error("cannot parse integer from empty string");
+  if (!(min < 0n ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s)) return error("invalid digit found in string");
+  const n = BigInt(s);
+  if (n > max) return error("number too large to fit in target type");
+  if (n < min) return error("number too small to fit in target type");
+  return { TAG: "Ok", _0: n };
+}
+"#
+            }
+            Helper::BigDiv => {
+                r#"
+function $bigDiv(a, b, min) {
+  if (b === 0n) {
+    throw new Error("attempt to divide by zero");
+  }
+  if (a === min && b === -1n) {
+    throw new Error("attempt to divide with overflow");
+  }
+  return a / b;
+}
+"#
+            }
+            Helper::BigRem => {
+                r#"
+function $bigRem(a, b, min) {
+  if (b === 0n) {
+    throw new Error("attempt to calculate the remainder with a divisor of zero");
+  }
+  if (a === min && b === -1n) {
+    throw new Error("attempt to calculate the remainder with overflow");
+  }
+  return a % b;
+}
+"#
+            }
             Helper::Div => {
                 r#"
 function $div(a, b, min) {
@@ -276,6 +458,27 @@ function $eq(a, b) {
                 r#"
 function $range(start, end) {
   return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
+}
+"#
+            }
+            // `u8::try_from(x)` between integers: `Ok` of it as the target's
+            // representation, a number or a BigInt, or a `TryFromIntError`,
+            // which is its message, as a parse error is (ADR 0063).
+            Helper::TryFromInt => {
+                r#"
+function $tryFromInt(x, lo, hi) {
+  if (x < lo || x > hi) return { TAG: "Err", _0: "out of range integral type conversion attempted" };
+  return { TAG: "Ok", _0: typeof hi === "bigint" ? BigInt(x) : Number(x) };
+}
+"#
+            }
+            // `a..b` of `i64`s or `u64`s, collected (ADR 0086).
+            Helper::BigRange => {
+                r#"
+function $bigRange(start, end) {
+  const items = [];
+  for (let i = start; i < end; i++) items.push(i);
+  return items;
 }
 "#
             }
@@ -474,9 +677,9 @@ function $settle(promise) {
             }
             Helper::UnwrapOk => {
                 r#"
-function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value") {
+function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value", debug = $debug) {
   if (result.TAG === "Err") {
-    throw new Error(message + ": " + $debug(result._0));
+    throw new Error(message + ": " + debug(result._0));
   }
   return result._0;
 }
@@ -774,6 +977,31 @@ function $pow(base, exp) {
 }
 "#
             }
+            // `x.checked_pow(e)`: Rust's own squarings, exact in BigInts, and
+            // `None` as soon as one is out of the type's range. It's a BigInt
+            // if the type's bounds are.
+            Helper::CheckedPow => {
+                r#"
+function $checkedPow(base, exp, lo, hi) {
+  const fits = (x) => x >= lo && x <= hi;
+  const result = (x) => (typeof hi === "bigint" ? x : Number(x));
+  if (exp === 0) return result(1n);
+  let b = BigInt(base);
+  let acc = 1n;
+  while (exp > 1) {
+    if (exp & 1) {
+      acc *= b;
+      if (!fits(acc)) return undefined;
+    }
+    exp >>>= 1;
+    b *= b;
+    if (!fits(b)) return undefined;
+  }
+  acc *= b;
+  return fits(acc) ? result(acc) : undefined;
+}
+"#
+            }
             // `x.powi(n)`: the multiplications Rust's own `__powidf2` does, in
             // its order, so the result rounds the same.
             Helper::Powi => {
@@ -895,6 +1123,7 @@ function $debugParseError(message, name) {
     "cannot parse char from empty string": "EmptyString",
     "too many characters in string": "TooManyChars",
   };
+  if (name === "TryFromIntError") return "TryFromIntError(())";
   return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
 }
 "#

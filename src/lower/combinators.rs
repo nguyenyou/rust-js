@@ -801,7 +801,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     vec!["a".into(), "b".into()],
                     vec![StmtKind::Return(Some(times)).at(js::Span::NONE)],
                 );
-                method(items, "reduce", vec![f, Expr::int(1)])
+                method(items, "reduce", vec![f, num.literal(1)])
             }
             IterComb::Nth => {
                 let n = next();

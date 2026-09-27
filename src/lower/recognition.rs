@@ -32,6 +32,13 @@ pub(super) enum Std {
     /// `s.to_owned()`, `String::from(s)`, `v.iter()`, and `Deref` of
     /// `String`, `Rc`, `Vec`, `Ref`, `RefMut` and JS objects.
     Same,
+    /// `u64::from(x)` of a number that isn't a BigInt: `BigInt(x)` (ADR 0086).
+    ToBig,
+    /// `u8::try_from(x)` (`into: false`) or `x.try_into()` between
+    /// integers: `Ok` of it in range, or a `TryFromIntError`.
+    TryFromInt {
+        into: bool,
+    },
     /// An iterator's `cloned()` and `copied()`: its items, each cloned if
     /// that could be told apart from sharing it (ADR 0052).
     Cloned,
@@ -450,11 +457,29 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             } else {
                 (None, None)
             };
-            if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty)
-                && ((self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty))
-                    || (Num::of(to_ty).is_some() && Num::of(from_ty.peel_refs()).is_some()))
+            if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty) {
+                if self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty) {
+                    return Some(Std::Same);
+                }
+                // Into a BigInt from a number (ADR 0086), else the same.
+                if let (Some(from), Some(to)) = (Num::of(from_ty.peel_refs()), Num::of(to_ty)) {
+                    return Some(if to.big() && !from.big() { Std::ToBig } else { Std::Same });
+                }
+            }
+            // Between integers, which may not fit.
+            let into = tcx.is_diagnostic_item(sym::TryInto, trait_);
+            let (from_ty, to_ty) = if into {
+                (Some(ty), args.types().nth(1))
+            } else if tcx.is_diagnostic_item(sym::TryFrom, trait_) {
+                (args.types().nth(1), Some(ty))
+            } else {
+                (None, None)
+            };
+            if let (Some(from), Some(to)) = (from_ty.and_then(|t| Num::of(t.peel_refs())), to_ty.and_then(Num::of))
+                && from != Num::F64
+                && to != Num::F64
             {
-                return Some(Std::Same);
+                return Some(Std::TryFromInt { into });
             }
             let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
@@ -831,6 +856,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
 pub(super) enum JsonMethod {
     NumberFromF64,
     NumberAsF64,
+    /// `as_u64()` and `as_i64()`: `"u64"` or `"i64"`, a BigInt (ADR 0086).
+    NumberAsInt(&'static str),
     NumberKind(&'static str),
     NumberIsI64,
     IsNull,
@@ -838,8 +865,12 @@ pub(super) enum JsonMethod {
     IsNumber(&'static str),
     AsTag(&'static str),
     AsF64,
+    AsInt(&'static str),
     Get,
-    Unsupported { owner: &'static str, name: Symbol },
+    Unsupported {
+        owner: &'static str,
+        name: Symbol,
+    },
 }
 
 impl JsonMethod {
@@ -848,6 +879,8 @@ impl JsonMethod {
             return match name.as_str() {
                 "from_f64" => Self::NumberFromF64,
                 "as_f64" => Self::NumberAsF64,
+                "as_u64" => Self::NumberAsInt("u64"),
+                "as_i64" => Self::NumberAsInt("i64"),
                 "is_f64" => Self::NumberKind("f"),
                 "is_u64" => Self::NumberKind("u"),
                 "is_i64" => Self::NumberIsI64,
@@ -870,6 +903,8 @@ impl JsonMethod {
             "as_object" | "as_object_mut" => Self::AsTag("Object"),
             "as_number" => Self::AsTag("Number"),
             "as_f64" => Self::AsF64,
+            "as_u64" => Self::AsInt("u64"),
+            "as_i64" => Self::AsInt("i64"),
             "get" | "get_mut" => Self::Get,
             _ => Self::Unsupported { owner: "Value", name },
         }
@@ -1034,7 +1069,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
 impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
-            && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError"]
+            && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError", "TryFromIntError"]
                 .contains(&self.tcx.item_name(adt.did()).as_str()))
     }
 

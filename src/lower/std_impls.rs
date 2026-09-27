@@ -365,7 +365,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         Ok(match ty.kind() {
-            _ if Num::of(ty).is_some() => Expr::int(0),
+            _ if let Some(num) = Num::of(ty) => num.literal(0),
             ty::Bool => Expr::bool(false),
             ty::Char => Expr::str("\0"),
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),

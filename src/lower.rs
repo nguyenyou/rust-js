@@ -2228,6 +2228,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             return Ok(Expr::bin(js_op, l, r));
         }
+        if num.big() {
+            return self.big_binary(op, l, r, known, num, span);
+        }
 
         // Integers: compute exactly in JS, then wrap back into range.
         Ok(match op {
@@ -2281,6 +2284,44 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
+    /// An `i64`'s or a `u64`'s operator (ADR 0086): exact on BigInts, then
+    /// wrapped. A quotient needs no wrap, but can panic as Rust's does.
+    fn big_binary(&mut self, op: BinOp, l: Expr, r: Expr, known: Option<i128>, num: Num, span: Span) -> R<Expr> {
+        Ok(match op {
+            BinOp::Add => num.wrap(Expr::bin(Op::Add, unwrapped(l), unwrapped(r))),
+            BinOp::Sub => num.wrap(Expr::bin(Op::Sub, unwrapped(l), unwrapped(r))),
+            BinOp::Mul => num.wrap(Expr::bin(Op::Mul, unwrapped(l), unwrapped(r))),
+            BinOp::Div | BinOp::Rem => {
+                let (js_op, helper, name) = match op {
+                    BinOp::Div => (Op::Div, Helper::BigDiv, "$bigDiv"),
+                    _ => (Op::Rem, Helper::BigRem, "$bigRem"),
+                };
+                let safe = known
+                    .or_else(|| r.as_bigint())
+                    .is_some_and(|d| d != 0 && !(num.signed() && d == -1));
+                if safe {
+                    Expr::bin(js_op, l, r)
+                } else {
+                    self.runtime.insert(helper);
+                    let mut args = vec![l, r];
+                    if num.signed() {
+                        args.push(Expr::bigint(num.range().0));
+                    }
+                    Expr::call(Expr::var(name), args)
+                }
+            }
+            // Of two in range, in range.
+            BinOp::BitAnd => Expr::bin(Op::BitAnd, l, r),
+            BinOp::BitOr => Expr::bin(Op::BitOr, l, r),
+            BinOp::BitXor => Expr::bin(Op::BitXor, l, r),
+            // The amount masked to 63, as release Rust masks it, and a BigInt,
+            // whatever its own type.
+            BinOp::Shl => num.wrap(Expr::bin(Op::Shl, unwrapped(l), big_shift(r))),
+            BinOp::Shr => Expr::bin(Op::Shr, l, big_shift(r)),
+            _ => return Err(self.unsupported(span, "this operator")),
+        })
+    }
+
     fn bitwise(&self, op: Op, l: Expr, r: Expr, num: Num) -> Expr {
         // JS bitwise ops return signed 32-bit results; only u32 needs fixing.
         let e = Expr::bin(op, l, r);
@@ -2301,8 +2342,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             UnOp::Neg => {
                 let num = self.num(ty, span)?;
                 // `-x` of a literal is just a negative literal.
-                if let Some(n) = a.as_int() {
-                    return Ok(Expr::int(-n));
+                if let Some(n) = a.as_int().or_else(|| a.as_bigint()) {
+                    return Ok(num.literal(-n));
                 }
                 Ok(num.wrap(Expr::unary(UnaryOp::Neg, a)))
             }
@@ -2313,12 +2354,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn cast(&mut self, v: Expr, from: Ty<'tcx>, to: Ty<'tcx>, span: Span) -> R<Expr> {
         let target = self.num(to, span)?;
         if from.is_bool() && target != Num::F64 {
-            return Ok(Expr::cond(v, Expr::num(1), Expr::num(0)));
+            return Ok(Expr::cond(v, target.literal(1), target.literal(0)));
         }
         // A `char` is its code point (ADR 0063), and a `u8` as a `char` its
         // character.
         if from.is_char() {
             let code = Expr::call(Expr::member(v, "codePointAt"), vec![Expr::int(0)]);
+            let code = if target.big() { to_bigint(code) } else { code };
             let (lo, hi) = target.range();
             return Ok(if target == Num::F64 || (lo <= 0 && hi >= 0x10ffff) {
                 code
@@ -2366,23 +2408,61 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::index(table, v)
             };
             if fits {
-                return Ok(value);
+                return Ok(if target.big() { to_bigint(value) } else { value });
             }
             let repr = rustc_middle::ty::util::IntTypeExt::to_ty(&adt.repr().discr_type(), self.tcx);
-            (value, Num::of(repr).unwrap_or(Num::I32))
+            let repr = Num::of(repr).unwrap_or(Num::I32);
+            // Its discriminant was a JS number, whatever its type.
+            (if repr.big() { to_bigint(value) } else { value }, repr)
         } else {
             (v, self.num(from, span)?)
         };
         match (source, target) {
             (Num::F64, Num::F64) => Ok(v),
-            // `as` from float to int saturates; we don't do that yet.
-            (Num::F64, _) => Err(self.unsupported(span, "casting `f64` to an integer")),
-            // Every integer we support fits exactly in an f64.
+            // `as` from float to int saturates (ADR 0086): `NaN` is 0, and the
+            // rest is truncated into range.
+            (Num::F64, _) => {
+                let (lo, hi) = target.range();
+                let (helper, name) = if target.big() {
+                    (Helper::F64ToBig, "$f64ToBig")
+                } else {
+                    (Helper::F64ToInt, "$f64ToInt")
+                };
+                self.runtime.insert(helper);
+                Ok(Expr::call(
+                    Expr::var(name),
+                    vec![v, target.literal(lo), target.literal(hi)],
+                ))
+            }
+            // An `i64` or `u64` is its nearest `f64`, as `as` rounds it.
+            (source, Num::F64) if source.big() => Ok(Expr::call(Expr::var("Number"), vec![v])),
+            // Every other integer fits exactly in an f64.
             (_, Num::F64) => Ok(v),
             _ => {
                 let (lo, hi) = source.range();
                 let (tlo, thi) = target.range();
-                Ok(if tlo <= lo && hi <= thi { v } else { target.wrap(v) })
+                let fits = tlo <= lo && hi <= thi;
+                Ok(match (source.big(), target.big()) {
+                    // Into a BigInt, then into range.
+                    (false, true) if fits => to_bigint(v),
+                    (false, true) => target.wrap(to_bigint(v)),
+                    // A constant, or what a mask keeps in range: `x & 1023n`.
+                    (true, false) if let Some(n) = v.as_bigint() => target.wrap(Expr::int(n)),
+                    (true, false) if masked(&v).is_some_and(|mask| (0..=thi).contains(&mask)) => {
+                        Expr::call(Expr::var("Number"), vec![v])
+                    }
+                    // Into range as a BigInt, then a number.
+                    (true, false) => {
+                        let method = if target.signed() { "asIntN" } else { "asUintN" };
+                        let wrapped = Expr::call(
+                            Expr::member(Expr::var("BigInt"), method),
+                            vec![Expr::int(target.bits().into()), v],
+                        );
+                        Expr::call(Expr::var("Number"), vec![wrapped])
+                    }
+                    _ if fits => v,
+                    _ => target.wrap(v),
+                })
             }
         }
     }
@@ -2396,9 +2476,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A `char` is a string of one character (ADR 0034).
             LitKind::Char(c) => Ok(Expr::str(c.to_string())),
             LitKind::Int(n, _) => {
-                self.num(ty, span)?;
+                let num = self.num(ty, span)?;
                 let n = n.get() as i128;
-                Ok(Expr::int(if neg { -n } else { n }))
+                Ok(num.literal(if neg { -n } else { n }))
             }
             LitKind::Byte(b) => Ok(Expr::int(b.into())),
             LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F64) => {
@@ -3290,6 +3370,46 @@ fn strip(thir: &Thir<'_>, mut e: ExprId) -> ExprId {
 
 fn mask_shift(r: Expr, num: Num) -> Expr {
     Expr::bin(Op::BitAnd, r, Expr::num(num.bits() - 1))
+}
+
+/// `BigInt(x)`, or of a literal, the BigInt literal.
+fn to_bigint(e: Expr) -> Expr {
+    match e.as_int() {
+        Some(n) => Expr::bigint(n),
+        None => Expr::call(Expr::var("BigInt"), vec![e]),
+    }
+}
+
+/// A 64-bit shift's amount: masked to 63, as a BigInt, `BigInt(n) & 63n`.
+fn big_shift(r: Expr) -> Expr {
+    match r.as_int().or_else(|| r.as_bigint()) {
+        Some(n) => Expr::bigint(n & 63),
+        None => Expr::bin(Op::BitAnd, to_bigint(r), Expr::bigint(63)),
+    }
+}
+
+/// `x + y` of `BigInt.asUintN(64, x + y)`: what's added, subtracted,
+/// multiplied or shifted left needn't be wrapped itself, as the result is,
+/// modulo the same 2^64, so `a + b + c` is wrapped once.
+fn unwrapped(e: Expr) -> Expr {
+    if let js::ExprKind::Call(callee, args) = &e.kind
+        && let js::ExprKind::Member(object, name) = &callee.kind
+        && matches!(&object.kind, js::ExprKind::Var(v) if v == "BigInt")
+        && (name == "asUintN" || name == "asIntN")
+        && let [bits, inner] = args.as_slice()
+        && bits.as_int() == Some(64)
+    {
+        return inner.clone();
+    }
+    e
+}
+
+/// The mask of `x & 1023n`, which keeps it from 0 to 1023.
+fn masked(e: &Expr) -> Option<i128> {
+    match &e.kind {
+        js::ExprKind::Binary(Op::BitAnd, a, b) => b.as_bigint().or_else(|| a.as_bigint()),
+        _ => None,
+    }
 }
 
 fn assign_op(op: AssignOp) -> BinOp {

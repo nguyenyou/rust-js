@@ -17,7 +17,9 @@ pub(super) enum NumOp {
     /// The same in JS: `Math.floor(x)`, `Math.atan2(y, x)`.
     Math(&'static str),
     Abs,
+    UnsignedAbs,
     Pow,
+    CheckedPow,
     Powi,
     Powf,
     Round,
@@ -49,6 +51,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
         let num = Num::of(ty).expect("a number's method");
+        if num.big() {
+            return self.big_number_call(op, args, ty, num, span, out);
+        }
         let (lo, hi) = num.range();
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
@@ -70,6 +75,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 math(name, list)
             }
             NumOp::Abs => num.wrap(math("abs", vec![arg()])),
+            // An `i32::MIN`'s is 2^31, which a `u32` holds.
+            NumOp::UnsignedAbs => math("abs", vec![arg()]),
+            NumOp::CheckedPow => helper(
+                self,
+                Helper::CheckedPow,
+                "$checkedPow",
+                vec![arg(), arg(), Expr::int(lo), Expr::int(hi)],
+            ),
             // Exact below 2^53, and `$pow` multiplies as `Math.imul` does, so
             // what's past it wraps as Rust's does.
             NumOp::Pow => {
@@ -164,6 +177,85 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 )
             }
             NumOp::AbsDiff => math("abs", vec![Expr::bin(Op::Sub, arg(), arg())]),
+        })
+    }
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// An `i64`'s or a `u64`'s methods (ADR 0086): a BigInt's, where JS's
+    /// `Math` takes only numbers. What they count, `count_ones()` and the
+    /// like, is a `u32`, a number.
+    fn big_number_call(
+        &mut self,
+        op: NumOp,
+        args: &[ExprId],
+        ty: Ty<'tcx>,
+        num: Num,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let (lo, hi) = num.range();
+        let (lo, hi) = (Expr::bigint(lo), Expr::bigint(hi));
+        let mut values = self.operands(args, out)?.into_iter();
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        let helper = |this: &mut Self, helper: Helper, name: &str, list: Vec<Expr>| {
+            this.runtime.insert(helper);
+            Expr::call(Expr::var(name), list)
+        };
+        Ok(match op {
+            NumOp::Abs => num.wrap(helper(self, Helper::BigAbs, "$bigAbs", vec![arg()])),
+            // An `i64::MIN`'s is 2^63, which a `u64` holds.
+            NumOp::UnsignedAbs => helper(self, Helper::BigAbs, "$bigAbs", vec![arg()]),
+            NumOp::Pow => num.wrap(helper(self, Helper::BigPow, "$bigPow", vec![arg(), arg()])),
+            NumOp::CheckedPow => helper(self, Helper::CheckedPow, "$checkedPow", vec![arg(), arg(), lo, hi]),
+            NumOp::Checked(BinOp::Div) => {
+                let min = if num.signed() { lo } else { Expr::undefined() };
+                helper(self, Helper::BigCheckedDiv, "$bigCheckedDiv", vec![arg(), arg(), min])
+            }
+            NumOp::Checked(op) => {
+                let exact = Expr::bin(js_op(op), arg(), arg());
+                helper(self, Helper::BigChecked, "$bigChecked", vec![exact, lo, hi])
+            }
+            NumOp::Saturating(op) => {
+                let exact = Expr::bin(js_op(op), arg(), arg());
+                helper(self, Helper::BigClamp, "$bigClamp", vec![exact, lo, hi])
+            }
+            NumOp::Wrapping(op) => {
+                let (a, b) = (arg(), arg());
+                self.binary(op, a, b, None, ty, span)?
+            }
+            NumOp::RemEuclid if !num.signed() => {
+                let (a, b) = (arg(), arg());
+                self.binary(BinOp::Rem, a, b, None, ty, span)?
+            }
+            NumOp::DivEuclid if !num.signed() => {
+                let (a, b) = (arg(), arg());
+                self.binary(BinOp::Div, a, b, None, ty, span)?
+            }
+            NumOp::RemEuclid => {
+                self.runtime.insert(Helper::BigRem);
+                helper(self, Helper::BigRemEuclid, "$bigRemEuclid", vec![arg(), arg(), lo])
+            }
+            NumOp::DivEuclid => {
+                self.runtime.insert(Helper::BigDiv);
+                helper(self, Helper::BigDivEuclid, "$bigDivEuclid", vec![arg(), arg(), lo])
+            }
+            NumOp::Signum => helper(self, Helper::BigSignum, "$bigSignum", vec![arg()]),
+            NumOp::LeadingZeros => helper(self, Helper::BigBits, "$bigLeadingZeros", vec![arg()]),
+            NumOp::TrailingZeros => helper(self, Helper::BigBits, "$bigTrailingZeros", vec![arg()]),
+            NumOp::CountOnes => helper(self, Helper::BigBits, "$bigCountOnes", vec![arg()]),
+            NumOp::IsPowerOfTwo => {
+                let x = arg();
+                let x = if x.reads_same() { x } else { self.spill("n", x, out) };
+                let lower = Expr::bin(Op::BitAnd, x.clone(), Expr::bin(Op::Sub, x.clone(), Expr::bigint(1)));
+                Expr::bin(
+                    Op::And,
+                    Expr::bin(Op::Ne, x, Expr::bigint(0)),
+                    Expr::bin(Op::Eq, lower, Expr::bigint(0)),
+                )
+            }
+            NumOp::AbsDiff => helper(self, Helper::BigAbsDiff, "$bigAbsDiff", vec![arg(), arg()]),
+            _ => return Err(self.unsupported(span, "this method of a 64-bit integer")),
         })
     }
 }

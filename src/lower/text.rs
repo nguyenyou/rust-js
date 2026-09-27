@@ -126,10 +126,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Ok(Expr::call(Expr::var("$parseF64"), vec![text]));
             }
             let (lo, hi) = num.range();
-            self.runtime.insert(Helper::ParseInt);
+            // A 64-bit one is read as a BigInt, exactly (ADR 0086).
+            let (helper, name) = if num.big() {
+                (Helper::ParseBig, "$parseBig")
+            } else {
+                (Helper::ParseInt, "$parseInt")
+            };
+            self.runtime.insert(helper);
             return Ok(Expr::call(
-                Expr::var("$parseInt"),
-                vec![text, Expr::int(lo), Expr::int(hi)],
+                Expr::var(name),
+                vec![text, num.literal(lo), num.literal(hi)],
             ));
         }
         if target.is_bool() {

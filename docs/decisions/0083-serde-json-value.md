@@ -89,4 +89,4 @@ JSON text is.
 - `v["k"] = x` (`IndexMut`), which makes a `Null` an object, is an error:
   change it through `as_object_mut()`.
 - `as_u64()` and `as_i64()` give 64-bit integers, which rust-js can't hold
-  yet; `as_f64()` works.
+  yet; `as_f64()` works. (They work now, as BigInts: ADR 0086.)

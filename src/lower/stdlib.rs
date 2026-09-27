@@ -448,18 +448,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (Some(start), Some(end)) = (bound(0), bound(1)) else {
                     unreachable!("a range has a start and an end")
                 };
-                self.runtime.insert(Helper::Range);
+                let big = Num::of(self.thir[start].ty).is_some_and(Num::big);
+                let (helper, name) = if big {
+                    (Helper::BigRange, "$bigRange")
+                } else {
+                    (Helper::Range, "$range")
+                };
+                self.runtime.insert(helper);
                 let bounds = self.operands(&[start, end], out)?;
-                Expr::call(Expr::var("$range"), bounds)
+                Expr::call(Expr::var(name), bounds)
             }
             _ if self.is_lang_adt(receiver_ty, LangItem::Range) => {
                 return Err(self.unsupported(span, "a range in a variable, as an iterator"));
             }
-            // `a..=b`: `$range(a, b + 1)`.
-            _ if let Some((start, end)) = self.inclusive_range(args[0]) => {
-                self.runtime.insert(Helper::Range);
-                let [start, end]: [Expr; 2] = self.operands(&[start, end], out)?.try_into().ok().unwrap();
-                Expr::call(Expr::var("$range"), vec![start, Expr::bin(Op::Add, end, Expr::int(1))])
+            // `a..=b`: `$range(a, b + 1)`, exact, and past the type's end.
+            _ if let Some((start_id, end_id)) = self.inclusive_range(args[0]) => {
+                let num = Num::of(self.thir[start_id].ty);
+                let big = num.is_some_and(Num::big);
+                let (helper, name) = if big {
+                    (Helper::BigRange, "$bigRange")
+                } else {
+                    (Helper::Range, "$range")
+                };
+                self.runtime.insert(helper);
+                let [start, end]: [Expr; 2] = self.operands(&[start_id, end_id], out)?.try_into().ok().unwrap();
+                let one = if big { Expr::bigint(1) } else { Expr::int(1) };
+                Expr::call(Expr::var(name), vec![start, Expr::bin(Op::Add, end, one)])
             }
             _ => {
                 let value = self.iter_value(args[0], out)?;
@@ -520,7 +534,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 );
                 // Rust's floating Sum starts at -0.0, preserving the sign of
                 // an empty sum and of a sequence containing only negative zero.
-                let zero = if num == Num::F64 { Expr::num(-0.0) } else { Expr::int(0) };
+                let zero = if num == Num::F64 {
+                    Expr::num(-0.0)
+                } else {
+                    num.literal(0)
+                };
                 method(items, "reduce", vec![f, zero])
             }
             // `Array.from(s).join("")` is `s`.
@@ -555,6 +573,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .contains(&name.as_str()),
                         js::ExprKind::Var(name) => [
                             "$range",
+                            "$bigRange",
                             "$zip",
                             "$takeWhile",
                             "$skipWhile",
@@ -626,7 +645,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     ty::Slice(t) | ty::Array(t, _) => *t,
                     _ => return Err(self.unsupported(span, "sorting this")),
                 };
-                if Num::of(elem).is_some() {
+                // A comparator's answer is a number, so a BigInt's is its `cmp`.
+                if Num::of(elem).is_some_and(|n| !n.big()) {
                     let js_span = self.js_span(span);
                     let f = Expr::arrow(
                         vec!["a".into(), "b".into()],

@@ -182,6 +182,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         Ok(match method {
             JsonMethod::NumberAsF64 => call("$jsonNumberF64", Vec::new()),
+            JsonMethod::NumberAsInt(kind) => call("$jsonNumberInt", vec![Expr::str(kind)]),
             JsonMethod::NumberKind(kind) => Expr::bin(Op::Eq, Expr::member(receiver.clone(), "kind"), Expr::str(kind)),
             JsonMethod::NumberIsI64 => call("$jsonNumberIsI64", Vec::new()),
             JsonMethod::IsNull => Expr::bin(Op::Eq, receiver.clone(), Expr::str("Null")),
@@ -189,6 +190,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             JsonMethod::IsNumber(kind) => call("$jsonValueIs", vec![Expr::str(kind)]),
             JsonMethod::AsTag(tag) => call("$jsonValueAs", vec![Expr::str(tag)]),
             JsonMethod::AsF64 => call("$jsonValueF64", Vec::new()),
+            JsonMethod::AsInt(kind) => call("$jsonValueInt", vec![Expr::str(kind)]),
             // `get(k)` of an object, or `get(i)` of an array: `None` if it
             // isn't there.
             JsonMethod::Get => {

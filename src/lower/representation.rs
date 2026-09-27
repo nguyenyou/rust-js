@@ -600,16 +600,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 }
 
-/// Number representations. Every one of them is a plain JS number; the
-/// difference is how results are wrapped back into range.
+/// Number representations. Up to 32 bits and `f64`, a plain JS number, and
+/// `i64` and `u64`, a BigInt (ADR 0086); the difference is how results are
+/// wrapped back into range.
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Num {
     I8,
     I16,
     I32,
+    I64,
     U8,
     U16,
     U32,
+    U64,
     F64,
 }
 
@@ -620,9 +623,11 @@ impl Num {
             ty::Int(ty::IntTy::I16) => Num::I16,
             // `isize` and `usize` are 32 bits, as on wasm32 (ADR 0025).
             ty::Int(ty::IntTy::I32 | ty::IntTy::Isize) => Num::I32,
+            ty::Int(ty::IntTy::I64) => Num::I64,
             ty::Uint(ty::UintTy::U8) => Num::U8,
             ty::Uint(ty::UintTy::U16) => Num::U16,
             ty::Uint(ty::UintTy::U32 | ty::UintTy::Usize) => Num::U32,
+            ty::Uint(ty::UintTy::U64) => Num::U64,
             ty::Float(ty::FloatTy::F64) => Num::F64,
             _ => return None,
         })
@@ -633,12 +638,22 @@ impl Num {
             Num::I8 | Num::U8 => 8,
             Num::I16 | Num::U16 => 16,
             Num::I32 | Num::U32 => 32,
-            Num::F64 => 64,
+            Num::I64 | Num::U64 | Num::F64 => 64,
         }
     }
 
     pub(super) fn signed(self) -> bool {
-        matches!(self, Num::I8 | Num::I16 | Num::I32)
+        matches!(self, Num::I8 | Num::I16 | Num::I32 | Num::I64)
+    }
+
+    /// An `i64` or a `u64`: a JS BigInt, which mixes only with another.
+    pub(super) fn big(self) -> bool {
+        matches!(self, Num::I64 | Num::U64)
+    }
+
+    /// `n` as a literal of this type: `5`, or `5n`.
+    pub(super) fn literal(self, n: i128) -> Expr {
+        if self.big() { Expr::bigint(n) } else { Expr::int(n) }
     }
 
     /// The inclusive value range, for integers.
@@ -661,13 +676,16 @@ impl Num {
         {
             let size = 1i128 << self.bits();
             let wrapped = n.rem_euclid(size);
-            return Expr::int(if self.signed() && wrapped >= size / 2 {
+            return self.literal(if self.signed() && wrapped >= size / 2 {
                 wrapped - size
             } else {
                 wrapped
             });
         }
+        let as_n = |name: &str| Expr::call(Expr::member(Expr::var("BigInt"), name), vec![Expr::int(64), e.clone()]);
         match self {
+            Num::I64 => as_n("asIntN"),
+            Num::U64 => as_n("asUintN"),
             Num::I32 => Expr::bin(Op::BitOr, e, Expr::num(0)),
             Num::U32 => Expr::bin(Op::UShr, e, Expr::num(0)),
             Num::I8 | Num::I16 => {
@@ -684,6 +702,7 @@ impl Num {
 fn const_int(e: &Expr) -> Option<i128> {
     Some(match &e.kind {
         js::ExprKind::Num(n) if n.fract() == 0.0 && n.abs() < 9_007_199_254_740_992.0 => *n as i128,
+        js::ExprKind::BigInt(n) => *n,
         js::ExprKind::Unary(js::UnaryOp::Neg, x) => -const_int(x)?,
         js::ExprKind::Binary(op, a, b) => {
             let (a, b) = (const_int(a)?, const_int(b)?);
@@ -843,5 +862,5 @@ pub(super) fn num_literal(bits: u128, num: Num) -> Expr {
     } else {
         bits as i128
     };
-    Expr::int(n)
+    num.literal(n)
 }

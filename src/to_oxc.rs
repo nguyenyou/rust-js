@@ -609,6 +609,15 @@ impl<'a> Cx<'a> {
         let sp = span(e.span);
         match &e.kind {
             ExprKind::Num(n) => self.number(sp, *n),
+            // `5n`, and `-5n` as `-` of it, as a number is written.
+            ExprKind::BigInt(n) => {
+                let digits = Expression::new_identifier(sp, self.name(&format!("{}n", n.unsigned_abs())), b);
+                if *n < 0 {
+                    Expression::new_unary_expression(sp, UnaryOperator::UnaryNegation, digits, b)
+                } else {
+                    digits
+                }
+            }
             ExprKind::Bool(v) => Expression::new_boolean_literal(sp, *v, b),
             ExprKind::Str(s) => Expression::new_string_literal(sp, self.allocator.alloc_str(s), None, b),
             ExprKind::Undefined => Expression::new_identifier(sp, "undefined", b),

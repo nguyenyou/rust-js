@@ -245,7 +245,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")))
     }
 
-    /// `ParseIntError` and the like, which rust-js holds as their message
+    /// `ParseIntError`, `TryFromIntError` and the like, which rust-js holds as their message
     /// (ADR 0063): `e.to_string()` is the message itself.
     pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
         self.recognition().is_parse_error(ty)

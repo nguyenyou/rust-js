@@ -194,6 +194,8 @@ pub struct Symbol {
 #[derive(Clone)]
 pub enum ExprKind {
     Num(f64),
+    /// A `u64` or an `i64` (ADR 0086): `5n`.
+    BigInt(i128),
     Bool(bool),
     Str(String),
     Undefined,
@@ -307,8 +309,12 @@ impl Expr {
     }
 
     pub fn int(n: i128) -> Expr {
-        // Every integer rust-js supports fits in 32 bits, so this is exact.
+        // A number-represented integer fits in 32 bits, so this is exact.
         Expr::num(n as f64)
+    }
+
+    pub fn bigint(n: i128) -> Expr {
+        Expr::new(ExprKind::BigInt(n))
     }
 
     pub fn bool(b: bool) -> Expr {
@@ -438,11 +444,23 @@ impl Expr {
         }
     }
 
+    pub fn as_bigint(&self) -> Option<i128> {
+        match self.kind {
+            ExprKind::BigInt(n) => Some(n),
+            _ => None,
+        }
+    }
+
     /// Literals can be evaluated at any time, so they never need a temporary.
     pub fn is_constant(&self) -> bool {
         matches!(
             self.kind,
-            ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Undefined | ExprKind::Null
+            ExprKind::Num(_)
+                | ExprKind::BigInt(_)
+                | ExprKind::Bool(_)
+                | ExprKind::Str(_)
+                | ExprKind::Undefined
+                | ExprKind::Null
         )
     }
 
@@ -464,6 +482,7 @@ impl Expr {
             ExprKind::Call(f, args) | ExprKind::New(f, args) => f.contains_jsx() || args.iter().any(Expr::contains_jsx),
             ExprKind::Template(_, values) => values.iter().any(Expr::contains_jsx),
             ExprKind::Num(_)
+            | ExprKind::BigInt(_)
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
             | ExprKind::Undefined
@@ -558,6 +577,7 @@ impl Expr {
                 children: all(&jsx.children)?,
             })),
             ExprKind::Num(_)
+            | ExprKind::BigInt(_)
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
             | ExprKind::Undefined
@@ -607,6 +627,7 @@ impl Expr {
     pub fn has_effects(&self) -> bool {
         match &self.kind {
             ExprKind::Num(_)
+            | ExprKind::BigInt(_)
             | ExprKind::Bool(_)
             | ExprKind::Str(_)
             | ExprKind::Undefined

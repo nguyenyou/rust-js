@@ -235,6 +235,10 @@ tooling while preserving rust-js's own readable-output goals.
   supported mutation, and destructor/cleanup behavior. Establish explicit
   boundaries for raw memory and other native-only facilities. Readable output
   must not depend on accepting incorrect results.
+  Progress: `i64`/`u64` are exact BigInts, with saturating float casts and
+  integer `TryFrom` ([ADR 0086](docs/decisions/0086-64-bit-integers.md),
+  [`wide` example](examples/wide.rs) compared with native Rust); 128-bit
+  integers and `f32` remain.
 - [ ] **M7.3 — Complete reusable abstraction support.** Extend associated
   types/constants, generic traits and methods, const generics, trait objects,
   closures, macros, and async composition against the inventory. Test them
@@ -318,8 +322,8 @@ broader completeness work.
 | Area | Current gap and evidence | Why it may matter |
 | --- | --- | --- |
 | Dependency reuse | General Cargo crate compilation remains outside the [documented scope](docs/decisions/0019-one-js-file-per-module.md). | Sharing a model file is easier than consuming an existing shared crate and its dependencies. |
-| JSON models | Generic derives, `flatten`, and several attributes are rejected; reading internally/adjacently tagged or untagged enums is unsupported. See [Serde diagnostics](test/diagnostics.test.ts) and [deserialization](src/lower/serde/de.rs). | Common API envelope and event shapes may need new support or a documented schema choice. |
-| Numbers | [Numeric representations](src/lower/representation.rs) support 8/16/32-bit integers and `f64`; `usize`/`isize` are 32-bit. `u64`, `i64`, 128-bit integers, and `f32` are outside this set. | IDs, timestamps, and external schemas need an explicit lossless representation. |
+| JSON models | Generic derives, `flatten`, every enum representation, and `Value` are supported ([ADRs 0079–0083](docs/decisions/0083-serde-json-value.md)); `with`, `serialize_with`, `deserialize_with`, and some `Value` methods remain rejected (see [Serde diagnostics](test/diagnostics.test.ts)). | Unusual API shapes may still need new support or a documented schema choice. |
+| Numbers | [Numeric representations](src/lower/representation.rs) support 8/16/32-bit integers, `f64`, and `i64`/`u64` as BigInts ([ADR 0086](docs/decisions/0086-64-bit-integers.md)); `usize`/`isize` are 32-bit. 128-bit integers and `f32` are outside this set. | External schemas and numeric code may use them. |
 | Traits and generics | [Validation](src/lower/traits.rs) rejects const generics, generic trait parameters, and generic trait methods; general associated items remain limited. | Existing Rust abstractions and dependencies may not compile unchanged. |
 | Mutable references | [Primitive mutation boxes](docs/decisions/0074-mut-boxes.md) cover calls, with restrictions on returned/stored references and trait methods. | Reusable application helpers may exceed the current reference model. |
 | Options, maps, and iterators | [Diagnostic cases](test/diagnostics.test.ts) include nullish concrete option payloads, struct map keys, map equality, and held-iterator restrictions. | Combinations matter even when each broad feature is listed as supported. |

@@ -319,7 +319,8 @@ function $toJson(value, write, pretty) {
 // the text (`$JsonReader`), or a value already read (`$JsonContent`), which
 // is how serde reads a tagged or an untagged enum.
 class $JsonDecoder {
-  // An integer type, named as serde names it, from `min` to `max`.
+  // An integer type, named as serde names it, from `min` to `max`: a
+  // number, or for an `i64` or `u64`, a BigInt (ADR 0086).
   int(name, min, max) {
     return this.deserializeNumber(name, (n) => {
       if (n.kind === "f")
@@ -329,7 +330,7 @@ class $JsonDecoder {
       if (n.kind === "u" ? n.value > max : n.value < min) {
         throw $jsonError(`invalid value: integer \`${n.value}\`, expected ${name}`);
       }
-      return Number(n.value);
+      return typeof max === "bigint" ? BigInt(n.value) : Number(n.value);
     });
   }
 
@@ -2353,6 +2354,8 @@ const $json = {
   i16: (json) => json.int("i16", -32768, 32767),
   i32: (json) => json.int("i32", -2147483648, 2147483647),
   isize: (json) => json.int("isize", -2147483648, 2147483647),
+  u64: (json) => json.int("u64", 0n, 18446744073709551615n),
+  i64: (json) => json.int("i64", -9223372036854775808n, 9223372036854775807n),
   f64: (json) => json.f64(),
   string: (json) => json.string(),
   str: (json) => json.borrowedStr(),
@@ -2447,9 +2450,13 @@ function $debugJsonError(e) {
   return `Error(${$debugStr(e.message)}, line: ${e.line}, column: ${e.column})`;
 }
 
-function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value") {
+function $unwrapOk(
+  result,
+  message = "called `Result::unwrap()` on an `Err` value",
+  debug = $debug,
+) {
   if (result.TAG === "Err") {
-    throw new Error(message + ": " + $debug(result._0));
+    throw new Error(message + ": " + debug(result._0));
   }
   return result._0;
 }

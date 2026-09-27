@@ -37,6 +37,7 @@ fn prints_on_lines(value: &Expr) -> bool {
             }) || jsx.children.iter().any(prints_on_lines)
         }
         ExprKind::Num(_)
+        | ExprKind::BigInt(_)
         | ExprKind::Bool(_)
         | ExprKind::Str(_)
         | ExprKind::Undefined

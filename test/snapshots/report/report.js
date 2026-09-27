@@ -158,6 +158,7 @@ function $debugParseError(message, name) {
     "cannot parse char from empty string": "EmptyString",
     "too many characters in string": "TooManyChars",
   };
+  if (name === "TryFromIntError") return "TryFromIntError(())";
   return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
 }
 

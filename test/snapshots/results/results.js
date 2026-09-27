@@ -29,9 +29,13 @@ function $debug(v) {
   return String(v);
 }
 
-function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value") {
+function $unwrapOk(
+  result,
+  message = "called `Result::unwrap()` on an `Err` value",
+  debug = $debug,
+) {
   if (result.TAG === "Err") {
-    throw new Error(message + ": " + $debug(result._0));
+    throw new Error(message + ": " + debug(result._0));
   }
   return result._0;
 }
