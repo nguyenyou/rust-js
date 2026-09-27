@@ -40,6 +40,12 @@ time, valid and deterministic by construction:
   changes from run to run natively: `insert`, `remove`, `entry(..)
   .or_insert(0) +=`, `get`, `contains_key`, `len`, `values().sum()`, and
   `for` over it.
+- Writes inside expressions, `({ x = a; b })`, where any expression may
+  be, and an item written through an index that writes first, `v[{ x =
+  a; id(0usize) }] += b`: what's read before and after a write says in
+  which order an expression's parts run, which Rust's reference fixes and
+  JS's rules differ from, in an assignment's place first. A guard doesn't
+  write, as rust-js doesn't support one that does yet.
 - It keeps to what the borrow checker allows: a `Vec` is read through
   `clone()`, never moved, and a closure takes copies, so a later write to
   what it captured doesn't conflict with it.
@@ -85,6 +91,10 @@ left is written with its seed to `target/fuzz/`, to become a corpus case.
 
 - The generator makes only what's here; each kind of Rust it's taught to
   make, structs or collections next, finds its own bugs.
+- Seeds 1,000 to 2,199 ran on GitHub before writes were generated; one
+  differed, seed 1476, an index checked before its value
+  (`assignment_order.rs`). A review found what no seed could, a value read
+  after an index that wrote it, and writes are generated since.
 - A seed is a program only for this version of the generator: a change to
   it makes other programs of the same seeds, so a failure is kept as its
   reduced program, not its seed.

@@ -76,7 +76,10 @@ export type Expr =
   // whose arms bind what the variant holds.
   | { kind: "text"; ty: Ty; value: string }
   | { kind: "enum"; ty: Ty; variant: "A" | "B" | "C"; a?: Expr; b?: Expr }
-  | { kind: "match"; ty: Ty; a: Expr; whenA: Expr; bind: string; guard?: Expr; whenB: Expr; otherB?: Expr; x: string; y: string; whenC: Expr };
+  | { kind: "match"; ty: Ty; a: Expr; whenA: Expr; bind: string; guard?: Expr; whenB: Expr; otherB?: Expr; x: string; y: string; whenC: Expr }
+  // `({ x = a; b })`: a write, then a value, so what's read before and after
+  // it says in which order an expression's parts run.
+  | { kind: "write"; ty: Ty; name: string; value: Expr; result: Expr };
 
 export type Stmt =
   | { kind: "let"; name: string; ty: Ty; value: Expr }
@@ -87,7 +90,9 @@ export type Stmt =
   | { kind: "for-each"; name: string; items: string; body: Stmt[] }
   | { kind: "if-let"; name: string; value: Expr; then: Stmt[]; else: Stmt[] }
   | { kind: "vec-op"; name: string; op: "push" | "pop" | "sort" | "reverse"; value?: Expr }
-  | { kind: "set"; name: string; index?: number; field?: string; value: Expr }
+  // `v[i] = x`, `v[i] += x` or `s.a = x`; an index may write first,
+  // `v[{ y = a; i }] = x`.
+  | { kind: "set"; name: string; index?: number; field?: string; op: string; write?: { name: string; value: Expr }; value: Expr }
   | { kind: "closure"; name: string; param: IntTy; body: Expr }
   | { kind: "text-op"; name: string; op: "push_str" | "push"; value: Expr }
   | { kind: "map-op"; name: string; op: "insert" | "remove" | "entry"; key: Expr; value?: Expr }
@@ -119,6 +124,10 @@ function literal(r: Random, ty: Ty): Expr {
   return { kind: "lit", ty, value };
 }
 
+// What an expression may write: a variable of what's `Copy`, but not a
+// closure, which is never assigned.
+const assignable = (scope: Scope) => scope.filter((v) => v.mutable && isCopy(v.ty) && !v.ty.startsWith("fn("));
+
 function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
   const vars = scope.filter((v) => v.ty === ty);
   const sub = (t: Ty) => expr(r, t, scope, depth - 1);
@@ -131,6 +140,11 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
     if (vecOf) return { kind: "vec", ty, items: Array.from({ length: r.chance(0.1) ? 0 : 1 + r.int(4) }, () => literal(r, vecOf)) };
     if (optionOf && r.chance(0.7)) return { kind: "some", ty, a: literal(r, optionOf) };
     return literal(r, ty);
+  }
+  const written = assignable(scope);
+  if (written.length > 0 && r.chance(0.08)) {
+    const w = r.pick(written);
+    return { kind: "write", ty, name: w.name, value: sub(w.ty), result: sub(ty) };
   }
   if (ty === "bool") {
     const choice = r.int(6);
@@ -295,7 +309,8 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
         a: sub("E"),
         whenA: sub(ty),
         bind,
-        guard: guarded ? expr(r, "bool", withB, depth - 1) : undefined,
+        // A guard reads, as rust-js doesn't support one that writes yet.
+        guard: guarded ? expr(r, "bool", withB.map((v) => ({ ...v, mutable: false })), depth - 1) : undefined,
         whenB: expr(r, ty, withB, depth - 1),
         otherB: guarded ? sub(ty) : undefined,
         x,
@@ -362,10 +377,20 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
       const structs = writable.filter((v) => v.ty === "S");
       if (vecs.length > 0 && r.chance(0.5)) {
         const v = r.pick(vecs);
-        stmts.push({ kind: "set", name: v.name, index: r.chance(0.8) ? 0 : r.int(4), value: expr(r, inside(v.ty, "Vec")!, inner, 2) });
+        const elem = inside(v.ty, "Vec")!;
+        const written = assignable(inner);
+        const w = written.length > 0 && r.chance(0.5) ? r.pick(written) : undefined;
+        stmts.push({
+          kind: "set",
+          name: v.name,
+          index: r.chance(0.8) ? 0 : r.int(4),
+          op: r.pick(["=", "=", "+=", "-=", "^="]),
+          write: w && { name: w.name, value: expr(r, w.ty, inner, 2) },
+          value: expr(r, elem, inner, 2),
+        });
       } else if (structs.length > 0) {
         const [field, t] = r.pick(struct.fields);
-        stmts.push({ kind: "set", name: r.pick(structs).name, field, value: expr(r, t, inner, 2) });
+        stmts.push({ kind: "set", name: r.pick(structs).name, field, op: r.pick(["=", "=", "+=", "|="]), value: expr(r, t, inner, 2) });
       }
     } else if (choice === 10) {
       // A closure captures what's `Copy`, by value, so a later write can't
@@ -460,6 +485,8 @@ function show(e: Expr): string {
       return e.ty === "bool" ? "false" : `id(0${e.ty})`;
     case "var":
       return isCopy(e.ty) ? e.name : `${e.name}.clone()`;
+    case "write":
+      return `({ ${e.name} = ${show(e.value)}; ${show(e.result)} })`;
     case "bin":
     case "cmp":
     case "logic":
@@ -600,8 +627,10 @@ function lines(stmts: Stmt[], indent: string): string[] {
         return [`${indent}if let Some(${s.name}) = ${show(s.value)} {`, ...nested(s.then), `${indent}} else {`, ...nested(s.else), `${indent}}`];
       case "vec-op":
         return [`${indent}${s.name}.${s.op}(${s.value ? show(s.value) : ""});`];
-      case "set":
-        return [`${indent}${s.name}${s.field !== undefined ? `.${s.field}` : `[id(${s.index}usize)]`} = ${show(s.value)};`];
+      case "set": {
+        const index = s.write ? `{ ${s.write.name} = ${show(s.write.value)}; id(${s.index}usize) }` : `id(${s.index}usize)`;
+        return [`${indent}${s.name}${s.field !== undefined ? `.${s.field}` : `[${index}]`} ${s.op} ${show(s.value)};`];
+      }
       case "closure":
         return [`${indent}let ${s.name} = move |x: ${s.param}| -> ${s.param} { ${show(s.body)} };`];
       case "text-op":
@@ -669,6 +698,8 @@ function* smaller(program: Program): Generator<Program> {
         yield put(s.body);
         yield* inBlock(s.body, (next) => put([{ ...s, body: next }]));
       }
+      if (s.kind === "set" && s.write) yield put([{ ...s, write: undefined }]);
+      if (s.kind === "set" && s.op !== "=") yield put([{ ...s, op: "=" }]);
       if ("value" in s && s.value) for (const value of simpler(s.value)) yield put([{ ...s, value } as Stmt]);
       if (s.kind === "closure") for (const body of simpler(s.body)) yield put([{ ...s, body }]);
     }
