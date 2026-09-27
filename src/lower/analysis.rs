@@ -17,8 +17,44 @@ use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
+use rustc_span::hygiene::{ExpnKind, MacroKind};
 use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
+
+/// Made by serde's `#[derive(Serialize)]` or `#[derive(Deserialize)]`, or
+/// inside what they made (its `const _: () = { .. }`): left out, since
+/// rust-js writes each type's JSON codec itself (ADR 0077).
+pub(super) fn from_serde_derive(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
+    let mut item = Some(def_id);
+    while let Some(id) = item {
+        let mut ctxt = tcx.def_span(id).ctxt();
+        while !ctxt.is_root() {
+            let expansion = ctxt.outer_expn_data();
+            if let ExpnKind::Macro(MacroKind::Derive, name) = expansion.kind
+                && matches!(name.as_str(), "Serialize" | "Deserialize")
+            {
+                return true;
+            }
+            ctxt = expansion.call_site.ctxt();
+        }
+        item = tcx.opt_local_parent(id);
+    }
+    false
+}
+
+/// Is `id` serde's derived `impl Serialize` (`Some(true)`) or `impl
+/// Deserialize` (`Some(false)`)?
+/// Only the impls for the crate's own types: the derive's helpers inside
+/// its `const _` block have impls too.
+pub(super) fn serde_impl(tcx: TyCtxt<'_>, id: DefId) -> Option<bool> {
+    if !matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) {
+        return None;
+    }
+    let tr = tcx.impl_trait_ref(id).instantiate_identity();
+    let own = matches!(tr.self_ty().kind(), ty::Adt(adt, _)
+        if adt.did().as_local().is_some_and(|local| !from_serde_derive(tcx, local)));
+    super::serde::serde_trait(tcx, tr.def_id).filter(|_| own)
+}
 
 /// Copy the THIR of every function and closure in the crate.
 ///
@@ -29,6 +65,7 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
     items
         .definitions()
         .chain(items.nested_bodies())
+        .filter(|&def_id| !from_serde_derive(tcx, def_id))
         .filter(|&def_id| match tcx.def_kind(def_id) {
             // A function declared in an `extern` block is JS's (ADR 0021),
             // and so is one with `#[rust_js::link_name]` (ADR 0039).
@@ -70,7 +107,11 @@ struct Pass {
 
 /// Lower every function, grouped by module. Reports all unsupported
 /// features as rustc errors.
-pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option<Lowered> {
+pub fn lower_crate<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    all_bodies: &[Body<'tcx>],
+    serde_attrs: &super::SerdeAttributes,
+) -> Option<Lowered> {
     if !bindings::validate(tcx) || !traits::validate(tcx) || !super::jsx_api::validate(tcx) {
         return None;
     }
@@ -103,7 +144,10 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         .definitions()
         .filter(|&id| {
             matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
-                && (!tcx.is_automatically_derived(id.to_def_id()) || derived_debug(tcx, id.to_def_id()))
+                && (!tcx.is_automatically_derived(id.to_def_id())
+                    || derived_debug(tcx, id.to_def_id())
+                    || serde_impl(tcx, id.to_def_id()).is_some())
+                && (!from_serde_derive(tcx, id) || serde_impl(tcx, id.to_def_id()).is_some())
         })
         .map(|id| id.to_def_id())
         .collect();
@@ -138,15 +182,27 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
     let consts: Vec<LocalDefId> = tcx
         .hir_crate_items(())
         .definitions()
-        .filter(|&d| matches!(tcx.def_kind(d), DefKind::Const { .. }) && !markers.iter().any(|&(m, _)| m == d))
+        .filter(|&d| {
+            matches!(tcx.def_kind(d), DefKind::Const { .. })
+                && !markers.iter().any(|&(m, _)| m == d)
+                && !from_serde_derive(tcx, d)
+        })
         .collect();
 
-    // What gets a JS name: functions and methods, `const`s, and dictionaries.
+    // A derived `Serialize`'s `serialize`, which rust-js writes (ADR 0077).
+    let serializers: Vec<DefId> = trait_impls
+        .iter()
+        .filter(|&&id| serde_impl(tcx, id) == Some(true))
+        .map(|&id| tcx.associated_item_def_ids(id)[0])
+        .collect();
+    // What gets a JS name: functions and methods, `const`s, dictionaries,
+    // and serializers.
     let items: Vec<LocalDefId> = bodies
         .iter()
         .map(|body| body.def_id)
         .chain(consts.iter().copied())
         .chain(dictionaries.iter().map(|id| id.expect_local()))
+        .chain(serializers.iter().map(|id| id.expect_local()))
         .collect();
     // The modules that get a JS file: the root, then every module with one of
     // those, in the order the first one appears.
@@ -210,12 +266,14 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         fns: &fns,
         imports: &import_names,
         trait_impls: &trait_impls,
+        serde_attrs,
     };
     for (def_id, body) in bodies
         .iter()
         .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
         .map(|b| (b.def_id.to_def_id(), Some(*b)))
         .chain(dictionaries.iter().map(|id| (*id, None)))
+        .chain(serializers.iter().map(|id| (*id, None)))
     {
         let module = fns[&def_id].module;
         let file = module_file(tcx, module);
@@ -251,6 +309,12 @@ pub fn lower_crate<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[Body<'tcx>]) -> Option
         };
         let result = match body {
             Some(body) => cx.lower_fn(body),
+            None if serializers.contains(&def_id) => cx.lower_serialize(def_id).map(|function| super::LoweredFn {
+                function,
+                runtime: std::mem::take(&mut cx.runtime),
+                jsx: cx.jsx,
+                dependencies: cx.dependencies.take(),
+            }),
             None => {
                 let cache = format!("${}", fns[&def_id].name);
                 cx.lower_dictionary(def_id, &cache).map(|function| super::LoweredFn {
@@ -497,6 +561,7 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
             _ if markers.iter().any(|&(marker, _)| marker == def_id) => continue,
+            _ if from_serde_derive(tcx, def_id) => continue,
             // std's storage for a thread-local: JS needs none.
             _ if in_thread_local(tcx, def_id).is_some() => continue,
             // Methods, trait impls' included (ADRs 0047, 0049). Derives like

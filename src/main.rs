@@ -55,6 +55,8 @@ impl Callbacks for RustJs {
     }
 
     fn after_expansion<'tcx>(&mut self, _compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
+        // 0. `#[serde(..)]`, which only the expanded crate still has (ADR 0077).
+        let serde_attrs = lower::serde_attributes(tcx);
         // 1. Copy each function's THIR. MIR building (for borrowck) steals it.
         let bodies = lower::collect_bodies(tcx);
 
@@ -63,7 +65,7 @@ impl Callbacks for RustJs {
 
         // 3. Only a program rustc accepts becomes JavaScript.
         if tcx.dcx().has_errors().is_none()
-            && let Some(lowered) = lower::lower_crate(tcx, &bodies)
+            && let Some(lowered) = lower::lower_crate(tcx, &bodies, &serde_attrs)
             && tcx.dcx().has_errors().is_none()
             && let Err(err) = self.output.write(
                 lowered,

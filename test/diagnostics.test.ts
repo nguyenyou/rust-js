@@ -1,11 +1,11 @@
 import { beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCompiler, compiler, fixture } from "./support";
+import { buildCompiler, buildSerde, compiler, fixture } from "./support";
 
 beforeAll(buildCompiler, 600_000);
 
-for (const [name, source, message] of [
+for (const [name, source, message, crate] of [
   ["type error", 'pub fn f() -> i32 { "wrong" }', "mismatched types"],
   ["borrow error", 'pub fn f() -> i32 { let mut x = 1; let r = &x; x = 2; *r }', "borrowed"],
   ["unsupported type", 'pub fn f(x: u64) -> u64 { x }', "does not support"],
@@ -33,12 +33,14 @@ for (const [name, source, message] of [
   ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],
   ["handwritten JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "element builders are compiler-only"],
-]) {
+  ["a generic Serialize", '#[derive(serde::Serialize)] pub struct W<T> { pub x: T }\npub fn f() -> String { serde_json::to_string(&W { x: 1u32 }).unwrap() }', "`Serialize` of a generic type", "serde"],
+  ["#[serde(flatten)]", '#[derive(serde::Serialize)] pub struct In { pub a: u32 }\n#[derive(serde::Serialize)] pub struct Out { #[serde(flatten)] pub i: In }\npub fn f(o: &Out) -> String { serde_json::to_string(o).unwrap() }', "`#[serde(flatten)]`", "serde"],
+] as [string, string, string, string?][]) {
   test(`${name} reports a source location and preserves existing output`, () => {
     const dir = fixture("diagnostic");
     const input = join(dir, "lib.rs"), output = join(dir, "lib.js"), manifest = join(dir, "manifest.json");
     writeFileSync(input, source);
-    const args = [compiler, input, "-o", output, "--manifest", manifest];
+    const args = [compiler, input, "-o", output, "--manifest", manifest, ...(crate ? ["--", ...buildSerde()] : [])];
     const rejected = Bun.spawnSync(args);
     expect(rejected.exitCode).not.toBe(0);
     expect(rejected.stderr.toString()).toContain(message);

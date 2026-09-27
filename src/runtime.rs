@@ -46,6 +46,8 @@ pub enum Helper {
     Next,
     NextSome,
     Scan,
+    ToJson,
+    JsonError,
     LowerExp,
     FromDigit,
     FromU32,
@@ -941,6 +943,82 @@ function $lowerExp(x) {
   if (Number.isNaN(x)) return "NaN";
   if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";
   return x.toExponential().replace("e+", "e");
+}
+"#
+            }
+            // A `serde_json::Error`, `{ message, line, column }`, shown as serde_json
+            // shows one: a place only when it has one (line 0 is none).
+            Helper::JsonError => {
+                r#"
+function $displayJsonError(e) {
+  return e.line === 0 ? e.message : `${e.message} at line ${e.line} column ${e.column}`;
+}
+function $debugJsonError(e) {
+  return `Error(${$debugStr(e.message)}, line: ${e.line}, column: ${e.column})`;
+}
+"#
+            }
+            // serde_json's writer (ADR 0077): `write` makes serde's calls on it,
+            // and it lays them out as serde_json's compact or pretty
+            // formatter does. A number is as serde_json writes an `f64`: its
+            // shortest digits, fixed from 1e-5 to 1e15, else `1.5e+16`.
+            Helper::ToJson => {
+                r#"
+class $JsonError extends Error {}
+function $jsonError(message) {
+  return new $JsonError(message);
+}
+function $jsonNumber(x) {
+  if (!Number.isFinite(x)) return "null";
+  if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
+  const [mantissa, exponent] = x.toExponential().split("e");
+  const e = Number(exponent);
+  if (e < -5 || e > 15) return `${mantissa}e${e < 0 ? "-" : "+"}${Math.abs(e)}`;
+  const fixed = String(x);
+  return fixed.includes(".") ? fixed : `${fixed}.0`;
+}
+function $jsonWriter(pretty) {
+  // For each array or object open: whether nothing is in it yet.
+  const empty = [];
+  const next = (json) => {
+    const first = empty[empty.length - 1];
+    empty[empty.length - 1] = false;
+    if (pretty) json.text += (first ? "\n" : ",\n") + "  ".repeat(empty.length);
+    else if (!first) json.text += ",";
+  };
+  const open = (json, bracket) => {
+    empty.push(true);
+    json.text += bracket;
+  };
+  const close = (json, bracket) => {
+    if (!empty.pop() && pretty) json.text += "\n" + "  ".repeat(empty.length);
+    json.text += bracket;
+  };
+  return {
+    text: "",
+    raw(text) { this.text += text; },
+    string(s) { this.text += JSON.stringify(s); },
+    number(x) { this.text += $jsonNumber(x); },
+    beginArray() { open(this, "["); },
+    element() { next(this); },
+    endArray() { close(this, "]"); },
+    beginObject() { open(this, "{"); },
+    key(k) {
+      next(this);
+      this.text += JSON.stringify(k) + (pretty ? ": " : ":");
+    },
+    endObject() { close(this, "}"); },
+  };
+}
+function $toJson(value, write, pretty) {
+  const json = $jsonWriter(pretty);
+  try {
+    write(value, json);
+  } catch (e) {
+    if (e instanceof $JsonError) return { TAG: "Err", _0: { message: e.message, line: 0, column: 0 } };
+    throw e;
+  }
+  return { TAG: "Ok", _0: json.text };
 }
 "#
             }

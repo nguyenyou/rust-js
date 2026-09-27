@@ -47,6 +47,7 @@ mod maps;
 mod numbers;
 mod ordering;
 mod representation;
+mod serde;
 mod std_impls;
 mod stdlib;
 mod text;
@@ -58,6 +59,7 @@ use bindings::{Export, JsForm, is_binding, js_form, js_name};
 use representation::{
     Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, variant_field,
 };
+pub use serde::{SerdeAttributes, attributes as serde_attributes};
 use stdlib::Std;
 
 type R<T> = Result<T, ErrorGuaranteed>;
@@ -216,6 +218,8 @@ struct CrateFacts<'a, 'tcx> {
     fns: &'a HashMap<DefId, FnInfo>,
     imports: &'a HashMap<Export, String>,
     trait_impls: &'a [DefId],
+    /// `#[serde(..)]` attributes, from the expanded crate (ADR 0077).
+    serde_attrs: &'a serde::SerdeAttributes,
 }
 
 /// Dependencies recorded by one function (including copied trait bodies and

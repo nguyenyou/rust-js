@@ -6,9 +6,9 @@
 import { beforeAll, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
-import { buildCompiler, buildReact, buildWeb, compiler, expectSnapshot, root, run, target } from "./support";
+import { buildCompiler, buildReact, buildSerde, buildWeb, compiler, expectSnapshot, root, run, target } from "./support";
 
-type Crate = "web" | "react";
+type Crate = "web" | "react" | "serde";
 
 // A name (its folder in test/snapshots/), the crate's root, and the crates it uses.
 const cases: [string, string, Crate[]][] = [
@@ -30,6 +30,7 @@ const cases: [string, string, Crate[]][] = [
   ["lexer", "examples/lexer.rs", []],
   ["values", "examples/values.rs", []],
   ["versions", "examples/versions.rs", []],
+  ["wire", "examples/wire.rs", ["serde"]],
   ["traits", "examples/traits.rs", []],
   ["consts", "examples/consts.rs", []],
   ["enums", "examples/enums.rs", []],
@@ -66,6 +67,7 @@ for (const [name, input, crates] of cases) {
     const flags: string[] = [];
     if (crates.includes("web")) flags.push("--extern", `web=${join(target, "libweb.rmeta")}`);
     if (crates.includes("react")) flags.push("--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target);
+    if (crates.includes("serde")) flags.push(...buildSerde());
     // From the repository's root, so each file's header names its source the
     // same way on every machine.
     run([compiler, input, "-o", join(out, `${basename(input, ".rs")}.js`), ...(flags.length > 0 ? ["--", ...flags] : [])]);

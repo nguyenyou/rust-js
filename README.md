@@ -20,6 +20,8 @@ compiled by rust-js.
   only where needed.
 - **Fit the tools you already use.** ES modules, JavaScript imports, DOM bindings,
   React, and Vite with Fast Refresh. Source maps point back to your Rust.
+- **Share types with a Rust server.** `#[derive(Serialize)]` types, with their
+  `#[serde(..)]` attributes, write the same JSON text serde_json does.
 - **Make the choices explicit.** Support grows one feature at a time. Unsupported
   features produce compiler errors; differences from native Rust are
   [documented](docs/README.md).

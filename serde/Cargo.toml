@@ -1,0 +1,15 @@
+# serde, serde_derive and serde_json, built with rust-js's pinned toolchain,
+# for a crate rust-js compiles to depend on (ADR 0077). `serde/build.sh`
+# builds them and prints the `--extern` flags that find them.
+[package]
+name = "rust-js-serde"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Standalone: not part of the rust-js package one directory up.
+[workspace]

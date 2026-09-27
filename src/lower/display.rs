@@ -233,6 +233,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_string_like(ty) || self.is_parse_error(ty) {
             return Ok(value);
         }
+        if self.is_json_error(ty) {
+            self.runtime.insert(Helper::JsonError);
+            return Ok(Expr::call(Expr::var("$displayJsonError"), vec![value]));
+        }
         if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
             return Ok(shown_number(value));
         }
@@ -262,6 +266,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
             && ["ParseIntError", "ParseFloatError", "ParseBoolError", "ParseCharError"]
                 .contains(&self.tcx.item_name(adt.did()).as_str()))
+    }
+
+    /// `serde_json::Error`: `{ message, line, column }` (ADR 0077).
+    pub(super) fn is_json_error(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate).as_str() == "serde_json"
+            && self.tcx.item_name(adt.did()).as_str() == "Error")
     }
 
     pub(super) fn debug_trait(&self) -> DefId {
@@ -304,6 +314,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_string_like(ty) {
             self.runtime.insert(Helper::DebugStr);
             return Ok(Expr::call(Expr::var("$debugStr"), vec![value]));
+        }
+        if self.is_json_error(ty) {
+            self.runtime.extend([Helper::JsonError, Helper::DebugStr]);
+            return Ok(Expr::call(Expr::var("$debugJsonError"), vec![value]));
         }
         // A parse error is its message (ADR 0063), which says its kind.
         if self.is_parse_error(ty) {

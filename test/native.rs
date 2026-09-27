@@ -28,6 +28,10 @@ mod generic_options;
 #[allow(dead_code)]
 mod combinators;
 
+#[path = "../examples/wire.rs"]
+#[allow(dead_code)]
+mod wire;
+
 #[path = "../examples/versions.rs"]
 #[allow(dead_code)]
 mod versions;
@@ -247,6 +251,8 @@ fn main() {
     case("lexer.report", &[], lexer::report);
     case("values.report", &[], values::report);
     case("versions.report", &[], versions::report);
+    // serde_json's own bytes, compact and pretty.
+    case("wire.report", &[], wire::report);
     for i in [0, 1, 2] {
         case("versions.panics", &[i as i64], || versions::panics(i));
     }

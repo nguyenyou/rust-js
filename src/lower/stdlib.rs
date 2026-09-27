@@ -77,6 +77,8 @@ pub(super) enum Std {
     Number(NumOp),
     /// A `BinaryHeap`'s own methods (ADR 0068).
     Heap(HeapOp),
+    /// `serde_json::to_string(&v)` (false) and `to_string_pretty` (ADR 0077).
+    ToJson(bool),
     /// `it.next()`, `peekable()`, `peek()` and the like (ADR 0071).
     Step(StepOp),
     /// `VecDeque::remove(i)`: an `Option`, where `Vec`'s panics.
@@ -235,6 +237,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if char_fn("from_u32") {
             return Some(Std::FromU32);
+        }
+        if tcx.crate_name(def_id.krate).as_str() == "serde_json" {
+            match tcx.item_name(def_id).as_str() {
+                "to_string" => return Some(Std::ToJson(false)),
+                "to_string_pretty" => return Some(Std::ToJson(true)),
+                _ => {}
+            }
         }
         if diagnostic("vec_from_elem") {
             return Some(Std::FromElem);

@@ -7,7 +7,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { root, target, run, buildCompiler, buildReact, buildWeb } from "./support";
+import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -30,6 +30,7 @@ let report: Record<string, (...args: any[]) => unknown>;
 let lexer: Record<string, (...args: any[]) => unknown>;
 let values: Record<string, (...args: any[]) => unknown>;
 let versions: Record<string, (...args: any[]) => unknown>;
+let wire: Record<string, (...args: any[]) => unknown>;
 let consts: Record<string, (...args: any[]) => unknown>;
 let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
@@ -50,7 +51,7 @@ beforeAll(async () => {
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--crate-name=modules",
     "examples/modules/lib.rs", "-o", join(target, "libmodules.rlib")]);
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--extern", `modules=${join(target, "libmodules.rlib")}`,
-    "test/native.rs", "-o", join(target, "native")]);
+    ...buildSerde("rlib"), "test/native.rs", "-o", join(target, "native")]);
   cases = run([join(target, "native")]).trim().split("\n").map((line) => JSON.parse(line));
   fib = await import(join(target, "fib.js"));
   run([join(target, "debug", "rust-js"), "examples/structs.rs", "-o", join(target, "structs.js")]);
@@ -87,6 +88,8 @@ beforeAll(async () => {
   values = await import(join(target, "values.js"));
   run([join(target, "debug", "rust-js"), "examples/versions.rs", "-o", join(target, "versions.js")]);
   versions = await import(join(target, "versions.js"));
+  run([join(target, "debug", "rust-js"), "examples/wire.rs", "-o", join(target, "wire.js"), "--", ...buildSerde()]);
+  wire = await import(join(target, "wire.js"));
   run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
   run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
@@ -202,6 +205,9 @@ function call(c: Case): unknown {
       }
       if (path[0] === "versions") {
         return versions[path[1]](...c.args);
+      }
+      if (path[0] === "wire") {
+        return wire[path[1]](...c.args);
       }
       if (path[0] === "std_traits") {
         return stdTraits[path[1]](...c.args);

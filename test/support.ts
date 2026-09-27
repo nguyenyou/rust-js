@@ -32,6 +32,14 @@ export function fixture(name: string): string {
   return mkdtempSync(join(target, `${name}-`));
 }
 
+/** serde, serde_derive and serde_json (ADR 0077): the flags that find them,
+ * as metadata for rust-js or as libraries for a native build. */
+const serdeFlags: Record<string, string[]> = {};
+export function buildSerde(kind: "rmeta" | "rlib" = "rmeta"): string[] {
+  serdeFlags[kind] ??= run(["serde/build.sh", ...(kind === "rlib" ? ["--rlib"] : [])]).trim().split(/\s+/);
+  return serdeFlags[kind];
+}
+
 let react = false;
 export function buildReact() {
   if (!react) {

@@ -45,6 +45,7 @@ This folder is where we write those choices down.
 | `src/jsx_syntax.rs`, `src/jsx_syntax/` | Load configured modules and expand JSX tokens into typed Rust before resolution; shared by native and WASM |
 | `src/lower/link.rs` | Resolve actual module dependencies and collision-free aliases after lowering |
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
+| `src/lower/serde.rs`, `serde/` | `#[serde(..)]` attributes and serde_json-compatible JSON; the serde crates, built with the pinned toolchain |
 | `src/runtime.rs` | Runtime helpers emitted on demand |
 | `src/prepare.rs` | JSX readability preparation after lowering |
 | `src/output.rs` | Filename validation, manifests and artifact publication |
@@ -142,6 +143,10 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0043 React's whole API, gated by the release that added it](decisions/0043-react-versions.md)
 - [0072 JSX syntax in the native and browser compilers](decisions/0072-jsx-syntax.md)
 - [0075 JSX is the public syntax for React elements](decisions/0075-jsx-only-elements.md)
+
+**Talking to a server**
+
+- [0077 `#[derive(Serialize)]` is a function that writes serde_json's text](decisions/0077-serde-json.md)
 
 **Scope and process**
 
