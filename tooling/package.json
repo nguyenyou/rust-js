@@ -9,5 +9,5 @@
     "./manifest": "./manifest.js",
     "./publish": "./publish.js"
   },
-  "files": ["build.js", "manifest.js", "publish.js", "README.md"]
+  "files": ["build.js", "resources.js", "manifest.js", "publish.js", "README.md"]
 }

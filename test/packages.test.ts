@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCompiler, compiler, root as repository } from "./support";
 
-test("packed host packages compile outside the repository layout", () => {
+test("packed hosts and binding resources compile outside the repository layout", () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js packages ")));
   const run = (args: string[], cwd = root) => {
@@ -22,18 +22,38 @@ test("packed host packages compile outside the repository layout", () => {
     }
     const plugin = JSON.parse(readFileSync(join(root, "node_modules/vite-plugin-rust-js/package.json"), "utf8"));
     expect(plugin.dependencies["rust-js-build"]).toBe("0.1.0");
+    const resources = join(root, "node_modules/rust-js-resources");
+    const resourceArchive = join(root, "resources.tgz");
+    run([process.execPath, join(repository, "scripts/package-resources.ts"), resourceArchive]);
+    mkdirSync(resources, { recursive: true });
+    run(["tar", "-xzf", resourceArchive, "--strip-components=1", "-C", resources]);
+    const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
+    expect(resourcePackage.version).toBe(Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")).package.version);
+    expect(readFileSync(join(resources, "rust-toolchain.toml"), "utf8")).toBe(readFileSync(join(repository, "rust-toolchain.toml"), "utf8"));
     writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
-    writeFileSync(join(root, "lib.rs"), "pub fn answer() -> u32 { 42 }");
+    writeFileSync(join(root, "lib.rs"), `
+#[derive(serde::Deserialize)]
+pub struct Message { pub count: u32 }
+pub fn answer() -> u32 {
+    let message: Message = serde_json::from_str(r#"{"count":42}"#).unwrap();
+    message.count
+}
+`);
+    writeFileSync(join(root, "App.rs"), `
+#![allow(non_snake_case)]
+use react::Element;
+pub fn App() -> Element { jsx! { <main><span>{"Packaged"}</span></main> } }
+`);
     writeFileSync(join(root, "check.ts"), `
 import rustJs from "vite-plugin-rust-js";
 import { parseManifest } from "rust-js-build/manifest";
 import { publishArtifacts } from "rust-js-build/publish";
 import { readFileSync, readdirSync } from "node:fs";
-const plugin = rustJs({ crates: ["lib.rs"], rustJs: ${JSON.stringify(compiler)}, bindings: [], cacheDir: ${JSON.stringify(join(root, "cache"))} });
+const plugin = rustJs({ crates: ["lib.rs", "App.rs"], rustJs: ${JSON.stringify(compiler)}, resources: ${JSON.stringify(resources)}, bindings: ["react", "serde"], cacheDir: ${JSON.stringify(join(root, "cache"))} });
 plugin.configResolved({ root: ${JSON.stringify(root)} });
 const watched = [];
 await plugin.buildStart.call({ addWatchFile: file => watched.push(file), warn: message => { throw new Error(message); }, error: message => { throw new Error(message); } });
-const manifest = parseManifest(readFileSync("cache/vite/" + readdirSync("cache/vite")[0], "utf8"));
+const manifest = readdirSync("cache/vite").map(file => parseManifest(readFileSync("cache/vite/" + file, "utf8"))).find(value => value.input.endsWith("/lib.rs"));
 const { answer } = await import("./lib.js");
 console.log(JSON.stringify({ answer: answer(), watched, input: manifest.input, publisher: typeof publishArtifacts }));
 `);
@@ -42,5 +62,8 @@ console.log(JSON.stringify({ answer: answer(), watched, input: manifest.input, p
     expect(result.watched).toContain(join(root, "lib.rs"));
     expect(result.input).toBe(join(root, "lib.rs"));
     expect(result.publisher).toBe("function");
+    const jsx = readFileSync(join(root, "App.jsx"), "utf8");
+    expect(jsx).toContain("<main>");
+    expect(jsx).toContain("<span>Packaged</span>");
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);

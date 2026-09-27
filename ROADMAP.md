@@ -149,6 +149,10 @@ pilot. No delivery dates are assigned yet.
 - [ ] **M4.1 — Package the compiler and bindings.** Define versioned artifacts,
   toolchain/sysroot requirements, checksums, and installation for each promised
   host. Verify installation and compilation on clean machines.
+  Added evidence: `bun run pack:resources <output.tgz>` creates a versioned
+  source-resource package; [package tests](test/packages.test.ts) compile React
+  and Serde with unpacked host and resource tarballs outside the checkout.
+  Native compiler installation and clean-machine qualification remain open.
 - [ ] **M4.2 — Decouple Vite from the source checkout.** Ship the plugin and
   binding assets with explicit versions and configuration. The
   [private plugin](vite-plugin/package.json) now declares its versioned

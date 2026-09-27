@@ -33,7 +33,27 @@ The package test unpacks these tarballs into an independent application's
 `node_modules` and compiles through the plugin. No registry release is implied.
 When using unpacked packages, provide `rustJs` explicitly and provide `resources`
 when preparing built-in bindings. Defaults locate the development checkout;
-compiler binaries and binding resources are not included in these packages.
+compiler binaries and binding resources are not included in these host packages.
+
+Create a separate resource tarball from the repository root:
+
+```sh
+bun run pack:resources /absolute/artifacts/rust-js-resources.tgz
+```
+
+This stages `rust-js-resources` with the compiler's version, root toolchain pin,
+React/web binding sources and build scripts, and the locked Serde manifest and
+source. The resource package and metadata cache use the same input inventory.
+Unpack it and set `resources` to the directory containing its `package.json` and
+`rust-toolchain.toml`. Build outputs go to the configured cache, outside the
+resource directory. The resource tarball contains source inputs, not prebuilt
+metadata, compiler binaries, or a Rust sysroot. Building still requires Bun,
+Bash, and the pinned Rust toolchain; Cargo also needs its locked dependencies
+available locally or through its configured registry.
+
+The isolated package test exercises both React/JSX and Serde using these unpacked
+resources. Native compiler installation, release checksums, platform qualification,
+and published package installation remain separate distribution work.
 
 Use absolute compiler, resource, cache and extern paths. Crate and output paths
 may also be relative to `root`. `watchFiles` lists toolchain and binding inputs;

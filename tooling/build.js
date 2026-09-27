@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resourceInputs } from "./resources.js";
 
 export const defaultResources = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const defaultCompiler = join(defaultResources, "target/debug/rust-js");
@@ -23,14 +24,8 @@ function run(command, args, cwd) {
 }
 
 export function createNativeBuilder({ root, rustJs = defaultCompiler, resources = defaultResources, cacheDir = join(root, "node_modules/.cache/rust-js"), rustcFlags = [], bindings = ["react"], externs = {} }) {
-  const unsupported = bindings.filter(name => !["react", "serde"].includes(name));
-  if (unsupported.length) throw new Error(`Unsupported built-in bindings: ${unsupported.join(", ")}; supply explicit externs instead`);
   const repo = resources;
-  const metadataInputs = [...(bindings.length ? ["rust-toolchain.toml"] : []), ...(bindings.includes("react") ? [
-    "react/build.sh", "react/cfg.ts", "react/versions.json",
-    "react/src/lib.rs", "react/src/event.rs", "react/src/dom.rs", "react/src/elements.rs",
-    "web/build.sh", "web/src/lib.rs",
-  ] : []), ...(bindings.includes("serde") ? ["serde/Cargo.toml", "serde/Cargo.lock", "serde/src/lib.rs"] : [])].map(p => join(repo, p));
+  const metadataInputs = resourceInputs(bindings).map(p => join(repo, p));
   // The React the project has installed, whose API the react crate is built
   // with (ADR 0043): what a later React added doesn't compile. `null` without
   // one, which gets the latest's.

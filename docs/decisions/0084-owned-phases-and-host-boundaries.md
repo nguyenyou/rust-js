@@ -47,7 +47,11 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   publication entry points; Vite and the playground use declared dependencies
   rather than imports outside their package directories. Local tarball tests
   exercise the plugin outside the checkout with an explicit compiler path.
-  Compiler binaries and binding assets remain separate distribution work.
+  `scripts/package-resources.ts` packages binding inputs and the Rust pin into
+  a separate versioned source-resource tarball. Packaging and metadata cache
+  invalidation share the inventory in `tooling/resources.js`. Isolated package
+  tests compile JSX and Serde using the unpacked resources. Native compiler
+  binaries, installation, and release qualification remain distribution work.
   Hosts can select compiler/resources/cache locations,
   built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,
