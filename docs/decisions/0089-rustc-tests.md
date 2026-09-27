@@ -81,9 +81,9 @@ and stderr, and return, under Bun and Node.
   before its first run, which makes a full run an hour or more unless the
   terminal is a developer tool (System Settings › Privacy & Security ›
   Developer Tools).
-- rust-js compiles with the host's `cfg`, where `target_pointer_width` is
-  64, but a `usize` is 32 bits (ADR 0025): tests that ask are among the
-  failures, as a difference to decide on.
-- Two tests compile and answer otherwise, `const-negation` and
-  `bitwise-ops-platform`: the `usize` difference above, which rustc's own
-  constants make worse, as `usize::MAX` is worked out at 64 bits.
+- rust-js checks programs for `wasm32-unknown-unknown` (ADR 0090), and the
+  native binary is the 64-bit machine's: a test that asks the width, as
+  `cfg(target_pointer_width)`, asks each its own.
+- Before ADR 0090, two tests compiled and answered otherwise,
+  `const-negation` and `bitwise-ops-platform`: rustc worked out `usize`
+  constants at 64 bits.

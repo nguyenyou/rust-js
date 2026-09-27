@@ -3,3 +3,6 @@
 [toolchain]
 channel = "nightly-2026-03-25"
 components = ["rustc-dev", "llvm-tools", "rust-src", "rustfmt", "clippy"]
+# The target rustc checks programs for (ADR 0090): its `usize` is 32 bits,
+# as rust-js's is.
+targets = ["wasm32-unknown-unknown"]

@@ -78,7 +78,9 @@ replacing a whole value through a `&mut` held in a variable (`*r = v`).
 
 **Also:**
 
-- `usize` and `isize` are 32 bits, as on `wasm32`.
+- `usize` and `isize` are 32 bits, as on `wasm32`; rustc checks programs for
+  `wasm32-unknown-unknown`, so its constants, `size_of` and `cfg` agree
+  (ADR 0090).
 - Strings get `trim()`, `is_empty()` (`length === 0`), `==` and `!=`
   (`===`, `!==`), and `String::new()`, `String::from(s)`, `s.to_owned()`
   and `s.as_str()`, the last three being `s` itself.

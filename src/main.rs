@@ -202,10 +202,15 @@ fn main() -> ExitCode {
         input.display().to_string(),
         "--crate-type=lib".to_string(),
         "--edition=2024".to_string(),
+        // What rustc works out for the program, `usize::MAX`, `size_of` and
+        // `cfg(target_pointer_width)`, is for a 32-bit `usize`, as rust-js's is
+        // (ADR 0090). `cfg(rust_js)` says it's rust-js.
+        format!("--target={TARGET}"),
+        "--cfg=rust_js".to_string(),
         // `#[cfg(browser)]` marks tests that need a real browser (ADR 0027):
         // `-- --cfg browser` turns it on. Declaring any cfg makes rustc check them
         // all, so `test` is declared too, as Cargo does.
-        "--check-cfg=cfg(browser, test)".to_string(),
+        "--check-cfg=cfg(browser, test, rust_js)".to_string(),
     ];
     // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
     // and `#![rust_js::import = "./App.css"]` inside a module. A feature the
@@ -225,12 +230,18 @@ fn main() -> ExitCode {
     if test {
         rustc_args.push("--test".to_string());
     }
-    // An edition after `--` is the one: rustc takes only one.
+    // An edition or a target after `--` is the one: rustc takes only one.
     if to_rustc
         .iter()
         .any(|arg| arg == "--edition" || arg.starts_with("--edition="))
     {
         rustc_args.retain(|arg| arg != "--edition=2024");
+    }
+    if to_rustc
+        .iter()
+        .any(|arg| arg == "--target" || arg.starts_with("--target="))
+    {
+        rustc_args.retain(|arg| !arg.starts_with("--target="));
     }
     rustc_args.extend(to_rustc.iter().cloned());
     let mut callbacks = RustJs {
@@ -240,6 +251,10 @@ fn main() -> ExitCode {
     };
     rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))
 }
+
+/// The target rustc checks programs for (ADR 0090): WebAssembly's, whose
+/// `usize` is 32 bits, as a JS one is here (ADR 0025). Nothing is made for it.
+const TARGET: &str = "wasm32-unknown-unknown";
 
 /// The features a crate's root enables itself: `#![feature(a, b)]`.
 fn enabled_features(root: &Path) -> Vec<String> {

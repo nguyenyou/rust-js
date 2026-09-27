@@ -102,17 +102,24 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
       if (!toolchain) throw new Error("Binding resources must declare a pinned Rust toolchain");
       // Cargo's structured output handles hashed filenames and paths with spaces.
       // Run Cargo even on reuse: it checks that every dependency is still fresh.
+      // For rust-js's target (ADR 0090); serde_derive, a procedural macro, runs on the host.
       const output = await run("cargo", [`+${toolchain}`, "build", "--locked", "--message-format=json",
+        "--target", "wasm32-unknown-unknown",
         "--manifest-path", join(repo, "serde/Cargo.toml"), "--target-dir", join(cacheDir, "serde", key)], repo);
       const artifacts = output.split("\n").filter(Boolean).map(line => JSON.parse(line))
         .filter(message => message.reason === "compiler-artifact");
+      // Where the target's libraries are, and where the host's macro is.
+      const directories = new Set(artifacts
+        .filter(message => message.target.kind.some(kind => kind === "lib" || kind === "rlib" || kind === "proc-macro"))
+        .flatMap(message => message.filenames.map(file => dirname(file))));
       for (const name of ["serde", "serde_json"]) {
         const artifact = artifacts.find(message => message.target.name === name && message.target.kind.includes("lib"));
         const file = artifact?.filenames.find(file => file.endsWith(".rmeta"))
           ?? artifact?.filenames.find(file => file.endsWith(".rlib"));
         if (!file || !existsSync(file)) throw new Error(`Cargo produced no ${name} metadata`);
-        flags.push("--extern", `${name}=${file}`, "-L", `dependency=${dirname(file)}`);
+        flags.push("--extern", `${name}=${file}`);
       }
+      for (const directory of directories) flags.push("-L", `dependency=${directory}`);
     }
     return { flags, react };
   }

@@ -263,3 +263,28 @@ test("a crate's own features and edition are its own", () => {
   const run = Bun.spawnSync([process.execPath, "-e", `import(${JSON.stringify(js)}).then((m) => console.log(m.f()))`]);
   expect(run.stdout.toString()).toBe("6\n");
 });
+
+// What rustc works out for a program, rust-js's runtime agrees with: a
+// `usize` is 32 bits in constants, `size_of` and `cfg`, as in its arithmetic,
+// and `cfg(rust_js)` says it's rust-js (ADR 0090). Native Rust, on a 64-bit
+// machine, can't be the oracle here.
+test("rustc checks programs for rust-js's 32-bit usize", () => {
+  const dir = fixture("corpus-target");
+  const file = join(dir, "width.rs");
+  writeFileSync(
+    file,
+    "const MAX: usize = usize::MAX;\n" +
+      "const SIZE: usize = std::mem::size_of::<usize>();\n" +
+      "pub fn width() -> String {\n" +
+      "    let max = usize::MAX;\n" +
+      "    let wrapped = max.wrapping_add(1);\n" +
+      "    let who = if cfg!(rust_js) { \"rust-js\" } else { \"native\" };\n" +
+      '    format!("{MAX} {max} {wrapped} {} {} {} {who}", SIZE, cfg!(target_pointer_width = "32"), MAX == max)\n' +
+      "}\n",
+  );
+  const js = join(dir, "width.js");
+  const p = Bun.spawnSync([compiler, file, "-o", js], { cwd: root, stderr: "pipe" });
+  expect(p.stderr.toString()).toBe("");
+  const run = Bun.spawnSync([process.execPath, "-e", `import(${JSON.stringify(js)}).then((m) => console.log(m.width()))`]);
+  expect(run.stdout.toString()).toBe("4294967295 4294967295 0 4 true true rust-js\n");
+});

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createNativeBuilder } from "../tooling/build.js";
 import { parseManifest } from "../tooling/manifest.js";
-import { buildCompiler, compiler, root as repository, run } from "./support";
+import { buildCompiler, buildSerde, compiler, root as repository, run } from "./support";
 
 test("independent native and JS clients share models, validation, and source edits", async () => {
   buildCompiler();
@@ -52,13 +52,9 @@ fn main() {
 }
 `);
     const builder = createNativeBuilder({ root, rustJs: compiler, bindings: ["serde"] });
-    const { flags } = await builder.prepare();
-    // Cargo build emits both metadata and linkable libraries. Native code
-    // needs the latter; rust-js only needs metadata to run rustc's checks.
-    const nativeFlags = flags.map(flag => flag.replace(/\.rmeta$/, ".rlib"));
-    for (const flag of nativeFlags.filter(flag => /^(serde|serde_json)=/.test(flag))) {
-      expect(existsSync(flag.slice(flag.indexOf("=") + 1))).toBe(true);
-    }
+    // The client's serde is built for rust-js's target (ADR 0090); the
+    // server's, for the machine it runs on, as its own Cargo build would.
+    const nativeFlags = buildSerde("rlib");
     const pin = Bun.TOML.parse(readFileSync(join(repository, "rust-toolchain.toml"), "utf8")).toolchain.channel;
     // Fresh processes also reload imported model modules after the shared edit.
     const callClient = (method: string, value: string | number) => JSON.parse(run([

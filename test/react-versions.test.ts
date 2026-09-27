@@ -49,6 +49,8 @@ function bindings(release: string): Set<string> {
   run(["web/build.sh", "-o", join(out, "libweb.rmeta")]);
   run([
     "rustdoc", "-Zunstable-options", "--document-hidden-items", "--output-format=json", "--edition=2024", "--crate-name=react",
+    // As rust-js checks it, for its target (ADR 0090).
+    "--target=wasm32-unknown-unknown",
     "react/src/lib.rs", "--extern", `web=${join(out, "libweb.rmeta")}`, ...cfgFlags(release).flags, "-o", out,
   ]);
   const docs = JSON.parse(readFileSync(join(out, "react.json"), "utf8"));

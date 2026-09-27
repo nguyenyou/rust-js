@@ -7,7 +7,8 @@ import { parseManifest } from "../tooling/manifest.js";
 
 beforeAll(buildCompiler, 600_000);
 const pin = readFileSync(join(root, "rust-toolchain.toml"), "utf8").match(/channel = "([^"]+)"/)![1];
-const target = run(["rustc", `+${pin}`, "-vV"]).match(/^host: (.+)$/m)![1];
+// What rust-js checks programs for (ADR 0090), so what their dependencies are built for.
+const target = "wasm32-unknown-unknown";
 
 test("a real Cargo dependency links scalar functions and function values into JS", async () => {
   const dir = fixture("cargo-shared-library");
@@ -27,12 +28,12 @@ test("a real Cargo dependency links scalar functions and function values into JS
   const libraryManifest = join(dir, "js/shared/manifest.json");
   const output = join(dir, "js/app/lib.js"), manifest = join(dir, "js/app/manifest.json");
   function compile() {
-    const messages = run(["cargo", `+${pin}`, "check", "--frozen", "--lib", "--manifest-path", manifestPath, "--message-format=json"])
+    const messages = run(["cargo", `+${pin}`, "check", "--frozen", "--lib", "--target", target, "--manifest-path", manifestPath, "--message-format=json"])
       .trim().split("\n").map(line => JSON.parse(line));
     const shared = messages.find(m => m.reason === "compiler-artifact" && m.target.name === "shared");
     const metadata = shared.filenames.find((p: string) => p.endsWith(".rmeta"));
     run([compiler, source, "-o", join(dir, "js/shared/lib.js"), "--library", "--manifest", libraryManifest, "--", "--crate-name", "shared"]);
-    return [compiler, join(dir, "app/src/lib.rs"), "-o", output, "--manifest", manifest, "--dependency", libraryManifest, "--", "--crate-name", "app", "--extern", `model=${metadata}`, "-L", `dependency=${join(dir, "target/debug/deps")}`];
+    return [compiler, join(dir, "app/src/lib.rs"), "-o", output, "--manifest", manifest, "--dependency", libraryManifest, "--", "--crate-name", "app", "--extern", `model=${metadata}`, "-L", `dependency=${join(dir, "target", target, "debug/deps")}`];
   }
   let command = compile();
   run(command);
@@ -81,7 +82,7 @@ test("scalar linkage supports sibling outputs and rejects generic and aggregate 
     pub fn generic<T>(value: T) -> T { value }
     pub fn pair() -> (u32, u32) { (1, 2) }
   `);
-  run(["rustc", `+${pin}`, source, "--crate-name", "shared", "--crate-type=lib", "--emit=metadata", "-o", metadata]);
+  run(["rustc", `+${pin}`, source, "--crate-name", "shared", "--crate-type=lib", "--emit=metadata", `--target=${target}`, "-o", metadata]);
   const libraryManifest = join(dir, "shared.json");
   run([compiler, source, "-o", join(dir, ".shared.js"), "--library", "--manifest", libraryManifest]);
   const app = join(dir, "app.rs"), output = join(dir, "app.js");
