@@ -19,8 +19,13 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   lives in `src/link.rs` and accepts only owned modules, symbols, import candidates
   and reserved names. Lowering translates rustc module identities into symbols
   before this boundary. `src/names.rs` owns the shared identifier and collision
-  policy. Neither linking nor name allocation depends on rustc or lowering; crate
-  analysis still orchestrates when these phases run.
+  policy. Neither linking nor name allocation depends on rustc or lowering; `lower/pipeline.rs`
+  orchestrates when these phases run. `lower/analysis.rs` returns an
+  `AnalyzedCrate` containing named items, imports, trait facts, body references,
+  tests and mutation facts. It does not lower functions or invoke the linker.
+  The result owns its collections and borrows captured THIR; it is not a second
+  Rust IR or a frontend-independent artifact. The pipeline retains diagnostic
+  accumulation and the existing demand-driven codec/reachability ordering.
 - Operand lowering produces prerequisite statements and a value. Sequencing
   uses those actual statements to capture earlier operands before executing
   later prerequisites. `is_simple` is no longer the operand-order oracle:

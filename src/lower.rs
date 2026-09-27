@@ -45,6 +45,7 @@ mod jsx_api;
 mod maps;
 mod numbers;
 mod ordering;
+mod pipeline;
 mod recognition;
 mod representation;
 mod serde;
@@ -57,8 +58,9 @@ mod traits;
 use crate::names::{fresh_in, js_ident};
 use crate::program::{Lowered, LoweredModule, TestFn};
 use crate::runtime::Helper;
-pub use analysis::{collect_bodies, lower_crate};
+pub use analysis::collect_bodies;
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
+pub use pipeline::lower_crate;
 use recognition::Std;
 use representation::{
     Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, variant_field,

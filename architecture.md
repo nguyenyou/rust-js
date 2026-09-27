@@ -26,8 +26,10 @@ and executable evidence.
 Import resolution now lives in `src/link.rs` and accepts only owned JavaScript
 modules, symbols, import candidates and reserved names. The frontend translates
 rustc module identities before calling it. Shared identifier policy lives in
-`src/names.rs`; neither module depends on lowering or rustc. Crate analysis still
-orchestrates reachability, lowering and linking.
+`src/names.rs`; neither module depends on lowering or rustc. `src/lower/analysis.rs`
+returns collected crate facts; `src/lower/pipeline.rs` orchestrates constant and
+function emission, reachability, module assembly and linking. The analysis result
+owns its collections and borrows captured THIR, so it remains frontend-specific.
 
 Standard-library and Serde Value call recognition use only immutable type and
 trait inputs in `src/lower/recognition.rs`, separate from function emission state.
@@ -348,7 +350,7 @@ or release needs justify it. Existing files provide the starting points:
 | Target responsibility | Current starting point |
 | --- | --- |
 | Driver and syntax | `src/main.rs`, `src/jsx_syntax.rs` |
-| Analysis and lowering | `src/lower/analysis.rs`, `src/lower.rs`, `src/lower/` |
+| Analysis and lowering | `src/lower/analysis.rs`, `src/lower/pipeline.rs`, `src/lower.rs`, `src/lower/` |
 | Linking and runtime | `src/link.rs`, `src/names.rs`, `src/runtime.rs`, `src/runtime/` |
 | JS tree and presentation | `src/js.rs`, `src/prepare.rs`, `src/to_oxc.rs`, `src/format.rs` |
 | Owned modules and source origins | `src/program.rs`, `src/lower/sources.rs` |

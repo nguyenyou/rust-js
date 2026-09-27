@@ -55,3 +55,7 @@ test("native and WASI compiler dependency versions agree", () => {
   };
   expect(dependencies("wasm/Cargo.toml")).toEqual(dependencies("Cargo.toml"));
 });
+
+test("crate analysis cannot emit functions or invoke linking", () => {
+  expect(read("src/lower/analysis.rs")).not.toMatch(/\b(?:FnCx|CrateFacts|LoweredModule|LoweredFn)\b|\blink::|\.lower_(?:fn|codec|dictionary)\(/);
+});
