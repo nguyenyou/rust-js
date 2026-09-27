@@ -166,6 +166,10 @@ pilot. No delivery dates are assigned yet.
   diagnostics, define compatibility/versioning rules, and publish migration
   notes for breaking changes. Verify a previous-version app can upgrade and
   roll back using the documented steps.
+  Added evidence: `--version-json` reports the manifest compiler identity;
+  packaged-resource preparation rejects release/pin mismatches before building.
+  [Package tests](test/packages.test.ts) verify rejection, preserved output, and
+  recovery after restoring matching resources. A real release upgrade remains open.
 
 ### M5 — Establish operating limits
 

@@ -65,5 +65,18 @@ console.log(JSON.stringify({ answer: answer(), watched, input: manifest.input, p
     const jsx = readFileSync(join(root, "App.jsx"), "utf8");
     expect(jsx).toContain("<main>");
     expect(jsx).toContain("<span>Packaged</span>");
+    const previous = readFileSync(join(root, "lib.js"), "utf8");
+    const resourceManifest = join(resources, "package.json");
+    writeFileSync(resourceManifest, JSON.stringify({ ...resourcePackage, version: "999.0.0" }));
+    expect(() => run([process.execPath, "check.ts"])).toThrow("Incompatible rust-js resources");
+    expect(readFileSync(join(root, "lib.js"), "utf8")).toBe(previous);
+    writeFileSync(resourceManifest, JSON.stringify(resourcePackage));
+    const pinPath = join(resources, "rust-toolchain.toml");
+    const originalPin = readFileSync(pinPath, "utf8");
+    writeFileSync(pinPath, originalPin.replace(/channel\s*=\s*"[^"]+"/, 'channel = "nightly-2000-01-01"'));
+    expect(() => run([process.execPath, "check.ts"])).toThrow("Install matching compiler and resources");
+    expect(readFileSync(join(root, "lib.js"), "utf8")).toBe(previous);
+    writeFileSync(pinPath, originalPin);
+    expect(JSON.parse(run([process.execPath, "check.ts"])).answer).toBe(42);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);

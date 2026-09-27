@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, writeFileSync, rmSync, readFileSync, mkdirSync, copyFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseManifest, mapManifestPaths } from "../tooling/manifest.js";
+import { parseManifest, mapManifestPaths, parseCompilerIdentity } from "../tooling/manifest.js";
 import { createNativeBuilder } from "../tooling/build.js";
 import { buildCompiler, compiler, root as repository } from "./support";
 
@@ -20,6 +20,15 @@ test("hosts reject incompatible and malformed manifests before consuming paths",
     expect(() => parseManifest(JSON.stringify(value))).toThrow();
   }
   expect(parseManifest(JSON.stringify(manifest))).toEqual(manifest);
+});
+
+test("compiler identities reject incompatible ABI and missing version fields", () => {
+  const identity = { version: "0.1.0", toolchain: "nightly-2026-03-25", abi: 1 };
+  expect(parseCompilerIdentity(JSON.stringify(identity))).toEqual(identity);
+  for (const value of [null, {}, [], { ...identity, abi: 2 }, { ...identity, version: "" }, { ...identity, toolchain: "" }]) {
+    expect(() => parseCompilerIdentity(JSON.stringify(value))).toThrow();
+    expect(() => parseManifest(JSON.stringify({ ...manifest, compiler: value }))).toThrow();
+  }
 });
 
 test("virtual path mapping preserves JSON escaping and unrelated values", () => {
@@ -44,6 +53,9 @@ test("native build adapter compiles an independent application and preserves out
     const builder = createNativeBuilder({ root, rustJs: compiler, bindings: [] });
     await builder.compile({ crate: source, output, manifest: manifestPath });
     const result = parseManifest(readFileSync(manifestPath, "utf8"));
+    const version = Bun.spawnSync([compiler, "--version-json"], { stdout: "pipe", stderr: "pipe" });
+    expect(version.exitCode).toBe(0);
+    expect(parseCompilerIdentity(version.stdout.toString())).toEqual(result.compiler);
     expect(result.sources).toContain(source);
     expect((await import(output)).answer()).toBe(42);
     const previous = readFileSync(output, "utf8");

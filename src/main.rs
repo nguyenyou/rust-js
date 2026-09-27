@@ -94,6 +94,13 @@ impl Callbacks for RustJs {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["--version-json"] {
+        println!(
+            "{}",
+            serde_json::to_string(&manifest::Compiler::current()).expect("serialize compiler identity")
+        );
+        return ExitCode::SUCCESS;
+    }
     if args.as_slice() == ["--version"] {
         let compiler = manifest::Compiler::current();
         println!(

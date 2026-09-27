@@ -42,6 +42,10 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   the current output contract; it does **not** establish a cross-crate ABI.
   Source dependencies list files actually loaded, not source-path records
   imported from rustc metadata. Virtual paths are remapped field by field.
+  `--version-json` exposes the same compiler identity before compilation. Hosts
+  validate its ABI and require packaged resources to match the compiler release
+  and Rust pin before preparing bindings. Development checkout resources keep
+  their existing workflow; release identity does not replace artifact checksums.
 - `tooling/build.js` prepares native compilation. Vite owns scheduling, watching,
   overlays and refresh. The `rust-js-build` package exposes build, manifest, and
   publication entry points; Vite and the playground use declared dependencies

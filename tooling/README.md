@@ -55,6 +55,16 @@ The isolated package test exercises both React/JSX and Serde using these unpacke
 resources. Native compiler installation, release checksums, platform qualification,
 and published package installation remain separate distribution work.
 
+For packaged resources, the adapter queries `rust-js --version-json` before
+preparing metadata. The response contains `version`, `toolchain`, and `abi`,
+matching the compiler identity in emitted manifests. The adapter requires the
+resource package's version and Rust pin to match, and accepts only ABI 1.
+Mismatch errors report both identities and leave existing output untouched.
+`rust-js --version` remains the human-readable form. Source-checkout resources
+without the `rust-js-resources` package identity retain the development workflow.
+Matching version fields are a compatibility check, not proof of artifact
+provenance; release checksums and qualification are still needed.
+
 Use absolute compiler, resource, cache and extern paths. Crate and output paths
 may also be relative to `root`. `watchFiles` lists toolchain and binding inputs;
 add the validated manifest's `sources` for the application's watch set.

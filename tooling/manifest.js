@@ -1,4 +1,17 @@
 // The compiler's versioned build result. Shared by native and WASI hosts.
+function validCompiler(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && typeof value.version === "string" && value.version.length > 0
+    && typeof value.toolchain === "string" && value.toolchain.length > 0
+    && value.abi === 1;
+}
+
+export function parseCompilerIdentity(text) {
+  const value = JSON.parse(text);
+  if (!validCompiler(value)) throw new Error("Unsupported rust-js compiler identity or ABI; expected ABI 1");
+  return value;
+}
+
 export function parseManifest(text) {
   let result;
   try { result = JSON.parse(text); }
@@ -10,9 +23,7 @@ export function parseManifest(text) {
   if (!object(result) || result.version !== 1) {
     throw new Error(`Unsupported rust-js manifest version ${result?.version}; expected 1`);
   }
-  if (result.compiler !== undefined && (!object(result.compiler)
-      || typeof result.compiler.version !== "string" || typeof result.compiler.toolchain !== "string"
-      || result.compiler.abi !== 1)) {
+  if (result.compiler !== undefined && !validCompiler(result.compiler)) {
     throw new Error("Unsupported rust-js compiler identity or ABI; expected ABI 1");
   }
   if (!path(result.input) || !path(result.output) || !paths(result.sources)

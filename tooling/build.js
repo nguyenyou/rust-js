@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resourceInputs } from "./resources.js";
+import { parseCompilerIdentity } from "./manifest.js";
 
 export const defaultResources = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const defaultCompiler = join(defaultResources, "target/debug/rust-js");
@@ -43,6 +44,17 @@ export function createNativeBuilder({ root, rustJs = defaultCompiler, resources 
     if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: run bun run build in the rust-js repository`);
     const react = bindings.includes("react") ? installedReact() : null;
     if (!bindings.length) return { flags: [], react };
+    const packagePath = join(repo, "package.json");
+    if (existsSync(packagePath)) {
+      const resourcePackage = JSON.parse(await readFile(packagePath, "utf8"));
+      if (resourcePackage.name === "rust-js-resources") {
+        const identity = parseCompilerIdentity(await run(rustJs, ["--version-json"], root));
+        const pin = (await readFile(join(repo, "rust-toolchain.toml"), "utf8")).match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
+        if (resourcePackage.version !== identity.version || pin !== identity.toolchain) {
+          throw new Error(`Incompatible rust-js resources: compiler ${identity.version} (${identity.toolchain}), resources ${resourcePackage.version} (${pin ?? "missing Rust pin"}). Install matching compiler and resources.`);
+        }
+      }
+    }
     const hash = createHash("sha256").update(JSON.stringify({ resources: resolve(resources), react, bindings, rustcFlags }));
     hash.update(await readFile(rustJs));
     for (const path of metadataInputs) hash.update(await readFile(path));
@@ -79,7 +91,7 @@ export function createNativeBuilder({ root, rustJs = defaultCompiler, resources 
   }
 
   return {
-    watchFiles: [...metadataInputs, rustJs, ...Object.values(externs)],
+    watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), rustJs, ...Object.values(externs)],
     prepare,
     async compile({ crate, output, manifest }) {
       const { flags, react } = await prepare();
