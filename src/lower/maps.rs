@@ -2,7 +2,7 @@
 //! what JS compares by value: numbers, strings, `char`s, `bool`s and
 //! fieldless enums.
 
-use super::stdlib::Std;
+use super::recognition::Std;
 use super::{FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
@@ -58,17 +58,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A `HashMap`, `HashSet`, `BTreeMap` or `BTreeSet`: a JS `Map` or `Set`.
     /// serde_json's `Map` is one too, a `BTreeMap` (ADR 0083).
     pub(super) fn is_map(&self, ty: Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
-        ["HashMap", "HashSet", "BTreeMap", "BTreeSet"]
-            .into_iter()
-            .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
-            || self.is_json_map(ty)
+        self.recognition().is_map(ty)
     }
 
     /// A `HashSet` or `BTreeSet`: a JS `Set`.
     pub(super) fn is_set(&self, ty: Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
-        self.is_std_adt(ty, Symbol::intern("HashSet")) || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
+        self.recognition().is_set(ty)
     }
 
     /// A `BTreeMap` or `BTreeSet`, whose order is its keys' (ADR 0059).

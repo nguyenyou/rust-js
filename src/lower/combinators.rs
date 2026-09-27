@@ -99,8 +99,7 @@ pub(super) enum HeapOp {
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Is `ty` a `Peekable`, which is always a `$iter` (ADR 0071)?
     pub(super) fn is_peekable(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
-            && self.tcx.item_name(adt.did()).as_str() == "Peekable")
+        self.recognition().is_peekable(ty)
     }
 
     /// Does `e` name one that knows where it is: a `Peekable`, or a local

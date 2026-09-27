@@ -26,6 +26,12 @@ test("lowering and artifact planning cannot publish files", () => {
   }
 });
 
+test("library recognition cannot access function emission state", () => {
+  const recognition = read("src/lower/recognition.rs");
+  expect(recognition).not.toMatch(/\b(?:FnCx|ExprId|Stmt)\b|\bRefCell\s*<|crate::js|runtime::|&mut\s+self/);
+  expect(recognition).toContain("pub(super) struct Recognition");
+});
+
 test("Vite delegates build preparation and validates build results", () => {
   const plugin = read("vite-plugin/index.js");
   expect(plugin).not.toMatch(/react\/build\.sh|libreact\.rmeta|rust-toolchain\.toml|child_process/);

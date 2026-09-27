@@ -3,8 +3,8 @@
 use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
 use super::combinators::StepOp;
 use super::numbers::NumOp;
+use super::recognition::Std;
 use super::representation::Num;
-use super::stdlib::Std;
 use super::text::TextOp;
 use super::{FnCx, R, camel_case, global};
 use crate::js;

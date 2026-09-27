@@ -5,6 +5,7 @@
 //! `"i"`nteger or `"f"`loat, as serde_json keeps one.
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
+use crate::lower::recognition::Json;
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R};
 use crate::runtime::Helper;
@@ -14,33 +15,14 @@ use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 
-/// serde_json's own types, by name.
-#[derive(Clone, Copy, PartialEq)]
-pub(in crate::lower) enum Json {
-    Value,
-    Number,
-    Map,
-}
-
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `serde_json::Value`, `Number` or `Map`.
     pub(in crate::lower) fn json_type(&self, ty: Ty<'tcx>) -> Option<Json> {
-        let ty::Adt(adt, _) = ty.peel_refs().kind() else {
-            return None;
-        };
-        if self.tcx.crate_name(adt.did().krate).as_str() != "serde_json" {
-            return None;
-        }
-        Some(match self.tcx.item_name(adt.did()).as_str() {
-            "Value" => Json::Value,
-            "Number" => Json::Number,
-            "Map" => Json::Map,
-            _ => return None,
-        })
+        self.recognition().json_type(ty)
     }
 
     pub(in crate::lower) fn is_json_map(&self, ty: Ty<'tcx>) -> bool {
-        self.json_type(ty) == Some(Json::Map)
+        self.recognition().is_json_map(ty)
     }
 
     pub(in crate::lower) fn is_json_number(&self, ty: Ty<'tcx>) -> bool {

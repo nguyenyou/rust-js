@@ -46,6 +46,7 @@ mod link;
 mod maps;
 mod numbers;
 mod ordering;
+mod recognition;
 mod representation;
 mod serde;
 mod sources;
@@ -58,11 +59,11 @@ use crate::program::{Lowered, LoweredImport, LoweredModule, TestFn};
 use crate::runtime::Helper;
 pub use analysis::{collect_bodies, lower_crate};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
+use recognition::Std;
 use representation::{
     Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, variant_field,
 };
 pub use serde::{SerdeAttributes, attributes as serde_attributes};
-use stdlib::Std;
 
 type R<T> = Result<T, ErrorGuaranteed>;
 
@@ -3468,4 +3469,14 @@ fn stepped_locals(tcx: TyCtxt<'_>, thir: &Thir<'_>) -> HashSet<LocalVarId> {
         }
     }
     stepped
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    fn recognition(&self) -> recognition::Recognition<'_, 'tcx> {
+        recognition::Recognition {
+            tcx: self.tcx,
+            typing_env: self.typing_env,
+            trait_impls: self.krate.trait_impls,
+        }
+    }
 }

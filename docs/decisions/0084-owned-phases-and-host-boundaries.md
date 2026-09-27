@@ -26,6 +26,14 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   component selections and child computations retain their original order;
   conditional inputs remain inside their selected branches. Static inputs and
   immutable local bindings need no temporary.
+- `lower/recognition.rs` classifies standard-library calls from a definition ID
+  and generic arguments. Its context contains only rustc type queries, the typing
+  environment, and immutable local trait-implementation identities. It cannot
+  access function locals, dependency recording, temporary allocation, statement
+  output, or runtime-helper selection. Shared type/trait predicates live there;
+  lowering delegates to them instead of duplicating recognition rules. Formatting
+  and iterator emission remain in `stdlib.rs`. Serde Value operation dispatch
+  and other feature-specific recognition still need further separation.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature

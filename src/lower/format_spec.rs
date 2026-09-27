@@ -2,8 +2,8 @@
 //! apply where Rust applies them: numbers, strings, `char`s and `bool`s pad,
 //! and a `fmt` that writes with `write!` ignores them, as it does in Rust.
 
+use super::recognition::Std;
 use super::representation::Num;
-use super::stdlib::Std;
 use super::{FnCx, R};
 use crate::js::{Expr, Op};
 use crate::runtime::Helper;

@@ -25,7 +25,7 @@
 mod de;
 mod value;
 
-pub(super) use value::Json;
+pub(super) use super::recognition::Json;
 
 use super::bindings::variant_name;
 use super::representation::{Num, variant_field};

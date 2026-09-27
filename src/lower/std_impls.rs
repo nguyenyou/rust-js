@@ -19,20 +19,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The trait's arguments for `Self = ty`, with `ty` for any others too:
     /// `PartialEq`'s `Rhs` is `Self` unless it says otherwise.
     pub(super) fn args_of(&self, trait_id: DefId, ty: Ty<'tcx>) -> ty::GenericArgsRef<'tcx> {
-        let ty = self.tcx.erase_and_anonymize_regions(ty);
-        self.tcx.mk_args_from_iter(std::iter::repeat_n(
-            ty::GenericArg::from(ty),
-            self.tcx.generics_of(trait_id).count(),
-        ))
+        self.recognition().args_of(trait_id, ty)
     }
 
     /// Does `ty` use a hand-written impl of `trait_id` from this crate?
     pub(super) fn has_user_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
-        self.is_user_impl(ty::TraitRef::new_from_args(
-            self.tcx,
-            trait_id,
-            self.args_of(trait_id, ty),
-        ))
+        self.recognition().has_user_impl(trait_id, ty)
     }
 
     /// Is the crate's impl of `trait_id` for `ty` a `#[derive]`d one?
@@ -46,9 +38,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is `tr` a hand-written impl from this crate?
     pub(super) fn is_user_impl(&self, tr: ty::TraitRef<'tcx>) -> bool {
-        let tr = self.tcx.erase_and_anonymize_regions(tr);
-        matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
-            Ok(ImplSource::UserDefined(imp)) if self.krate.trait_impls.contains(&imp.impl_def_id))
+        self.recognition().is_user_impl(tr)
     }
 
     /// `method` of the hand-written impl for the trait's `args`, called

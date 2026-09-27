@@ -122,7 +122,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(reader("string"));
         }
         // serde_json's `Value` and `Number` (ADR 0083); its `Map` is a map.
-        if self.json_type(ty) == Some(super::value::Json::Value) {
+        if self.json_type(ty) == Some(super::Json::Value) {
             self.runtime.insert(Helper::JsonValue);
             return Ok(reader("value"));
         }

@@ -18,8 +18,7 @@ use rustc_span::{Span, Symbol, sym};
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `str`, `String`, `char`, or a reference to one: all JS strings.
     pub(super) fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
-        let ty = ty.peel_refs();
-        ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
+        self.recognition().is_string_like(ty)
     }
 
     /// Eligibility for JS Map/Set equality. A string-shaped enum alone is
@@ -165,11 +164,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.is_diagnostic_item(name, adt.did()))
+        self.recognition().is_std_adt(ty, name)
     }
 
     pub(super) fn is_lang_adt(&self, ty: Ty<'tcx>, item: LangItem) -> bool {
-        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.is_lang_item(adt.did(), item))
+        self.recognition().is_lang_adt(ty, item)
     }
 
     /// std types that aren't plain structs in JS: `String` is a JS string,
@@ -188,10 +187,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A `Vec`, a `VecDeque` or a `BinaryHeap`: a JS array (ADR 0068). A
     /// heap's array is in the order Rust's own heap keeps it.
     pub(super) fn is_vec_like(&self, ty: Ty<'tcx>) -> bool {
-        self.is_std_adt(ty, sym::Vec)
-            || ["VecDeque", "BinaryHeap"]
-                .into_iter()
-                .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+        self.recognition().is_vec_like(ty)
     }
 
     /// Is a `ty` value a JS object? Then a reference to it, even `&mut`, can
@@ -224,18 +220,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// its only field is `PhantomData` of an extern type. Rust never builds
     /// one; it only holds references to them, which are the JS objects.
     pub(super) fn is_js_object(&self, ty: Ty<'tcx>) -> bool {
-        let ty::Adt(adt, args) = ty.kind() else { return false };
-        if !adt.is_struct() {
-            return false;
-        }
-        // `PhantomData<JsObject>`, then only more markers, for a generic one
-        // like `Promise<T>`.
-        let mut fields = adt.non_enum_variant().fields.iter().map(|f| f.ty(self.tcx, args));
-        let first = fields.next();
-        first.is_some_and(|field| {
-            matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
-            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))
-        }) && fields.all(|field| matches!(field.kind(), ty::Adt(marker, _) if marker.is_phantom_data()))
+        self.recognition().is_js_object(ty)
     }
 
     /// An enum variant's fields as JS properties (ADR 0033): `_0`, `_1` for a
