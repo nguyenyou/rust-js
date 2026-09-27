@@ -449,6 +449,13 @@ fn main() {
         case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));
         case("structs.divmod_sum", &[a as i64, b as i64], || structs::divmod_sum(a, b) as i64);
     }
+    // The harness's own values, which the JS test answers as JS holds them:
+    // text JSON must escape, what JSON has no number for, and a panic's
+    // message with quotes and a line break.
+    case("harness.escapes", &[], || "tab\t nul\0 esc\u{1b} \"quoted\" back\\slash é".to_string());
+    case("harness.floats", &[], || vec![-0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.1 + 0.2]);
+    case("harness.bigint", &[], || u64::MAX);
+    case("harness.panic", &[], || -> u32 { panic!("a \"quoted\"\nmessage") });
 }
 
 fn case<T: Json>(name: &str, args: &[i64], f: impl FnOnce() -> T + UnwindSafe) {
@@ -462,13 +469,34 @@ fn case_with<T: Json>(name: &str, args: &[&dyn Json], f: impl FnOnce() -> T + Un
     let outcome = match panic::catch_unwind(f) {
         Ok(v) => format!("\"value\":{}", v.json()),
         Err(e) => {
-            let msg = e.downcast_ref::<&str>().map(|s| s.to_string())
+            // A message the JS must match exactly: without one, the case
+            // can't be compared, so the run stops rather than pass it.
+            let Some(msg) = e.downcast_ref::<&str>().map(|s| s.to_string())
                 .or_else(|| e.downcast_ref::<String>().cloned())
-                .unwrap_or_default();
-            format!("\"panic\":{msg:?}")
+            else {
+                eprintln!("{name} panicked with a payload that isn't a string");
+                std::process::exit(1);
+            };
+            format!("\"panic\":{}", msg.json())
         }
     };
-    println!("{{\"fn\":{name:?},\"args\":[{args}],{outcome}}}");
+    println!("{{\"fn\":{},\"args\":[{args}],{outcome}}}", name.json());
+}
+
+/// A string as JSON writes it; `{:?}` writes some characters as `\u{1b}`
+/// or `\0`, which JSON can't read.
+fn json_string(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 trait Json {
@@ -499,9 +527,10 @@ impl Json for u8 {
     }
 }
 
+/// A `u64` is a BigInt in JS (ADR 0086), which JSON has no number for.
 impl Json for u64 {
     fn json(&self) -> String {
-        self.to_string()
+        format!("{{\"$bigint\":\"{self}\"}}")
     }
 }
 
@@ -519,19 +548,19 @@ impl Json for bool {
 
 impl Json for &str {
     fn json(&self) -> String {
-        format!("{self:?}")
+        json_string(self)
     }
 }
 
 impl Json for char {
     fn json(&self) -> String {
-        format!("{:?}", self.to_string())
+        json_string(&self.to_string())
     }
 }
 
 impl Json for String {
     fn json(&self) -> String {
-        format!("{self:?}")
+        json_string(self)
     }
 }
 
@@ -603,9 +632,22 @@ impl<T: Json, E: Json> Json for Result<T, E> {
     }
 }
 
+/// JSON has no -0, NaN or infinities, so they're tagged.
 impl Json for f64 {
     fn json(&self) -> String {
-        self.to_string()
+        let special = if self.is_nan() {
+            Some("NaN")
+        } else if self.is_infinite() {
+            Some(if *self > 0.0 { "inf" } else { "-inf" })
+        } else if *self == 0.0 && self.is_sign_negative() {
+            Some("-0")
+        } else {
+            None
+        };
+        match special {
+            Some(special) => format!("{{\"$f64\":\"{special}\"}}"),
+            None => self.to_string(),
+        }
     }
 }
 

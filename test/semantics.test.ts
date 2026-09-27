@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { decode, expected, observe, type Outcome } from "./oracle";
 import { buildCompiler, compiler, fixture, root, run } from "./support";
 
 const cases: [string, boolean | number][] = [
@@ -14,28 +15,33 @@ const cases: [string, boolean | number][] = [
     [false, true].map(value => [name, value] as [string, boolean])),
 ];
 let generated: Record<string, (arg: any) => number[]>;
-let expected: (number[] | "panic")[];
+let native: Outcome[];
 beforeAll(async () => {
   buildCompiler();
   const dir = fixture("semantics");
   copyFileSync(join(root, "test/semantics.rs"), join(dir, "cases.rs"));
+  // Each outcome as a JSON line: the value, or the panic's message, which
+  // the JS must match exactly. The messages here are plain text, which
+  // `{:?}` writes as JSON does.
   writeFileSync(join(dir, "native.rs"), `mod cases;
+fn message(e: Box<dyn std::any::Any + Send>) -> String {
+  e.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| e.downcast_ref::<String>().cloned())
+    .expect("a panic with a message")
+}
 fn main() { ${cases.map(([name, arg]) => `
   match std::panic::catch_unwind(|| cases::${name}(${arg})) {
-    Ok(value) => println!("{:?}", value),
-    Err(_) => println!("\\\"panic\\\""),
+    Ok(value) => println!("{{\\"value\\":{:?}}}", value),
+    Err(e) => println!("{{\\"panic\\":{:?}}}", message(e)),
   }`).join("\n")} }`);
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native")]);
-  expected = run([join(dir, "native")]).trim().split("\n").map(line => JSON.parse(line));
+  native = run([join(dir, "native")]).trim().split("\n").map(line => expected(decode(line)));
   run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js")]);
   generated = await import(join(dir, "cases.js"));
 }, 600_000);
 
 for (const [index, [name, arg]] of cases.entries()) {
   test(`${name}(${arg}) preserves native values, effects and panics`, () => {
-    let actual: number[] | "panic";
-    try { actual = generated[name](arg); } catch { actual = "panic"; }
-    expect(actual).toEqual(expected[index]);
+    expect(observe(() => generated[name](arg))).toStrictEqual(native[index]);
   });
 }
 

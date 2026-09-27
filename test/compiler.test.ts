@@ -7,11 +7,20 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
+import { decode, expected, observe, same, type Outcome } from "./oracle";
 import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
-let cases: Case[] = [];
+
+// Native Rust runs as the file loads, so each function it called is a test
+// of its own. Same semantics rust-js targets: the release profile, where
+// arithmetic wraps.
+run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--crate-name=modules",
+  "examples/modules/lib.rs", "-o", join(target, "libmodules.rlib")]);
+run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--extern", `modules=${join(target, "libmodules.rlib")}`,
+  ...buildSerde("rlib"), "test/native.rs", "-o", join(target, "native")]);
+const cases: Case[] = run([join(target, "native")]).trim().split("\n").map(decode);
 let fib: Record<string, (...args: any[]) => number>;
 let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;
@@ -51,12 +60,6 @@ let asyncs: Record<string, (...args: any[]) => any>;
 beforeAll(async () => {
   buildCompiler();
   run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
-  // Same semantics rust-js targets: the release profile, where arithmetic wraps.
-  run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--crate-name=modules",
-    "examples/modules/lib.rs", "-o", join(target, "libmodules.rlib")]);
-  run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--extern", `modules=${join(target, "libmodules.rlib")}`,
-    ...buildSerde("rlib"), "test/native.rs", "-o", join(target, "native")]);
-  cases = run([join(target, "native")]).trim().split("\n").map((line) => JSON.parse(line));
   fib = await import(join(target, "fib.js"));
   run([join(target, "debug", "rust-js"), "examples/structs.rs", "-o", join(target, "structs.js")]);
   structs = await import(join(target, "structs.js"));
@@ -171,10 +174,10 @@ function call(c: Case): unknown {
         return threadLocals[path[1]](...c.args);
       }
       if (path[0] === "iterators") {
-        return JSON.parse(JSON.stringify(iterators[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+        return iterators[path[1]](...c.args);
       }
       if (path[0] === "results") {
-        return JSON.parse(JSON.stringify(results[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+        return results[path[1]](...c.args);
       }
       if (path[0] === "strings") {
         return strings[path[1]](...c.args);
@@ -183,10 +186,10 @@ function call(c: Case): unknown {
         return enums[path[1]](...c.args);
       }
       if (path[0] === "consts") {
-        return JSON.parse(JSON.stringify(consts[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+        return consts[path[1]](...c.args);
       }
       if (path[0] === "generic_options") {
-        return JSON.parse(JSON.stringify(genericOptions[path[1]](...c.args), (_, x) => (x === undefined ? null : x)));
+        return genericOptions[path[1]](...c.args);
       }
       if (path[0] === "combinators") {
         return combinators[path[1]](...c.args);
@@ -240,9 +243,10 @@ function call(c: Case): unknown {
         return methods[path[1]](...c.args);
       }
       if (path[0] === "options") {
-        // `None` is `undefined` in JS, and `null` in the JSON: compare them as one.
-        const value = options[path[1]](...c.args);
-        return JSON.parse(JSON.stringify(value, (_, x) => (x === undefined ? null : x)));
+        return options[path[1]](...c.args);
+      }
+      if (path[0] === "harness") {
+        return harness[path[1]]();
       }
       if (path[0] === "modules") {
         const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
@@ -253,17 +257,34 @@ function call(c: Case): unknown {
   }
 }
 
-test("generated JS matches native Rust on every case", () => {
+// What JS holds for the harness's own values in test/native.rs: if these
+// match, its encoding loses nothing.
+const harness: Record<string, () => unknown> = {
+  escapes: () => 'tab\t nul\0 esc\u001b "quoted" back\\slash é',
+  floats: () => [-0, NaN, Infinity, -Infinity, 0.1 + 0.2],
+  bigint: () => 18446744073709551615n,
+  panic: () => {
+    throw new Error('a "quoted"\nmessage');
+  },
+};
+
+test("native Rust ran every case", () => {
   expect(cases.length).toBeGreaterThan(100);
-  for (const c of cases) {
-    const label = `${c.fn}(${c.args.map((a) => JSON.stringify(a)).join(", ")})`;
-    if (c.panic !== undefined) {
-      expect(() => call(c), label).toThrow(c.panic);
-    } else {
-      expect([label, call(c)]).toEqual([label, c.value]);
-    }
-  }
 });
+
+// One test per function, reporting every call that differs, not just the first.
+for (const [fn, calls] of Map.groupBy(cases, (c) => c.fn)) {
+  test(`${fn} matches native Rust`, () => {
+    const differ: { call: string; native: Outcome; js: Outcome }[] = [];
+    for (const c of calls) {
+      const js = observe(() => call(c));
+      if (!same(js, expected(c))) {
+        differ.push({ call: `${fn}(${c.args.map((a) => Bun.inspect(a)).join(", ")})`, native: expected(c), js });
+      }
+    }
+    expect(differ).toEqual([]);
+  });
+}
 
 // ADR 0019: one JS file per module, with generated imports and exports.
 test("a crate split across files becomes one JS file per module", async () => {
