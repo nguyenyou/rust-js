@@ -1,11 +1,6 @@
 name: Check
 
 on:
-  pull_request:
-  push:
-  schedule:
-    # 02:17 in Vietnam (UTC+7), away from the busy start of the hour.
-    - cron: '17 19 * * *'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +46,7 @@ jobs:
           git init -q wasm/rustc
           git -C wasm/rustc remote add origin https://github.com/rust-lang/rust.git
           git -C wasm/rustc sparse-checkout set --cone compiler library/proc_macro
-          git -C wasm/rustc fetch -q --depth=1 --filter=blob:none origin 362211dc29abc4e8f8cfc384740237f144929b03
+          git -C wasm/rustc fetch -q --depth=1 --filter=blob:none origin "$(bun scripts/toolchain.ts commit)"
           git -C wasm/rustc checkout -q FETCH_HEAD
       - uses: actions/cache@v6
         with:

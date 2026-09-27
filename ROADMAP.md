@@ -95,7 +95,8 @@ pilot. No delivery dates are assigned yet.
   and main updates, and require successful checks before merging. Include
   formatting, Clippy, Rust tests, differential tests, snapshots, browser tests,
   and the production example build. Today [Check](.github/workflows/check.yml)
-  now runs on pull requests and pushes as well as scheduled/manual runs.
+  runs manually only; automatic and scheduled runs are deferred to avoid
+  GitHub Actions costs during development.
   Branch-protection enforcement still needs repository configuration.
 - [ ] **M2.2 — Require fresh native/browser parity.** Build or fetch WASM for
   the exact candidate sources and run parity plus playground behavior tests

@@ -6,8 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-TOOLCHAIN=nightly-2026-03-25
-COMMIT=362211dc29abc4e8f8cfc384740237f144929b03
+TOOLCHAIN=$(bun ../scripts/toolchain.ts channel)
+COMMIT=$(bun ../scripts/toolchain.ts commit)
 
 # 1. rustc's source: a worktree of a rust-lang/rust clone, at the pinned commit.
 if [ ! -d rustc/compiler ]; then
@@ -17,6 +17,7 @@ if [ ! -d rustc/compiler ]; then
   echo "  git -C $PWD/rustc checkout" >&2
   exit 1
 fi
+bun ../scripts/toolchain.ts check-source "$PWD/rustc"
 
 # 2. Our patches to rustc. Skip ones already applied; fail loudly on conflicts.
 for patch in patches/*.patch; do
@@ -35,7 +36,7 @@ SYSROOT=$(rustc "+$TOOLCHAIN" --print sysroot)
 HOST=$(rustc "+$TOOLCHAIN" -vV | sed -n 's/^host: //p')
 export AR_wasm32_wasip1="$SYSROOT/lib/rustlib/$HOST/bin/llvm-ar"
 
-cargo "+$TOOLCHAIN" build --release
+cargo "+$TOOLCHAIN" build --release --locked
 
 # 4. Record which committed inputs this build came from (`dirty` if there were
 #    uncommitted changes), so `prebuilt.sh publish` can refuse a stale binary.

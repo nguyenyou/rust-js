@@ -13,15 +13,23 @@ You need the pinned toolchain (`rust-toolchain.toml` one level up) and a
 rust-lang/rust clone to take rustc's source from:
 
 ```bash
-git -C <rust clone> worktree add --no-checkout "$PWD/rustc" 362211dc29abc4e8f8cfc384740237f144929b03
+cd wasm
+COMMIT=$(bun ../scripts/toolchain.ts commit)
+git -C <rust clone> worktree add --no-checkout "$PWD/rustc" "$COMMIT"
 git -C rustc sparse-checkout set --cone compiler library/proc_macro
 git -C rustc checkout
 bun run wasm        # runs ./build.sh
 ```
 
-`build.sh` applies `patches/`, builds `target/wasm32-wasip1/release/rust-js.wasm`
+`build.sh` first checks that the checkout matches the pinned compiler's source
+commit, then applies `patches/`, builds `target/wasm32-wasip1/release/rust-js.wasm`
 and stages `sysroot/`, the official `wasm32-unknown-unknown` metadata that
 programs are type-checked against.
+
+Native builds, WASM builds, and deployment all read the root
+`rust-toolchain.toml`. `scripts/toolchain.ts` obtains the matching source commit
+from that installed compiler's `rustc -vV`; a toolchain upgrade does not require
+copying a date or commit into the build scripts or workflows.
 
 ## Run
 

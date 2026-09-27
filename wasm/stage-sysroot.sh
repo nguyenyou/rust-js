@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-TOOLCHAIN=nightly-2026-03-25
+TOOLCHAIN=$(bun ../scripts/toolchain.ts channel)
 
 rustup target add wasm32-unknown-unknown --toolchain "$TOOLCHAIN" >/dev/null
 SYSROOT=$(rustc "+$TOOLCHAIN" --print sysroot)

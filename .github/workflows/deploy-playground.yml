@@ -20,16 +20,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  TOOLCHAIN: nightly-2026-03-25
-  # The rust-lang/rust commit that nightly was built from (see wasm/README.md).
-  RUSTC_COMMIT: 362211dc29abc4e8f8cfc384740237f144929b03
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
 
       - name: Use a prebuilt rust-js.wasm, if one matches these sources
         id: prebuilt
@@ -44,6 +42,7 @@ jobs:
 
       - name: Install the pinned toolchain
         run: |
+          TOOLCHAIN=$(bun scripts/toolchain.ts channel)
           rustup toolchain install "$TOOLCHAIN" --profile minimal \
             --component llvm-tools \
             --target wasm32-wasip1 --target wasm32-unknown-unknown
@@ -52,6 +51,7 @@ jobs:
       - name: Fetch rustc's source at the pinned commit
         if: steps.prebuilt.outputs.found != 'true'
         run: |
+          RUSTC_COMMIT=$(bun scripts/toolchain.ts commit)
           git init -q wasm/rustc
           cd wasm/rustc
           git remote add origin https://github.com/rust-lang/rust.git
@@ -66,7 +66,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             wasm/target
-          key: wasm-${{ runner.os }}-${{ hashFiles('wasm/Cargo.lock', 'wasm/patches/*', 'wasm/.cargo/config.toml') }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('wasm/Cargo.lock', 'wasm/patches/*', 'wasm/.cargo/config.toml', 'rust-toolchain.toml') }}
           restore-keys: wasm-${{ runner.os }}-
 
       - name: Build rust-js.wasm
@@ -77,8 +77,6 @@ jobs:
       - name: Stage the sysroot
         if: steps.prebuilt.outputs.found == 'true'
         run: wasm/stage-sysroot.sh
-
-      - uses: oven-sh/setup-bun@v2
 
       - name: Build the static site
         run: |

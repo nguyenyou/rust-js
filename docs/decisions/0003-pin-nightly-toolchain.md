@@ -44,3 +44,16 @@ it changes between nightlies without notice, and a rename can break us any day.
   Linux, not Windows.
 - Upgrading the pin is a maintenance task we'll repeat. Do it in its own
   commit.
+
+## Amendment: one authoritative pin
+
+Native builds, WASM scripts, and CI/deployment use the root
+`rust-toolchain.toml`. `scripts/toolchain.ts` reads its channel and resolves the
+source commit through the installed pinned compiler's `rustc -vV`. Before
+applying patches or building, the WASM build rejects a rustc checkout whose
+HEAD differs from that commit. Applied WASM patches are allowed on the matching
+base. WASM builds also use `--locked` to keep dependency resolution explicit.
+
+This removes duplicate executable pins; an upgrade still requires adapting
+rustc integration, patches, bootstrap settings, and lockfiles, then running
+native tests and freshly built WASM parity checks.

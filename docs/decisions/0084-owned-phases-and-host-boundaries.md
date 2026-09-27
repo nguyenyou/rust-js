@@ -82,7 +82,8 @@ untrusted preview payloads. `test/playground.test.ts` checks a real worker,
 cancellation followed by recovery, the preview origin boundary, and freshly
 built native/WASI output parity.
 
-The Check workflow now runs on pull requests and pushes. Its separate WASM job
+The Check workflow is manual-only to avoid automatic GitHub Actions costs during
+development. Its separate WASM job
 builds from candidate sources and requires playground parity rather than silently
 skipping missing WASM. Repository branch-protection settings remain external to
 this checkout; the workflow alone does not enforce merging policy.

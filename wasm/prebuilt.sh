@@ -18,9 +18,9 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 WASM=wasm/target/wasm32-wasip1/release/rust-js.wasm
 STAMP=$WASM.inputs
-# Everything that can change the binary. The toolchain and the rustc commit
-# are pinned inside build.sh, so they're covered too.
-INPUTS=(src Cargo.toml rust-toolchain.toml wasm/Cargo.toml wasm/Cargo.lock wasm/.cargo wasm/patches wasm/build.sh)
+# Everything that can change the binary, including the root toolchain pin
+# and the helper that resolves its rustc source commit.
+INPUTS=(src Cargo.toml rust-toolchain.toml scripts/toolchain.ts wasm/Cargo.toml wasm/Cargo.lock wasm/.cargo wasm/patches wasm/build.sh)
 
 die() {
   echo "prebuilt.sh: $*" >&2
