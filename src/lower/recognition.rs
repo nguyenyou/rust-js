@@ -758,10 +758,7 @@ pub(super) enum JsonCall<'tcx> {
         json: Json,
     },
     Default,
-    Method {
-        name: Symbol,
-        owner: Ty<'tcx>,
-    },
+    Method(JsonMethod),
 }
 
 impl<'a, 'tcx> Recognition<'a, 'tcx> {
@@ -819,6 +816,58 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         let imp = tcx.inherent_impl_of_assoc(def_id)?;
         let owner = tcx.type_of(imp).instantiate_identity();
-        matches!(self.json_type(owner), Some(Json::Value | Json::Number)).then_some(JsonCall::Method { name, owner })
+        match self.json_type(owner)? {
+            json @ (Json::Value | Json::Number) => Some(JsonCall::Method(JsonMethod::recognize(json, name))),
+            Json::Map => None,
+        }
+    }
+}
+
+/// Inherent Value/Number operations, selected before operand emission.
+pub(super) enum JsonMethod {
+    NumberFromF64,
+    NumberAsF64,
+    NumberKind(&'static str),
+    NumberIsI64,
+    IsNull,
+    IsTag(&'static str),
+    IsNumber(&'static str),
+    AsTag(&'static str),
+    AsF64,
+    Get,
+    Unsupported { owner: &'static str, name: Symbol },
+}
+
+impl JsonMethod {
+    fn recognize(json: Json, name: Symbol) -> Self {
+        if json == Json::Number {
+            return match name.as_str() {
+                "from_f64" => Self::NumberFromF64,
+                "as_f64" => Self::NumberAsF64,
+                "is_f64" => Self::NumberKind("f"),
+                "is_u64" => Self::NumberKind("u"),
+                "is_i64" => Self::NumberIsI64,
+                _ => Self::Unsupported { owner: "Number", name },
+            };
+        }
+        match name.as_str() {
+            "is_null" => Self::IsNull,
+            "is_boolean" => Self::IsTag("Bool"),
+            "is_number" => Self::IsTag("Number"),
+            "is_string" => Self::IsTag("String"),
+            "is_array" => Self::IsTag("Array"),
+            "is_object" => Self::IsTag("Object"),
+            "is_f64" => Self::IsNumber("f64"),
+            "is_u64" => Self::IsNumber("u64"),
+            "is_i64" => Self::IsNumber("i64"),
+            "as_bool" => Self::AsTag("Bool"),
+            "as_str" => Self::AsTag("String"),
+            "as_array" | "as_array_mut" => Self::AsTag("Array"),
+            "as_object" | "as_object_mut" => Self::AsTag("Object"),
+            "as_number" => Self::AsTag("Number"),
+            "as_f64" => Self::AsF64,
+            "get" | "get_mut" => Self::Get,
+            _ => Self::Unsupported { owner: "Value", name },
+        }
     }
 }

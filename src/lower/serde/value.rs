@@ -5,7 +5,7 @@
 //! `"i"`nteger or `"f"`loat, as serde_json keeps one.
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
-use crate::lower::recognition::{Json, JsonCall};
+use crate::lower::recognition::{Json, JsonCall, JsonMethod};
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R};
 use crate::runtime::Helper;
@@ -106,9 +106,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }))
             }
             JsonCall::Default => Ok(Some(Expr::str("Null"))),
-            JsonCall::Method { name, owner } => {
+            JsonCall::Method(method) => {
                 let values = self.operands(args, out)?;
-                self.json_value_method(name.as_str(), owner, values, span).map(Some)
+                self.json_value_method(method, values, span).map(Some)
             }
         }
     }
@@ -172,50 +172,39 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// A method of `Value` or `Number`, as serde_json's does it.
-    fn json_value_method(&mut self, name: &str, receiver_ty: Ty<'tcx>, mut values: Vec<Expr>, span: Span) -> R<Expr> {
+    fn json_value_method(&mut self, method: JsonMethod, mut values: Vec<Expr>, span: Span) -> R<Expr> {
         self.use_value();
-        let json = self.json_type(receiver_ty);
         // `Number::from_f64(x)`: `None` unless it's finite.
-        if json == Some(Json::Number) && name == "from_f64" {
-            return Ok(Expr::call(Expr::var("$jsonNumberOfF64"), values));
+        match method {
+            JsonMethod::NumberFromF64 => return Ok(Expr::call(Expr::var("$jsonNumberOfF64"), values)),
+            JsonMethod::Unsupported { owner, name } => {
+                return Err(self.unsupported(span, &format!("`{owner}::{name}`")));
+            }
+            _ => {}
         }
         let receiver = values.remove(0);
         let call = |helper: &str, mut args: Vec<Expr>| {
             args.insert(0, receiver.clone());
             Expr::call(Expr::var(helper), args)
         };
-        let tag = |tag: &str| Expr::bin(Op::Eq, Expr::member(receiver.clone(), "TAG"), Expr::str(tag));
-        if json == Some(Json::Number) {
-            let kind = |kind: &str| Expr::bin(Op::Eq, Expr::member(receiver.clone(), "kind"), Expr::str(kind));
-            return Ok(match name {
-                "as_f64" => call("$jsonNumberF64", Vec::new()),
-                "is_f64" => kind("f"),
-                "is_u64" => kind("u"),
-                "is_i64" => call("$jsonNumberIsI64", Vec::new()),
-                _ => return Err(self.unsupported(span, &format!("`Number::{name}`"))),
-            });
-        }
-        Ok(match name {
-            "is_null" => Expr::bin(Op::Eq, receiver.clone(), Expr::str("Null")),
-            "is_boolean" => tag("Bool"),
-            "is_number" => tag("Number"),
-            "is_string" => tag("String"),
-            "is_array" => tag("Array"),
-            "is_object" => tag("Object"),
-            "is_f64" | "is_u64" | "is_i64" => call("$jsonValueIs", vec![Expr::str(&name[3..])]),
-            "as_bool" => call("$jsonValueAs", vec![Expr::str("Bool")]),
-            "as_str" => call("$jsonValueAs", vec![Expr::str("String")]),
-            "as_array" | "as_array_mut" => call("$jsonValueAs", vec![Expr::str("Array")]),
-            "as_object" | "as_object_mut" => call("$jsonValueAs", vec![Expr::str("Object")]),
-            "as_number" => call("$jsonValueAs", vec![Expr::str("Number")]),
-            "as_f64" => call("$jsonValueF64", Vec::new()),
+        Ok(match method {
+            JsonMethod::NumberAsF64 => call("$jsonNumberF64", Vec::new()),
+            JsonMethod::NumberKind(kind) => Expr::bin(Op::Eq, Expr::member(receiver.clone(), "kind"), Expr::str(kind)),
+            JsonMethod::NumberIsI64 => call("$jsonNumberIsI64", Vec::new()),
+            JsonMethod::IsNull => Expr::bin(Op::Eq, receiver.clone(), Expr::str("Null")),
+            JsonMethod::IsTag(tag) => Expr::bin(Op::Eq, Expr::member(receiver.clone(), "TAG"), Expr::str(tag)),
+            JsonMethod::IsNumber(kind) => call("$jsonValueIs", vec![Expr::str(kind)]),
+            JsonMethod::AsTag(tag) => call("$jsonValueAs", vec![Expr::str(tag)]),
+            JsonMethod::AsF64 => call("$jsonValueF64", Vec::new()),
             // `get(k)` of an object, or `get(i)` of an array: `None` if it
             // isn't there.
-            "get" | "get_mut" => {
+            JsonMethod::Get => {
                 let key = values.remove(0);
                 call("$jsonGet", vec![key])
             }
-            _ => return Err(self.unsupported(span, &format!("`Value::{name}`"))),
+            JsonMethod::NumberFromF64 | JsonMethod::Unsupported { .. } => {
+                unreachable!("handled before receiver extraction")
+            }
         })
     }
 
