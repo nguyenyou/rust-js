@@ -56,7 +56,7 @@ mod text;
 mod traits;
 
 use crate::names::{fresh_in, js_ident};
-use crate::program::{Lowered, LoweredModule, TestFn};
+use crate::program::TestFn;
 use crate::runtime::Helper;
 pub use analysis::collect_bodies;
 use bindings::{Export, JsForm, is_binding, js_form, js_name};

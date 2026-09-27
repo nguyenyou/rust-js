@@ -28,8 +28,11 @@ modules, symbols, import candidates and reserved names. The frontend translates
 rustc module identities before calling it. Shared identifier policy lives in
 `src/names.rs`; neither module depends on lowering or rustc. `src/lower/analysis.rs`
 returns collected crate facts; `src/lower/pipeline.rs` orchestrates constant and
-function emission, reachability, module assembly and linking. The analysis result
-owns its collections and borrows captured THIR, so it remains frontend-specific.
+function emission, reachability and symbolic module assembly. It returns an owned
+`Unlinked` value. The driver passes that value to the linker, which resolves
+imports and runtime-helper dependencies before producing `Lowered`, the input
+to output planning. The analysis result borrows captured THIR; the unlinked
+output contains no frontend references.
 
 Standard-library and Serde Value call recognition use only immutable type and
 trait inputs in `src/lower/recognition.rs`, separate from function emission state.

@@ -19,8 +19,12 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   lives in `src/link.rs` and accepts only owned modules, symbols, import candidates
   and reserved names. Lowering translates rustc module identities into symbols
   before this boundary. `src/names.rs` owns the shared identifier and collision
-  policy. Neither linking nor name allocation depends on rustc or lowering; `lower/pipeline.rs`
-  orchestrates when these phases run. `lower/analysis.rs` returns an
+  policy. Neither linking nor name allocation depends on rustc or lowering.
+  `lower/pipeline.rs` returns owned `Unlinked` modules with explicit import
+  requests, reserved names and requested runtime helpers. The driver invokes
+  `link::link` only after the lowering diagnostic gate passes. Linking consumes
+  this value, resolves imports and runtime dependency closure, and produces the
+  `Lowered` value accepted by output planning. `lower/analysis.rs` returns an
   `AnalyzedCrate` containing named items, imports, trait facts, body references,
   tests and mutation facts. It does not lower functions or invoke the linker.
   The result owns its collections and borrows captured THIR; it is not a second

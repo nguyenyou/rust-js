@@ -59,3 +59,9 @@ test("native and WASI compiler dependency versions agree", () => {
 test("crate analysis cannot emit functions or invoke linking", () => {
   expect(read("src/lower/analysis.rs")).not.toMatch(/\b(?:FnCx|CrateFacts|LoweredModule|LoweredFn)\b|\blink::|\.lower_(?:fn|codec|dictionary)\(/);
 });
+
+test("lowering returns symbolic output and leaves linking to the driver", () => {
+  expect(read("src/lower/pipeline.rs")).not.toMatch(/crate::link|link::|runtime::resolve/);
+  expect(read("src/lower/pipeline.rs")).toContain("Option<Unlinked>");
+  expect(read("src/main.rs")).toContain("link::link(unlinked)");
+});

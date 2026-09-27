@@ -2,6 +2,7 @@
 
 use crate::js;
 use crate::runtime::Helper;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// Normalized Rust source retained independently of the frontend.
@@ -60,5 +61,28 @@ pub struct Sources {
 pub struct Lowered {
     pub sources: Sources,
     pub modules: Vec<LoweredModule>,
+    pub tests: Vec<TestFn>,
+}
+
+/// A module dependency expressed without frontend identities.
+pub struct ImportRequest {
+    pub symbol: js::Symbol,
+    pub export: String,
+    pub path: Vec<String>,
+}
+
+/// Symbolic module output. Imports and runtime closure are filled by linking.
+pub struct UnlinkedModule {
+    pub module: LoweredModule,
+    pub imports: Vec<ImportRequest>,
+    pub reserved_names: HashSet<String>,
+    pub runtime: HashSet<Helper>,
+}
+
+/// Complete lowering output, owned independently of rustc. Only linking turns
+/// this into the Lowered value accepted by output planning.
+pub struct Unlinked {
+    pub sources: Sources,
+    pub modules: Vec<UnlinkedModule>,
     pub tests: Vec<TestFn>,
 }

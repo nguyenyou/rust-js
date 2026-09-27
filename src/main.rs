@@ -70,12 +70,12 @@ impl Callbacks for RustJs {
 
         // 3. Only a program rustc accepts becomes JavaScript.
         if tcx.dcx().has_errors().is_none()
-            && let Some(lowered) = lower::lower_crate(tcx, &bodies, &serde_attrs)
+            && let Some(unlinked) = lower::lower_crate(tcx, &bodies, &serde_attrs)
             && tcx.dcx().has_errors().is_none()
             && let Err(err) = self
                 .output
                 .plan(
-                    lowered,
+                    link::link(unlinked),
                     tcx.sess
                         .source_map()
                         .files()

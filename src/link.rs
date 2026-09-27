@@ -4,14 +4,28 @@
 
 use crate::js::{Expr, ExprKind, Function, JsxTag, Pattern, Prop, Stmt, StmtKind};
 use crate::names::fresh_in;
-use crate::program::{LoweredImport, LoweredModule};
+use crate::program::{ImportRequest, Lowered, LoweredImport, LoweredModule, Unlinked};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub(crate) fn resolve(
-    module: &mut LoweredModule,
-    imports: &[(crate::js::Symbol, String, Vec<String>)],
-    mut names: HashSet<String>,
-) {
+/// Consume symbolic output; printing only receives the completed linked crate.
+pub(crate) fn link(unlinked: Unlinked) -> Lowered {
+    let modules = unlinked
+        .modules
+        .into_iter()
+        .map(|mut item| {
+            resolve(&mut item.module, &item.imports, item.reserved_names);
+            item.module.runtime = crate::runtime::resolve(item.runtime);
+            item.module
+        })
+        .collect();
+    Lowered {
+        sources: unlinked.sources,
+        modules,
+        tests: unlinked.tests,
+    }
+}
+
+fn resolve(module: &mut LoweredModule, imports: &[ImportRequest], mut names: HashSet<String>) {
     visit(
         module,
         &mut Visitor {
@@ -22,13 +36,13 @@ pub(crate) fn resolve(
     let mut grouped: BTreeMap<Vec<String>, Vec<(String, String)>> = BTreeMap::new();
     let replacements: HashMap<_, _> = imports
         .iter()
-        .map(|(symbol, base, path)| {
-            let alias = fresh_in(&mut names, base);
+        .map(|request| {
+            let alias = fresh_in(&mut names, &request.export);
             grouped
-                .entry(path.clone())
+                .entry(request.path.clone())
                 .or_default()
-                .push((base.clone(), alias.clone()));
-            (symbol.clone(), alias)
+                .push((request.export.clone(), alias.clone()));
+            (request.symbol.clone(), alias)
         })
         .collect();
     module.imports = grouped

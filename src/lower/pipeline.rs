@@ -1,10 +1,10 @@
-//! Orchestrate analyzed crate facts, function emission, reachability and linking.
+//! Orchestrate analyzed crate facts, function emission, reachability and symbolic module assembly.
 
 use super::analysis::{AnalyzedCrate, analyze_crate, is_thread_local};
 use super::bindings::Export;
-use super::{Body, CrateFacts, FnCx, Lowered, LoweredModule, const_js, eval_const, module_file, module_symbol};
+use super::{Body, CrateFacts, FnCx, const_js, eval_const, module_file, module_symbol};
 use crate::js::{self, Expr, StmtKind};
-use crate::link;
+use crate::program::{ImportRequest, LoweredModule, Unlinked, UnlinkedModule};
 use crate::runtime::Helper;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::def_id::{DefId, LocalModDefId};
@@ -32,7 +32,7 @@ pub fn lower_crate<'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &[Body<'tcx>],
     serde_attrs: &super::SerdeAttributes,
-) -> Option<Lowered> {
+) -> Option<Unlinked> {
     let sources = super::sources::CapturedSources::new(tcx);
     let AnalyzedCrate {
         bodies,
@@ -347,8 +347,7 @@ pub fn lower_crate<'tcx>(
                     });
                 }
             }
-            let helpers = crate::runtime::resolve(pass.runtime.remove(&module).unwrap_or_default());
-            let mut lowered = LoweredModule {
+            let lowered = LoweredModule {
                 path: paths[&module].clone(),
                 file: module_file(tcx, module).name.clone().into_local_path(),
                 packages,
@@ -357,20 +356,28 @@ pub fn lower_crate<'tcx>(
                 consts: const_items.remove(&module).unwrap_or_default(),
                 functions: pass.functions.remove(&module).unwrap_or_default(),
                 caches: pass.caches.remove(&module).unwrap_or_default(),
-                runtime: helpers,
+                runtime: Vec::new(),
                 jsx: pass.jsx.contains(&module),
             };
             let mut imports: Vec<_> = targets.remove(&module).unwrap_or_default().into_iter().collect();
             imports.sort_by(|(a, an), (b, bn)| (&paths[a], an).cmp(&(&paths[b], bn)));
             let candidates: Vec<_> = imports
                 .into_iter()
-                .map(|(target, export)| (module_symbol(target, &export), export, paths[&target].clone()))
+                .map(|(target, export)| ImportRequest {
+                    symbol: module_symbol(target, &export),
+                    export,
+                    path: paths[&target].clone(),
+                })
                 .collect();
-            link::resolve(&mut lowered, &candidates, taken[&module].clone());
-            lowered
+            UnlinkedModule {
+                module: lowered,
+                imports: candidates,
+                reserved_names: taken[&module].clone(),
+                runtime: pass.runtime.remove(&module).unwrap_or_default(),
+            }
         })
         .collect();
-    tcx.dcx().has_errors().is_none().then_some(Lowered {
+    tcx.dcx().has_errors().is_none().then_some(Unlinked {
         sources: sources.output,
         modules: lowered,
         tests,
