@@ -4,7 +4,7 @@
 hosts can use it without importing the Vite plugin.
 
 ```js
-import { createNativeBuilder } from "./tooling/build.js";
+import { createNativeBuilder } from "rust-js-build/build";
 
 const builder = createNativeBuilder({
   root: "/absolute/app",
@@ -21,6 +21,19 @@ await builder.compile({
   manifest: "/absolute/app/.cache/rust-js/manifest.json",
 });
 ```
+
+`rust-js-build` exposes three package entry points: `/build` for native compiler
+preparation, `/manifest` for build-result validation, and `/publish` for WASI
+artifact publication. Vite and the playground declare this package dependency;
+neither imports tooling through a path outside its own package.
+
+Both host packages remain private while distribution is being developed. Local
+tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
+The package test unpacks these tarballs into an independent application's
+`node_modules` and compiles through the plugin. No registry release is implied.
+When using unpacked packages, provide `rustJs` explicitly and provide `resources`
+when preparing built-in bindings. Defaults locate the development checkout;
+compiler binaries and binding resources are not included in these packages.
 
 Use absolute compiler, resource, cache and extern paths. Crate and output paths
 may also be relative to `root`. `watchFiles` lists toolchain and binding inputs;

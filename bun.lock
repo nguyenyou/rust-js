@@ -50,8 +50,16 @@
         "@webref/elements": "2.9.0",
       },
     },
+    "tooling": {
+      "name": "rust-js-build",
+      "version": "0.1.0",
+    },
     "vite-plugin": {
       "name": "vite-plugin-rust-js",
+      "version": "0.1.0",
+      "dependencies": {
+        "rust-js-build": "workspace:*",
+      },
       "peerDependencies": {
         "vite": ">=8",
       },
@@ -75,6 +83,7 @@
         "@tailwindcss/vite": "4.3.3",
         "@vitejs/plugin-react": "6.1.1",
         "babel-plugin-react-compiler": "1.0.0",
+        "rust-js-build": "workspace:*",
         "tailwindcss": "4.3.3",
         "vite": "8.3.0",
         "vite-plugin-rust-js": "workspace:*",
@@ -440,6 +449,8 @@
     "react-dom": ["react-dom@19.3.0", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.0" } }, "sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q=="],
 
     "rolldown": ["rolldown@1.2.11", "", { "dependencies": { "@oxc-project/types": "=0.151.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.11", "@rolldown/binding-android-arm64": "1.2.11", "@rolldown/binding-darwin-arm64": "1.2.11", "@rolldown/binding-darwin-x64": "1.2.11", "@rolldown/binding-freebsd-x64": "1.2.11", "@rolldown/binding-linux-arm-gnueabihf": "1.2.11", "@rolldown/binding-linux-arm64-gnu": "1.2.11", "@rolldown/binding-linux-arm64-musl": "1.2.11", "@rolldown/binding-linux-ppc64-gnu": "1.2.11", "@rolldown/binding-linux-s390x-gnu": "1.2.11", "@rolldown/binding-linux-x64-gnu": "1.2.11", "@rolldown/binding-linux-x64-musl": "1.2.11", "@rolldown/binding-openharmony-arm64": "1.2.11", "@rolldown/binding-win32-arm64-msvc": "1.2.11", "@rolldown/binding-win32-x64-msvc": "1.2.11" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-qpSwIyz0jHQq5qXBTNxFmE6664rJ7O+4TvPFOiOaBSrz8IOHc1koKKSqTM2H6u1UG1+TveuC6vaDHKXFOvb1Kw=="],
+
+    "rust-js-build": ["rust-js-build@workspace:tooling"],
 
     "rust-js-react-generator": ["rust-js-react-generator@workspace:react"],
 

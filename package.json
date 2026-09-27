@@ -8,6 +8,7 @@
     "react",
     "wasm/web",
     "vite-plugin",
+    "tooling",
     "examples/vite-react"
   ],
   "scripts": {

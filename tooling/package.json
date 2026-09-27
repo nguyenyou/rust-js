@@ -1,0 +1,13 @@
+{
+  "name": "rust-js-build",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build preparation, manifests, and publication for rust-js hosts.",
+  "exports": {
+    "./build": "./build.js",
+    "./manifest": "./manifest.js",
+    "./publish": "./publish.js"
+  },
+  "files": ["build.js", "manifest.js", "publish.js", "README.md"]
+}

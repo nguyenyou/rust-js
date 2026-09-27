@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
-import { createNativeBuilder, defaultCompiler } from "../tooling/build.js";
-import { parseManifest } from "../tooling/manifest.js";
+import { createNativeBuilder, defaultCompiler } from "rust-js-build/build";
+import { parseManifest } from "rust-js-build/manifest";
 
 /**
  * @param {object} [options]

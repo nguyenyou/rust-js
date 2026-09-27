@@ -43,7 +43,12 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   Source dependencies list files actually loaded, not source-path records
   imported from rustc metadata. Virtual paths are remapped field by field.
 - `tooling/build.js` prepares native compilation. Vite owns scheduling, watching,
-  overlays and refresh. Hosts can select compiler/resources/cache locations,
+  overlays and refresh. The `rust-js-build` package exposes build, manifest, and
+  publication entry points; Vite and the playground use declared dependencies
+  rather than imports outside their package directories. Local tarball tests
+  exercise the plugin outside the checkout with an explicit compiler path.
+  Compiler binaries and binding assets remain separate distribution work.
+  Hosts can select compiler/resources/cache locations,
   built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,
   React version and options. A completion marker is written only after success.

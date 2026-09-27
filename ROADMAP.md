@@ -150,10 +150,13 @@ pilot. No delivery dates are assigned yet.
   toolchain/sysroot requirements, checksums, and installation for each promised
   host. Verify installation and compilation on clean machines.
 - [ ] **M4.2 — Decouple Vite from the source checkout.** Ship the plugin and
-  binding assets with explicit versions and configuration. It is currently
-  [private](vite-plugin/package.json) and resolves compiler/build inputs from
-  its [parent repository](vite-plugin/index.js). A fresh app must build using
-  only documented installed dependencies.
+  binding assets with explicit versions and configuration. The
+  [private plugin](vite-plugin/package.json) now declares its versioned
+  [build-host dependency](tooling/package.json); the
+  [package test](test/packages.test.ts) verifies unpacked tarballs compile an
+  independent app with an explicitly supplied compiler. Default compiler and
+  binding-resource discovery still assumes the development checkout. A fresh
+  app must eventually build using only documented installed dependencies.
 - [ ] **M4.3 — Provide a reproducible starter and upgrade path.** Document
   create/build/test/deploy commands, expose compiler/toolchain versions in
   diagnostics, define compatibility/versioning rules, and publish migration
