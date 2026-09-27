@@ -85,6 +85,13 @@ export function ratchet(results: Result[], known: Map<string, string>) {
   };
 }
 
+/** The tests of a run of some that aren't as the known failures say, as
+ * the ratchet says of a whole run. */
+export function surprises(results: Result[], known: Map<string, string>): Set<string> {
+  const { regressions, fixed, worse } = ratchet(results, known);
+  return new Set([...regressions, ...fixed, ...worse].map((r) => r.test));
+}
+
 async function spawn(cmd: string[], cwd: string, timeout: number) {
   const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout });
   const [stdout, stderr] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -298,12 +305,8 @@ async function main() {
   }
   if (selectors.length > 0) {
     // Some tests: each, and whether it's what the known failures say.
-    const known = readKnown();
-    const rows = results.map((r) => {
-      const expected = known.has(r.test) ? "fail" : "pass";
-      const surprise = r.status !== "skip" && r.status !== expected;
-      return { r, surprise };
-    });
+    const unlisted = surprises(results, readKnown());
+    const rows = results.map((r) => ({ r, surprise: unlisted.has(r.test) }));
     for (const { r, surprise } of rows) {
       console.log(`${r.status}\t${r.test}${"reason" in r ? `\t${r.reason}` : ""}${surprise ? "\t(not as the known failures say)" : ""}`);
     }

@@ -20,11 +20,11 @@
 #![feature(rustc_private)]
 
 extern crate rustc_ast;
+extern crate rustc_builtin_macros;
 extern crate rustc_driver;
 extern crate rustc_expand;
 extern crate rustc_hir;
 extern crate rustc_interface;
-extern crate rustc_lexer;
 extern crate rustc_middle;
 extern crate rustc_parse;
 extern crate rustc_session;
@@ -46,13 +46,14 @@ mod reachability;
 mod runtime;
 mod to_oxc;
 
-use rustc_lexer::TokenKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::Compiler;
 use rustc_middle::ty::TyCtxt;
+use rustc_session::Session;
+use rustc_span::{Symbol, sym};
 
 struct RustJs {
     output: output::OutputPlan,
@@ -62,6 +63,7 @@ struct RustJs {
 
 impl Callbacks for RustJs {
     fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
+        enable_features(&compiler.sess, krate);
         jsx_syntax::expand(&compiler.sess, krate);
         Compilation::Continue
     }
@@ -214,21 +216,6 @@ fn main() -> ExitCode {
         // all, so `test` is declared too, as Cargo does.
         "--check-cfg=cfg(browser, test, rust_js)".to_string(),
     ];
-    // `#[rust_js::link_name]`, for bindings that are generic (ADR 0039),
-    // and `#![rust_js::import = "./App.css"]` inside a module. A feature the
-    // crate enables itself isn't enabled again, which rustc rejects.
-    let enabled = enabled_features(&input);
-    for feature in [
-        "register_tool",
-        "custom_inner_attributes",
-        "decl_macro",
-        "stmt_expr_attributes",
-    ] {
-        if !enabled.iter().any(|f| f == feature) {
-            rustc_args.push(format!("-Zcrate-attr=feature({feature})"));
-        }
-    }
-    rustc_args.push("-Zcrate-attr=register_tool(rust_js)".to_string());
     if test {
         rustc_args.push("--test".to_string());
     }
@@ -258,55 +245,35 @@ fn main() -> ExitCode {
 /// `usize` is 32 bits, as a JS one is here (ADR 0025). Nothing is made for it.
 const TARGET: &str = "wasm32-unknown-unknown";
 
-/// The features a crate's root enables itself, `#![feature(a, b)]`, read as
-/// rustc's lexer reads the file: with spaces anywhere, and a comment or a
-/// string not an attribute. Only the root's leading inner attributes can
-/// enable one.
-fn enabled_features(root: &Path) -> Vec<String> {
-    let source = std::fs::read_to_string(root).unwrap_or_default();
-    let text = &source[rustc_lexer::strip_shebang(&source).unwrap_or(0)..];
-    let mut at = 0;
-    let tokens: Vec<(TokenKind, &str)> = rustc_lexer::tokenize(text, rustc_lexer::FrontmatterAllowed::No)
-        .filter_map(|token| {
-            let piece = &text[at..at + token.len as usize];
-            at += token.len as usize;
-            let trivia = matches!(
-                token.kind,
-                TokenKind::Whitespace | TokenKind::LineComment { .. } | TokenKind::BlockComment { .. }
-            );
-            (!trivia).then_some((token.kind, piece))
-        })
-        .collect();
-    let mut features = Vec::new();
-    let mut i = 0;
-    // Each `#![..]`, to its matching `]`.
-    while let [
-        (TokenKind::Pound, _),
-        (TokenKind::Bang, _),
-        (TokenKind::OpenBracket, _),
-        ..,
-    ] = tokens[i..]
-    {
-        i += 3;
-        let open = i;
-        let mut depth = 1;
-        while depth > 0 && i < tokens.len() {
-            match tokens[i].0 {
-                TokenKind::OpenBracket => depth += 1,
-                TokenKind::CloseBracket => depth -= 1,
-                _ => {}
-            }
-            i += 1;
-        }
-        if let [(TokenKind::Ident, "feature"), (TokenKind::OpenParen, _), rest @ ..] =
-            &tokens[open..i.saturating_sub(1)]
-        {
-            features.extend(
-                rest.iter()
-                    .filter(|(kind, _)| *kind == TokenKind::Ident)
-                    .map(|(_, name)| name.to_string()),
-            );
-        }
+/// `#[rust_js::link_name]`, for bindings that are generic (ADR 0039), and
+/// `#![rust_js::import = "./App.css"]` inside a module need these features
+/// and the `rust_js` tool, which a program never asks for. What the crate
+/// root has already, itself or by a `cfg_attr` whose `cfg` holds, isn't
+/// added again, which rustc rejects: its attributes are read as rustc
+/// configures them, before rustc reads which features are on.
+fn enable_features(sess: &Session, krate: &mut rustc_ast::Crate) {
+    let attrs = jsx_syntax::configured_attrs(sess, &krate.attrs).unwrap_or_default();
+    let listed = |name: Symbol| -> Vec<Symbol> {
+        attrs
+            .iter()
+            .filter(|attr| attr.has_name(name))
+            .flat_map(|attr| attr.meta_item_list().unwrap_or_default())
+            .filter_map(|item| item.ident().map(|ident| ident.name))
+            .collect()
+    };
+    let (features, tools) = (listed(sym::feature), listed(sym::register_tool));
+    let mut missing: Vec<String> = [
+        sym::register_tool,
+        sym::custom_inner_attributes,
+        sym::decl_macro,
+        sym::stmt_expr_attributes,
+    ]
+    .into_iter()
+    .filter(|feature| !features.contains(feature))
+    .map(|feature| format!("feature({feature})"))
+    .collect();
+    if !tools.contains(&Symbol::intern("rust_js")) {
+        missing.push("register_tool(rust_js)".to_string());
     }
-    features
+    rustc_builtin_macros::cmdline_attrs::inject(krate, &sess.psess, &missing);
 }

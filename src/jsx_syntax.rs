@@ -335,7 +335,7 @@ impl MutVisitor for Expand<'_> {
 
 // Check cfg without cloning entire module trees or changing the attributes
 // rustc will subsequently validate. Also works for the crate root.
-fn configured_attrs(sess: &Session, attrs: &ast::AttrVec) -> Option<ast::AttrVec> {
+pub fn configured_attrs(sess: &Session, attrs: &ast::AttrVec) -> Option<ast::AttrVec> {
     struct Attributes(ast::AttrVec);
     impl HasAttrs for Attributes {
         const SUPPORTS_CUSTOM_INNER_ATTRS: bool = true;

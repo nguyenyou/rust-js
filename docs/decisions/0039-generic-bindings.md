@@ -47,9 +47,11 @@ impl<T> SetState<T> {
 }
 ```
 
-- **rust-js registers the tool** for every crate it compiles, passing
-  `-Zcrate-attr=feature(register_tool, custom_inner_attributes)` and
-  `-Zcrate-attr=register_tool(rust_js)`, so a program never writes them. A
+- **rust-js registers the tool** for every crate it compiles, adding
+  `#![feature(register_tool, custom_inner_attributes)]` and
+  `#![register_tool(rust_js)]` to its root, so a program never writes them;
+  what the root already enables or registers, itself or by a `cfg_attr`
+  whose `cfg` holds, isn't added again (ADR 0089). A
   library of bindings that plain rustc builds, like `react`, writes them once
   in its `lib.rs`. rustc keeps tool attributes in a crate's metadata, so they
   work across crates.

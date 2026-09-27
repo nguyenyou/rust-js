@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 
 import { homedir } from "node:os";
 
-import { failureKind, firstError, ratchet, scope, type Result } from "../scripts/rustc-suite";
+import { failureKind, firstError, ratchet, scope, surprises, type Result } from "../scripts/rustc-suite";
 
 test("a test is in scope unless a directive says it needs what a case can't have", () => {
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
@@ -76,4 +76,24 @@ test("a failure is rejected, crashed or wrong, and one listed as rejected may no
   // Another rejection is no worse; a crash or a wrong answer is; a wrong
   // answer turned into a rejection is better.
   expect(ratchet(now, listed).worse.map((r) => r.test)).toEqual(["b.rs", "c.rs"]);
+});
+
+// A run of some tests, as the workflow's `tests` makes, is checked as a
+// whole run is: a listed rejection that now crashes isn't as listed either.
+// Found in review.
+test("a run of some tests says which aren't as listed, a worse failure too", () => {
+  const listed = new Map([
+    ["a.rs", "error: rust-js does not support statics yet"],
+    ["b.rs", "error: rust-js does not support statics yet"],
+    ["c.rs", "error: rust-js does not support statics yet"],
+  ]);
+  const now: Result[] = [
+    { test: "a.rs", status: "fail", reason: "error: rust-js does not support statics yet" },
+    { test: "b.rs", status: "fail", reason: "thread 'rustc' panicked at x.rs:1:2:" },
+    { test: "c.rs", status: "pass" },
+    { test: "d.rs", status: "fail", reason: "error: rust-js does not support unions yet" },
+    { test: "e.rs", status: "pass" },
+    { test: "f.rs", status: "skip", reason: "has revisions" },
+  ];
+  expect([...surprises(now, listed)].sort()).toEqual(["b.rs", "c.rs", "d.rs"]);
 });

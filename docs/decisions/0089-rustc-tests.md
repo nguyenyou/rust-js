@@ -97,10 +97,15 @@ and stderr, and return, under Bun and Node.
 - The known failures are a release build's on Linux, as the workflow makes
   them, and as `bun run test:rustc` builds: a debug build's deeper stack
   overflows on a test or two a release build passes.
-- Which features a crate enables itself is read with rustc's lexer, so
-  `#![feature (x)]` with a space is one, and a comment or a string that
-  says `#![feature(x)]` isn't; a substring match had both wrong. Found in
-  review.
+- Which features a crate enables itself, and whether it registers
+  `rust_js`, is read from its root's attributes as rustc configures them,
+  after parsing: `#![feature (x)]` with a space is one, a comment or a
+  string that says `#![feature(x)]` isn't, and neither is a `cfg_attr`
+  whose `cfg` doesn't hold. A substring match, then rustc's lexer, had
+  some of these wrong, and the lexer panicked on an unfinished `#![`,
+  now rustc's syntax error. Found in review.
+- A run of some tests is checked as a whole run is: a listed rejection that
+  now crashes or answers wrongly isn't as listed. Found in review.
 - **The fifteen that crashed now pass, twelve of them, or are rejected:**
   - a `cfg` rustc doesn't expect, in a crate root, left a warning from
     rust-js's own early look at its `cfg`s that belonged to no item, and

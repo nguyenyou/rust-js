@@ -247,6 +247,26 @@ test("a crate's own features are read from its syntax, not its text", () => {
   expect(compiles("quoted", 'pub const S: &str = "#![feature(decl_macro)]";\n')).toEqual(["quoted", "compiles"]);
 });
 
+// What a crate root enables through a `cfg_attr` is enabled only when its
+// `cfg` holds, as rustc configures it, and a crate may register `rust_js`
+// itself. An unfinished attribute is rustc's syntax error. Found in review.
+test("a crate's own features and tools are as rustc configures them", () => {
+  const compile = (name: string, source: string) => {
+    const dir = fixture(`corpus-configured-${name}`);
+    const file = join(dir, "root.rs");
+    writeFileSync(file, source);
+    const p = Bun.spawnSync([compiler, file, "-o", join(dir, "root.js"), "--", "-Awarnings"], { cwd: root, stderr: "pipe" });
+    return [name, p.exitCode === 0 ? "compiles" : p.stderr.toString().split("\n")[0]];
+  };
+  const body = "macro double($x:expr) { $x * 2 }\npub fn f() -> i32 { #[rust_js::link_name = \"g\"] fn g() {} double!(3) }\n";
+  expect(compile("enabled", "#![cfg_attr(all(), feature(decl_macro))]\n" + body)).toEqual(["enabled", "compiles"]);
+  expect(compile("disabled", "#![cfg_attr(any(), feature(decl_macro))]\n" + body)).toEqual(["disabled", "compiles"]);
+  expect(compile("several", "#![cfg_attr(all(), feature(register_tool, stmt_expr_attributes))]\n" + body)).toEqual(["several", "compiles"]);
+  expect(compile("tool", "#![feature(register_tool)]\n#![register_tool(rust_js)]\n" + body)).toEqual(["tool", "compiles"]);
+  expect(compile("tool-configured", "#![feature(register_tool)]\n#![cfg_attr(all(), register_tool(rust_js))]\n" + body)).toEqual(["tool-configured", "compiles"]);
+  expect(compile("unfinished", "#![")).toEqual(["unfinished", "error: this file contains an unclosed delimiter"]);
+});
+
 // A `cfg` rustc doesn't expect, `FALSE` for `false`, is rustc's warning to
 // give, once. rust-js's own early look at a crate root's `cfg`s raised it for
 // no node, and rustc panicked. Found by rustc's `cfg-macros-notfoo`.
