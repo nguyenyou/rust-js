@@ -224,6 +224,9 @@ and Node, and Chromium tests.
 These are proposals, not features implemented by this research. They are in
 order: each makes the next one trustworthy.
 
+Progress: steps 1 and 2 have started, as the exact oracle and the corpus of
+[ADR 0088](../decisions/0088-corpus.md).
+
 ### 1. Make the harness strict
 
 A test is only as good as what it can tell apart.

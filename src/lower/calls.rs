@@ -710,6 +710,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
                 Expr::undefined()
             }
+            // A whole line is `console.log`'s, which ends it; text that may
+            // not end one is written as it is (ADR 0087).
+            Std::Print { error } => match without_newline(arg()) {
+                Ok(line) => Expr::call(
+                    Expr::member(Expr::var("console"), if error { "error" } else { "log" }),
+                    vec![line],
+                ),
+                Err(text) => {
+                    self.runtime.insert(Helper::Print);
+                    Expr::call(Expr::var(if error { "$eprint" } else { "$print" }), vec![text])
+                }
+            },
             Std::FmtStr => arg(),
             Std::FmtDisplay => {
                 let ty = generic_args.types().next().expect("`new_display` has a type argument");
@@ -1008,4 +1020,18 @@ pub(super) fn apply(f: Expr, args: Vec<Expr>) -> Expr {
         }
     }
     Expr::call(f, args)
+}
+
+/// `"a\n"` or `` `a ${x}\n` ``: the line, `"a"`, without the newline
+/// `println!` ends it with. Anything else is given back.
+fn without_newline(text: Expr) -> Result<Expr, Expr> {
+    match &text.kind {
+        js::ExprKind::Str(s) if s.ends_with('\n') => Ok(Expr::str(&s[..s.len() - 1])),
+        js::ExprKind::Template(texts, values) if texts.last().is_some_and(|last| last.ends_with('\n')) => {
+            let mut texts = texts.clone();
+            texts.last_mut().expect("a template has a last text").pop();
+            Ok(Expr::template(texts, values.clone()))
+        }
+        _ => Err(text),
+    }
 }

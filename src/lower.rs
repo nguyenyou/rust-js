@@ -623,10 +623,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ExprKind::AssignOp { op, lhs, rhs } => {
                 let rhs_js = self.expr(rhs, out)?;
+                // Rust takes the value first, then the place, which is read and
+                // written: what in it has effects, `v[f()]`, is taken once.
+                let mut place = Vec::new();
                 let target = match self.place(lhs) {
                     Some(_) => self.assignee(lhs)?,
-                    None => self.element_target(lhs, out)?,
+                    None => self.element_target(lhs, &mut place)?,
                 };
+                let target = self.read_twice(target, &mut place);
+                let rhs_js = if !place.is_empty() && rhs_js.has_effects() {
+                    self.spill("value", rhs_js, out)
+                } else {
+                    rhs_js
+                };
+                out.extend(place);
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
                 let known = self.known_int(rhs);
@@ -2946,6 +2956,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn indexed(&mut self, items: ExprId, index: ExprId, out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
         match self.place(items) {
             Some((place, _)) => Ok(vec![place, self.expr(index, out)?]),
+            // An element that's indexed in turn, `grid[i][j]`: the row itself,
+            // not the copy reading it as a value makes, which `grid[i][j] = x`
+            // would change instead.
+            None if self.element(items).is_some() => {
+                let mut row = self.referent(items, out)?;
+                let index = self.evaluated(index)?;
+                if !index.statements.is_empty() && !row.is_constant() {
+                    row = self.spill("row", row, out);
+                }
+                out.extend(index.statements);
+                Ok(vec![row, index.value])
+            }
             None => self.operands(&[items, index], out),
         }
     }
@@ -3025,6 +3047,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
             }
             _ => self.assignee(e),
+        }
+    }
+
+    /// A target that `x += 1` reads and then writes: each part of it that
+    /// wouldn't read the same twice, `v[f()]` or `$index(v, f()).x`, taken
+    /// once. A bounds check of what reads the same, `$at(v, i)`, can be.
+    fn read_twice(&mut self, target: Expr, out: &mut Vec<Stmt>) -> Expr {
+        let mut once = |this: &mut Self, e: Expr, name: &str| {
+            let repeatable = e.reads_same()
+                || matches!(&e.kind, js::ExprKind::Call(f, args)
+                    if matches!(&f.kind, js::ExprKind::Var(v) if v == "$at" || v == "$index")
+                        && args.iter().all(Expr::reads_same));
+            if repeatable { e } else { this.spill(name, e, out) }
+        };
+        match target.kind {
+            js::ExprKind::Index(items, index) => {
+                let items = once(self, *items, "items");
+                let index = once(self, *index, "index");
+                Expr::index(items, index)
+            }
+            js::ExprKind::Member(object, name) => {
+                let object = once(self, *object, "item");
+                Expr::member(object, &name)
+            }
+            kind => Expr { kind, ..target },
         }
     }
 

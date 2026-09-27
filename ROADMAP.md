@@ -112,7 +112,9 @@ pilot. No delivery dates are assigned yet.
   Added evidence: [nested lowering regressions](test/semantics.rs) and their
   [native comparisons](test/semantics.test.ts) cover struct updates, effect
   order, and used inner results inside discarded calls. Generated/property-based
-  coverage remains open.
+  coverage remains open. The [oracle](test/oracle.ts) compares panics by their
+  whole message and values strictly, with [negative controls](test/oracle.test.ts)
+  ([ADR 0088](docs/decisions/0088-corpus.md)).
 
 ### M3 — Prove a complete application
 
@@ -229,6 +231,12 @@ tooling while preserving rust-js's own readable-output goals.
   differences, and attach executable cases. Track feature combinations as well
   as isolated examples: generics with options, mutation through traits,
   nested patterns, iterators with effects, and async error paths.
+  Started: the [corpus](test/corpus/) of `fn main()` programs, run natively
+  and under Bun and Node, records support with `run-pass`/`run-fail`,
+  rejections with `compile-fail`, and gaps with `ignore-rust-js`, which fails
+  once a gap closes ([ADR 0088](docs/decisions/0088-corpus.md)). Its first
+  cases found and fixed two miscompilations (nested element writes, repeated
+  index effects in compound assignment).
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for
   broad portable Rust. Include wider integers, `f32`, nested options, general

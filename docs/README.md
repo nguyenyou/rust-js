@@ -116,6 +116,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0063 `char`'s questions are Unicode regular expressions; `parse` is a `Result` of Rust's message](decisions/0063-text.md)
 - [0064 Numbers' methods are `Math`'s, where JS agrees; operators call their impl](decisions/0064-numbers.md)
 - [0086 An `i64` or a `u64` is a BigInt, wrapped as release Rust wraps it](decisions/0086-64-bit-integers.md)
+- [0087 `println!` is `console.log`; `print!` writes as it is where JS can](decisions/0087-printing.md)
 - [0065 The JS is formatted as oxfmt formats it, and the source map follows](decisions/0065-format-with-oxfmt.md)
 - [0066 Text with values in it is a template literal](decisions/0066-template-literals.md)
 - [0067 Range patterns, `@`, `let ... else`, and a `&mut` into a map](decisions/0067-patterns.md)
@@ -167,6 +168,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 
 - [0016 Only top-level functions, for now](decisions/0016-crate-shape.md) *(modules: superseded by 0019)*
 - [0017 Test against native Rust, not against expectations](decisions/0017-differential-testing.md)
+- [0088 The corpus: Rust programs that say what they expect, run natively and as JS](decisions/0088-corpus.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

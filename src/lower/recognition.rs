@@ -68,6 +68,11 @@ pub(super) enum Std {
     Panic,
     /// `panic!("{}", x)`: the same, with a formatted message.
     PanicFmt,
+    /// `println!` and `print!`, or with `error`, `eprintln!` and
+    /// `eprint!`: `console.log(..)` of a line (ADR 0087).
+    Print {
+        error: bool,
+    },
     /// What `assert_eq!` and `assert_ne!` call when they fail.
     AssertFailed,
     /// `format_args!("..")` with no placeholders: the string.
@@ -280,6 +285,13 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if tcx.is_lang_item(def_id, LangItem::Panic) {
             return Some(Std::Panic);
+        }
+        if krate == sym::std {
+            match tcx.def_path_str(def_id).as_str() {
+                "std::io::_print" => return Some(Std::Print { error: false }),
+                "std::io::_eprint" => return Some(Std::Print { error: true }),
+                _ => {}
+            }
         }
         if tcx.is_lang_item(def_id, LangItem::PanicFmt) {
             return Some(Std::PanicFmt);

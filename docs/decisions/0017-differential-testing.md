@@ -1,6 +1,6 @@
 # 0017. Test against native Rust, not against expectations
 
-Status: Accepted
+Status: Accepted. Extended by [0088](0088-corpus.md): outcomes are compared exactly, and a corpus of programs runs natively and as JS.
 
 ## Context
 

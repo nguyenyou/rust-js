@@ -66,6 +66,7 @@ pub enum Helper {
     ParseBig,
     BigRange,
     TryFromInt,
+    Print,
     ToJson,
     FromJson,
     JsonValue,
@@ -672,6 +673,40 @@ function $try(f) {
                 r#"
 function $settle(promise) {
   return promise.then((value) => ({ TAG: "Ok", _0: value }), (e) => ({ TAG: "Err", _0: e }));
+}
+"#
+            }
+            // `print!` and `eprint!` of text that may not end a line: written as
+            // it is where JS can (Node, Bun, Deno), else each line as it ends,
+            // as a browser's `console` only writes lines, and what's left when
+            // the task ends (ADR 0087).
+            Helper::Print => {
+                r#"
+const $printed = ["", ""];
+function $print(text) {
+  $write(text, 0);
+}
+function $eprint(text) {
+  $write(text, 1);
+}
+function $write(text, error) {
+  const stream = globalThis.process?.[error ? "stderr" : "stdout"];
+  if (stream?.write) {
+    stream.write(text);
+    return;
+  }
+  const log = error ? console.error : console.log;
+  const lines = ($printed[error] + text).split("\n");
+  const rest = lines.pop();
+  for (const line of lines) log(line);
+  // What's left unended is written when this task ends, so none is lost.
+  if (rest !== "" && $printed[error] === "") {
+    queueMicrotask(() => {
+      if ($printed[error] !== "") log($printed[error]);
+      $printed[error] = "";
+    });
+  }
+  $printed[error] = rest;
 }
 "#
             }
