@@ -37,7 +37,7 @@ jobs:
         # Split on spaces, with no globbing: each word is a test or a directory.
         run: |
           set -f
-          bun scripts/rustc-suite.ts $TESTS
+          bun scripts/rustc-suite.ts --compiler=target/release/rust-js $TESTS
 
   # rust-js, built once for the shards: a release build, as it's run some
   # 2,700 times, and the binary finds the toolchain where every runner has it.
@@ -47,17 +47,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: Install the pinned Rust toolchain
-        run: rustup show
-      - uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/release
-          key: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
-          restore-keys: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - run: cargo build --release --locked
+      - uses: ./.github/actions/build-rust-js
       - uses: actions/upload-artifact@v7
         with:
           name: rust-js

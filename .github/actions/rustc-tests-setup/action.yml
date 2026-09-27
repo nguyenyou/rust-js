@@ -2,7 +2,7 @@ name: Set up for rustc's tests
 description: Bun, Node, the pinned Rust toolchain, rustc's tests/ui at the toolchain's commit (ADR 0089), and, unless another job built it, rust-js.
 inputs:
   build:
-    description: "'true' to build rust-js here; 'false' when a build job's is downloaded instead."
+    description: "'true' to build rust-js here, at target/release/rust-js; 'false' when a build job's is downloaded instead."
     default: 'true'
 runs:
   using: composite
@@ -19,19 +19,10 @@ runs:
     - name: Install the pinned Rust toolchain
       shell: bash
       run: rustup show
+    # A release build, as the list of known failures is made with: a debug
+    # build's deeper stack overflows on tests a release build passes.
     - if: inputs.build == 'true'
-      uses: actions/cache@v6
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target/debug
-        key: rustc-tests-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
-        restore-keys: rustc-tests-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-    - if: inputs.build == 'true'
-      name: Build rust-js
-      shell: bash
-      run: cargo build --locked
+      uses: ./.github/actions/build-rust-js
     - uses: actions/cache@v6
       with:
         path: target/rustc-tests

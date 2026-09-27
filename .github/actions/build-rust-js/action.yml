@@ -1,0 +1,32 @@
+name: Build rust-js
+description: A release build of rust-js at target/release/rust-js, from the cache when the compiler's sources haven't changed.
+runs:
+  using: composite
+  steps:
+    # The binary itself, for the compiler's sources as they are, which are
+    # all it's made from: a run that changes only tests or scripts builds
+    # nothing.
+    - id: binary
+      uses: actions/cache@v6
+      with:
+        path: target/release/rust-js
+        key: rust-js-release-${{ runner.os }}-${{ hashFiles('src/**', 'build.rs', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}
+    - if: steps.binary.outputs.cache-hit != 'true'
+      name: Install the pinned Rust toolchain
+      shell: bash
+      run: rustup show
+    # Else what the last build left: dependencies aren't downloaded or
+    # compiled again, only rust-js is.
+    - if: steps.binary.outputs.cache-hit != 'true'
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/release
+        key: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+        restore-keys: rustc-tests-release-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+    - if: steps.binary.outputs.cache-hit != 'true'
+      name: Build rust-js
+      shell: bash
+      run: cargo build --release --locked

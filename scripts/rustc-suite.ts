@@ -7,7 +7,7 @@
 //   bun scripts/rustc-suite.ts derives/ path/to/test.rs    # run some, and say how each did
 //   bun scripts/rustc-suite.ts --shard=2/4 --out=r2.json   # every fourth test, from the second
 //   bun scripts/rustc-suite.ts --merge r1.json r2.json ..  # the shards, checked as one run
-//   bun scripts/rustc-suite.ts --compiler=target/release/rust-js ..
+//   bun scripts/rustc-suite.ts --compiler=target/debug/rust-js ..
 //
 // A test rust-js gets wrong is listed, with its first error, in
 // test/rustc-known-failures.txt. One that isn't listed must pass, and one
@@ -21,9 +21,10 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
-// The rust-js that compiles each test; `--compiler=path` says another, like
-// a release build.
-let compiler = join(root, "target", "debug", "rust-js");
+// The rust-js that compiles each test: a release build, as the known
+// failures are made with, since a debug build's deeper stack overflows on
+// tests a release build passes. `--compiler=path` says another.
+let compiler = join(root, "target", "release", "rust-js");
 const knownFile = join(root, "test", "rustc-known-failures.txt");
 const work = join(root, "target", "rustc-suite");
 
@@ -260,7 +261,7 @@ async function main() {
   const selectors = args.filter((a) => !a.startsWith("--"));
   compiler = resolve(option("compiler") ?? compiler);
   const ui = rustcTests();
-  if (!existsSync(compiler)) throw new Error("build rust-js first: cargo build");
+  if (!existsSync(compiler)) throw new Error(`no rust-js at ${compiler}: build it with cargo build --release`);
   let tests = selectors.length > 0 ? [...new Set(selectors.flatMap((s) => testsUnder(ui, s)))] : findTests(ui);
   // `--shard=2/4`: every fourth test, from the second.
   if (shard) {

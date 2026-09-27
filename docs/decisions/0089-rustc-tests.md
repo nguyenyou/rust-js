@@ -34,9 +34,9 @@ and stderr, and return, under Bun and Node.
 
 ## Why
 
-- **It measures what we didn't choose:** at `362211dc2`, 1,181 of the 2,688
-  tests in scope pass, each matching native Rust byte for byte; 1,080 are
-  out of scope, each for a reason it prints.
+- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,182 of
+  the 2,686 tests in scope pass, each matching native Rust byte for byte;
+  1,082 are out of scope, each for a reason it prints.
 - **It found what no example had.** Its first run found, and this change
   fixes:
   - a shift of a narrower integer by an `i64` or a `u64` threw in JS;
@@ -58,10 +58,10 @@ and stderr, and return, under Bun and Node.
   - a `const` of a std struct was its private fields, `iter::empty()` an
     `[undefined]` and a `Cell` a `Cell` in a `Cell` (rejected, but a `Cell`
     or a `RefCell` is its `{ value }`, new at each use).
-- **Every failure has a reason a person can act on:** 1,469 of the 1,507
+- **Every failure has a reason a person can act on:** 1,480 of the 1,504
   are a feature rust-js says it doesn't support yet, and counted, they say
-  which to do first: std functions (261), types (209), std trait impls
-  (178), statics (156), expressions such as `[x; N]` (140), generic trait
+  which to do first: std functions (262), types (206), std trait impls
+  (178), statics (156), expressions such as `[x; N]` (139), generic trait
   parameters (119), associated types (108).
 
 ## Alternatives
@@ -76,7 +76,8 @@ and stderr, and return, under Bun and Node.
 
 - **The rustc tests workflow runs them on GitHub,** when it's started: all of
   them, on six machines at once, with a release build of rust-js made once
-  for all six, in about five minutes, checked as one run, or blessed into a new
+  for all six, and not at all when the compiler's sources are as a cached
+  build's were, in about five minutes, checked as one run, or blessed into a new
   list to download; or only the tests and directories named, each said to
   be as the list says or not. Locally, on macOS, each new binary is checked
   before its first run, which makes a full run an hour or more unless the
@@ -88,3 +89,6 @@ and stderr, and return, under Bun and Node.
 - Before ADR 0090, two tests compiled and answered otherwise,
   `const-negation` and `bitwise-ops-platform`: rustc worked out `usize`
   constants at 64 bits.
+- The known failures are a release build's on Linux, as the workflow makes
+  them, and as `bun run test:rustc` builds: a debug build's deeper stack
+  overflows on a test or two a release build passes.
