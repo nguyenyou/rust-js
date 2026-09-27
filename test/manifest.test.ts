@@ -31,6 +31,23 @@ test("compiler identities reject incompatible ABI and missing version fields", (
   }
 });
 
+test("scalar library manifests validate signatures and remap fingerprinted inputs", () => {
+  const library = {
+    version: 1, name: "shared", inputs: [{ file: "/virtual/shared.rs", hash: "1234567890abcdef" }],
+    functions: [{ rust_path: "shared::answer", module: [], export: "answer", signature: { inputs: ["bool"], output: "u32" } }],
+  };
+  const value = { ...manifest, library };
+  expect(parseManifest(JSON.stringify(value))).toEqual(value);
+  const mapped = mapManifestPaths(value, path => path.replace("/virtual", "/local"));
+  expect(mapped.library.inputs[0].file).toBe("/local/shared.rs");
+  expect(mapped.library.functions).toEqual(library.functions);
+  for (const invalid of [null, { ...library, version: 2 }, { ...library, inputs: [{ file: "relative.rs", hash: "bad" }] },
+    { ...library, functions: [{ ...library.functions[0], signature: { inputs: ["unit"], output: "u32" } }] },
+    { ...library, functions: [{ ...library.functions[0], signature: { inputs: [], output: "struct" } }] }]) {
+    expect(() => parseManifest(JSON.stringify({ ...manifest, library: invalid }))).toThrow("library contract");
+  }
+});
+
 test("virtual path mapping preserves JSON escaping and unrelated values", () => {
   const directory = '/local/a"quoted\\folder';
   const value = { ...manifest, note: "/virtual/not-a-path-field" };

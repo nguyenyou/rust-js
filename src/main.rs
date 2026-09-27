@@ -11,7 +11,8 @@
 //!                          errors? stop here ◄───┘
 //! ```
 //!
-//! Usage: `rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>] [-- <rustc flags>]`. Also
+//! Usage: `rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>]
+//! [--library] [--dependency <manifest.json>] [-- <rustc flags>]`. Also
 //! writes `<output.js>.map`. Flags after `--` go to rustc unchanged. With
 //! `--test`, the crate's `#[test]` functions are compiled too, and
 //! `<output>.test.js` runs them with `bun test` (ADR 0026).
@@ -31,6 +32,7 @@ extern crate rustc_span;
 mod format;
 mod js;
 mod jsx_syntax;
+mod library;
 mod link;
 mod lower;
 mod manifest;
@@ -52,6 +54,8 @@ use rustc_middle::ty::TyCtxt;
 
 struct RustJs {
     output: output::OutputPlan,
+    dependencies: library::Dependencies,
+    export_library: bool,
 }
 
 impl Callbacks for RustJs {
@@ -71,7 +75,8 @@ impl Callbacks for RustJs {
 
         // 3. Only a program rustc accepts becomes JavaScript.
         if tcx.dcx().has_errors().is_none()
-            && let Some(unlinked) = lower::lower_crate(tcx, &bodies, &serde_attrs)
+            && let Some(unlinked) =
+                lower::lower_crate(tcx, &bodies, &serde_attrs, &self.dependencies, self.export_library)
             && tcx.dcx().has_errors().is_none()
             && let Err(err) = self
                 .output
@@ -83,6 +88,7 @@ impl Callbacks for RustJs {
                         .iter()
                         .filter(|file| file.src.is_some())
                         .filter_map(|file| file.name.clone().into_local_path())
+                        .chain(self.dependencies.inputs.iter().cloned())
                         .collect(),
                 )
                 .and_then(|plan| plan.publish())
@@ -140,6 +146,21 @@ fn main() -> ExitCode {
         None => (&args[..], &[][..]),
     };
     let mut ours = ours.to_vec();
+    let export_library = if let Some(i) = ours.iter().position(|arg| arg == "--library") {
+        ours.remove(i);
+        true
+    } else {
+        false
+    };
+    let mut dependency_paths = Vec::new();
+    while let Some(i) = ours.iter().position(|arg| arg == "--dependency") {
+        if i + 1 >= ours.len() {
+            eprintln!("--dependency requires a manifest path");
+            return ExitCode::FAILURE;
+        }
+        dependency_paths.push(PathBuf::from(ours.remove(i + 1)));
+        ours.remove(i);
+    }
     let manifest = if let Some(i) = ours.iter().position(|arg| arg == "--manifest") {
         if i + 1 >= ours.len() {
             eprintln!("--manifest requires a path");
@@ -159,12 +180,23 @@ fn main() -> ExitCode {
         [input, flag, output] if flag == "-o" => (PathBuf::from(input), PathBuf::from(output)),
         _ => {
             eprintln!(
-                "usage: rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>] [-- <rustc flags>]"
+                "usage: rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>] [--library] [--dependency <manifest.json>] [-- <rustc flags>]"
             );
             return ExitCode::FAILURE;
         }
     };
 
+    if export_library && manifest.is_none() {
+        eprintln!("--library requires --manifest");
+        return ExitCode::FAILURE;
+    }
+    let dependencies = match library::Dependencies::load(&dependency_paths, &output) {
+        Ok(dependencies) => dependencies,
+        Err(error) => {
+            eprintln!("rust-js: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut rustc_args = vec![
         "rust-js".to_string(), // argv[0], ignored by rustc
         input.display().to_string(),
@@ -185,6 +217,8 @@ fn main() -> ExitCode {
     }
     rustc_args.extend(to_rustc.iter().cloned());
     let mut callbacks = RustJs {
+        dependencies,
+        export_library,
         output: output::OutputPlan::new(input, output, test, manifest),
     };
     rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))

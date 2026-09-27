@@ -32,9 +32,12 @@ pub fn lower_crate<'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &[Body<'tcx>],
     serde_attrs: &super::SerdeAttributes,
+    dependencies: &crate::library::Dependencies,
+    export_library: bool,
 ) -> Option<Unlinked> {
     let sources = super::sources::CapturedSources::new(tcx);
     let AnalyzedCrate {
+        external,
         bodies,
         closures,
         trait_impls,
@@ -53,7 +56,7 @@ pub fn lower_crate<'tcx>(
         paths,
         mutated,
         changed_vecs,
-    } = analyze_crate(tcx, all_bodies)?;
+    } = analyze_crate(tcx, all_bodies, dependencies)?;
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
     for &def_id in consts.iter().filter(|&&d| !is_thread_local(tcx, d)) {
@@ -86,6 +89,7 @@ pub fn lower_crate<'tcx>(
     // the link step knows exactly which imports and local names survive.
     let mut lowered_items = Vec::new();
     let crate_facts = CrateFacts {
+        external: &external,
         sources: &sources,
         mutated: &mutated,
         changed_vecs: &changed_vecs,
@@ -368,6 +372,7 @@ pub fn lower_crate<'tcx>(
         })
         .collect();
     tcx.dcx().has_errors().is_none().then_some(Unlinked {
+        library: export_library.then(|| super::library::exports(tcx, &fns)),
         sources: sources.output,
         modules: lowered,
         tests,

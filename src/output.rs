@@ -238,7 +238,7 @@ fn parent_dir(path: &Path) -> &Path {
 
 /// `to` as seen from directory `from`, e.g. `../examples/fib.rs`. Resolve
 /// existing ancestors without requiring the output directory to exist yet.
-fn relative(from: &Path, to: &Path) -> String {
+pub(crate) fn relative(from: &Path, to: &Path) -> String {
     let resolve = |p: &Path| absolute(p).unwrap_or_else(|_| p.to_path_buf());
     let (from, to) = (resolve(from), resolve(to));
     let from: Vec<_> = from.components().collect();
@@ -261,7 +261,7 @@ impl OutputPlan {
     }
 
     pub fn plan(&mut self, linked: crate::link::Linked, sources: Vec<PathBuf>) -> Result<ArtifactPlan, String> {
-        let lowered = linked.into_program();
+        let mut lowered = linked.into_program();
         self.jsx = lowered
             .modules
             .iter()
@@ -269,6 +269,18 @@ impl OutputPlan {
             .map(|m| m.path.clone())
             .collect();
         let sources: Vec<PathBuf> = sources.into_iter().map(|p| absolute(&p)).collect::<Result<_, _>>()?;
+        if let Some(library) = &mut lowered.library {
+            library.inputs = sources
+                .iter()
+                .map(|file| {
+                    let bytes = std::fs::read(file).map_err(|e| e.to_string())?;
+                    Ok(manifest::Artifact {
+                        file: file.clone(),
+                        hash: fingerprint(&bytes),
+                    })
+                })
+                .collect::<Result<_, String>>()?;
+        }
         let mut planned = Vec::new();
         let mut modules = Vec::new();
         for module in &lowered.modules {
@@ -342,6 +354,7 @@ impl OutputPlan {
                 }
             }
             let manifest = Manifest {
+                library: lowered.library,
                 version: manifest::VERSION,
                 compiler: Some(manifest::Compiler::current()),
                 input,
@@ -368,7 +381,7 @@ impl OutputPlan {
     }
 }
 
-fn absolute(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn absolute(path: &Path) -> Result<PathBuf, String> {
     if cfg!(target_os = "wasi") {
         // The virtual filesystem has absolute preopened paths; realpath is not
         // provided by all WASI hosts (including browser shims).
@@ -384,7 +397,7 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn fingerprint(bytes: &[u8]) -> String {
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
     // Stable across compiler releases; an ownership check, not a security hash.
     let hash = bytes.iter().fold(0xcbf29ce484222325_u64, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)

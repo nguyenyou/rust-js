@@ -59,6 +59,7 @@ pub struct Sources {
 
 /// The linked crate as JS: one module per Rust module, and tests in test mode.
 pub struct Lowered {
+    pub library: Option<crate::library::Library>,
     pub sources: Sources,
     pub modules: Vec<LoweredModule>,
     pub tests: Vec<TestFn>,
@@ -82,6 +83,7 @@ pub struct UnlinkedModule {
 /// Complete lowering output, owned independently of rustc. Only linking turns
 /// this into the Linked wrapper accepted by output planning.
 pub struct Unlinked {
+    pub library: Option<crate::library::Library>,
     pub sources: Sources,
     pub modules: Vec<UnlinkedModule>,
     pub tests: Vec<TestFn>,

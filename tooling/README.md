@@ -232,3 +232,11 @@ produce rustc invocations, compile dependencies to JS, establish a cross-crate A
 or cache compilation artifacts. Metadata feature sets are Cargo resolution data,
 not a substitute for Cargo compiler-unit/build-script information. The native
 builder and Vite do not consume this experimental plan yet.
+
+The compiler also has an experimental scalar linkage proof, described in
+[ADR 0085](../docs/decisions/0085-scalar-library-linkage.md). A producer uses
+`rust-js shared.rs -o shared.js --library --manifest shared.json`; a consumer
+passes `--dependency shared.json` plus real rustc `--extern` metadata after `--`.
+This supports only the documented scalar free-function ABI. The caller must build
+matching metadata and JS and rebuild dependencies after source edits. The Cargo
+planner, native build adapter and Vite do not orchestrate these steps yet.

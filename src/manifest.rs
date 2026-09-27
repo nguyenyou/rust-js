@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub const VERSION: u32 = 1;
 pub const ABI_VERSION: u32 = 1;
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct Compiler {
     pub version: String,
     pub toolchain: String,
@@ -38,6 +38,8 @@ pub struct Manifest {
     // Version-1 manifests written before identity was added remain readable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compiler: Option<Compiler>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library: Option<crate::library::Library>,
     pub input: PathBuf,
     pub output: PathBuf,
     pub sources: Vec<PathBuf>,

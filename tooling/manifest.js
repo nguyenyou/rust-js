@@ -20,11 +20,25 @@ export function parseManifest(text) {
   const strings = value => Array.isArray(value) && value.every(item => typeof item === "string");
   const path = value => typeof value === "string" && (/^\//.test(value) || /^[A-Za-z]:[\\/]/.test(value));
   const paths = value => strings(value) && value.every(path);
+  const fingerprint = value => object(value) && path(value.file)
+    && typeof value.hash === "string" && /^[0-9a-f]{16}$/.test(value.hash);
   if (!object(result) || result.version !== 1) {
     throw new Error(`Unsupported rust-js manifest version ${result?.version}; expected 1`);
   }
   if (result.compiler !== undefined && !validCompiler(result.compiler)) {
     throw new Error("Unsupported rust-js compiler identity or ABI; expected ABI 1");
+  }
+  if (result.library !== undefined) {
+    const library = result.library;
+    const scalar = value => ["bool", "i32", "u32"].includes(value);
+    if (!object(library) || library.version !== 1 || typeof library.name !== "string" || !library.name
+        || !Array.isArray(library.inputs) || !library.inputs.every(fingerprint)
+        || !Array.isArray(library.functions) || !library.functions.every(fn => object(fn)
+          && typeof fn.rust_path === "string" && typeof fn.export === "string" && strings(fn.module)
+          && object(fn.signature) && Array.isArray(fn.signature.inputs) && fn.signature.inputs.every(scalar)
+          && (scalar(fn.signature.output) || fn.signature.output === "unit"))) {
+      throw new Error("Invalid rust-js scalar library contract; expected library ABI 1");
+    }
   }
   if (!path(result.input) || !path(result.output) || !paths(result.sources)
       || !Array.isArray(result.modules) || !result.modules.every(module => object(module)
@@ -56,5 +70,8 @@ export function mapManifestPaths(manifest, map) {
       source: module.source === null ? null : map(module.source), imports: module.imports.map(map),
     })),
     artifacts: manifest.artifacts.map(artifact => ({ ...artifact, file: map(artifact.file) })),
+    ...(manifest.library === undefined ? {} : { library: {
+      ...manifest.library, inputs: manifest.library.inputs.map(input => ({ ...input, file: map(input.file) })),
+    } }),
   };
 }

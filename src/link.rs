@@ -29,6 +29,7 @@ pub(crate) fn link(unlinked: Unlinked) -> Linked {
         })
         .collect();
     Linked(Lowered {
+        library: unlinked.library,
         sources: unlinked.sources,
         modules,
         tests: unlinked.tests,

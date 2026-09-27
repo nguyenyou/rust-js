@@ -42,6 +42,7 @@ mod display;
 mod format_spec;
 mod jsx;
 mod jsx_api;
+mod library;
 mod maps;
 mod numbers;
 mod ordering;
@@ -184,6 +185,7 @@ struct CrateFacts<'a, 'tcx> {
     bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,
     imports: &'a HashMap<Export, String>,
+    external: &'a HashMap<(LocalModDefId, DefId), Export>,
     trait_impls: &'a [DefId],
     /// `#[serde(..)]` attributes, from the expanded crate (ADR 0077).
     serde_attrs: &'a serde::SerdeAttributes,
@@ -1893,6 +1895,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 source,
                 ..
             } => self.expr(source, out),
+            ExprKind::ZstLiteral { .. }
+                if let &ty::FnDef(id, _) = ty.kind()
+                    && let Some(export) = self.krate.external.get(&(self.module, id)) =>
+            {
+                self.dependencies
+                    .borrow_mut()
+                    .package_uses
+                    .insert((self.module, export.clone()));
+                Ok(Expr::var(&self.krate.imports[export]))
+            }
             // A function as a value, `component(Card, props)`: its JS name.
             ExprKind::ZstLiteral { .. }
                 if let &ty::FnDef(def_id, args) = ty.kind()

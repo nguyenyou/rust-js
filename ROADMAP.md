@@ -257,8 +257,12 @@ tooling while preserving rust-js's own readable-output goals.
   module linking, dependency invalidation, and reproducible builds.
   Initial evidence: `tooling/cargo.js` discovers an offline, locked local-library
   graph with dependency aliases, resolved features and dependency ordering;
-  `test/cargo.test.ts` exercises independent workspaces. Compilation, JS linkage
-  and invalidation remain open.
+  `test/cargo.test.ts` exercises independent workspaces. `test/cargo-link.test.ts`
+  now separately compiles and links a scalar path library, compares native/JS
+  execution, and rejects stale inputs, incompatible identities and signatures
+  before publication. See [ADR 0085](docs/decisions/0085-scalar-library-linkage.md).
+  Automatic Cargo compilation, metadata/JS build-identity binding, transitive
+  build coverage and cache invalidation remain open.
   First proof: a separate Cargo library with a non-generic scalar function,
   consumed through a path dependency by both a native executable and a rust-js
   application. Resolve the dependency from Cargo metadata, compile it separately,

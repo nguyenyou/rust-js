@@ -40,6 +40,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Err(self.unsupported(f.span, "calling this"));
         };
+        if self.krate.external.contains_key(&(self.module, def_id)) {
+            let callee = self.expr(fun, out)?;
+            let values = self.operands(args, out)?;
+            return Ok(Expr::call(callee, values));
+        }
         // serde_json's `Value` and what makes one (ADR 0083).
         if let Some(value) = self.json_call(def_id, generic_args, args, span, out)? {
             return Ok(value);

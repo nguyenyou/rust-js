@@ -189,3 +189,4 @@ replaces an old one, don't delete the old one. Set its status to
 **Architecture boundaries**
 
 - [0084 Owned compiler phases and explicit host boundaries](decisions/0084-owned-phases-and-host-boundaries.md)
+- [0085 Experimental scalar library linkage](decisions/0085-scalar-library-linkage.md)

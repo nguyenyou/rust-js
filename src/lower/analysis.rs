@@ -91,6 +91,7 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
 /// Crate-wide facts collected before function emission. Body references point
 /// into the captured THIR; all collections are owned by this analysis result.
 pub(super) struct AnalyzedCrate<'a, 'tcx> {
+    pub external: HashMap<(LocalModDefId, DefId), Export>,
     pub bodies: Vec<&'a Body<'tcx>>,
     pub closures: HashMap<LocalDefId, &'a Body<'tcx>>,
     pub trait_impls: Vec<DefId>,
@@ -115,6 +116,7 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
 pub(super) fn analyze_crate<'a, 'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &'a [Body<'tcx>],
+    dependencies: &crate::library::Dependencies,
 ) -> Option<AnalyzedCrate<'a, 'tcx>> {
     if !bindings::validate(tcx) || !traits::validate(tcx) || !super::jsx_api::validate(tcx) {
         return None;
@@ -171,7 +173,12 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let all_bodies = &all_bodies;
     let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
 
-    let uses = js_uses(tcx, all_bodies);
+    let external = super::library::imports(tcx, all_bodies, dependencies)?;
+    let mut uses = js_uses(tcx, all_bodies);
+    for (&(module, id), export) in &external {
+        uses.bound_to.entry(export.clone()).or_default().insert(id);
+        uses.imported.entry(export.clone()).or_default().insert(module);
+    }
     let (import_names, globals) = name_imports(tcx, &uses);
     let imported = uses.imported;
 
@@ -232,6 +239,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let changed_vecs = changed_vecs(tcx, all_bodies);
 
     Some(AnalyzedCrate {
+        external,
         bodies,
         closures,
         trait_impls,

@@ -170,9 +170,12 @@ this checkout; the workflow alone does not enforce merging policy.
 
 ## Remaining target-architecture work
 
-General Cargo graph resolution, reusable compiled JS crates, exported trait and
-representation metadata and a validated cross-crate ABI are not implemented by
-this refactor. Local packages can run outside the source checkout; clean-machine
+The frozen local Cargo planner now discovers dependency order, aliases and
+features. [ADR 0085](0085-scalar-library-linkage.md) adds a separate-compilation
+proof for scalar functions, with input/artifact checks and native comparison.
+General Cargo build orchestration, reusable compilation caches, exported trait
+and representation metadata and a general cross-crate ABI remain open.
+Local packages can run outside the source checkout; clean-machine
 distribution and release qualification remain open. Neither are
 additional serialization frameworks or Protocol Buffers. These are feature and
 release work under roadmap M3/M4/M8, not consequences of moving modules.
@@ -180,6 +183,11 @@ release work under roadmap M3/M4/M8, not consequences of moving modules.
 Library recognition still has concrete Serde/std assumptions. Extending those
 families requires explicit recognition, representation and semantic tests; there
 is no claim that adding a serializer is a configuration-only operation.
+The boundary audit still finds error-type classification in `lower/display.rs`,
+Promise/Result interop classification in `lower/calls.rs`, and Serde-specific
+representation rules in its feature modules. Those are remaining adapter work,
+not grounds to claim recognition is fully centralized. The enforced ownership,
+publication, rustc and printer dependency boundaries remain intact.
 
 Application-scale phase/memory budgets, runtime-sharing policy, and an independent
 client/server adoption test also remain open. The existing module-graph benchmark
@@ -190,8 +198,10 @@ three warm samples on the development machine): 10 modules 33 ms; 100 modules
 136 ms; 500 modules 1,326 ms. This includes rustc, formatting and publication.
 These are observations, not enforced budgets or comparisons across machines.
 
-Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 291
-tests (7,541 expectations) after `bun run wasm`. `bun run fmt:check`,
+Verification in this checkout: `RUST_JS_REQUIRE_WASM=1 bun test` passed all 299
+tests (7,589 expectations) after `bun run wasm`. A subsequent focused manifest
+run passed six tests, including the added scalar-contract validation test.
+`bun run fmt:check`,
 `cargo clippy --locked -- -D warnings`, `cargo test --locked`, documentation
 link checks and `git diff --check` also passed. Generated JavaScript snapshots
-remain unchanged for this boundary cleanup. Hosted CI was not run.
+remain unchanged. Hosted CI was not run.
