@@ -155,7 +155,11 @@ pilot. No delivery dates are assigned yet.
   `bun run pack:compiler <compiler> <output.tgz>` also packages a native binary
   and launcher for the current host. The installed launcher discovers the pinned
   toolchain libraries and passes the package integration test. Clean-machine
-  installation, platform qualification, signing, and checksums remain open.
+  installation, platform qualification, and signing remain open.
+  `bun run pack:distribution <compiler> <new-directory>` assembles all four
+  packages with a compiler/host manifest and SHA-256 checksums. Tests verify
+  checksums with `shasum`, detect corruption, preserve existing bundles, and
+  remove staged output after a packaging failure.
   Distribution tests cover Node.js and Bun independently, including native
   launching and React/Serde preparation; neither runtime requires the other.
 - [ ] **M4.2 — Decouple Vite from the source checkout.** Ship the plugin and

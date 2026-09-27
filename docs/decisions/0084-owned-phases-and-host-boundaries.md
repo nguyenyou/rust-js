@@ -73,6 +73,11 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   installed `rust-js-native`, then checkout fallback. Native hosts and Vite use
   the same resolver. Installed-package tests require no compiler or resource
   path overrides; explicit `.bin` paths remain supported.
+  `scripts/package-distribution.ts` assembles the four version-matched packages
+  in a staging directory and exposes the completed bundle with one rename.
+  It rejects existing destinations and writes a distribution manifest and
+  SHA-256 checksums. This is local artifact assembly, not registry publication,
+  publisher authentication, or release qualification.
   Hosts can select compiler/resources/cache locations,
   built-in React and Serde preparation, explicit extern metadata and rustc flags. React
   metadata caches are keyed by compiler bytes, binding inputs, resource root,

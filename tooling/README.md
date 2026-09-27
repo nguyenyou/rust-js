@@ -61,7 +61,7 @@ The host hashes and watches both the launcher and its compiler binary.
 
 This is a local packaging path, tested on the development host. It still depends
 on Node.js or Bun, rustup, and compatible native system libraries. Clean-machine testing,
-Linux/macOS version qualification, signing, and release checksums remain open;
+Linux/macOS version qualification and signing remain open;
 the archive is not a standalone portable compiler distribution.
 
 Create a separate resource tarball from the repository root:
@@ -81,6 +81,22 @@ metadata, compiler binaries, or a Rust sysroot. Building still requires Node.js 
 Bash, and the pinned Rust toolchain; Cargo also needs its locked dependencies
 available locally or through its configured registry.
 
+To assemble all four packages together, use a new output directory:
+
+```sh
+bun run pack:distribution target/release/rust-js /absolute/artifacts
+cd /absolute/artifacts
+shasum -a 256 -c SHA256SUMS
+```
+
+On Linux, `sha256sum -c SHA256SUMS` also works. The command checks package versions
+against the compiler, stages every tarball, writes `distribution.json` with the
+compiler identity, host platform/architecture and archive hashes, then renames
+the completed directory into place. Existing destinations are rejected and a
+failed build removes its staging directory. `SHA256SUMS` covers all four archives
+and the distribution manifest. These hashes detect corruption; they do not
+authenticate the publisher. The command does not publish or install anything.
+
 For a local installation, add the four tarballs to the application's
 `package.json` using paths relative to that file, then install with the application's
 package manager. The local tarball setup below is tested with `bun install`;
@@ -90,13 +106,13 @@ running the installed packages does not depend on that choice:
 {
   "devDependencies": {
     "vite": "8.3.0",
-    "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js-0.1.0.tgz",
-    "rust-js-build": "./artifacts/rust-js-build-0.1.0.tgz",
-    "rust-js-native": "./artifacts/rust-js-native.tgz",
-    "rust-js-resources": "./artifacts/rust-js-resources.tgz"
+    "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js.tgz",
+    "rust-js-build": "./artifacts/rust-js-build.tgz",
+    "rust-js-native": "./artifacts/native.tgz",
+    "rust-js-resources": "./artifacts/resources.tgz"
   },
   "overrides": {
-    "rust-js-build": "./artifacts/rust-js-build-0.1.0.tgz"
+    "rust-js-build": "./artifacts/rust-js-build.tgz"
   }
 }
 ```
@@ -119,7 +135,7 @@ dependency fails the test. The CLI uses a Node.js shebang; Bun-only users can ru
 `bun node_modules/.bin/rust-js`. The build adapter invokes it with its own runtime.
 Direct use of `react/build.sh` defaults to Node.js; set `RUST_JS_JS_RUNTIME` to a
 Bun executable to run it with Bun. Hosts supply this automatically.
-Clean-machine compiler installation, release checksums, platform qualification,
+Clean-machine compiler installation, release authentication, platform qualification,
 and published package installation remain separate distribution work.
 
 For packaged resources, the adapter queries `rust-js --version-json` before
