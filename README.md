@@ -184,7 +184,7 @@ Run `bun run` to list all tasks.
 
 ## Explore
 
-[Design decisions](docs/README.md) · [Examples](examples/) ·
+[Roadmap](ROADMAP.md) · [Design decisions](docs/README.md) · [Examples](examples/) ·
 [React + Vite](examples/vite-react/README.md) ·
 [DOM bindings](web/README.md) · [Browser tests](browser/README.md) ·
 [Compiler in WebAssembly](wasm/README.md)

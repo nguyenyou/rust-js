@@ -7,6 +7,10 @@ have been willing to write by hand. The longer-term goal is Rust across the
 application stack: native Rust on the server, rust-js on the frontend, and
 shared types and data models between them.
 
+Aim for Scala.js-level correctness and completeness for full-stack Rust:
+broad language and library support, reusable shared crates, and dependable
+interop and tooling. The first production app is an intermediate milestone.
+
 ## Principles
 
 - **Keep Rust's checks.** rustc owns types, traits, ownership, borrow checking,
@@ -42,6 +46,9 @@ real examples and the playground to check integration when relevant.
 Document new semantic choices and current limitations. Run checks appropriate
 to the change and report what was verified. Documentation-only edits need
 content and link checks.
+
+Track production-readiness work in [ROADMAP.md](ROADMAP.md). Update relevant
+items with evidence when their acceptance criteria are met.
 
 Use the pinned Rust toolchain and Bun for JavaScript tooling. See
 [package.json](package.json) for commands: `bun run build`, `bun test`, and
