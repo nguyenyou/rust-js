@@ -22,6 +22,16 @@ time, valid and deterministic by construction:
   compound assignment, `if`, bounded `for` loops, and `println!` with `{}`,
   `{:?}`, `{:x}`, `{:#x}` and widths. `usize` isn't generated, as it's a
   known difference (ADR 0090).
+- `Vec`s of them: `vec![..]`, `push`, `pop`, `sort`, `reverse`, an item
+  read or written, which may not be there and panic, `len`, `contains`,
+  `sum`, `max`, and `map` and `filter` with closures; `for` over one.
+  `Option`s: `Some`, `None`, `checked_add` and the like, `first`,
+  `unwrap_or`, `map`, `is_some`, and `if let Some(x)`. A `Copy` struct of
+  three widths, made, compared, read and written. Closures, `move`, of
+  what's `Copy`, called.
+- It keeps to what the borrow checker allows: a `Vec` is read through
+  `clone()`, never moved, and a closure takes copies, so a later write to
+  what it captured doesn't conflict with it.
 - Each literal is `id(..)`'s, a function rustc doesn't see through, so it
   can't reject a program for an overflow it would work out. A program may
   panic, dividing by zero, as the oracle compares panics too.
@@ -34,7 +44,8 @@ skipped.
 
 **A program that differs is reduced:** statements are taken away, an `if`
 or a loop made what's in it, an expression made one of its parts or a
-literal, each change kept if the program still fails the same way. What's
+literal, each change kept if the program still fails the same way and is
+shorter, so the reducing ends. What's
 left is written with its seed to `target/fuzz/`, to become a corpus case.
 
 - `bun test` runs the first 12 seeds; `FUZZ_START` and `FUZZ_SEEDS` run
