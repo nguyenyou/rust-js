@@ -1366,7 +1366,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // tested where it is.
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
 
-        let mut chain: Vec<(Option<Expr>, Vec<Stmt>, js::Span)> = Vec::new();
+        // Each arm: its test, a guard's statements and test when it needs
+        // statements of its own, and its body.
+        type Arm = (Option<Expr>, Option<(Vec<Stmt>, Expr)>, Vec<Stmt>, js::Span);
+        let mut chain: Vec<Arm> = Vec::new();
         for (i, &arm_id) in arms.iter().enumerate() {
             let arm = &self.thir[arm_id];
             let arm_span = self.js_span(arm.span);
@@ -1380,10 +1383,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // isn't the place it names gets its `const`. So the guard reads
             // each binding from its place, which nothing has changed yet: it
             // runs right after the pattern's test.
+            let mut guarded = None;
             if let Some(guard) = arm.guard {
-                if !self.is_simple(guard) {
-                    return Err(self.unsupported(self.thir[guard].span, "this guard"));
-                }
                 for b in &bindings {
                     let place = Var {
                         place: b.place.clone(),
@@ -1392,15 +1393,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     };
                     self.vars.insert(b.var, place);
                 }
-                let guard = self.expr(guard, out);
+                let mut before = Vec::new();
+                let guard = self.expr(guard, &mut before);
                 for b in &bindings {
                     self.vars.remove(&b.var);
                 }
                 let guard = guard?;
-                test = Some(match test {
-                    Some(t) => Expr::bin(Op::And, t, guard),
-                    None => guard,
-                });
+                if before.is_empty() {
+                    test = Some(match test {
+                        Some(t) => Expr::bin(Op::And, t, guard),
+                        None => guard,
+                    });
+                } else {
+                    guarded = Some((before, guard));
+                }
             }
             let mut body = Vec::new();
             self.bind_all(bindings, stable, pat_span, &mut body);
@@ -1410,16 +1416,38 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 test = None;
             }
             self.stmt(arm.body, dest, &mut body)?;
-            let done = test.is_none();
-            chain.push((test, body, arm_span));
+            let done = test.is_none() && guarded.is_none();
+            chain.push((test, guarded, body, arm_span));
             if done {
                 break; // Later arms are unreachable.
             }
         }
 
-        // Fold into `if (..) {..} else if (..) {..} else {..}`.
+        // Fold into `if (..) {..} else if (..) {..} else {..}`. A guard with
+        // statements runs them after its arm's test, and one that fails goes
+        // on to the later arms, so the chain is a labeled block that a
+        // matched arm leaves.
+        let mut label = None;
         let mut rest: Option<Vec<Stmt>> = None;
-        for (test, body, span) in chain.into_iter().rev() {
+        for (test, guarded, mut body, span) in chain.into_iter().rev() {
+            if let Some((mut before, guard)) = guarded {
+                let leaves = matches!(
+                    body.last().map(|s| &s.kind),
+                    Some(StmtKind::Return(_) | StmtKind::Throw(_) | StmtKind::Break(_) | StmtKind::Continue(_))
+                );
+                if !leaves {
+                    let label = label.get_or_insert_with(|| fresh_in(&mut self.labels, "arms")).clone();
+                    body.push(StmtKind::Break(Some(label)).at(span));
+                }
+                before.push(StmtKind::If(guard, body, None).at(span));
+                let mut arm = match test {
+                    Some(t) => vec![StmtKind::If(t, before, None).at(span)],
+                    None => before,
+                };
+                arm.extend(rest.unwrap_or_default());
+                rest = Some(arm);
+                continue;
+            }
             rest = match test {
                 // An arm that does nothing, `Dot => {}`, before others:
                 // `if (s !== "Dot") { .. }`, not `if (s === "Dot") {} else ..`.
@@ -1432,7 +1460,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => Some(body),
             };
         }
-        out.extend(rest.unwrap_or_default());
+        match label {
+            Some(label) => {
+                let span = self.js_span(self.thir[scrutinee].span);
+                out.push(StmtKind::Labeled(label, rest.unwrap_or_default()).at(span));
+            }
+            None => out.extend(rest.unwrap_or_default()),
+        }
         Ok(())
     }
 

@@ -44,8 +44,7 @@ time, valid and deterministic by construction:
   be, and an item written through an index that writes first, `v[{ x =
   a; id(0usize) }] += b`: what's read before and after a write says in
   which order an expression's parts run, which Rust's reference fixes and
-  JS's rules differ from, in an assignment's place first. A guard doesn't
-  write, as rust-js doesn't support one that does yet.
+  JS's rules differ from, in an assignment's place first.
 - It keeps to what the borrow checker allows: a `Vec` is read through
   `clone()`, never moved, and a closure takes copies, so a later write to
   what it captured doesn't conflict with it.

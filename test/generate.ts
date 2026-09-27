@@ -309,8 +309,7 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
         a: sub("E"),
         whenA: sub(ty),
         bind,
-        // A guard reads, as rust-js doesn't support one that writes yet.
-        guard: guarded ? expr(r, "bool", withB.map((v) => ({ ...v, mutable: false })), depth - 1) : undefined,
+        guard: guarded ? expr(r, "bool", withB, depth - 1) : undefined,
         whenB: expr(r, ty, withB, depth - 1),
         otherB: guarded ? sub(ty) : undefined,
         x,

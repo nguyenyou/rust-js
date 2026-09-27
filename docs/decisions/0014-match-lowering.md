@@ -67,12 +67,19 @@ The rules:
 ## Consequences
 
 - Not supported yet: patterns with fields, ranges (`1..=5`), `ref`
-  bindings, bindings inside `|` patterns, `x @ pat`, and guards that need
-  statements. Each gives a clear compile error.
+  bindings, bindings inside `|` patterns, and `x @ pat`. Each gives a
+  clear compile error.
 - A guard reads its arm's bindings from the places they name, as it's
   tested right after the pattern, before anything can change them; the
   body then binds its own copies, as any arm does:
   `if (shape.TAG === "Line" && shape._0 > 10) { const n = shape._0; .. }`.
+  Generated programs found the rejection this replaces (ADR 0092).
+- A guard that needs statements, a `match` or a block that writes, runs
+  them after its arm's test, and one that fails goes on to the later arms:
+  the chain is a labeled block, which an arm that matched leaves, unless
+  its body leaves anyway, by `return` or `continue`:
+  `arms: { if (s.TAG === "Rect") { tries++; if (s.w === s.h) { label = ..;
+  break arms; } } if (..) .. }`. A guard in `matches!` still can't.
   Generated programs found the rejection this replaces (ADR 0092).
 - An arm's test is evaluated only if every earlier arm failed, and a body
   runs only after its test passes. So a body mutating the scrutinee variable
