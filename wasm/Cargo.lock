@@ -1797,6 +1797,7 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "rustc_ast",
+ "rustc_builtin_macros",
  "rustc_driver_impl",
  "rustc_expand",
  "rustc_hir",
