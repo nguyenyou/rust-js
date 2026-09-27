@@ -111,10 +111,13 @@ pilot. No delivery dates are assigned yet.
   regressions. Require diagnostics and preserved output for rejected programs.
   Added evidence: [nested lowering regressions](test/semantics.rs) and their
   [native comparisons](test/semantics.test.ts) cover struct updates, effect
-  order, and used inner results inside discarded calls. Generated/property-based
-  coverage remains open. The [oracle](test/oracle.ts) compares panics by their
+  order, and used inner results inside discarded calls. The [oracle](test/oracle.ts) compares panics by their
   whole message and values strictly, with [negative controls](test/oracle.test.ts)
-  ([ADR 0088](docs/decisions/0088-corpus.md)).
+  ([ADR 0088](docs/decisions/0088-corpus.md)). [Generated programs](test/generate.ts)
+  of integer arithmetic, casts and control flow, each from a seed, are
+  compared with native Rust and reduced when they differ
+  ([ADR 0092](docs/decisions/0092-generated-programs.md)); other kinds of
+  program remain.
 
 ### M3 — Prove a complete application
 

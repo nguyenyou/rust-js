@@ -93,6 +93,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Num::I8 => Expr::bin(Op::BitAnd, value, Expr::int(0xff)),
                     Num::I16 => Expr::bin(Op::BitAnd, value, Expr::int(0xffff)),
                     Num::I32 => Expr::bin(Op::UShr, value, Expr::int(0)),
+                    Num::I64 => Num::U64.wrap(value),
                     _ => value,
                 };
                 let base = match radix {

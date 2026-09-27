@@ -172,6 +172,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0088 The corpus: Rust programs that say what they expect, run natively and as JS](decisions/0088-corpus.md)
 - [0089 rustc's own `run-pass` tests run as JS, with a list of what fails that only shrinks](decisions/0089-rustc-tests.md)
 - [0091 What rust-js writes depends only on what it's given](decisions/0091-build-history.md)
+- [0092 Generated programs, each from a seed, and reduced when they fail](decisions/0092-generated-programs.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

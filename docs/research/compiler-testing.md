@@ -224,11 +224,13 @@ and Node, and Chromium tests.
 These are proposals, not features implemented by this research. They are in
 order: each makes the next one trustworthy.
 
-Progress: steps 1 to 5 have started: the exact oracle and the corpus of
+Progress: each step has started: the exact oracle and the corpus of
 [ADR 0088](../decisions/0088-corpus.md), run under Bun, Node and a minified
 production build; rustc's own tests in
-[ADR 0089](../decisions/0089-rustc-tests.md); and build history in
-[ADR 0091](../decisions/0091-build-history.md).
+[ADR 0089](../decisions/0089-rustc-tests.md); build history in
+[ADR 0091](../decisions/0091-build-history.md); and generated programs,
+reduced when they fail, in [ADR 0092](../decisions/0092-generated-programs.md).
+Mutation testing of the compiler remains.
 
 ### 1. Make the harness strict
 
