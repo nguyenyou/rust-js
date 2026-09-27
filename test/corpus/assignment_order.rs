@@ -28,6 +28,15 @@ fn value(name: &str, x: i32) -> i32 {
     x
 }
 
+struct Counter {
+    n: i32,
+}
+
+fn bump(c: &mut Counter) -> usize {
+    c.n += 1;
+    0
+}
+
 fn set(r: &mut [i32; 2]) {
     r[index("through a reference", 0)] = value("through a reference", 8);
 }
@@ -48,6 +57,20 @@ fn main() {
     let mut rows = vec![vec![0, 0]];
     rows[index("rows row", 0)][index("rows column", 1)] = value("rows", 9);
     println!("{v:?} {a:?} {} {:?} {rows:?}", ps[0].x, totals[0]);
+    // The value is read before the place changes it. Found in review.
+    let mut x = 1;
+    let mut one = [0];
+    one[{ x = 2; 0 }] = x;
+    let mut y = 1;
+    let mut w = vec![0];
+    w[{ y = 2; 0 }] = y;
+    let mut z = 1;
+    let mut u = vec![0];
+    u[{ z = 2; 0 }] += z;
+    let mut c = Counter { n: 1 };
+    let mut t = vec![0];
+    t[bump(&mut c)] = c.n;
+    println!("{} {x} {} {y} {} {z} {} {}", one[0], w[0], u[0], t[0], c.n);
     let mut empty: Vec<i8> = Vec::new();
     empty[index("out of bounds", 0)] = value("out of bounds", 8) as i8;
 }

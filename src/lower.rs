@@ -614,17 +614,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 place.write(value, span, out);
                 Ok(())
             }
-            // `v[i] = x` or `v[i].x = y`: Rust runs the right side first, so
-            // a value with effects is taken before the index is checked.
+            // `v[i] = x` or `v[i].x = y`: Rust runs the right side first.
             ExprKind::Assign { lhs, rhs } if self.place(lhs).is_none() && self.in_element(lhs) => {
                 let value = self.expr(rhs, out)?;
                 let mut place = Vec::new();
                 let target = self.element_target(lhs, &mut place)?;
-                let value = if (!place.is_empty() || target.has_effects()) && value.has_effects() {
-                    self.spill("value", value, out)
-                } else {
-                    value
-                };
+                let value = self.value_first(value, &place, &target, out);
                 out.extend(place);
                 out.push(StmtKind::Assign(target, value).at(span));
                 Ok(())
@@ -654,11 +649,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     None => self.element_target(lhs, &mut place)?,
                 };
                 let target = self.read_twice(target, &mut place);
-                let rhs_js = if !place.is_empty() && rhs_js.has_effects() {
-                    self.spill("value", rhs_js, out)
-                } else {
-                    rhs_js
-                };
+                let rhs_js = self.value_first(rhs_js, &place, &target, out);
                 out.extend(place);
                 let ty = self.thir[lhs].ty;
                 let current = target.clone().or_at(self.js_span(self.thir[lhs].span));
@@ -3093,6 +3084,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// An assignment's value, taken before its place runs as Rust takes it
+    /// (ADR 0056), where JS would run the place first: before a place that
+    /// could change what it reads, `v[{ x = 2; 0 }] = x`, and, if it has
+    /// effects, before one that could panic first, `v[$at(v, i)] = f()`.
+    fn value_first(&mut self, value: Expr, place: &[Stmt], target: &Expr, out: &mut Vec<Stmt>) -> Expr {
+        let writes = !only_reads(target)
+            || place
+                .iter()
+                .any(|s| !matches!(&s.kind, StmtKind::Const(_, e) if only_reads(e)));
+        let panics = target.has_effects() || !place.is_empty();
+        if (writes && !value.is_constant()) || (panics && value.has_effects()) {
+            self.spill("value", value, out)
+        } else {
+            value
+        }
+    }
+
     /// A target that `x += 1` reads and then writes: each part of it that
     /// wouldn't read the same twice, `v[f()]` or `$index(v, f()).x`, taken
     /// once. A bounds check of what reads the same, `$at(v, i)`, can be.
@@ -3519,6 +3527,20 @@ fn discriminants<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>) -> Vec<(String,
             (bindings::variant_name(tcx, adt.variant(index)), value)
         })
         .collect()
+}
+
+/// Does running this only read, so what a value reads is the same before
+/// and after it? Variables, their fields and items do, and a bounds check
+/// of them, `$at(v, i)`, which can only panic; a call may write anything.
+fn only_reads(e: &Expr) -> bool {
+    match &e.kind {
+        js::ExprKind::Member(object, _) => only_reads(object),
+        js::ExprKind::Index(object, index) => only_reads(object) && only_reads(index),
+        js::ExprKind::Call(f, args) if matches!(&f.kind, js::ExprKind::Var(v) if v == "$at" || v == "$index") => {
+            args.iter().all(only_reads)
+        }
+        _ => !e.has_effects(),
+    }
 }
 
 fn assign_op(op: AssignOp) -> BinOp {
