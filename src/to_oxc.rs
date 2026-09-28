@@ -24,12 +24,12 @@ use std::path::PathBuf;
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
     Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
-    BindingProperty, Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter, FormalParameterKind,
-    FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem, JSXAttributeName,
-    JSXAttributeValue, JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier,
-    JSXMemberExpressionObject, JSXOpeningElement, JSXOpeningFragment, LabelIdentifier, ObjectPropertyKind, Program,
-    PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, TemplateElement, TemplateElementValue,
-    VariableDeclarationKind, VariableDeclarator,
+    BindingProperty, BlockStatement, Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter,
+    FormalParameterKind, FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem,
+    JSXAttributeName, JSXAttributeValue, JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName,
+    JSXExpression, JSXIdentifier, JSXMemberExpressionObject, JSXOpeningElement, JSXOpeningFragment, LabelIdentifier,
+    ObjectPropertyKind, Program, PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, TemplateElement,
+    TemplateElementValue, VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -486,6 +486,13 @@ impl<'a> Cx<'a> {
                 let block = Statement::new_block_statement(sp, self.stmts(body), b);
                 self.labeled(sp, Some(label), block)
             }
+            StmtKind::Try(body, finally) => Statement::new_try_statement(
+                sp,
+                BlockStatement::boxed(SPAN, self.stmts(body), b),
+                None,
+                Some(BlockStatement::boxed(SPAN, self.stmts(finally), b)),
+                b,
+            ),
             StmtKind::While { label, cond, body } => {
                 let w = Statement::new_while_statement(sp, self.expr(cond), self.block(body), b);
                 self.labeled(sp, label.as_deref(), w)

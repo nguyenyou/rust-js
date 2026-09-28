@@ -175,7 +175,8 @@ for (const [name, source, diagnostic] of [
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   ["const generic", `pub fn f<const N: usize>() -> usize { N }`, "const generics"],
-  ["Drop", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} }`, "user implementations"],
+  // A `Drop` runs where rustc drops (ADR 0098), but not yet a closure's.
+  ["Drop in a closure", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} } pub fn f() { let r = Resource; let c = move || { let _ = &r; }; c(); }`, "a closure that holds a value with a destructor"],
   // `Clone`, `Default` and `From` are supported (ADR 0052), but not all of them.
   ["clone_from", `#[derive(Clone)] pub struct P { pub v: Vec<u32> } pub fn f(a: &mut P, b: &P) { a.clone_from(b); }`, "calling \`std::clone::Clone::clone_from\`"],
   // A `fmt` returns its string (ADR 0054): a `fmt::Error` has nowhere to go.

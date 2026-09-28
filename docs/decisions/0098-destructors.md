@@ -32,8 +32,10 @@ region scope tree, and each scope's end, `ExprKind::Scope`.
 through its fields, variants, items or box. Only values of those types
 get drop code; a crate without a `Drop` impl gets the JS it gets today.
 
-**Each such type gets a drop function**, which calls the user's `drop`,
-then drops each part that has one, in Rust's order:
+**A value's drop is written where it's dropped**: the user's `drop`, then
+each part that has one, in Rust's order: a struct's fields in declaration
+order, a `Vec`'s or an array's items, an `Option`'s value, an enum's
+variant's fields, a `Box`'s value.
 
 ```rust
 struct Noisy(u8);
@@ -42,12 +44,10 @@ struct Pair { a: Noisy, b: Noisy }
 ```
 
 ```js
-function dropNoisy(noisy) {
-  noisyDrop_drop(noisy);
-}
-function dropPair(pair) {
-  dropNoisy(pair.a);
-  dropNoisy(pair.b);
+noisyDrop_drop(pair.a);
+noisyDrop_drop(pair.b);
+for (const item of list) {
+  noisyDrop_drop(item);
 }
 ```
 
@@ -68,24 +68,31 @@ fn main() {
 ```js
 function main() {
   const a = [1];
+  const b = [2];
+  let b$live = true;
   try {
-    let b = [2], b$live = true;
-    try {
-      if (ready()) { b$live = false; consume(b); }
-      console.log("end");
-    } finally {
-      if (b$live) dropNoisy(b);
+    if (ready()) {
+      b$live = false;
+      consume(b);
     }
+    console.log("end");
   } finally {
-    dropNoisy(a);
+    if (b$live) {
+      noisyDrop_drop(b);
+    }
+    noisyDrop_drop(a);
   }
 }
 ```
 
-- **A moved variable isn't dropped.** One moved only by a statement of its
-  own scope, not in a branch, a loop or a closure, is left out of the
-  `finally`. One moved elsewhere gets a flag, `b$live`, cleared as it
-  moves.
+- **A moved variable isn't dropped:** one that's moved anywhere gets a
+  flag, `b$live`, cleared as it moves. Moved into a call, it moves as the
+  call's made, after every operand, so an operand that panics first leaves
+  it owned: `const arg = second(); again$live = false; pair(again, arg);`.
+- **`let`s in a row share a `try`** when nothing between them can leave
+  early: a `let` of a literal, a variable, or what's built of them.
+- **A statement's value is dropped at once:** `Noisy(1);` and `let _ =
+  Noisy(1);` are `noisyDrop_drop([1]);`.
 - **A field moved out isn't dropped, and the rest are, each on its own,**
   as a person cleaning up would: what's still owned. Rust forbids moving a
   field out of a type with a `Drop` of its own (E0509), so the value's
@@ -104,7 +111,7 @@ function main() {
     consume(pair.a);
     console.log("end");
   } finally {
-    dropNoisy(pair.b);
+    noisyDrop_drop(pair.b);
   }
   ```
 - **A temporary is dropped at the end of its temporary scope**, as rustc's
@@ -128,7 +135,7 @@ function main() {
   function consume(value, dropT) {
     dropT?.(value);
   }
-  consume([1], dropNoisy);
+  consume([1], noisyDrop_drop);
   consume(5);
   ```
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
@@ -165,6 +172,18 @@ value, and a `dyn Trait` of one.
   replaces the first.
 - A flag and a `try` are more JS than the program without drops had; it's
   what the Rust means.
+- **Found in implementing:** leaving a move's flag out when the move is a
+  statement of the variable's own scope drops too little: a panic between
+  the `let` and the move leaves it owned, and Rust drops it. So every moved
+  variable has a flag. For the same reason, a variable moved into a call is
+  moved after its other operands, and a value with a destructor made
+  before an operand that can leave early, `f(Noisy(1), g())`, is an error
+  for now: Rust drops it as `g` panics.
+- **Done first, and not yet:** variables, parameters, moves, assignments,
+  statements' values and `mem::drop`. A temporary that's borrowed or taken
+  apart, a partial move, generic code given a value with a destructor, a
+  `let x;` without its value, and `async` code that owns one are errors
+  until they're done.
 - A generic function that drops a `T` has a JS parameter more than its
   Rust one has. Nothing depends on the old signatures yet, and rejecting
   generic drops would reject correct Rust for none of that.

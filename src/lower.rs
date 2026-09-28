@@ -39,6 +39,7 @@ mod bindings;
 mod calls;
 mod combinators;
 mod display;
+mod drops;
 mod format_spec;
 mod jsx;
 mod jsx_api;
@@ -261,6 +262,8 @@ struct FnCx<'a, 'tcx> {
     mutated_types: RefCell<HashMap<Ty<'tcx>, bool>>,
     clones: RefCell<HashMap<Ty<'tcx>, bool>>,
     clone_assumed: Cell<usize>,
+    /// What's dropped, and where (ADR 0098).
+    drop_state: drops::DropState<'tcx>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -269,8 +272,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut out = Vec::new();
         let thir = self.thir;
         let evidence = self.evidence_params(def_id);
+        self.drop_facts()?;
         let (mut params, is_async) = self.lower_signature(def_id, &thir.params.raw, body.expr, &mut out)?;
         params.extend(evidence);
+        self.check_drops()?;
 
         Ok(LoweredFn {
             function: js::Function {
@@ -306,6 +311,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(formatter) = self.formatter_param(def_id) {
             return Ok((self.lower_writer(params, formatter, body, span, out)?, false));
         }
+        // The parameters are the body's to drop (ADR 0098).
+        let mark = self.owned_mark();
         let params = self.lower_params(params, span, out)?;
         let BodyTy::Fn(sig) = self.thir.body_type else {
             return Err(self.unsupported(span, "this kind of body"));
@@ -316,7 +323,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             Dest::Return
         };
-        let is_async = self.lower_body(body, &dest, out)?;
+        let mut lowered = Vec::new();
+        let is_async = self.lower_body(body, &dest, &mut lowered)?;
+        if is_async && self.owned_mark() > mark {
+            return Err(self.unsupported(span, "an `async` function that owns a value with a destructor"));
+        }
+        self.close_scope(mark, lowered, span, out)?;
         Ok((params, is_async))
     }
 
@@ -408,7 +420,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             None if generated => "param",
                             None => name.as_str(),
                         };
-                        self.bind(*var, rust_name, mode.1 == Mutability::Mut)
+                        let name = self.bind(*var, rust_name, mode.1 == Mutability::Mut);
+                        if mode.0 == ByRef::No && self.has_drops(pat.ty) {
+                            self.own(*var, Expr::var(&name), pat.ty, pat.span, out)?;
+                        }
+                        name
                     }
                     PatKind::Wild => self.fresh("_"),
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
@@ -581,6 +597,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Rust evaluates the right side of an assignment first. The target
             // is a variable or its fields, which reading can't change.
             // A value in a map: `m.set(k, v)` (ADR 0059).
+            ExprKind::Assign { lhs, rhs } if self.has_drops(self.thir[lhs].ty) => {
+                self.assign_dropping(lhs, rhs, span, out)
+            }
             ExprKind::Assign { lhs, rhs } if self.slots_write(lhs) => {
                 let value = self.expr(rhs, out)?;
                 self.slot_write(lhs, &|_, _| Ok(value.clone()), expr.span, out)
@@ -680,7 +699,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     // over without a copy: every local dies here, so nothing is
                     // left to share it. One reached through a reference, or a
                     // closure's capture, outlives the call, so it's copied.
-                    (Dest::Return, Some((place, _))) if self.is_local_place(e) => place.or_at(span),
+                    (Dest::Return, Some((place, _))) if self.is_local_place(e) => {
+                        self.moved(e, out)?;
+                        place.or_at(span)
+                    }
                     _ => self.expr(e, out)?,
                 };
                 match dest {
@@ -695,23 +717,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn block(&mut self, block: BlockId, dest: &Dest, out: &mut Vec<Stmt>) -> R<()> {
-        self.block_stmts(block, out)?;
-        match self.thir[block].expr {
-            Some(tail) => self.stmt(tail, dest, out),
-            None => Ok(()),
-        }
+        self.block_rest(block, 0, Some(dest), out)
     }
 
     /// A block's statements, without its tail expression.
     fn block_stmts(&mut self, block: BlockId, out: &mut Vec<Stmt>) -> R<()> {
-        let block = &self.thir[block];
+        self.block_rest(block, 0, None, out)
+    }
+
+    /// A block's statements from `from` on, then its tail, to `tail` if
+    /// that's given. Once a `let` binds what has a destructor, the rest is
+    /// a `try` whose `finally` drops it (ADR 0098).
+    fn block_rest(&mut self, block_id: BlockId, from: usize, tail: Option<&Dest>, out: &mut Vec<Stmt>) -> R<()> {
+        let block = &self.thir[block_id];
         if block.targeted_by_break {
             return Err(self.unsupported(block.span, "labeled blocks"));
         }
         // Every local gets a unique JS name, so a Rust block needs no JS
         // block of its own: its statements go straight into `out`.
-        for &stmt in &block.stmts {
+        for (i, &stmt) in block.stmts.iter().enumerate().skip(from) {
             match &self.thir[stmt].kind {
+                // A statement's value that has a destructor is dropped at once.
+                thir::StmtKind::Expr { expr, .. } if self.has_drops(self.thir[*expr].ty) => {
+                    let ty = self.thir[*expr].ty;
+                    let span = self.thir[*expr].span;
+                    let value = self.expr(*expr, out)?;
+                    let value = self.droppable(value, ty, out);
+                    self.drop_value(value, ty, span, out)?;
+                }
                 thir::StmtKind::Expr { expr, .. } => self.stmt(*expr, &Dest::Discard, out)?,
                 thir::StmtKind::Let {
                     pattern,
@@ -733,9 +766,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         out.extend(bindings);
                         continue;
                     }
+                    let mark = self.owned_mark();
                     self.lower_let(pattern, *initializer, *span, out)?;
+                    if self.owned_mark() > mark {
+                        // The `let`s after it that can't leave early share its `try`.
+                        let mut next = i + 1;
+                        while let Some(&stmt) = block.stmts.get(next)
+                            && let thir::StmtKind::Let {
+                                pattern,
+                                initializer: Some(init),
+                                else_block: None,
+                                span,
+                                ..
+                            } = &self.thir[stmt].kind
+                            && self.cannot_leave(*init)
+                        {
+                            self.lower_let(pattern, Some(*init), *span, out)?;
+                            next += 1;
+                        }
+                        let mut rest = Vec::new();
+                        self.block_rest(block_id, next, tail, &mut rest)?;
+                        return self.close_scope(mark, rest, block.span, out);
+                    }
                 }
             }
+        }
+        if let Some(dest) = tail
+            && let Some(value) = block.expr
+        {
+            self.stmt(value, dest, out)?;
         }
         Ok(())
     }
@@ -755,6 +814,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && self.stepped.contains(&var)
             && self.is_array_iter(ty)
             && !self.is_peekable(ty)
+            && !self.has_drops(ty)
         {
             let items = self.iter_value(init, out)?;
             let items = self.iter_source(items, ty, span)?;
@@ -783,6 +843,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ..
             } = self.thir[block]
             && !block_span.from_expansion()
+            && !self.block_owns(block).unwrap_or(true)
         {
             self.block_stmts(block, out)?;
             return self.lower_let(pat, Some(value), span, out);
@@ -828,6 +889,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && let Some(init) = init
             && let Some(tried) = self.as_question(init)
             && self.option_of(self.thir[tried].ty).is_some()
+            && !self.has_drops(self.thir[init].ty)
         {
             let value = self.question(init, tried, Some(name.as_str()), out)?;
             self.vars.insert(
@@ -872,7 +934,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.check_by_value(*mode, *ty, pat.span)?;
                 self.check_value_ty(*ty, pat.span)?;
                 let mutable = mode.1 == Mutability::Mut;
-                match init {
+                let owns = mode.0 == ByRef::No && self.has_drops(*ty);
+                if owns && init.is_none() {
+                    return Err(self.unsupported(pat.span, "a `let` of a value with a destructor, without its value"));
+                }
+                let name = match init {
                     // Only control flow needs `let x;` and then assignments in
                     // its branches. Anything else (a closure, say) computes its
                     // statements first and then has a value.
@@ -880,25 +946,49 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         let value = self.expr(init, out)?;
                         let name = self.bind(*var, name.as_str(), mutable);
                         let kind = if mutable {
-                            StmtKind::Let(name, Some(value))
+                            StmtKind::Let(name.clone(), Some(value))
                         } else {
-                            StmtKind::Const(name, value)
+                            StmtKind::Const(name.clone(), value)
                         };
                         out.push(kind.at(span));
+                        name
                     }
                     Some(init) => {
                         let name = self.bind(*var, name.as_str(), mutable);
                         out.push(StmtKind::Let(name.clone(), None).at(span));
-                        self.stmt(init, &Dest::Assign(name), out)?;
+                        self.stmt(init, &Dest::Assign(name.clone()), out)?;
+                        name
                     }
                     None => {
                         let name = self.bind(*var, name.as_str(), mutable);
-                        out.push(StmtKind::Let(name, None).at(span));
+                        out.push(StmtKind::Let(name.clone(), None).at(span));
+                        name
                     }
+                };
+                if owns {
+                    self.own(*var, Expr::var(&name), *ty, pat.span, out)?;
                 }
                 Ok(())
             }
+            // `let _ = f();` drops what `f` made at once; `let _ = x;` doesn't move `x`.
             PatKind::Wild => match init {
+                Some(init)
+                    if self.has_drops(self.thir[init].ty)
+                        && !matches!(
+                            self.thir[self.strip(init)].kind,
+                            ExprKind::VarRef { .. }
+                                | ExprKind::Field { .. }
+                                | ExprKind::Index { .. }
+                                | ExprKind::Deref { .. }
+                                | ExprKind::UpvarRef { .. }
+                                | ExprKind::StaticRef { .. }
+                        ) =>
+                {
+                    let ty = self.thir[init].ty;
+                    let value = self.expr(init, out)?;
+                    let value = self.droppable(value, ty, out);
+                    self.drop_value(value, ty, pat.span, out)
+                }
                 Some(init) => self.stmt(init, &Dest::Discard, out),
                 None => Ok(()),
             },
@@ -1932,6 +2022,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.expr(source, out),
             ExprKind::Block { .. } if let Some(f) = self.as_format_args(e) => self.lower_format_args(f, span, out),
+            // One that owns what it drops computes its value before the drops.
+            ExprKind::Block { block } if !self.thir[block].targeted_by_break && self.block_owns(block)? => {
+                let name = self.fresh("value");
+                out.push(StmtKind::Let(name.clone(), None).at(js_span));
+                self.block(block, &Dest::Assign(name.clone()), out)?;
+                Ok(Expr::var(&name))
+            }
             ExprKind::Block { block } if !self.thir[block].targeted_by_break => {
                 self.block_stmts(block, out)?;
                 match self.thir[block].expr {
@@ -2227,6 +2324,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Sequence actual lowering results, not a prediction of their effects.
     /// Earlier operands are captured before a later operand's prerequisites.
     fn operands(&mut self, list: &[ExprId], out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
+        let moves = self.defer_moves(list)?;
+        let mut values = self.operands_in_order(list, out)?;
+        self.end_moves(&moves, &mut values, out);
+        Ok(values)
+    }
+
+    fn operands_in_order(&mut self, list: &[ExprId], out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
         let mut values: Vec<(Expr, bool)> = Vec::new();
         for &e in list {
             let evaluated = self.evaluated(e)?;
@@ -2776,6 +2880,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 CoroutineSource::Block
             ))
         );
+        let span = self.tcx.def_span(body.def_id);
+        if self.drop_facts()?.has_owners() && block {
+            return Err(self.unsupported(span, "an `async` block that owns a value with a destructor"));
+        }
+        let mark = self.owned_mark();
         // The first parameter is the closure itself, which JS doesn't need.
         let params = if block {
             Vec::new()
@@ -2797,12 +2906,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             Dest::Return
         };
+        let mut lowered = Vec::new();
         let is_async = if block {
-            self.stmt(body.expr, &Dest::Return, &mut stmts)?;
+            self.stmt(body.expr, &Dest::Return, &mut lowered)?;
             true
         } else {
-            self.lower_body(body.expr, &dest, &mut stmts)?
+            self.lower_body(body.expr, &dest, &mut lowered)?
         };
+        if is_async && self.owned_mark() > mark {
+            return Err(self.unsupported(span, "an `async` closure that owns a value with a destructor"));
+        }
+        self.close_scope(mark, lowered, span, &mut stmts)?;
+        self.check_drops()?;
         self.thir = thir;
         self.loops = loops;
         self.names = names;
@@ -2843,6 +2958,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Its captures are this function's parameters and variables, so no snapshots.
         let body: &'a Body<'tcx> = self.krate.closures[&coroutine];
         let thir = std::mem::replace(&mut self.thir, &body.thir);
+        // A future dropped before it's done drops what it holds, which a JS
+        // promise can't be (ADR 0098).
+        if self.drop_facts()?.has_owners() {
+            let span = self.tcx.def_span(body.def_id);
+            self.thir = thir;
+            return Err(self.unsupported(span, "`async` code that owns a value with a destructor"));
+        }
         let lowered = self.stmt(body.expr, &Dest::Return, out);
         self.thir = thir;
         lowered.map(|()| true)
@@ -3340,6 +3462,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Read a variable or field's value.
     fn read(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
         let ty = self.thir[e].ty;
+        self.moved(e, out)?;
         if let Some((place, _)) = self.place(e) {
             return Ok(self.copy_if_needed(place, ty));
         }

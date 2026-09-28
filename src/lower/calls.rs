@@ -203,6 +203,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
         };
+        // One that takes a value with a destructor, or changes a place that
+        // holds one, must keep or give back what it takes: these do. Another
+        // might drop it, which JS wouldn't (ADR 0098).
+        let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
+            ty::Ref(_, inner, rustc_ast::Mutability::Mut) => self.has_drops(inner),
+            ty::Ref(..) => false,
+            _ => self.has_drops(self.thir[a].ty),
+        });
+        if takes_drops
+            && !matches!(
+                known,
+                Std::Drop
+                    | Std::Forget
+                    | Std::Push
+                    | Std::Same
+                    | Std::VecMacro
+                    | Std::Unwrap
+                    | Std::UnwrapOk
+                    | Std::Method("pop")
+                    | Std::Index
+                    | Std::Len
+                    | Std::IsEmpty
+            )
+        {
+            let path = self.tcx.def_path_str(def_id);
+            return Err(self.unsupported(span, &format!("`{path}` of a value with a destructor")));
+        }
         // A std function that makes an `Option` of a generic `T` must box it
         // (ADR 0051); these do, and others aren't supported.
         // Normalized, so an iterator's `Self::Item` is the item's type.
@@ -402,6 +429,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A `Ref` or `RefMut` guard is what it guards: the object itself.
             Std::Borrow => Expr::member(arg(), "value"),
+            // `mem::drop(x)` is `x`'s destructor, run now (ADR 0098).
+            Std::Drop => {
+                let ty = self.thir[args[0]].ty;
+                let value = arg();
+                let value = self.droppable(value, ty, out);
+                self.drop_value(value, ty, span, out)?;
+                Expr::undefined()
+            }
+            Std::Forget => {
+                let value = arg();
+                if value.has_effects() {
+                    out.push(StmtKind::Expr(value).at(js_span));
+                }
+                Expr::undefined()
+            }
             // An atomic's operation (ADR 0096) is the plain one on its `{ value }`:
             // JS runs a module on one thread, so every ordering holds. Each
             // ordering is evaluated, and not used.

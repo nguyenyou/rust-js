@@ -253,6 +253,46 @@ export const mutations: Mutation[] = [
     replace: "        if let ty::Adt(adt, _) = target.kind()\n            && adt.did().is_local()\n            && false\n",
     tests: ["test/diagnostics.test.ts", "-t", "pointer of the crate"],
   },
+  {
+    name: "drop-order",
+    breaks: "a scope drops what it owns first first, not last first",
+    file: "src/lower/drops.rs",
+    find: "        for o in owned.into_iter().rev() {\n",
+    replace: "        for o in owned.into_iter() {\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_scopes"],
+  },
+  {
+    name: "drop-after-move",
+    breaks: "a moved variable is dropped at the end of its scope too",
+    file: "src/lower/drops.rs",
+    find: "                None => out.push(clear),\n",
+    replace: "                None => {}\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_scopes"],
+  },
+  {
+    name: "drop-on-assign",
+    breaks: "an assignment doesn't drop the old value",
+    file: "src/lower/drops.rs",
+    find: "            None => out.extend(drop),\n",
+    replace: "            None => {}\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_scopes"],
+  },
+  {
+    name: "drop-without-finally",
+    breaks: "a scope's drops run only when it ends normally, not by `return`, `break` or a panic",
+    file: "src/lower/drops.rs",
+    find: "            out.push(StmtKind::Try(body, finally).at(js_span));\n",
+    replace: "            out.extend(body);\n            out.extend(finally);\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_scopes|drop_on_panic"],
+  },
+  {
+    name: "drop-move-before-operands",
+    breaks: "a variable moved into a call is taken as moved before a later operand panics",
+    file: "src/lower/drops.rs",
+    find: "            match self.drop_state.deferred.get_mut(&(key, e)) {\n",
+    replace: "            match None::<&mut Option<Stmt>> {\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_operand_panic"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

@@ -47,6 +47,11 @@ written, and what it breaks, as Rust would see it:
 | `user-deref-impl` | a user `Deref` is rejected | `user_deref.rs` |
 | `returned-field-write` | a field of what a call's `&mut` points to can't be written | `user_deref.rs`, `returned_references.rs` |
 | `own-pointer-unsize` | a pointer of the crate's own, unsized to a `dyn`, is left as it was | `diagnostics.test.ts` |
+| `drop-order` | a scope drops what it owns first first, not last first | `drop_scopes.rs` |
+| `drop-after-move` | a moved variable is dropped at the end of its scope too | `drop_scopes.rs` |
+| `drop-on-assign` | an assignment doesn't drop the old value | `drop_scopes.rs` |
+| `drop-without-finally` | a scope's drops run only when it ends normally | `drop_scopes.rs`, `drop_on_panic.rs` |
+| `drop-move-before-operands` | a variable moved into a call is taken as moved before a later operand panics | `drop_operand_panic.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

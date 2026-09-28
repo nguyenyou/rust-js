@@ -165,6 +165,9 @@ pub enum StmtKind {
     },
     /// `label: { .. }`, which a `break label` leaves: a let chain's (ADR 0048).
     Labeled(String, Vec<Stmt>),
+    /// `try { .. } finally { .. }`: a scope, and the drops that end it,
+    /// however it's left (ADR 0098).
+    Try(Vec<Stmt>, Vec<Stmt>),
     Break(Option<String>),
     Continue(Option<String>),
     Return(Option<Expr>),

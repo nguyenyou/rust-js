@@ -173,6 +173,10 @@ fn block(body: &mut [Stmt], visitor: &mut Visitor<'_>) {
                 block(body, visitor);
             }
             StmtKind::Labeled(_, body) => block(body, visitor),
+            StmtKind::Try(body, finally) => {
+                block(body, visitor);
+                block(finally, visitor);
+            }
             StmtKind::Return(None) | StmtKind::Break(_) | StmtKind::Continue(_) => {}
         }
     }

@@ -85,6 +85,9 @@ pub(super) enum Std {
     SizeOf,
     AlignOf,
     SizeOfVal,
+    /// `mem::drop(x)`: `x`'s destructor, and `mem::forget(x)`: none (ADR 0098).
+    Drop,
+    Forget,
     /// `println!` and `print!`, or with `error`, `eprintln!` and
     /// `eprint!`: `console.log(..)` of a line (ADR 0087).
     Print {
@@ -254,6 +257,12 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_size_of_val") {
             return Some(Std::SizeOfVal);
+        }
+        if diagnostic("mem_drop") {
+            return Some(Std::Drop);
+        }
+        if diagnostic("mem_forget") {
+            return Some(Std::Forget);
         }
         if diagnostic("box_new") {
             return Some(Std::Same);
@@ -1363,6 +1372,8 @@ pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
         // An auto trait, as `Send`, `Sync`, `Unpin` or `UnwindSafe`, has no
         // items: its impl says what the type may be used for, and runs nothing.
         || tcx.trait_is_auto(id)
+        // Run where rustc drops a value (ADR 0098).
+        || tcx.is_lang_item(id, LangItem::Drop)
 }
 
 pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {

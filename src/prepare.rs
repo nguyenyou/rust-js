@@ -143,6 +143,11 @@ impl Context {
                     self.reserve_stmt(s);
                 }
             }
+            StmtKind::Try(body, finally) => {
+                for s in body.iter().chain(finally) {
+                    self.reserve_stmt(s);
+                }
+            }
             StmtKind::ForOf {
                 pattern,
                 iterable,
@@ -246,6 +251,10 @@ impl Context {
                     self.block(body);
                 }
                 StmtKind::Labeled(_, body) => self.block(body),
+                StmtKind::Try(body, finally) => {
+                    self.block(body);
+                    self.block(finally);
+                }
                 StmtKind::ForOf { iterable, body, .. } => {
                     self.expr(iterable, &mut next, false);
                     self.block(body);
