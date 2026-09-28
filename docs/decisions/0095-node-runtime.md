@@ -37,3 +37,12 @@ generated tests of `rust-js --test`, which ADR 0026 runs with `bun test`.
   program's output under Bun isn't what's promised.
 - `rust-js --test` still makes tests for `bun test` (ADR 0026); whether
   they should run under Node's own runner is a question for later.
+- **Found in review:** the examples' comparisons with native Rust
+  (`compiler.test.ts`) and the semantics cases (`semantics.test.ts`) still
+  ran the JS in Bun, imported into the test. Their calls now run under
+  Node too (`test/node-calls.ts`), and their values cross back as native
+  Rust's do, tagged: what no Rust value is, a `Map` or a function, crosses
+  as what it is, so it can't pass for `{}`. Left in Bun are the tests of
+  the JS a JS caller sees, as imports from JS modules, `async` functions
+  and a thrown `SyntaxError` held as a value: they check JS objects, not
+  what native Rust answered.

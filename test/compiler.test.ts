@@ -7,8 +7,9 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { decode, expected, observe, same, type Outcome } from "./oracle";
-import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb, compiler } from "./support";
+import { decode, expected, same, type Outcome } from "./oracle";
+import { callInNode, type Call } from "./programs";
+import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb, compiler, fixture } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -28,7 +29,6 @@ let collections: Record<string, (...args: any[]) => unknown>;
 let options: Record<string, (...args: any[]) => unknown>;
 let methods: Record<string, (...args: any[]) => unknown>;
 let genericOptions: Record<string, (...args: any[]) => unknown>;
-let stdTraits: Record<string, (...args: any[]) => unknown>;
 let combinators: Record<string, (...args: any[]) => unknown>;
 let text: Record<string, (...args: any[]) => unknown>;
 let calc: Record<string, (...args: any[]) => unknown>;
@@ -49,13 +49,14 @@ let enums: Record<string, (...args: any[]) => unknown>;
 let strings: Record<string, (...args: any[]) => unknown>;
 let results: Record<string, (...args: any[]) => unknown>;
 let iterators: Record<string, (...args: any[]) => unknown>;
-let threadLocals: Record<string, (...args: any[]) => unknown>;
 let throws: Record<string, (...args: any[]) => any>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
 let imports: Record<string, Record<string, () => unknown>>;
 let asyncs: Record<string, (...args: any[]) => any>;
+// What each native case's call did as JS, under Node, at the case's index.
+let outcomes: Outcome[];
 
 beforeAll(async () => {
   buildCompiler();
@@ -74,7 +75,6 @@ beforeAll(async () => {
   run([compiler, "examples/generic_options.rs", "-o", join(target, "generic_options.js")]);
   genericOptions = await import(join(target, "generic_options.js"));
   run([compiler, "examples/std_traits.rs", "-o", join(target, "std_traits.js")]);
-  stdTraits = await import(join(target, "std_traits.js"));
   run([compiler, "examples/combinators.rs", "-o", join(target, "combinators.js")]);
   combinators = await import(join(target, "combinators.js"));
   run([compiler, "examples/text.rs", "-o", join(target, "text.js")]);
@@ -116,7 +116,6 @@ beforeAll(async () => {
   run([compiler, "examples/iterators.rs", "-o", join(target, "iterators.js")]);
   iterators = await import(join(target, "iterators.js"));
   run([compiler, "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
-  threadLocals = await import(join(target, "thread_locals.js"));
   // The web crate is used from its metadata (ADR 0024).
   buildWeb();
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
@@ -149,135 +148,45 @@ beforeAll(async () => {
     lib: await import(join(target, "imports", "lib.js")),
     leaf: await import(join(target, "imports", "inner", "leaf.js")),
   };
+  outcomes = callInNode(jsFiles(), cases.map(request), fixture("compiler-calls"));
 }, 600_000);
 
-// `nth` takes an enum; in JS a fieldless variant is its name as a string.
-function call(c: Case): unknown {
-  switch (c.fn) {
-    case "nth_asc":
-      return fib.nth("Ascending", ...(c.args as number[]));
-    case "nth_desc":
-      return fib.nth("Descending", ...(c.args as number[]));
-    default: {
-      // "modules.summary" is the crate root's; "modules.stats.mean" is stats.js's.
-      const path = c.fn.split(".");
-      if (path[0] === "structs") {
-        return structs[path[1]](...c.args);
-      }
-      if (path[0] === "closures") {
-        return closures[path[1]](...c.args);
-      }
-      if (path[0] === "collections") {
-        return collections[path[1]](...c.args);
-      }
-      if (path[0] === "thread_locals") {
-        return threadLocals[path[1]](...c.args);
-      }
-      if (path[0] === "iterators") {
-        return iterators[path[1]](...c.args);
-      }
-      if (path[0] === "results") {
-        return results[path[1]](...c.args);
-      }
-      if (path[0] === "strings") {
-        return strings[path[1]](...c.args);
-      }
-      if (path[0] === "enums") {
-        return enums[path[1]](...c.args);
-      }
-      if (path[0] === "consts") {
-        return consts[path[1]](...c.args);
-      }
-      if (path[0] === "generic_options") {
-        return genericOptions[path[1]](...c.args);
-      }
-      if (path[0] === "combinators") {
-        return combinators[path[1]](...c.args);
-      }
-      if (path[0] === "text") {
-        return text[path[1]](...c.args);
-      }
-      if (path[0] === "calc") {
-        return calc[path[1]](...c.args);
-      }
-      if (path[0] === "numbers") {
-        return numbers[path[1]](...c.args);
-      }
-      if (path[0] === "inventory") {
-        return inventory[path[1]](...c.args);
-      }
-      if (path[0] === "queues") {
-        return queues[path[1]](...c.args);
-      }
-      if (path[0] === "report") {
-        return report[path[1]](...c.args);
-      }
-      if (path[0] === "lexer") {
-        return lexer[path[1]](...c.args);
-      }
-      if (path[0] === "values") {
-        return values[path[1]](...c.args);
-      }
-      if (path[0] === "versions") {
-        return versions[path[1]](...c.args);
-      }
-      if (path[0] === "wire") {
-        return wire[path[1]](...c.args);
-      }
-      if (path[0] === "inbox") {
-        return inbox[path[1]](...c.args);
-      }
-      if (path[0] === "api") {
-        return api[path[1]](...c.args);
-      }
-      if (path[0] === "dynamic") {
-        return dynamic[path[1]](...c.args);
-      }
-      if (path[0] === "wide") {
-        return wide[path[1]](...c.args);
-      }
-      if (path[0] === "std_traits") {
-        return stdTraits[path[1]](...c.args);
-      }
-      if (path[0] === "methods") {
-        return methods[path[1]](...c.args);
-      }
-      if (path[0] === "options") {
-        return options[path[1]](...c.args);
-      }
-      if (path[0] === "harness") {
-        return harness[path[1]]();
-      }
-      if (path[0] === "modules") {
-        const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
-        return modules[file][name](...(c.args as number[]));
-      }
-      return fib[c.fn](...(c.args as number[]));
-    }
+// A native case as a call of the JS, under Node (ADR 0095). `nth` takes an
+// enum; in JS a fieldless variant is its name as a string. "modules.summary"
+// is the crate root's; "modules.stats.mean" is stats.js's.
+function request(c: Case): Call {
+  if (c.fn === "nth_asc" || c.fn === "nth_desc") {
+    return { module: "fib", fn: "nth", args: [c.fn === "nth_asc" ? "Ascending" : "Descending", ...c.args] };
   }
+  const path = c.fn.split(".");
+  if (path.length === 1) return { module: "fib", fn: c.fn, args: c.args };
+  if (path[0] === "modules") {
+    const [file, name] = path.length === 2 ? ["lib", path[1]] : [path[1], path[2]];
+    return { module: `modules.${file}`, fn: name, args: c.args };
+  }
+  return { module: path[0], fn: path[1], args: c.args };
 }
 
-// What JS holds for the harness's own values in test/native.rs: if these
-// match, its encoding loses nothing.
-const harness: Record<string, () => unknown> = {
-  escapes: () => 'tab\t nul\0 esc\u001b "quoted" back\\slash é',
-  floats: () => [-0, NaN, Infinity, -Infinity, 0.1 + 0.2],
-  bigint: () => 18446744073709551615n,
-  panic: () => {
-    throw new Error('a "quoted"\nmessage');
-  },
-};
+// Each example's JS, by the name its cases start with.
+function jsFiles(): Record<string, string> {
+  const files: Record<string, string> = { harness: join(root, "test/harness-values.ts") };
+  for (const { module } of cases.map(request)) {
+    if (module.startsWith("modules.")) files[module] = join(target, "modules", `${module.slice("modules.".length)}.js`);
+    else files[module] ??= join(target, `${module}.js`);
+  }
+  return files;
+}
 
 test("native Rust ran every case", () => {
   expect(cases.length).toBeGreaterThan(100);
 });
 
 // One test per function, reporting every call that differs, not just the first.
-for (const [fn, calls] of Map.groupBy(cases, (c) => c.fn)) {
+for (const [fn, calls] of Map.groupBy(cases.entries(), ([, c]) => c.fn)) {
   test(`${fn} matches native Rust`, () => {
     const differ: { call: string; native: Outcome; js: Outcome }[] = [];
-    for (const c of calls) {
-      const js = observe(() => call(c));
+    for (const [index, c] of calls) {
+      const js = outcomes[index];
       if (!same(js, expected(c))) {
         differ.push({ call: `${fn}(${c.args.map((a) => Bun.inspect(a)).join(", ")})`, native: expected(c), js });
       }

@@ -3,7 +3,7 @@
 
 import { expect, test } from "bun:test";
 
-import { decode, expected, normalize, observe, same } from "./oracle";
+import { decode, encode, expected, normalize, observe, same } from "./oracle";
 
 const panics = (message: string) => () => {
   throw new Error(message);
@@ -61,4 +61,20 @@ test("native Rust's tagged values decode to what JS holds", () => {
   // An object that only looks tagged is left as it is.
   expect(decode('{"$f64":"other"}')).toEqual({ $f64: "other" });
   expect(decode('{"$bigint":"1","x":2}')).toEqual({ $bigint: "1", x: 2 });
+});
+
+test("values cross to another process and back as they were", () => {
+  const values = [-0, NaN, Infinity, -Infinity, 0.5, 18446744073709551615n, "é\0\"", true, null, [1, { x: -0 }], { TAG: "Ok", _0: 2n }];
+  expect(same({ value: decode(encode(values)) }, { value: values })).toBe(true);
+  // `None`, `undefined` in JS, is `null` in JSON, as `normalize` makes it.
+  expect(decode(encode({ a: undefined }))).toEqual({ a: null });
+});
+
+test("what no Rust value is can't cross as one that is", () => {
+  // A `Map` or a `Set` would be `{}` in plain JSON, and a function nothing.
+  for (const js of [new Map([[1, 2]]), new Set([1]), () => 1, new Date(0)]) {
+    const crossed = decode(encode({ value: js }));
+    for (const native of [{}, [], null, 1]) expect(same(crossed, { value: native })).toBe(false);
+  }
+  expect(decode(encode(new Map()))).toEqual({ $js: "Map" });
 });

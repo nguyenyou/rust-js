@@ -1,7 +1,8 @@
 import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { decode, expected, observe, type Outcome } from "./oracle";
+import { decode, expected, type Outcome } from "./oracle";
+import { callInNode } from "./programs";
 import { buildCompiler, compiler, fixture, root, run } from "./support";
 
 const cases: [string, boolean | number][] = [
@@ -14,7 +15,8 @@ const cases: [string, boolean | number][] = [
   ...["nested_struct_updates", "discarded_nested_insert"].flatMap(name =>
     [false, true].map(value => [name, value] as [string, boolean])),
 ];
-let generated: Record<string, (arg: any) => number[]>;
+// What each call did, natively and as JS under Node (ADR 0095).
+let js: Outcome[];
 let native: Outcome[];
 beforeAll(async () => {
   buildCompiler();
@@ -36,12 +38,13 @@ fn main() { ${cases.map(([name, arg]) => `
   run(["rustc", "--edition=2024", "-Coverflow-checks=off", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native")]);
   native = run([join(dir, "native")]).trim().split("\n").map(line => expected(decode(line)));
   run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js")]);
-  generated = await import(join(dir, "cases.js"));
+  const calls = cases.map(([name, arg]) => ({ module: "cases", fn: name, args: [arg] }));
+  js = callInNode({ cases: join(dir, "cases.js") }, calls, dir);
 }, 600_000);
 
 for (const [index, [name, arg]] of cases.entries()) {
   test(`${name}(${arg}) preserves native values, effects and panics`, () => {
-    expect(observe(() => generated[name](arg))).toStrictEqual(native[index]);
+    expect(js[index]).toStrictEqual(native[index]);
   });
 }
 

@@ -6,13 +6,26 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { compileFailure, runSync, stopped } from "./child";
-import { same, type Outcome } from "./oracle";
-import { compiler, root } from "./support";
+import { decode, encode, same, type Outcome } from "./oracle";
+import { compiler, root, run } from "./support";
 
 export const node = Bun.which("node");
 // The generated JS runs under Node, the runtime rust-js targets (ADR 0095);
 // Bun runs the tests, not the JS they check.
 export const runtimes: [string, string[]][] = [["node", [node ?? "node"]]];
+
+export type Call = { module: string; fn: string; args: unknown[] };
+
+/** Each call, of the generated JS in `modules` (a name for each file), made
+ * under Node by `node-calls.ts`, and what it did. */
+export function callInNode(modules: Record<string, string>, calls: Call[], dir: string): Outcome[] {
+  const callsFile = join(dir, "calls.json");
+  const outcomesFile = join(dir, "outcomes.json");
+  rmSync(outcomesFile, { force: true });
+  writeFileSync(callsFile, encode({ modules, calls }));
+  run([node ?? "node", join(root, "test/node-calls.ts"), callsFile, outcomesFile]);
+  return decode(readFileSync(outcomesFile, "utf8"));
+}
 
 export type Run = { stdout: string; stderr: string; outcome: Outcome | string };
 

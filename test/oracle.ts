@@ -25,6 +25,29 @@ export function decode(line: string): any {
   });
 }
 
+/** Values as JSON, tagged as native Rust tags them, for `decode` to restore
+ * in another process. What no Rust value is, a `Map` or a function, is
+ * tagged by its kind, so it can't come back as one that is. */
+export function encode(value: unknown): string {
+  const tagged = (v: unknown): unknown => {
+    if (typeof v === "bigint") return { $bigint: String(v) };
+    if (typeof v === "number") {
+      if (Object.is(v, -0)) return { $f64: "-0" };
+      if (Number.isNaN(v)) return { $f64: "NaN" };
+      if (v === Infinity) return { $f64: "inf" };
+      if (v === -Infinity) return { $f64: "-inf" };
+      return v;
+    }
+    if (v === undefined || v === null || typeof v === "string" || typeof v === "boolean") return v ?? null;
+    if (Array.isArray(v)) return v.map(tagged);
+    if (typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, tagged(x)]));
+    }
+    return { $js: typeof v === "object" ? (v.constructor?.name ?? "object") : typeof v };
+  };
+  return JSON.stringify(tagged(value));
+}
+
 /** Run generated JS as native Rust ran the Rust, and say what happened. */
 export function observe(run: () => unknown): Outcome {
   try {
