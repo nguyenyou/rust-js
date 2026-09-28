@@ -50,6 +50,11 @@ time, valid and deterministic by construction:
   tag and gives `a`, and `bump(&mut s)` changes `s.a` and gives it,
   as in `s.a += bump(&mut s)`; an index may be `note`'s, and the value
   written through an index that writes may be what it wrote.
+- A closure that captures a variable by reference and writes it, called
+  where that variable, or another, is assigned, in a block of its own:
+  `{ let mut g = || { x = a; b }; x += g(); }`, as `x += g()` reads `x`
+  after the call. It captures only `x`, so nothing else it reads is
+  borrowed while it lives.
 - It keeps to what the borrow checker allows: a `Vec` is read through
   `clone()`, never moved, and a closure takes copies, so a later write to
   what it captured doesn't conflict with it.

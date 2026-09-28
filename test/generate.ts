@@ -99,6 +99,10 @@ export type Stmt =
   // `v[{ y = a; i }] = x`.
   | { kind: "set"; name: string; index?: number; field?: string; op: string; write?: { name: string; value: Expr }; note?: number; value: Expr }
   | { kind: "closure"; name: string; param: IntTy; body: Expr }
+  // `let mut g = || { x = a; b };` and `y op= g()` in a block of their own:
+  // a closure that captures `x` by reference and writes it, called where
+  // `x`, or another, is assigned, as `x += g()` reads `x` after the call.
+  | { kind: "call-mut"; name: string; captured: string; ty: IntTy; body: Expr; result: Expr; target: string; op: string; twice: boolean }
   | { kind: "text-op"; name: string; op: "push_str" | "push"; value: Expr }
   | { kind: "map-op"; name: string; op: "insert" | "remove" | "entry"; key: Expr; value?: Expr }
   | { kind: "for-map"; key: string; item: string; map: string; body: Stmt[] }
@@ -353,7 +357,7 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
     const vecs = writable.filter((v) => inside(v.ty, "Vec"));
     const texts = writable.filter((v) => v.ty === "String");
     const maps = writable.filter((v) => v.ty === "Map");
-    const choice = r.int(18);
+    const choice = r.int(19);
     if (choice < 3 || writable.length === 0) {
       const ty = valueType(r);
       const name = `v${counter.n++}`;
@@ -444,6 +448,25 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
         value: expr(r, "E", inner, 2),
         then: block(r, [...inner, { name, ty: "i32", mutable: false }], depth - 1, counter, 1 + r.int(3)),
         else: block(r, inner, depth - 1, counter, r.int(2)),
+      });
+    } else if (choice === 18 && writable.some((v) => isInt(v.ty))) {
+      const ints = writable.filter((v) => isInt(v.ty));
+      const x = r.pick(ints);
+      const ty = x.ty as IntTy;
+      // The closure sees only what it captures, so nothing else it reads is
+      // borrowed while it lives.
+      const only = [{ name: x.name, ty, mutable: true }];
+      const others = ints.filter((v) => v.ty === ty && v.name !== x.name);
+      stmts.push({
+        kind: "call-mut",
+        name: `g${counter.n++}`,
+        captured: x.name,
+        ty,
+        body: expr(r, ty, only, 2),
+        result: expr(r, ty, only, 2),
+        target: others.length > 0 && r.chance(0.4) ? r.pick(others).name : x.name,
+        op: r.pick(["=", "+=", "-=", "^="]),
+        twice: r.chance(0.3),
       });
     } else if (depth > 0) {
       const name = `k${counter.n++}`;
@@ -647,6 +670,18 @@ function lines(stmts: Stmt[], indent: string): string[] {
       }
       case "closure":
         return [`${indent}let ${s.name} = move |x: ${s.param}| -> ${s.param} { ${show(s.body)} };`];
+      case "call-mut": {
+        const call = s.twice ? `(${s.name}() ^ ${s.name}())` : `${s.name}()`;
+        return [
+          `${indent}{`,
+          `${indent}    let mut ${s.name} = || -> ${s.ty} {`,
+          `${indent}        ${s.captured} = ${show(s.body)};`,
+          `${indent}        ${show(s.result)}`,
+          `${indent}    };`,
+          `${indent}    ${s.target} ${s.op} ${call};`,
+          `${indent}}`,
+        ];
+      }
       case "text-op":
         return [`${indent}${s.name}.${s.op}(${s.op === "push_str" ? `${show(s.value)}.as_str()` : show(s.value)});`];
       case "map-op":
@@ -727,6 +762,11 @@ function* smaller(program: Program): Generator<Program> {
       if (s.kind === "set" && s.op !== "=") yield put([{ ...s, op: "=" }]);
       if ("value" in s && s.value) for (const value of simpler(s.value)) yield put([{ ...s, value } as Stmt]);
       if (s.kind === "closure") for (const body of simpler(s.body)) yield put([{ ...s, body }]);
+      if (s.kind === "call-mut") {
+        if (s.twice) yield put([{ ...s, twice: false }]);
+        for (const body of simpler(s.body)) yield put([{ ...s, body }]);
+        for (const result of simpler(s.result)) yield put([{ ...s, result }]);
+      }
     }
   }
   yield* inBlock(program, (next) => next);
