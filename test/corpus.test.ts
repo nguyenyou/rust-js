@@ -6,6 +6,7 @@
 //   //@ run-fail: <message>        main panics with exactly this message (\n for a newline)
 //   //@ compile-fail: <text>       rust-js rejects it, with this in its first error
 //   //@ ignore-rust-js: <reason>   rust-js gets it wrong for now; passing is an error
+//   //@ edition: <year>            compiled at this edition, 2024 if it says none; beside one of those
 //
 //   case.rs ─┬─ rustc ──► native ─────────────────┐
 //            └─ rust-js ──► case.js ─┬─ bun  ──────┼─► stdout, stderr, outcome: the same?
@@ -30,18 +31,20 @@ type Expect =
   | { kind: "ignore-rust-js"; reason: string };
 
 /** What a case's directives say, or the problems with them. */
-function directives(source: string): Expect | string {
+function directives(source: string): (Expect & { edition: string }) | string {
   const found: Expect[] = [];
+  let edition = "2024";
   for (const [, line] of source.matchAll(/^\/\/@(.*)$/gm)) {
     const [, name, value] = /^ ([a-z-]+)(?:: (.+))?$/.exec(line) ?? [];
-    if (name === "run-pass" && value === undefined) found.push({ kind: "run-pass" });
+    if (name === "edition" && value && ["2015", "2018", "2021", "2024"].includes(value)) edition = value;
+    else if (name === "run-pass" && value === undefined) found.push({ kind: "run-pass" });
     else if (name === "run-fail" && value) found.push({ kind: "run-fail", message: value.replaceAll("\\n", "\n") });
     else if (name === "compile-fail" && value) found.push({ kind: "compile-fail", text: value });
     else if (name === "ignore-rust-js" && value) found.push({ kind: "ignore-rust-js", reason: value });
     else return `unknown or malformed directive \`//@${line}\``;
   }
   if (found.length > 1) return "more than one directive";
-  return found[0] ?? { kind: "run-pass" };
+  return { ...(found[0] ?? { kind: "run-pass" }), edition };
 }
 
 
@@ -71,7 +74,7 @@ async function check(file: string): Promise<string[]> {
   const want = directives(readFileSync(file, "utf8"));
   if (typeof want === "string") return [want];
   const dir = fixture(`corpus-${basename(file, ".rs")}`);
-  const native = runNative(file, dir);
+  const native = runNative(file, dir, want.edition);
   if (typeof native === "string") return [native];
 
   // The directive is checked against Rust itself, so it can't be wrong.
@@ -80,7 +83,7 @@ async function check(file: string): Promise<string[]> {
     return [`native Rust ended ${show(native.outcome)}, but the directive says ${show(nativeOutcome)}`];
   }
 
-  const compiled = compileJs(file, dir);
+  const compiled = compileJs(file, dir, want.edition);
   if (want.kind === "compile-fail") {
     if ("js" in compiled) return ["rust-js compiled it, but `compile-fail` says it can't"];
     // A rejection, not a crash, which may begin with the rejection it expects.
@@ -162,7 +165,9 @@ test("unknown and repeated directives are reported", () => {
   expect(directives("//@ run_pass\nfn main() {}")).toContain("unknown or malformed directive");
   expect(directives("//@run-pass\nfn main() {}")).toContain("unknown or malformed directive");
   expect(directives("//@ run-pass\n//@ run-fail: x\nfn main() {}")).toBe("more than one directive");
-  expect(directives("fn main() {}")).toEqual({ kind: "run-pass" });
+  expect(directives("fn main() {}")).toEqual({ kind: "run-pass", edition: "2024" });
+  expect(directives("//@ edition: 2015\n//@ run-fail: x\nfn main() {}")).toEqual({ kind: "run-fail", message: "x", edition: "2015" });
+  expect(directives("//@ edition: 2016\nfn main() {}")).toContain("unknown or malformed directive");
 });
 
 // Where JS has no `process`, as in a browser, `print!` writes each line to

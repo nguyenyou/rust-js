@@ -46,7 +46,7 @@ const rustString = (s: string) => JSON.stringify(s);
 // Natively, the case is a module whose `main` the wrapper calls, catching a
 // panic as the JS runner does. The panic hook is silenced, so stderr is only
 // what the program writes.
-export function runNative(file: string, dir: string): Run | string {
+export function runNative(file: string, dir: string, edition = "2024"): Run | string {
   const wrapper = join(dir, "native.rs");
   writeFileSync(wrapper, `mod case {
     include!(${rustString(file)});
@@ -78,7 +78,7 @@ fn main() {
 }
 `);
   const binary = join(dir, "native");
-  const build = runSync(["rustc", "--edition=2024", "-Coverflow-checks=off", "-Awarnings", wrapper, "-o", binary], root, compileTimeout);
+  const build = runSync(["rustc", `--edition=${edition}`, "-Coverflow-checks=off", "-Awarnings", wrapper, "-o", binary], root, compileTimeout);
   const why = stopped(build, compileTimeout);
   if (why || build.code !== 0) return `rustc can't compile it${why ? `: it ${why}` : ""}:\n${build.stderr}`;
   const outcomeFile = join(dir, "native.json");
@@ -90,11 +90,11 @@ fn main() {
 export type CompileError = { kind: "rejected" | "crashed"; reason: string; error: string };
 
 // As JS, the case is the crate's root, with `entry` exported to call `main`.
-export function compileJs(file: string, dir: string): { js: string } | CompileError {
+export function compileJs(file: string, dir: string, edition = "2024"): { js: string } | CompileError {
   const wrapper = join(dir, "lib.rs");
   writeFileSync(wrapper, `include!(${rustString(file)});\npub fn entry() {\n    main()\n}\n`);
   const js = join(dir, "case.js");
-  const p = runSync([compiler, wrapper, "-o", js, "--", "-Awarnings"], root, compileTimeout);
+  const p = runSync([compiler, wrapper, "-o", js, "--", `--edition=${edition}`, "-Awarnings"], root, compileTimeout);
   if (p.code === 0 && !stopped(p, compileTimeout)) return { js };
   const { kind, reason } = compileFailure(p, compileTimeout);
   return { kind, reason, error: kind === "crashed" ? `rust-js crashed: ${reason}\n${p.stderr}` : p.stderr };
