@@ -31,7 +31,11 @@ try {
       "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "wasm/web/rust/*.rs",
     ]).split("\0").filter(Boolean));
   }
-  run(["cargo", "build", "--locked", "--quiet"]);
+  // The compiler given, as an installed one is qualified with (ADR 0094),
+  // or this checkout's, built first.
+  const given = process.env.RUST_JS_COMPILER;
+  if (!given) run(["cargo", "build", "--locked", "--quiet"]);
+  const compiler = given ? resolve(given) : resolve(root, "target/debug/rust-js");
   const changed: [string, string][] = [];
   for (const file of [...new Set(files)].sort()) {
     const path = resolve(root, file);
@@ -40,7 +44,7 @@ try {
       "rustfmt", "--edition", "2024", "--config-path", root,
       "--config", "skip_children=true", "--emit", "stdout",
     ], source);
-    const formatted = run([resolve(root, "target/debug/rust-js"), "--format-jsx"], rust);
+    const formatted = run([compiler, "--format-jsx"], rust);
     if (formatted !== source) changed.push([path, formatted]);
   }
   // Validate every input before writing any playground or explicitly selected file.

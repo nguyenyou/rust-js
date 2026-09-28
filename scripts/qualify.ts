@@ -18,7 +18,19 @@ const root = join(import.meta.dir, "..");
 const installTimeout = 5 * 60_000;
 const suiteTimeout = 60 * 60_000;
 
-type Suite = { name: string; command: string[]; compiler: string; passed: boolean; pass: number; fail: number; skip: number; seconds: number; log: string };
+type Suite = {
+  name: string;
+  command: string[];
+  compiler: string;
+  passed: boolean;
+  pass: number;
+  fail: number;
+  skip: number;
+  // Each by name, so what "qualified" didn't run is said.
+  skipped: string[];
+  seconds: number;
+  log: string;
+};
 
 /** What's wrong with a distribution's files: each is listed in SHA256SUMS
  * with the hash it has, and each artifact is the one distribution.json
@@ -66,6 +78,7 @@ function suite(name: string, tests: string[], compiler: string, logs: string): S
     pass,
     fail,
     skip,
+    skipped: [...new Set([...output.matchAll(/^\(skip\) (.*)$/gm)].map((m) => m[1].trim()))],
     seconds: Math.round((Date.now() - started) / 1000),
     log,
   };
@@ -161,6 +174,7 @@ async function main() {
     "",
     `Commit ${commit}; ${report.runtimes.rustc}; Bun ${report.runtimes.bun}; Node ${report.runtimes.node}; ${release()}.`,
     `Not qualified here: ${report.notQualified.join("; ")}.`,
+    ...suites.flatMap((s) => s.skipped.map((name) => `Skipped in ${s.name}: ${name}.`)),
   ];
   console.log(lines.join("\n"));
   const summary = process.env.GITHUB_STEP_SUMMARY;

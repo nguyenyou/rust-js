@@ -1,5 +1,5 @@
 import { beforeAll, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildReact, compiler, fixture, root, run, target } from "./support";
 import { decodeMappings, lookup } from "./sourcemap";
@@ -129,4 +129,20 @@ pub fn view() -> Element {
   const line = lines.findIndex(l => l.includes("globalThis.record(7)"));
   expect(lookup(decodeMappings(map.mappings), line, lines[line].indexOf("globalThis.record(7)"))?.srcLine)
     .toBe(formatted.split("\n").findIndex(l => l.includes("record(7);")));
+});
+
+// The formatter's JSX pass is the compiler's, the one given too, as an
+// installed one is qualified with (ADR 0094), not always the checkout's
+// debug build, which it would build first.
+test("the formatter uses the compiler it's given", () => {
+  const dir = fixture("format-given");
+  const mark = join(dir, "called");
+  const given = join(dir, "rust-js");
+  writeFileSync(given, `#!/bin/sh\ntouch "${mark}"\ncat\n`);
+  chmodSync(given, 0o755);
+  const file = join(dir, "input.rs");
+  writeFileSync(file, "fn f() {}\n");
+  const p = Bun.spawnSync(["bun", join(root, "scripts/format.ts"), "--check", file], { env: { ...process.env, RUST_JS_COMPILER: given }, stderr: "pipe" });
+  expect(p.exitCode, p.stderr.toString()).toBe(0);
+  expect(existsSync(mark)).toBe(true);
 });
