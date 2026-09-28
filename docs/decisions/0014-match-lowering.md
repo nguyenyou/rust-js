@@ -85,3 +85,9 @@ The rules:
   runs only after its test passes. So a body mutating the scrutinee variable
   can't affect any test. That's why testing a mutable variable directly is
   safe. Only *aliasing* a binding to it isn't (rule 4).
+- **A binding after `@` is its own value:** in `x @ B { b, .. }`, `x`, or
+  where it's moved, is the same JS object as the value matched, so `b`
+  isn't read in place, where a change through `x` would change it; it's a
+  copy, if it's `Copy` and something changes it. `n @ 1..=9`, which binds
+  nothing else, is as it was. Found by rustc's `bind-by-copy.rs`
+  (`binding_after_at.rs`).

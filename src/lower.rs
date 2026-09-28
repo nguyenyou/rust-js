@@ -142,6 +142,8 @@ struct Binding<'tcx> {
     /// `ref mut`, or bound through a `&mut` subject: writes through it
     /// write the place it matched.
     by_ref_mut: bool,
+    /// `x @ ..`: it binds the whole value its subpattern binds parts of.
+    whole: bool,
     place: Expr,
     ty: Ty<'tcx>,
 }
@@ -1009,6 +1011,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `P { x, y } => x + y` becomes `p.x + p.y`. The rest get a variable
     /// holding their own value.
     fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
+        // `x @ B { b, .. }`: `x`, or where it's moved, is the same JS object
+        // as the value, and a change to it would change what `b` reads in
+        // place, so each binding has its own. `n @ 1..=9` binds nothing else.
+        let stable = stable && !(bindings.len() > 1 && bindings.iter().any(|b| b.whole));
         for b in bindings {
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
             // A `ref mut` one always does: `*r = x` writes the place it names.
@@ -1752,6 +1758,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     name: name.to_string(),
                     mutable: mode.1 == Mutability::Mut,
                     by_ref_mut,
+                    whole: subpattern.is_some(),
                     place: subject.clone(),
                     ty: *ty,
                 });
