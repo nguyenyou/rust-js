@@ -186,7 +186,7 @@ const source = () => Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root }).
 /** Did a process end otherwise than by exiting 0? */
 const failed = (exit: Exit, timeout: number) => exit.code !== 0 || stopped(exit, timeout) !== undefined;
 
-async function runTest(ui: string, file: string): Promise<Result> {
+export async function runTest(ui: string, file: string): Promise<Result> {
   const test = relative(ui, file);
   const source = readFileSync(file, "utf8");
   const s = scope(source);

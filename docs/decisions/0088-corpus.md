@@ -98,6 +98,14 @@ What it expects is in a `//@` directive:
   rejection only if it exited 1 with errors of its own; a panic, an
   internal compiler error, a signal, a deadline, another exit code, or an
   error of rustc's is a crash, even after the rejection a `compile-fail`
-  case expects. The corpus, generated programs and rustc's tests all
+  case expects, and fails an `ignore-rust-js` case, which rust-js may
+  reject or answer wrongly, but not crash on. The corpus, generated
+  programs and rustc's tests all
   judge a compile this way. Found in review: a compiler that printed the
   expected rejection, then panicked, passed.
+- **The harness's own failures are tested, made on purpose**
+  (`test/harness.test.ts`): a compiler that crashes after the rejection a
+  case expects, one that never ends, JS wrong under Bun only, a generated
+  program's reduction cut short, shards that aren't one run, and a test
+  native Rust never ends. Each fails the run, or says it's incomplete,
+  with what it saw.

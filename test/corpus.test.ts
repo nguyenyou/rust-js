@@ -96,6 +96,8 @@ async function check(file: string): Promise<string[]> {
     runs.push(["node, minified", runJs([node ?? "node"], await bundle(compiled.js, dir), dir, "minified")]);
   }
   if (want.kind === "ignore-rust-js") {
+    // Wrong for now, rejected or answered otherwise, but not a crash.
+    if ("error" in compiled && compiled.kind === "crashed") return [compiled.error];
     const passes = runs.length > 0 && runs.every(([, run]) => agree(run, native));
     return passes ? [`it passes now: remove \`ignore-rust-js: ${want.reason}\``] : [];
   }

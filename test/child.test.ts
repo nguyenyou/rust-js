@@ -25,6 +25,9 @@ test("a rejection followed by a crash is a crash", () => {
   const panicked = `${rejection}thread 'rustc' panicked at src/lower.rs:1:1:\nboom\n`;
   expect(compileFailure(exit(101, panicked), 1000)).toEqual({ kind: "crashed", reason: "thread 'rustc' panicked at src/lower.rs:1:1:" });
   expect(compileFailure(exit(1, panicked), 1000).kind).toBe("crashed");
+  // As rustc says it, with the thread's number.
+  const numbered = `${rejection}thread 'rustc' (21196015) panicked at src/lower/representation.rs:226:34:\n`;
+  expect(compileFailure(exit(101, numbered), 1000).reason).toBe("thread 'rustc' (21196015) panicked at src/lower/representation.rs:226:34:");
   expect(compileFailure(exit(101, "error: internal compiler error: oops\n"), 1000).reason).toBe("error: internal compiler error: oops");
 });
 

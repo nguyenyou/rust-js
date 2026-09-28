@@ -70,7 +70,7 @@ export function stopped(exit: Exit, timeout: number): string | undefined {
 const errors = (stderr: string) =>
   stderr.split("\n").filter((line) => /^error(\[E\d+\])?:/.test(line) && !line.startsWith("error: aborting due to"));
 const crashLine = (stderr: string) =>
-  stderr.split("\n").find((line) => /^thread '.*' panicked at|internal compiler error|unexpectedly panicked/.test(line));
+  stderr.split("\n").find((line) => /^thread '[^']*'( \(\d+\))? panicked at|internal compiler error|unexpectedly panicked/.test(line));
 
 /** How a compile that didn't succeed failed. rust-js rejects a program by
  * exiting 1 with errors of its own, each `error: rust-js ..`; anything
