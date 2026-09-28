@@ -2951,7 +2951,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let var = &self.vars[&id];
                 Some((var.place.clone(), var.mutable))
             }
-            ExprKind::Field { lhs, name, .. } => {
+            // A union's field is no place: it has no representation yet.
+            ExprKind::Field { lhs, name, .. } if !is_union(self.thir[lhs].ty) => {
                 let (base, mutable) = self.place(lhs)?;
                 Some((self.project(base, self.thir[lhs].ty, name.as_usize()), mutable))
             }
@@ -3233,6 +3234,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(self.copy_if_needed(place, ty));
         }
         match self.thir[self.strip(e)].kind {
+            // A union's field: a constant of one is rejected, and reading it
+            // is too, rather than taken as a struct's.
+            ExprKind::Field { lhs, .. } if is_union(self.thir[lhs].ty) => {
+                Err(self.unsupported(self.thir[e].span, "unions"))
+            }
             // A field of a temporary, like `f().x`: nothing else can see the rest.
             ExprKind::Field { lhs, name, .. } => {
                 // A field of an element, `v[i].x`, or of what a reference points
@@ -3592,6 +3598,10 @@ fn only_reads(e: &Expr) -> bool {
         }
         _ => !e.has_effects(),
     }
+}
+
+fn is_union(ty: Ty<'_>) -> bool {
+    ty.ty_adt_def().is_some_and(|adt| adt.is_union())
 }
 
 fn assign_op(op: AssignOp) -> BinOp {
