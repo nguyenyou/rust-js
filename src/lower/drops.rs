@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rustc_hir::{BindingMode, ByRef, LangItem};
+use rustc_middle::middle::region;
 use rustc_middle::mir::BinOp;
 use rustc_middle::thir::visit::{self, Visitor};
 use rustc_middle::thir::{
@@ -67,6 +68,10 @@ pub(super) struct Facts {
     moved: HashSet<LocalVarId>,
     /// Each use that moves one.
     moves: HashSet<ExprId>,
+    /// Each value with a destructor that lives in a temporary: one used in
+    /// place, borrowed or taken apart, and one made before an operand after
+    /// it that can leave early, which a call then moves.
+    temps: HashMap<ExprId, TempKind>,
     /// What this body does that isn't supported yet.
     problems: Vec<(Span, String)>,
 }
@@ -75,6 +80,34 @@ impl Facts {
     pub(super) fn has_owners(&self) -> bool {
         !self.owners.is_empty()
     }
+}
+
+/// Why a value with a destructor is a temporary.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum TempKind {
+    /// It's used in place, and dropped where rustc's scope tree ends it.
+    Place,
+    /// It's an operand, which the call or aggregate moves once every
+    /// operand is evaluated; one after it that leaves early leaves it owned.
+    Operand,
+}
+
+/// A temporary that ends with the statement being lowered.
+pub(super) struct Temp<'tcx> {
+    name: String,
+    ty: Ty<'tcx>,
+    flag: Option<String>,
+    /// The operand it is, which must have been moved by the statement's end.
+    operand: Option<ExprId>,
+}
+
+/// The statement being lowered, which a statement inside it saves and puts
+/// back: the scopes its temporaries end in, its own and, for a `let`, the
+/// rest of the block's, and the temporaries that end with it.
+#[derive(Default)]
+pub(super) struct Statement<'tcx> {
+    scopes: Option<(region::Scope, Option<region::Scope>)>,
+    temps: Vec<Temp<'tcx>>,
 }
 
 /// A function's drops, as its bodies are lowered.
@@ -94,6 +127,10 @@ pub(super) struct DropState<'tcx> {
     /// Moves that are a call's operands, and the statements that clear
     /// their flags, which wait until every operand is evaluated.
     deferred: HashMap<(usize, ExprId), Option<Stmt>>,
+    statement: Statement<'tcx>,
+    /// An operand temporary's flag, and whether its move was lowered.
+    temp_flags: HashMap<(usize, ExprId), String>,
+    temps_moved: HashSet<(usize, ExprId)>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -414,6 +451,172 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// Whether `e` is a temporary, and why.
+    pub(super) fn temp_kind(&mut self, e: ExprId) -> R<Option<TempKind>> {
+        Ok(self.drop_facts()?.temps.get(&e).copied())
+    }
+
+    /// `e`, a value with a destructor that's a temporary: in a `const` of its
+    /// own, dropped where rustc's scope tree ends it. One that ends with the
+    /// statement is dropped by its `finally`; one a `let` extends is owned
+    /// by the rest of the block, as a variable is.
+    pub(super) fn temporary(&mut self, e: ExprId, kind: TempKind, value: Expr, out: &mut Vec<Stmt>) -> R<Expr> {
+        let span = self.thir[e].span;
+        let ty = self.thir[e].ty;
+        let js_span = self.js_span(span);
+        let base = match ty.peel_refs().kind() {
+            ty::Adt(adt, _) => lower_first(self.tcx.item_name(adt.did()).as_str()),
+            _ => "temporary".to_string(),
+        };
+        let name = self.fresh(&base);
+        out.push(StmtKind::Const(name.clone(), value).at(js_span));
+        let Some((statement, rest)) = self.drop_state.statement.scopes else {
+            return Err(self.unsupported(span, "a temporary with a destructor here"));
+        };
+        let key = std::ptr::from_ref(self.thir) as usize;
+        let flag = match kind {
+            TempKind::Operand => {
+                let flag = self.fresh(&format!("{name}$live"));
+                out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
+                self.drop_state.temp_flags.insert((key, e), flag.clone());
+                Some(flag)
+            }
+            TempKind::Place => {
+                let tree = self.tcx.region_scope_tree(self.body_owner);
+                match tree.temporary_scope(self.thir[e].temp_scope_id).temp_lifetime {
+                    // Never dropped, as a promoted constant isn't.
+                    None => return Ok(Expr::var(&name)),
+                    Some(scope) if scope == statement => None,
+                    // `let r = &f();`: it lives as long as `r` does.
+                    Some(scope) if Some(scope) == rest => {
+                        self.own_value(Expr::var(&name), ty);
+                        return Ok(Expr::var(&name));
+                    }
+                    Some(_) => return Err(self.unsupported(span, "a temporary with a destructor here")),
+                }
+            }
+        };
+        let operand = (kind == TempKind::Operand).then_some(e);
+        self.drop_state.statement.temps.push(Temp {
+            name: name.clone(),
+            ty,
+            flag,
+            operand,
+        });
+        Ok(Expr::var(&name))
+    }
+
+    /// Start lowering a statement whose temporaries end in `scopes`: its own,
+    /// and for a `let`, the rest of the block's. What it replaces, a
+    /// statement it's inside, `end_statement` puts back.
+    pub(super) fn begin_statement(&mut self, scopes: (region::Scope, Option<region::Scope>)) -> Statement<'tcx> {
+        std::mem::replace(
+            &mut self.drop_state.statement,
+            Statement {
+                scopes: Some(scopes),
+                temps: Vec::new(),
+            },
+        )
+    }
+
+    /// Finish the statement `begin_statement` started: `lowered`, its JS,
+    /// goes in `out`, each of its temporaries dropped by a `finally` after
+    /// the `const` that holds it, last first.
+    pub(super) fn end_statement(
+        &mut self,
+        outer: Statement<'tcx>,
+        lowered: Vec<Stmt>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
+        let statement = std::mem::replace(&mut self.drop_state.statement, outer);
+        let key = std::ptr::from_ref(self.thir) as usize;
+        // An operand temporary must have been moved where it's an operand.
+        for t in &statement.temps {
+            if let Some(e) = t.operand
+                && !self.drop_state.temps_moved.contains(&(key, e))
+            {
+                return Err(self.unsupported(
+                    self.thir[e].span,
+                    "a value with a destructor made before what may panic or leave early, here",
+                ));
+            }
+        }
+        if statement.temps.is_empty() {
+            out.extend(lowered);
+            return Ok(());
+        }
+        // Each is declared in the statement's own JS, not in a branch of it.
+        let mut placed = Vec::new();
+        for t in statement.temps {
+            let at = lowered
+                .iter()
+                .position(|s| matches!(&s.kind, StmtKind::Const(n, _) if *n == t.name))
+                .ok_or_else(|| self.unsupported(span, "a temporary with a destructor in a branch"))?;
+            placed.push((at, t));
+        }
+        placed.sort_by_key(|(at, _)| *at);
+        self.wrap_temps(lowered, placed, span, out)
+    }
+
+    fn wrap_temps(
+        &mut self,
+        mut lowered: Vec<Stmt>,
+        mut placed: Vec<(usize, Temp<'tcx>)>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
+        if placed.is_empty() {
+            out.extend(lowered);
+            return Ok(());
+        }
+        let (at, temp) = placed.remove(0);
+        // Through its declaration, and its flag's.
+        let mut end = at + 1;
+        if let Some(flag) = &temp.flag
+            && matches!(lowered.get(end).map(|s| &s.kind), Some(StmtKind::Let(n, _)) if n == flag)
+        {
+            end += 1;
+        }
+        let rest = lowered.split_off(end);
+        out.extend(lowered);
+        let placed = placed.into_iter().map(|(i, t)| (i - end, t)).collect();
+        let mut inner = Vec::new();
+        self.wrap_temps(rest, placed, span, &mut inner)?;
+        // What the rest declares is used after it: declared before the `try`.
+        let mut body = Vec::new();
+        for s in inner {
+            let js_span = s.span;
+            match s.kind {
+                StmtKind::Const(name, value) | StmtKind::Let(name, Some(value)) => {
+                    out.push(StmtKind::Let(name.clone(), None).at(js_span));
+                    body.push(StmtKind::Assign(Expr::var(&name), value).at(js_span));
+                }
+                StmtKind::Let(name, None) => out.push(StmtKind::Let(name, None).at(js_span)),
+                StmtKind::Destructure { .. } => {
+                    return Err(self.unsupported(
+                        span,
+                        "taking a value apart in a statement with a temporary that has a destructor",
+                    ));
+                }
+                kind => body.push(kind.at(js_span)),
+            }
+        }
+        let mut drop = Vec::new();
+        self.drop_value(Expr::var(&temp.name), temp.ty, span, &mut drop)?;
+        let js_span = self.js_span(span);
+        let finally = match temp.flag {
+            Some(flag) => vec![StmtKind::If(Expr::var(&flag), drop, None).at(js_span)],
+            None => drop,
+        };
+        if body.is_empty() {
+            out.extend(finally);
+        } else {
+            out.push(StmtKind::Try(body, finally).at(js_span));
+        }
+        Ok(())
+    }
+
     /// A value its scope drops that no variable names, as a `_` parameter.
     pub(super) fn own_value(&mut self, value: Expr, ty: Ty<'tcx>) {
         self.drop_state.owned.push(Owned { value, ty, flag: None });
@@ -541,10 +744,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let moves: Vec<ExprId> = list
             .iter()
             .map(|&e| self.strip(e))
-            .filter(|e| facts.moves.contains(e))
+            .filter(|e| facts.moves.contains(e) || facts.temps.get(e) == Some(&TempKind::Operand))
             .collect();
         for &e in &moves {
-            self.drop_state.deferred.insert((key, e), None);
+            if facts.moves.contains(&e) {
+                self.drop_state.deferred.insert((key, e), None);
+            }
         }
         Ok(moves)
     }
@@ -553,10 +758,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// a `const`, in order, then the moves' flags are cleared.
     pub(super) fn end_moves(&mut self, moves: &[ExprId], values: &mut [Expr], out: &mut Vec<Stmt>) {
         let key = std::ptr::from_ref(self.thir) as usize;
-        let clears: Vec<Stmt> = moves
-            .iter()
-            .filter_map(|&e| self.drop_state.deferred.remove(&(key, e)).flatten())
-            .collect();
+        let mut clears: Vec<Stmt> = Vec::new();
+        for &e in moves {
+            if let Some(clear) = self.drop_state.deferred.remove(&(key, e)).flatten() {
+                clears.push(clear);
+            } else if let Some(flag) = self.drop_state.temp_flags.get(&(key, e)) {
+                // A temporary operand, moved now.
+                let js_span = self.js_span(self.thir[e].span);
+                clears.push(StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span));
+                self.drop_state.temps_moved.insert((key, e));
+            }
+        }
         if clears.is_empty() {
             return;
         }
@@ -868,31 +1080,52 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         if let Some(at) = siblings.iter().position(|&s| s == child)
             && siblings[at + 1..].iter().any(|&s| !self.cx.cannot_leave(s))
         {
-            self.problem(
-                span,
-                "a value with a destructor made before what may panic or leave early",
-            );
+            self.facts.temps.insert(e, TempKind::Operand);
             return;
         }
-        let temporary = match parent.map(|p| &self.thir[p].kind) {
-            None => self
-                .lets
-                .get(&child)
-                .is_some_and(|pat| !matches!(pat.kind, PatKind::Wild | PatKind::Binding { subpattern: None, .. })),
-            Some(
-                ExprKind::Borrow { arg, .. }
-                | ExprKind::RawBorrow { arg, .. }
-                | ExprKind::Let { expr: arg, .. }
-                | ExprKind::Match { scrutinee: arg, .. }
-                | ExprKind::Field { lhs: arg, .. }
-                | ExprKind::Index { lhs: arg, .. }
-                | ExprKind::Deref { arg },
-            ) => *arg == child,
-            Some(ExprKind::Adt(adt)) => matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child),
-            _ => false,
+        let taken = |finder: &Self, pats: &mut dyn Iterator<Item = &Pat<'tcx>>| {
+            pats.map(|p| finder.taken(p)).any(|t| t != Taken::Nothing)
         };
-        if temporary {
-            self.problem(span, "a temporary with a destructor");
+        let used_in_place =
+            match parent.map(|p| &self.thir[p].kind) {
+                // `let (a, _) = (x, y);` takes a temporary apart, and drops the rest.
+                None => {
+                    if self.lets.get(&child).is_some_and(|pat| {
+                        !matches!(pat.kind, PatKind::Wild | PatKind::Binding { subpattern: None, .. })
+                    }) {
+                        self.problem(span, "taking apart a temporary with a destructor");
+                    }
+                    return;
+                }
+                Some(ExprKind::Let { expr, pat }) if *expr == child => {
+                    if taken(self, &mut std::iter::once(&**pat)) {
+                        self.problem(span, "moving part of a temporary with a destructor");
+                        return;
+                    }
+                    true
+                }
+                Some(ExprKind::Match { scrutinee, arms, .. }) if *scrutinee == child => {
+                    if taken(self, &mut arms.iter().map(|&a| &*self.thir[a].pattern)) {
+                        self.problem(span, "moving part of a temporary with a destructor");
+                        return;
+                    }
+                    true
+                }
+                Some(
+                    ExprKind::Borrow { arg, .. }
+                    | ExprKind::RawBorrow { arg, .. }
+                    | ExprKind::Field { lhs: arg, .. }
+                    | ExprKind::Index { lhs: arg, .. }
+                    | ExprKind::Deref { arg },
+                ) => *arg == child,
+                Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
+                    self.problem(span, "a struct update from a value with a destructor");
+                    return;
+                }
+                _ => false,
+            };
+        if used_in_place {
+            self.facts.temps.insert(e, TempKind::Place);
         }
     }
 }
@@ -962,13 +1195,16 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
                 source,
                 ..
             } if {
-                let source = self.thir[source].ty;
-                let pointee = source.builtin_deref(true).unwrap_or(source);
-                let pointee = match pointee.kind() {
-                    ty::Adt(_, args) if pointee.is_box() => args.type_at(0),
-                    _ => pointee,
+                // To a `dyn`: an array unsized to a slice is the same array.
+                let pointee = |ty: Ty<'tcx>| {
+                    let pointee = ty.builtin_deref(true).unwrap_or(ty);
+                    match pointee.kind() {
+                        ty::Adt(_, args) if pointee.is_box() => args.type_at(0),
+                        _ => pointee,
+                    }
                 };
-                self.cx.drops(pointee) != Drops::Nothing
+                matches!(pointee(expr.ty).kind(), ty::Dynamic(..))
+                    && self.cx.drops(pointee(self.thir[source].ty)) != Drops::Nothing
             } =>
             {
                 self.problem(expr.span, "a `dyn` of a value with a destructor");

@@ -59,6 +59,9 @@ written, and what it breaks, as Rust would see it:
 | `drop-ref-parameter` | a parameter bound by `ref` isn't dropped | `drop_params.rs` |
 | `drop-let-value-context` | a `let`'s value is taken as moved whatever its pattern | `drop_params.rs` |
 | `drop-deref-temporary` | a temporary dereferenced in place is never dropped | `drop_deref_temporary.rs` |
+| `temporary-without-finally` | a statement's temporary isn't dropped as a panic unwinds | `drop_temporary_operands.rs` |
+| `temporary-not-extended` | a temporary a `let` keeps alive is dropped at the end of the `let` | `drop_temporaries.rs` |
+| `unsize-array-as-dyn` | an array unsized to a slice is taken for a `dyn`, and rejected | `drop_temporaries.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

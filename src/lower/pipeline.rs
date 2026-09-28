@@ -177,6 +177,7 @@ pub fn lower_crate<'tcx>(
             clones: RefCell::new(HashMap::new()),
             clone_assumed: Cell::new(usize::MAX),
             drop_state: Default::default(),
+            body_owner: def_id,
         };
         let result = match body {
             Some(body) => cx.lower_fn(body),

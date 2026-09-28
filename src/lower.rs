@@ -200,6 +200,7 @@ enum Nested<'tcx> {
 /// it's left (`leave_body`).
 struct Enclosing<'a, 'tcx> {
     thir: &'a Thir<'tcx>,
+    body_owner: DefId,
     stepped: HashSet<LocalVarId>,
     loops: Option<Vec<Loop>>,
     names: Option<HashSet<String>>,
@@ -294,6 +295,8 @@ struct FnCx<'a, 'tcx> {
     clone_assumed: Cell<usize>,
     /// What's dropped, and where (ADR 0098).
     drop_state: drops::DropState<'tcx>,
+    /// Whose body `thir` is: its scope tree says where temporaries end.
+    body_owner: DefId,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -774,6 +777,54 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Every local gets a unique JS name, so a Rust block needs no JS
         // block of its own: its statements go straight into `out`.
         for (i, &stmt) in block.stmts.iter().enumerate().skip(from) {
+            let mark = self.owned_mark();
+            self.statement(stmt, out)?;
+            if self.owned_mark() > mark {
+                // The `let`s after it that can't leave early share its `try`.
+                let mut next = i + 1;
+                while let Some(&stmt) = block.stmts.get(next)
+                    && let thir::StmtKind::Let {
+                        initializer: Some(init),
+                        else_block: None,
+                        ..
+                    } = &self.thir[stmt].kind
+                    && self.cannot_leave(*init)
+                {
+                    self.statement(stmt, out)?;
+                    next += 1;
+                }
+                let mut rest = Vec::new();
+                self.block_rest(block_id, next, tail, &mut rest)?;
+                return self.close_scope(mark, rest, block.span, out);
+            }
+        }
+        if let Some(dest) = tail
+            && let Some(value) = block.expr
+        {
+            self.stmt(value, dest, out)?;
+        }
+        Ok(())
+    }
+
+    /// One statement, whose temporaries end with it (ADR 0098).
+    fn statement(&mut self, stmt: thir::StmtId, out: &mut Vec<Stmt>) -> R<()> {
+        let (scopes, span) = match &self.thir[stmt].kind {
+            thir::StmtKind::Expr { scope, expr } => ((*scope, None), self.thir[*expr].span),
+            thir::StmtKind::Let {
+                init_scope,
+                remainder_scope,
+                span,
+                ..
+            } => ((*init_scope, Some(*remainder_scope)), *span),
+        };
+        let outer = self.begin_statement(scopes);
+        let mut lowered = Vec::new();
+        self.statement_body(stmt, &mut lowered)?;
+        self.end_statement(outer, lowered, span, out)
+    }
+
+    fn statement_body(&mut self, stmt: thir::StmtId, out: &mut Vec<Stmt>) -> R<()> {
+        {
             match &self.thir[stmt].kind {
                 // A statement's value that has a destructor is dropped at once.
                 thir::StmtKind::Expr { expr, .. } if self.has_drops(self.thir[*expr].ty) => {
@@ -802,37 +853,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         let js_span = self.js_span(*span);
                         out.push(StmtKind::If(std_impls::negate(test), failed, None).at(js_span));
                         out.extend(bindings);
-                        continue;
+                        return Ok(());
                     }
-                    let mark = self.owned_mark();
                     self.lower_let(pattern, *initializer, *span, out)?;
-                    if self.owned_mark() > mark {
-                        // The `let`s after it that can't leave early share its `try`.
-                        let mut next = i + 1;
-                        while let Some(&stmt) = block.stmts.get(next)
-                            && let thir::StmtKind::Let {
-                                pattern,
-                                initializer: Some(init),
-                                else_block: None,
-                                span,
-                                ..
-                            } = &self.thir[stmt].kind
-                            && self.cannot_leave(*init)
-                        {
-                            self.lower_let(pattern, Some(*init), *span, out)?;
-                            next += 1;
-                        }
-                        let mut rest = Vec::new();
-                        self.block_rest(block_id, next, tail, &mut rest)?;
-                        return self.close_scope(mark, rest, block.span, out);
-                    }
                 }
             }
-        }
-        if let Some(dest) = tail
-            && let Some(value) = block.expr
-        {
-            self.stmt(value, dest, out)?;
         }
         Ok(())
     }
@@ -2055,7 +2080,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// deeper down (a `Scope` passes its inner expression through, say).
     fn expr(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
         let span = self.js_span(self.thir[e].span);
-        Ok(self.expr_inner(e, out)?.or_at(span))
+        let value = self.expr_inner(e, out)?.or_at(span);
+        // A value with a destructor in a temporary is in a `const` its
+        // scope drops (ADR 0098).
+        match self.temp_kind(e)? {
+            Some(kind) => self.temporary(e, kind, value, out),
+            None => Ok(value),
+        }
     }
 
     fn expr_inner(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
@@ -2911,7 +2942,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         let names = if known { inner } else { self.names.clone() };
-        let enclosing = self.enter_body(&body.thir, Nested::Closure { names })?;
+        let enclosing = self.enter_body(&body.thir, body.def_id.to_def_id(), Nested::Closure { names })?;
         let mut stmts = Vec::new();
         // An `async` block takes no arguments, and runs as soon as it's
         // made: an async arrow, called right away (ADR 0029).
@@ -2998,7 +3029,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         // Its captures are this function's parameters and variables, so no snapshots.
         let body: &'a Body<'tcx> = self.krate.closures[&coroutine];
-        let enclosing = self.enter_body(&body.thir, Nested::Coroutine)?;
+        let enclosing = self.enter_body(&body.thir, body.def_id.to_def_id(), Nested::Coroutine)?;
         // A future dropped before it's done drops what it holds, which a JS
         // promise can't be (ADR 0098).
         if self.drop_facts()?.has_owners() {
@@ -3014,10 +3045,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `nested` says it starts. Each body finds its own stepped iterators
     /// (ADR 0071) and is checked for what it drops (ADR 0098). A body that
     /// fails leaves the state as it is: its whole item fails with it.
-    fn enter_body(&mut self, thir: &'a Thir<'tcx>, nested: Nested<'tcx>) -> R<Enclosing<'a, 'tcx>> {
+    fn enter_body(&mut self, thir: &'a Thir<'tcx>, owner: DefId, nested: Nested<'tcx>) -> R<Enclosing<'a, 'tcx>> {
         let own = stepped_locals(self.tcx, thir);
         let mut enclosing = Enclosing {
             thir: std::mem::replace(&mut self.thir, thir),
+            body_owner: std::mem::replace(&mut self.body_owner, owner),
             stepped: self.stepped.clone(),
             loops: None,
             names: None,
@@ -3054,6 +3086,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn leave_body(&mut self, enclosing: Enclosing<'a, 'tcx>) -> R<()> {
         self.check_drops()?;
         self.thir = enclosing.thir;
+        self.body_owner = enclosing.body_owner;
         self.stepped = enclosing.stepped;
         if let Some(loops) = enclosing.loops {
             self.loops = loops;

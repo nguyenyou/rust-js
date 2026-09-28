@@ -1,7 +1,8 @@
-//@ compile-fail: rust-js does not support a temporary with a destructor yet
+//@ compile-fail: rust-js does not support a temporary with a destructor here yet
 // A method call through a `Box` a call returned dereferences it in place:
-// the box is a temporary, dropped at the end of its statement, which isn't
-// supported yet (ADR 0098). Left out, its drop would never run.
+// the box is a temporary. One in an `if`'s condition is dropped before
+// either branch, which isn't supported yet (ADR 0098); left out, its drop
+// would never run.
 struct Temporary;
 
 impl Drop for Temporary {

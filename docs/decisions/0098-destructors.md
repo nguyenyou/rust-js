@@ -120,7 +120,24 @@ function main() {
   }
   ```
 - **A temporary is dropped at the end of its temporary scope**, as rustc's
-  region scope tree gives it, so the edition's rule is rustc's.
+  region scope tree gives it, so the edition's rule is rustc's. It's a
+  `const` of its own, and the rest of its statement is a `try` whose
+  `finally` drops it; what the statement declares is declared before the
+  `try`, for what comes after. One a `let` keeps alive, `let r =
+  &make();`, is owned by the rest of the block, as `r` would be.
+
+  ```js
+  const noisy = make("b");
+  let first;
+  try {
+    first = noisy[0];
+  } finally {
+    noisyDrop_drop(noisy);
+  }
+  ```
+- **A value made before an operand that may leave early is a temporary
+  too,** `f(make(1), g())`: its flag clears as the call is made, after
+  every operand, so a `g` that panics leaves it owned, and dropped.
 - **An assignment drops the old value** after the new one is computed, as
   Rust does.
 - **A generic function drops a `T` through a drop function it's given**,
@@ -204,10 +221,12 @@ value, and a `dyn Trait` of one.
   never dropped. The safety net saw none of them: it knows only what's
   bound by value. Each is fixed, or an error, now.
 - **Done first, and not yet:** variables, parameters, moves, assignments,
-  statements' values and `mem::drop`. A temporary that's borrowed or taken
-  apart, a partial move, generic code given a value with a destructor, a
-  `let x;` without its value, and `async` code that owns one are errors
-  until they're done.
+  statements' values and `mem::drop`, then temporaries that end with their
+  statement or a `let`'s block, and operands. A temporary of a condition or
+  a block's tail, one made in a branch of its statement or taken apart, a
+  partial move, generic code given a value with a destructor, a `let x;`
+  without its value, and `async` code that owns one are errors until
+  they're done.
 - A generic function that drops a `T` has a JS parameter more than its
   Rust one has. Nothing depends on the old signatures yet, and rejecting
   generic drops would reject correct Rust for none of that.

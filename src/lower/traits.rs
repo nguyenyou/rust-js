@@ -659,7 +659,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self_args: args,
             typing_env: ty::TypingEnv::post_analysis(self.tcx, id),
         };
-        let enclosing = self.enter_body(&body.thir, nested)?;
+        let enclosing = self.enter_body(&body.thir, id, nested)?;
         let mut out = Vec::new();
         let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut out)?;
         self.leave_body(enclosing)?;
