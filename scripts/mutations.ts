@@ -199,10 +199,10 @@ export const mutations: Mutation[] = [
   },
   {
     name: "static-mut-reference",
-    breaks: "a reference to a `static mut` is allowed",
+    breaks: "a `&mut` to a `static mut` is allowed",
     file: "src/lower/analysis.rs",
-    find: '                Some(d) if tcx.is_mutable_static(d) => "references to a `static mut`",',
-    replace: '                Some(d) if tcx.is_mutable_static(d) && false => "references to a `static mut`",',
+    find: '                Some(d) if tcx.is_mutable_static(d) => "`&mut` references to a `static mut`",',
+    replace: '                Some(d) if tcx.is_mutable_static(d) && false => "`&mut` references to a `static mut`",',
     tests: ["test/corpus.test.ts", "-t", "static_mut_reference"],
   },
   {
@@ -316,6 +316,38 @@ export const mutations: Mutation[] = [
     find: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n                self.stepped.extend(own);\n",
     replace: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n",
     tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
+  },
+  {
+    name: "static-mut-shared-reference",
+    breaks: "a shared reference to a `static mut` is rejected",
+    file: "src/lower/analysis.rs",
+    find: "                ExprKind::Borrow {\n                    borrow_kind: BorrowKind::Mut { .. },\n                    arg,\n                } => (arg, false),\n",
+    replace: "                ExprKind::Borrow { arg, .. } => (arg, false),\n",
+    tests: ["test/corpus.test.ts", "-t", "static_mut_shared"],
+  },
+  {
+    name: "drop-ref-parameter",
+    breaks: "a parameter bound by `ref` isn't dropped as its function ends",
+    file: "src/lower.rs",
+    find: "                        if self.has_drops(param.ty) {\n                            self.own(*var, Expr::var(&name), param.ty, pat.span, out)?;\n",
+    replace: "                        if mode.0 == ByRef::No && self.has_drops(param.ty) {\n                            self.own(*var, Expr::var(&name), param.ty, pat.span, out)?;\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_params"],
+  },
+  {
+    name: "drop-let-value-context",
+    breaks: "a `let`'s value is taken as moved whatever its pattern, so `let _ = x` moves `x`",
+    file: "src/lower/drops.rs",
+    find: "            if self.lets.contains_key(&child) {\n                return (None, child);\n            }\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "drop_params"],
+  },
+  {
+    name: "drop-deref-temporary",
+    breaks: "a temporary dereferenced in place, as a method call through a returned `Box`, is never dropped",
+    file: "src/lower/drops.rs",
+    find: "                | ExprKind::Index { lhs: arg, .. }\n                | ExprKind::Deref { arg },\n",
+    replace: "                | ExprKind::Index { lhs: arg, .. },\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_deref_temporary"],
   },
 ];
 

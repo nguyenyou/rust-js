@@ -68,9 +68,15 @@ export function bump() {
 
 - **Reads and writes are `COUNT.value`,** from any module: an imported JS
   binding can't be assigned, and an object's field can.
-- **A reference to one, `&COUNT`, `&mut COUNT` or `&raw mut COUNT`, is
-  rejected** for now. Rust 2024 denies references to a `static mut` by
-  default (`static_mut_refs`), and a `&mut` of a number has no JS value yet.
+- **A shared reference to one, `&COUNT`, is the value it points to**, as
+  any shared reference is (ADR 0023): a number's is its value then, and an
+  object's is the object. Rust makes writing the static while such a
+  reference is still used undefined behavior, so no program Rust defines
+  can tell. `println!("{}", COUNT)` takes one, as does a method of
+  `&self`. (Amended: the first version rejected every reference; 22 of
+  rustc's tests stopped there, most of them counting drops.)
+- **`&mut COUNT` and `&raw mut COUNT` are rejected** for now: a `&mut` of a
+  number has no JS value yet.
 
 **An atomic is a `{ value }` too, as a `Cell` is**, as `static N:
 AtomicUsize = AtomicUsize::new(0)` is `const N = { value: 0 }`. JS runs a
@@ -122,7 +128,7 @@ a function pointer, or a `dyn`.
   value, whatever its type's `Sync` says.
 - A `pub static mut` is an exported `{ value }` that JS can change, as
   Rust code can, in `unsafe`.
-- Left for later: a reference to a `static mut`, a static holding a
+- Left for later: a `&mut` to a `static mut`, a static holding a
   reference to another, and `Mutex` or `OnceLock` in a static, which none of
   the tests use.
 - **rustc makes value trees only of constants,** so a static's is read out

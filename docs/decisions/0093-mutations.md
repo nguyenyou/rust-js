@@ -40,7 +40,7 @@ written, and what it breaks, as Rust would see it:
 | `never-loop-value` | a `loop` that never ends, used as a value, is rejected | `loop_values.rs` |
 | `static-struct-variant` | a static struct's fields are read one place along | `statics.rs` |
 | `static-mut-place` | a `static mut` is read and written as its value, not its `{ value }` | `static_mut.rs` |
-| `static-mut-reference` | a reference to a `static mut` is allowed | `static_mut_reference.rs` |
+| `static-mut-reference` | a `&mut` to a `static mut` is allowed | `static_mut_reference.rs` |
 | `atomic-fetch-new-value` | an atomic's `fetch_add` gives the new value, not the old | `atomics.rs` |
 | `thread-local-storage-static` | std's storage for a `thread_local!` is taken as a static, and rejected | `thread_local_syntax.rs` |
 | `auto-trait-impl` | an impl of an auto trait, as `unsafe impl Sync`, is rejected | `marker_traits.rs` |
@@ -55,6 +55,10 @@ written, and what it breaks, as Rust would see it:
 | `drop-function-in-branch` | a drop function is declared in a branch another call to it isn't in | `drop_functions.rs` |
 | `drops-walk-uncached` | what a type drops is found once for each path to it, in exponential time | `nested_generic_types.rs` |
 | `closure-stepped-iterators` | a closure's body doesn't find its own stepped iterators | `stepped_nested.rs` |
+| `static-mut-shared-reference` | a shared reference to a `static mut` is rejected | `static_mut_shared.rs` |
+| `drop-ref-parameter` | a parameter bound by `ref` isn't dropped | `drop_params.rs` |
+| `drop-let-value-context` | a `let`'s value is taken as moved whatever its pattern | `drop_params.rs` |
+| `drop-deref-temporary` | a temporary dereferenced in place is never dropped | `drop_deref_temporary.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

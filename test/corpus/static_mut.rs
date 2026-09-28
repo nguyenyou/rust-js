@@ -1,6 +1,6 @@
 // A `static mut` is its module's `{ value }` (ADR 0096): reads and writes
-// are of `.value`, from its own module or another. Each is read by value:
-// a reference to one is rejected.
+// are of `.value`, from its own module or another. Each is read by value
+// here; a shared reference to one is in static_mut_shared.rs.
 #[derive(Clone, Copy, Debug)]
 struct Stats {
     calls: u32,

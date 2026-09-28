@@ -304,23 +304,26 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
     valid
 }
 
-/// Report each reference rust-js can't make to a static yet (ADR 0096): to
-/// a `static mut` or a part of one, and a raw address of any. False if there
-/// was one.
+/// Report each reference rust-js can't make to a static yet (ADR 0096): a
+/// `&mut` to a `static mut` or a part of one, and a raw address of any. A
+/// shared one is the value it points to, as any is. False if there was one.
 fn reject_static_references(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
     let mut valid = true;
     for body in all_bodies {
         let thir = &body.thir;
         for expr in thir.exprs.iter() {
             let (arg, raw) = match expr.kind {
-                ExprKind::Borrow { arg, .. } => (arg, false),
+                ExprKind::Borrow {
+                    borrow_kind: BorrowKind::Mut { .. },
+                    arg,
+                } => (arg, false),
                 ExprKind::RawBorrow { arg, .. } => (arg, true),
                 _ => continue,
             };
             let what = match static_of(thir, arg) {
                 Some(d) if tcx.is_foreign_item(d) => continue,
                 Some(_) if raw => "raw addresses of statics",
-                Some(d) if tcx.is_mutable_static(d) => "references to a `static mut`",
+                Some(d) if tcx.is_mutable_static(d) => "`&mut` references to a `static mut`",
                 _ => continue,
             };
             tcx.dcx()
