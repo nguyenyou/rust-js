@@ -65,5 +65,10 @@ and `map.get_mut(k).unwrap().n *= 4` work too.
   can't make another object be it.
 - A `Deref` or `IndexMut` to a number, `&mut i32`, is an error, as any
   `&mut` of a number returned is.
+- **Of rustc's tests, 14 more pass** (1,425 of 2,691). One more compiled
+  and threw: `#[derive(CoercePointee)]` writes a pointer of the crate's
+  own that unsizes to a `dyn`, and its derived impls pass unchecked, so
+  `ptr as MyPointer<dyn MyTrait>` was left as it was, not a `dyn`'s value
+  and impl. Unsizing a type of the crate's own is an error now.
 - `Drop` is left for its own ADR, and `Fn*`, `Wake`, `AsyncDrop` and the
   rest are still errors.

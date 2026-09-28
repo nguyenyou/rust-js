@@ -455,6 +455,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<js::Stmt>,
     ) -> R<Expr> {
+        // A pointer of the crate's own, as `#[derive(CoercePointee)]` makes
+        // one, would hold a `dyn`'s value and impl where it holds the value.
+        if let ty::Adt(adt, _) = target.kind()
+            && adt.did().is_local()
+        {
+            return Err(self.unsupported(span, &format!("unsizing a `{target}`")));
+        }
         // A `&dyn Debug` is the string it shows (ADR 0060).
         if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
             return self.debug_string(value, self.pointee(source), span);

@@ -120,7 +120,8 @@ jobs:
       - name: Write the known failures anew
         if: ${{ inputs.bless }}
         run: bun scripts/rustc-suite.ts --merge --bless results/*.json
-      - if: ${{ inputs.bless }}
+      # Even when the bless fails: its lists are what shows why.
+      - if: ${{ always() && inputs.bless }}
         uses: actions/upload-artifact@v7
         with:
           name: rustc-known-failures

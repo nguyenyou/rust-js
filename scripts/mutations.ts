@@ -245,6 +245,14 @@ export const mutations: Mutation[] = [
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "user_deref|returned_references"],
   },
+  {
+    name: "own-pointer-unsize",
+    breaks: "a pointer of the crate's own, unsized to a `dyn`, is the value it was, not a `dyn`'s",
+    file: "src/lower/traits.rs",
+    find: "        if let ty::Adt(adt, _) = target.kind()\n            && adt.did().is_local()\n",
+    replace: "        if let ty::Adt(adt, _) = target.kind()\n            && adt.did().is_local()\n            && false\n",
+    tests: ["test/diagnostics.test.ts", "-t", "pointer of the crate"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

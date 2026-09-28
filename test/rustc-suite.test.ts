@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 
 import { homedir } from "node:os";
 
-import { failureKind, firstError, ratchet, scope, surprises, validate, type Result, type Shard } from "../scripts/rustc-suite";
+import { failureKind, firstError, ratchet, scope, surprises, unblessable, validate, type Result, type Shard } from "../scripts/rustc-suite";
 
 test("a test is in scope unless a directive says it needs what a case can't have", () => {
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
@@ -201,4 +201,19 @@ test("a test newly out of scope, or newly in it, isn't as listed", () => {
   expect(excluded.map((r) => r.test)).toEqual(["a.rs", "b.rs"]);
   expect(included.map((r) => r.test)).toEqual(["c.rs"]);
   expect([...surprises(now, known, new Map(), outOfScope)].sort()).toEqual(["a.rs", "b.rs", "c.rs"]);
+});
+
+test("a bless writes the lists, but not a new crash or wrong answer without failing", () => {
+  const results: Result[] = [
+    { test: "a.rs", status: "fail", reason: "node: ended {\"error\":\"TypeError: x\"}" },
+    { test: "b.rs", status: "fail", reason: "rustc panicked" },
+    { test: "c.rs", status: "fail", reason: "error: rust-js does not support statics yet" },
+    { test: "d.rs", status: "fail", reason: "node: different stdout" },
+    { test: "e.rs", status: "pass" },
+  ];
+  // `a` was a clear rejection, `b` wasn't listed: both new, and not blessed quietly.
+  // `c` is a rejection, and `d` was wrong already.
+  const known = new Map([["a.rs", "error: rust-js does not support user implementations of this standard or external trait yet"], ["d.rs", "node: different stdout"]]);
+  expect(unblessable(results, known).map((r) => r.test)).toEqual(["a.rs", "b.rs"]);
+  expect(unblessable(results.slice(2), known)).toEqual([]);
 });

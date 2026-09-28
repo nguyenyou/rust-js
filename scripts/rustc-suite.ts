@@ -142,6 +142,17 @@ export function ratchet(
   };
 }
 
+/** What a bless mustn't write quietly: a failure that crashed or answered
+ * wrongly, unless it was listed so already. A clear rejection turned wrong
+ * is a miscompile, not a change to accept. */
+export function unblessable(results: Result[], known: Map<string, string>): (Result & { reason: string })[] {
+  return results.filter((r): r is Result & { reason: string } => {
+    if (r.status !== "fail" || failureKind(r.reason!) === "rejected") return false;
+    const listed = known.get(r.test);
+    return listed === undefined || failureKind(listed) === "rejected";
+  });
+}
+
 /** The tests of a run of some that aren't as the known failures say, as
  * the ratchet says of a whole run. */
 export function surprises(
@@ -442,6 +453,7 @@ function report(results: Result[], bless: boolean, inventory: Inventory) {
   ]);
   const listed = (status: string) => results.filter((r): r is Result & { reason: string } => r.status === status);
   if (bless) {
+    const [known] = lists();
     const failing = listed("fail"), unanswered = listed("native"), skipped = listed("skip");
     const blessed = "# Rewritten by `bun scripts/rustc-suite.ts --bless`.\n";
     const lines = (list: { test: string; reason: string }[]) => list.map((r) => `${r.test}\t${r.reason}\n`).join("");
@@ -452,6 +464,19 @@ function report(results: Result[], bless: boolean, inventory: Inventory) {
     const wrote = `${failing.length} known failures, ${unanswered.length} tests native Rust gives no answer for, and ${skipped.length} out of scope`;
     console.log(`wrote ${wrote}`);
     toSummary([`Wrote ${wrote}.`]);
+    // They're written for the diff, but the run fails: each is a bug.
+    const bad = unblessable(results, known);
+    if (bad.length > 0) {
+      for (const r of bad) console.log(`NOT BLESSED\t${r.test}\t${failureKind(r.reason)}: ${r.reason}`);
+      toSummary([
+        "",
+        "| Test | Now, and not blessed |",
+        "|---|---|",
+        ...bad.map((r) => `| ${r.test} | ${failureKind(r.reason)}: ${cell(r.reason)} |`),
+      ]);
+      console.log(`${bad.length} newly crashed or wrong: written, but a bless doesn't pass them`);
+      process.exitCode = 1;
+    }
     return;
   }
   const { regressions, fixed, worse, unanswered, answered, excluded, included } = ratchet(results, ...lists());
