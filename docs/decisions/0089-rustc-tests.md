@@ -34,7 +34,7 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
 - **How a test fails is kept too:** `rejected`, rust-js's own clear error,
   `crashed`, another compile error such as rustc's panic, or `wrong`, JS
   that ran otherwise. A test listed as rejected that now crashes or answers
-  wrongly fails the run, as a failure that got worse. The list is 1,219
+  wrongly fails the run, as a failure that got worse. The list is 1,209
   rejected and none crashed or wrong. A bless writes the lists as the run
   found them, but fails if one gains a failure that crashed or answered
   wrongly and wasn't listed so: found when a bless took in, quietly, a
@@ -42,7 +42,7 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
 
 ## Why
 
-- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,472 of
+- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,482 of
   the 2,691 tests in scope pass, each matching native Rust byte for byte;
   1,008 are out of scope, each for a reason it prints, and native Rust
   gives no answer here for 69.
@@ -67,12 +67,12 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
   - a `const` of a std struct was its private fields, `iter::empty()` an
     `[undefined]` and a `Cell` a `Cell` in a `Cell` (rejected, but a `Cell`
     or a `RefCell` is its `{ value }`, new at each use).
-- **Every failure has a reason a person can act on:** 1,209 of the 1,219
+- **Every failure has a reason a person can act on:** 1,199 of the 1,209
   are a feature rust-js says it doesn't support yet, and counted, they say
-  which to do first: values of types (234), std functions (164), generic
+  which to do first: values of types (236), std functions (165), generic
   trait parameters (119), associated types (109), expressions such as a
-  coroutine's `yield` (90), std trait impls (58), what destructors don't
-  do yet (45, since ADR 0098) and statics (33, since ADR 0096).
+  coroutine's `yield` (91), std trait impls (58), statics (33, since ADR
+  0096) and what destructors don't do yet (28, since ADR 0098).
 
 ## Alternatives
 

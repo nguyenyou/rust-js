@@ -225,6 +225,9 @@ value, and a `dyn Trait` of one.
   through a `Box` a call returned, wasn't taken for a temporary, and was
   never dropped. The safety net saw none of them: it knows only what's
   bound by value. Each is fixed, or an error, now.
+- **With temporaries, generic code and partial moves,** 10 more of rustc's
+  tests pass (1,482 of 2,691), and 28 stop at what destructors don't do
+  yet, most often a temporary whose parts a pattern moves (6).
 - **Done first, and not yet:** variables, parameters, moves, assignments,
   statements' values and `mem::drop`; then temporaries that end with their
   statement or a `let`'s block, and operands; generic code given a value
