@@ -36,6 +36,7 @@ written, and what it breaks, as Rust would see it:
 | `at-binding-copy` | a binding after `@` reads in place what the binding before it changes | `binding_after_at.rs` |
 | `option-some-rest` | `Some(..)` is taken as `None` | `option_rest_pattern.rs` |
 | `size-align-swap` | `align_of` is the type's size | `size_of.rs` |
+| `array-repeat-shared` | `[x; N]` of what's changed is one object, `N` times | `array_repeat.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

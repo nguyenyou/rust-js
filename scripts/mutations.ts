@@ -165,6 +165,14 @@ export const mutations: Mutation[] = [
     replace: "                let bytes = if matches!(known, Std::AlignOf) {\n                    layout.size.bytes()",
     tests: ["test/corpus.test.ts", "-t", "size_of\\.rs"],
   },
+  {
+    name: "array-repeat-shared",
+    breaks: "`[x; N]` of what's changed is one object, `N` times",
+    file: "src/lower.rs",
+    find: "                let copied = if self.is_copy(item_ty) {\n                    self.contains_mutated(item_ty)",
+    replace: "                let copied = if self.is_copy(item_ty) {\n                    false",
+    tests: ["test/corpus.test.ts", "-t", "array_repeat"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
