@@ -125,3 +125,12 @@ and stderr, and return, under Bun and Node.
 
   A `compile-fail` case in the corpus must say its text in its first
   error, so an error of rustc's own can't come before it unseen.
+- **A run is checked, or blessed, only if it's whole.** Each shard writes
+  which of how many it is, the compiler it ran (its SHA-256), the
+  toolchain's and this checkout's commits, every test there is, and the
+  ones it was to run. The merge fails, as incomplete, unless each shard is
+  there once, all ran the same compiler, toolchain and source as the
+  checkout that merges them, with the same tests, each its share, every
+  test has one result, and every known failure is a test. A whole local
+  run is checked as one shard of one. Found in review: an empty list of
+  results passed, with no tests run.

@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 
 import { homedir } from "node:os";
 
-import { failureKind, firstError, ratchet, scope, surprises, type Result } from "../scripts/rustc-suite";
+import { failureKind, firstError, ratchet, scope, surprises, validate, type Result, type Shard } from "../scripts/rustc-suite";
 
 test("a test is in scope unless a directive says it needs what a case can't have", () => {
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
@@ -96,4 +96,39 @@ test("a run of some tests says which aren't as listed, a worse failure too", () 
     { test: "f.rs", status: "skip", reason: "has revisions" },
   ];
   expect([...surprises(now, listed)].sort()).toEqual(["b.rs", "c.rs", "d.rs"]);
+});
+
+// The shards of a run are one whole run, or it isn't checked or blessed.
+// Found in review: an empty list of results passed, with no tests run.
+test("shards are checked as one whole run before their results are", () => {
+  const inventory = ["a.rs", "b.rs", "c.rs", "d.rs"];
+  const shard = (i: number, more: Partial<Shard> = {}): Shard => {
+    const expected = inventory.filter((_, k) => k % 2 === i - 1);
+    return {
+      shard: i,
+      of: 2,
+      compiler: "c1",
+      toolchain: "t1",
+      source: "s1",
+      inventory,
+      expected,
+      results: expected.map((test): Result => ({ test, status: "pass" })),
+      ...more,
+    };
+  };
+  const known = new Map([["b.rs", "x"]]);
+  expect(validate([shard(1), shard(2)], known, "s1")).toEqual([]);
+  expect(validate([], known, "s1")).toEqual(["there are no shards"]);
+  expect(validate([[] as unknown as Shard], known, "s1")).toEqual(["1 of the 1 files aren't a shard's record"]);
+  expect(validate([shard(1)], known, "s1")).toEqual(["shards missing, of 2: 2", "tests with no result: 2, as b.rs, d.rs"]);
+  expect(validate([shard(1), shard(1), shard(2)], known, "s1")).toEqual(["shards there more than once, of 2: 1", "tests with more than one result: 2, as a.rs, c.rs"]);
+  expect(validate([shard(1), shard(2, { compiler: "c2" })], known, "s1")).toEqual(["the shards ran with different compilers: c1, c2"]);
+  expect(validate([shard(1), shard(2)], known, "s2")).toEqual(["the shards ran source s1, and this is s2"]);
+  expect(validate([shard(1), shard(2, { results: [] })], known, "s1")).toEqual(["tests with no result: 2, as b.rs, d.rs"]);
+  expect(validate([shard(1), shard(2, { expected: ["b.rs"], results: [{ test: "b.rs", status: "pass" }] })], known, "s1")).toEqual([
+    "shard 2 was to run other tests than its share",
+    "tests with no result: 1, as d.rs",
+  ]);
+  expect(validate([shard(1), shard(2)], new Map([["gone.rs", "x"]]), "s1")).toEqual(["known failures that aren't tests: 1, as gone.rs"]);
+  expect(validate([shard(1, { inventory: [], expected: [], results: [] }), shard(2, { inventory: [], expected: [], results: [] })], new Map(), "s1")).toEqual(["there were no tests to run"]);
 });

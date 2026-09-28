@@ -19,7 +19,7 @@ import { availableParallelism, homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { compileFailure, run, stopped, type Exit } from "../test/child";
-import { rustcTests } from "./rustc-tests";
+import { rustcCommit, rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
 // The rust-js that compiles each test: a release build, as the known
@@ -105,6 +105,70 @@ const normalize = (line: string) =>
     .replaceAll(/\.rustup\/toolchains\/[^/\s]+/g, ".rustup/toolchains/<toolchain>")
     .replaceAll(/thread '([^']*)' \(\d+\)/g, "thread '$1'")
     .slice(0, 200);
+
+/** A shard's run, as `--shard --out` writes it: which of how many it
+ * is, what it ran with, every test there was, the ones it was to run, and
+ * how each did. */
+export type Shard = {
+  shard: number;
+  of: number;
+  compiler: string;
+  toolchain: string;
+  source: string;
+  inventory: string[];
+  expected: string[];
+  results: Result[];
+};
+
+/** What's wrong with shards taken as one run, or nothing: each is there
+ * once, all ran the same compiler, toolchain and source, this checkout's,
+ * with the same tests to run, each ran its share, every test has one
+ * result, and every known failure is a test. A run that isn't whole isn't
+ * checked or blessed. */
+export function validate(shards: Shard[], known: Map<string, string>, source: string): string[] {
+  if (shards.length === 0) return ["there are no shards"];
+  const record = (shard: unknown) =>
+    typeof shard === "object" &&
+    shard !== null &&
+    ["inventory", "expected", "results"].every((key) => Array.isArray((shard as Record<string, unknown>)[key]));
+  const malformed = shards.filter((shard) => !record(shard)).length;
+  if (malformed > 0) return [`${malformed} of the ${shards.length} files aren't a shard's record`];
+  const problems: string[] = [];
+  const [first] = shards;
+  for (const key of ["of", "compiler", "toolchain", "source"] as const) {
+    const values = new Set(shards.map((shard) => String(shard[key])));
+    if (values.size > 1) problems.push(`the shards ran with different ${key}s: ${[...values].join(", ")}`);
+  }
+  if (first.source !== source) problems.push(`the shards ran source ${first.source}, and this is ${source}`);
+  const inventory = first.inventory.join("\n");
+  if (first.inventory.length === 0) problems.push("there were no tests to run");
+  if (shards.some((shard) => shard.inventory.join("\n") !== inventory)) problems.push("the shards had different tests to run");
+  const counts = Array.from({ length: first.of }, (_, k) => shards.filter((shard) => shard.shard === k + 1).length);
+  const numbers = (n: (count: number) => boolean) => counts.flatMap((count, k) => (n(count) ? [k + 1] : []));
+  const absent = numbers((count) => count === 0), repeated = numbers((count) => count > 1);
+  if (absent.length > 0) problems.push(`shards missing, of ${first.of}: ${absent.slice(0, 10).join(", ")}${absent.length > 10 ? ", .." : ""}`);
+  if (repeated.length > 0) problems.push(`shards there more than once, of ${first.of}: ${repeated.join(", ")}`);
+  for (const shard of shards) {
+    const share = first.inventory.filter((_, k) => k % first.of === shard.shard - 1);
+    if (share.join("\n") !== shard.expected.join("\n")) problems.push(`shard ${shard.shard} was to run other tests than its share`);
+  }
+  const results = new Map<string, number>();
+  for (const r of shards.flatMap((shard) => shard.results)) results.set(r.test, (results.get(r.test) ?? 0) + 1);
+  const tests = new Set(first.inventory);
+  const some = (list: string[]) => `${list.length}, as ${list.slice(0, 3).join(", ")}`;
+  const missing = first.inventory.filter((test) => !results.has(test));
+  const twice = [...results].filter(([, n]) => n > 1).map(([test]) => test);
+  const extra = [...results.keys()].filter((test) => !tests.has(test));
+  const stale = [...known.keys()].filter((test) => !tests.has(test));
+  if (missing.length > 0) problems.push(`tests with no result: ${some(missing)}`);
+  if (twice.length > 0) problems.push(`tests with more than one result: ${some(twice)}`);
+  if (extra.length > 0) problems.push(`results of tests there weren't: ${some(extra)}`);
+  if (stale.length > 0) problems.push(`known failures that aren't tests: ${some(stale)}`);
+  return problems;
+}
+
+/** This checkout's commit. */
+const source = () => Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root }).stdout.toString().trim();
 
 /** Did a process end otherwise than by exiting 0? */
 const failed = (exit: Exit, timeout: number) => exit.code !== 0 || stopped(exit, timeout) !== undefined;
@@ -284,30 +348,49 @@ async function main() {
   const option = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
   const out = option("out");
   const shard = option("shard");
-  // `--merge a.json b.json`: the shards' results, as one run.
+  // `--merge a.json b.json`: the shards' results, as one run, if they
+  // are one whole run.
   if (args.includes("--merge")) {
     const files = args.filter((a) => !a.startsWith("--"));
-    const results = files.flatMap((f) => JSON.parse(readFileSync(f, "utf8")) as Result[]);
-    report(results.sort((a, b) => a.test.localeCompare(b.test)), bless);
+    const shards = files.map((f) => JSON.parse(readFileSync(f, "utf8")) as Shard);
+    const problems = validate(shards, readKnown(), source());
+    if (problems.length > 0) {
+      for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
+      toSummary(["## rustc run-pass tests", "", "The run isn't whole, so it isn't checked:", "", ...problems.map((p) => `- ${cell(p)}`)]);
+      process.exitCode = 1;
+      return;
+    }
+    report(shards.flatMap((shard) => shard.results).sort((a, b) => a.test.localeCompare(b.test)), bless);
     return;
   }
   const selectors = args.filter((a) => !a.startsWith("--"));
   compiler = resolve(option("compiler") ?? compiler);
   const ui = rustcTests();
   if (!existsSync(compiler)) throw new Error(`no rust-js at ${compiler}: build it with cargo build --release`);
-  let tests = selectors.length > 0 ? [...new Set(selectors.flatMap((s) => testsUnder(ui, s)))] : findTests(ui);
+  const all = selectors.length > 0 ? [...new Set(selectors.flatMap((s) => testsUnder(ui, s)))] : findTests(ui);
+  let tests = all;
   // `--shard=2/4`: every fourth test, from the second.
   if (shard) {
     const [i, n] = shard.split("/").map(Number);
     if (!(n > 0 && i >= 1 && i <= n)) throw new Error(`--shard=${shard}: say which of how many, as 2/4`);
-    tests = tests.filter((_, k) => k % n === i - 1);
-  }
-  const results = await runAll(ui, tests);
-  if (out) writeFileSync(out, JSON.stringify(results));
-  if (shard) {
+    if (selectors.length > 0) throw new Error("--shard runs every test: name none");
+    tests = all.filter((_, k) => k % n === i - 1);
+    const results = await runAll(ui, tests);
+    const record: Shard = {
+      shard: i,
+      of: n,
+      compiler: new Bun.CryptoHasher("sha256").update(readFileSync(compiler)).digest("hex"),
+      toolchain: rustcCommit(),
+      source: source(),
+      inventory: all.map((file) => relative(ui, file)),
+      expected: tests.map((file) => relative(ui, file)),
+      results,
+    };
+    if (out) writeFileSync(out, JSON.stringify(record));
     console.log(JSON.stringify(summarize(results), null, 2));
     return;
   }
+  const results = await runAll(ui, tests);
   if (selectors.length > 0) {
     // Some tests: each, and whether it's what the known failures say.
     const unlisted = surprises(results, readKnown());
@@ -324,6 +407,15 @@ async function main() {
       ...rows.map(({ r, surprise }) => `| ${r.test} | ${r.status}${surprise ? " ⚠️ not as listed" : ""} | ${"reason" in r ? cell(r.reason) : ""} |`),
     ]);
     if (rows.some((row) => row.surprise)) process.exitCode = 1;
+    return;
+  }
+  // A whole run is one shard of one, checked as the workflow's are.
+  const names = all.map((file) => relative(ui, file));
+  const whole: Shard = { shard: 1, of: 1, compiler: "", toolchain: "", source: source(), inventory: names, expected: names, results };
+  const problems = validate([whole], readKnown(), source());
+  for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
+  if (problems.length > 0) {
+    process.exitCode = 1;
     return;
   }
   // The whole run's results, which a run of some tests leaves as they were.
