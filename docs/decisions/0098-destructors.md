@@ -166,7 +166,16 @@ function main() {
   consume(5);
   ```
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
-  A static is never dropped (ADR 0096).
+  A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
+  a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of
+  a variable, a field or a box (ADR 0074): neither drops what it moves
+  out, which is the other place's, or returned.
+- **A std call rust-js doesn't know keeps what it takes is rejected** if
+  what it takes may hold a value with a destructor, including one whose
+  destructors rust-js can't follow, such as a `vec::IntoIter` of them:
+  `skip_while` drops what it skips, where the JS wouldn't. Found once
+  `mem::replace` let a rustc test reach it; the check had passed any value
+  it couldn't follow.
 
 **Rejected for now, with an error that says so:** an `Rc`, an `Arc` or a
 thread-local holding a value with a destructor (it runs when the last

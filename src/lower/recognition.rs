@@ -88,6 +88,10 @@ pub(super) enum Std {
     /// `mem::drop(x)`: `x`'s destructor, and `mem::forget(x)`: none (ADR 0098).
     Drop,
     Forget,
+    /// `mem::swap(&mut a, &mut b)` and `mem::replace(&mut a, v)` of places:
+    /// each written in turn.
+    Swap,
+    Replace,
     /// `println!` and `print!`, or with `error`, `eprintln!` and
     /// `eprint!`: `console.log(..)` of a line (ADR 0087).
     Print {
@@ -263,6 +267,20 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_forget") {
             return Some(Std::Forget);
+        }
+        if diagnostic("mem_swap") {
+            return Some(Std::Swap);
+        }
+        if diagnostic("mem_replace") {
+            return Some(Std::Replace);
+        }
+        // `hint::black_box(x)` is `x`: it only hides `x` from an optimizer.
+        // libtest's `test::black_box` is the same.
+        let krate = tcx.crate_name(def_id.krate);
+        if tcx.item_name(def_id).as_str() == "black_box"
+            && ((krate == sym::core && tcx.def_path_str(def_id).contains("hint")) || krate.as_str() == "test")
+        {
+            return Some(Std::Same);
         }
         if diagnostic("box_new") {
             return Some(Std::Same);

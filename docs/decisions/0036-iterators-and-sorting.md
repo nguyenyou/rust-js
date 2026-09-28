@@ -85,7 +85,9 @@ Two things came with it:
   element. Infinite iterators (`0..`) don't work.
 - `$cmp` on strings compares UTF-16 units, as `<` does (ADR 0034).
 - `a..=b` includes its end: `for (let i = a; i <= b; i++)`, and
-  `$range(a, b + 1)` as an iterator.
+  `$range(a, b + 1)` as an iterator. A search that takes its iterator by `&mut`,
+  `(0..n).all(f)` or `any`, `find` or `position`, is of the range it
+  borrows. Found in a rustc test: it had been called on `{ start, end }`.
 - Sorting by `Ord` came with ADR 0057, and an iterator of the crate's own,
   lazy and possibly endless, with ADR 0055.
 - `filter_map`, `flat_map`, `zip`, `chain` and more came with ADR 0062.

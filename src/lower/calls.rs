@@ -2,6 +2,7 @@
 
 use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
 use super::combinators::StepOp;
+use super::drops::Drops;
 use super::numbers::NumOp;
 use super::recognition::{Catching, Std};
 use super::representation::Num;
@@ -205,17 +206,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         // One that takes a value with a destructor, or changes a place that
         // holds one, must keep or give back what it takes: these do. Another
-        // might drop it, which JS wouldn't (ADR 0098).
+        // might drop it, which JS wouldn't (ADR 0098). A value whose drops
+        // rust-js can't follow, a `vec::IntoIter` of them say, might hold one.
+        let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;
         let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
-            ty::Ref(_, inner, rustc_ast::Mutability::Mut) => self.has_drops(inner),
+            ty::Ref(_, inner, rustc_ast::Mutability::Mut) => holds_drops(inner),
             ty::Ref(..) => false,
-            _ => self.has_drops(self.thir[a].ty),
+            _ => holds_drops(self.thir[a].ty),
         });
         if takes_drops
             && !matches!(
                 known,
                 Std::Drop
                     | Std::Forget
+                    | Std::Swap
+                    | Std::Replace
                     | Std::Push
                     | Std::Same
                     | Std::VecMacro
@@ -400,10 +405,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::AssertFailed);
             return Ok(Expr::call(Expr::var("$assertFailed"), values));
         }
+        if matches!(known, Std::Swap | Std::Replace) {
+            return self.swap_or_replace(known, args, discarded, span, out);
+        }
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
         let js_span = self.js_span(span);
         Ok(match known {
+            Std::Swap | Std::Replace => unreachable!("lowered from their places, above"),
             // An `Rc` is the JS reference itself: the garbage collector does
             // its counting, so a clone is the same object.
             Std::Same => arg(),
@@ -972,8 +981,62 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
-    /// `&mut p` of a value that must be boxed (ADR 0072): `p`, the place.
-    fn boxed_arg(&self, arg: ExprId) -> Option<ExprId> {
+    /// `mem::swap(&mut a, &mut b)`: `const t = a; a = b; b = t;`, and
+    /// `mem::replace(&mut a, v)`: `const old = a; a = v;`, and `old`. While
+    /// the call has a place's `&mut`, nothing else can use the place, so
+    /// writing each in turn is exact. Neither drops what it moves out: it's
+    /// the other place's now, or returned (ADR 0098), when it's used.
+    fn swap_or_replace(
+        &mut self,
+        known: Std,
+        args: &[ExprId],
+        discarded: bool,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let js_span = self.js_span(span);
+        let a = self.mut_place(args[0], span)?;
+        let (b, b_place) = match known {
+            Std::Swap => {
+                let b = self.mut_place(args[1], span)?;
+                (b.clone(), Some(b))
+            }
+            _ => (self.expr(args[1], out)?, None),
+        };
+        if b_place.is_none() && discarded {
+            out.push(StmtKind::Assign(a, b).at(js_span));
+            return Ok(Expr::undefined());
+        }
+        let old = self.spill(if b_place.is_some() { "t" } else { "old" }, a.clone(), out);
+        out.push(StmtKind::Assign(a, b).at(js_span));
+        match b_place {
+            Some(b) => {
+                out.push(StmtKind::Assign(b, old).at(js_span));
+                Ok(Expr::undefined())
+            }
+            None => Ok(old),
+        }
+    }
+
+    /// What a `&mut` argument points at, to read and write: `p` of `&mut p`,
+    /// or a box's `value` (ADR 0074). A place with an item in it isn't one:
+    /// its index would be evaluated at each use.
+    fn mut_place(&self, arg: ExprId, span: Span) -> R<Expr> {
+        if let Some(place) = self.mut_borrowed(arg) {
+            if self.element(place).is_none() {
+                return self.assignee(place);
+            }
+        } else if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
+            && self.boxes.contains(&id)
+            && let Some((boxed, _)) = self.place(arg)
+        {
+            return Ok(Expr::member(boxed, "value"));
+        }
+        Err(self.unsupported(span, "this `&mut` argument, which isn't to a variable or a field"))
+    }
+
+    /// `p` of `&mut p`, a reborrow's `&mut *&mut v[0]` too: `v[0]`.
+    fn mut_borrowed(&self, arg: ExprId) -> Option<ExprId> {
         let ExprKind::Borrow {
             borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
             arg: mut place,
@@ -981,7 +1044,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         else {
             return None;
         };
-        // `&mut *&mut v[0]`, a reborrow: the place is `v[0]`.
         while let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::Borrow {
                 borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
@@ -990,6 +1052,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             place = reborrowed;
         }
+        Some(place)
+    }
+
+    /// `&mut p` of a value that must be boxed (ADR 0072): `p`, the place.
+    fn boxed_arg(&self, arg: ExprId) -> Option<ExprId> {
+        let place = self.mut_borrowed(arg)?;
         // `&mut *out` of a box is the box itself.
         if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind

@@ -413,6 +413,30 @@ export const mutations: Mutation[] = [
     replace: "    if (false) {\n",
     tests: ["test/browser.test.ts", "-t", "fails the way Rust's would"],
   },
+  {
+    name: "swap-one-way",
+    breaks: "`mem::swap` writes the first place and leaves the second as it was",
+    file: "src/lower/calls.rs",
+    find: "                out.push(StmtKind::Assign(b, old).at(js_span));\n",
+    replace: "                drop((b, old));\n",
+    tests: ["test/corpus.test.ts", "-t", "swap_replace"],
+  },
+  {
+    name: "unfollowed-drops-taken",
+    breaks: "a std call takes an iterator whose destructors rust-js can't follow, and drops what it skips silently",
+    file: "src/lower/calls.rs",
+    find: "        let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;\n",
+    replace: "        let holds_drops = |ty: Ty<'tcx>| self.drops(ty) == Drops::Runs;\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_skipped_items"],
+  },
+  {
+    name: "range-search-unborrowed",
+    breaks: "a search on a range, `(0..n).all(f)`, is called on the range's `{ start, end }`, not its items",
+    file: "src/lower/stdlib.rs",
+    find: "            } if (self.is_lang_adt(self.reveal(self.thir[arg].ty), LangItem::Range)\n",
+    replace: "            } if false && (self.is_lang_adt(self.reveal(self.thir[arg].ty), LangItem::Range)\n",
+    tests: ["test/corpus.test.ts", "-t", "range_searches"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

@@ -441,8 +441,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        let receiver_ty = self.reveal(self.thir[args[0]].ty);
-        let items = match self.thir[self.strip(args[0])].kind {
+        // A search, `(0..n).all(f)`, takes its iterator by `&mut`: a range
+        // it's called on is the one borrowed.
+        let receiver = match self.thir[self.strip(args[0])].kind {
+            ExprKind::Borrow {
+                borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
+                arg,
+            } if (self.is_lang_adt(self.reveal(self.thir[arg].ty), LangItem::Range)
+                && matches!(self.thir[self.strip(arg)].kind, ExprKind::Adt(_)))
+                || self.inclusive_range(arg).is_some() =>
+            {
+                arg
+            }
+            _ => args[0],
+        };
+        let receiver_ty = self.reveal(self.thir[receiver].ty);
+        let items = match self.thir[self.strip(receiver)].kind {
             ExprKind::Adt(ref range) if self.is_lang_adt(receiver_ty, LangItem::Range) => {
                 let bound = |i: usize| range.fields.iter().find(|f| f.name.as_usize() == i).map(|f| f.expr);
                 let (Some(start), Some(end)) = (bound(0), bound(1)) else {
@@ -462,7 +476,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(span, "a range in a variable, as an iterator"));
             }
             // `a..=b`: `$range(a, b + 1)`, exact, and past the type's end.
-            _ if let Some((start_id, end_id)) = self.inclusive_range(args[0]) => {
+            _ if let Some((start_id, end_id)) = self.inclusive_range(receiver) => {
                 let num = Num::of(self.thir[start_id].ty);
                 let big = num.is_some_and(Num::big);
                 let (helper, name) = if big {
@@ -476,7 +490,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::var(name), vec![start, Expr::bin(Op::Add, end, one)])
             }
             _ => {
-                let value = self.iter_value(args[0], out)?;
+                let value = self.iter_value(receiver, out)?;
                 self.iter_source(value, receiver_ty, span)?
             }
         };
