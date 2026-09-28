@@ -19,6 +19,11 @@ const identity = parseCompilerIdentity(run([compiler, "--version-json"], root));
 const version = (Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
 const toolchain = (Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")) as { toolchain: { channel: string } }).toolchain.channel;
 if (identity.version !== version || identity.toolchain !== toolchain) throw new Error("Compiler does not match this checkout's version and Rust pin");
+// The native binary, not a launcher: one packaged as the compiler would start
+// itself, again and again.
+if (readFileSync(compiler).subarray(0, 2).toString() === "#!") {
+  throw new Error(`${compiler} is a script, as an installed launcher is: package the native binary`);
+}
 const staging = mkdtempSync(join(tmpdir(), "rust-js-native-"));
 try {
   mkdirSync(join(staging, "bin"));

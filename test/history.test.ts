@@ -51,7 +51,8 @@ test("the same input is the same bytes, build after build", () => {
     expect([name, builds[1]]).toEqual([name, builds[0]]);
     expect([name, builds[2]]).toEqual([name, builds[0]]);
   }
-});
+  // Three builds of each example, through an installed launcher too.
+}, 60_000);
 
 test("a crate is the same bytes wherever it's built", () => {
   const builds = ["here", join("deeper", "down", "there")].map((place) => {
