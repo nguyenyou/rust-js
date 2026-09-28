@@ -309,6 +309,14 @@ export const mutations: Mutation[] = [
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "nested_generic_types"],
   },
+  {
+    name: "closure-stepped-iterators",
+    breaks: "a closure's body doesn't find its own stepped iterators, and `it.next()` in one is rejected",
+    file: "src/lower.rs",
+    find: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n                self.stepped.extend(own);\n",
+    replace: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n",
+    tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

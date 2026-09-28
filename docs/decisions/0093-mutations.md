@@ -54,6 +54,7 @@ written, and what it breaks, as Rust would see it:
 | `drop-move-before-operands` | a variable moved into a call is taken as moved before a later operand panics | `drop_operand_panic.rs` |
 | `drop-function-in-branch` | a drop function is declared in a branch another call to it isn't in | `drop_functions.rs` |
 | `drops-walk-uncached` | what a type drops is found once for each path to it, in exponential time | `nested_generic_types.rs` |
+| `closure-stepped-iterators` | a closure's body doesn't find its own stepped iterators | `stepped_nested.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

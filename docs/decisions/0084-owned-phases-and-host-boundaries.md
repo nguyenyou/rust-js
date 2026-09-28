@@ -73,6 +73,13 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   Read-only HIR queries may accumulate local visitor results, but do not mutate
   the recognition context or access emission state. The mutable-map lookup
   special case and Ordering constants use the same identity boundary.
+- A body lowered inside another, a closure's, an `async fn`'s coroutine or
+  a trait default copied into an impl, starts and ends through `enter_body`
+  and `leave_body`: `Nested` says, in one place, what each kind shares with
+  the enclosing body and what it gets of its own, and each is checked for
+  what it drops (ADR 0098). Found in review: each path swapped its own set
+  of fields, and a closure's and a copied default's stepped iterators (ADR
+  0071) weren't their own, so `it.next()` in one was rejected.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature
@@ -142,6 +149,13 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   stale files whose ownership fingerprints still match. It stages changes and
   publishes its manifest last, with rollback on ordinary I/O failure. It never
   scans for arbitrary JavaScript files to delete.
+- **Both hosts remove a stale file by the same rules:** a generated `.js`,
+  `.jsx` or `.map`, inside the output's directory, that this build neither
+  writes nor reads (its input and sources, through symlinks), with the bytes
+  it was written with. `test/publication.test.ts` runs each case against the
+  native compiler and the WASI host's publisher. Found in review: the WASI
+  host checked only the fingerprint, and removed a file the next build read
+  as a source.
 - The playground runs compilation in a disposable worker. Cancel, timeout,
   worker errors and message failures terminate that worker and yield a failed
   result; a later compile starts fresh. The editor retains the downloaded

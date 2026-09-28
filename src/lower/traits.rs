@@ -654,23 +654,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             specialized.push((bound, self.dictionary(concrete, span)?));
         }
         let body = self.krate.bodies[&id];
-        let evidence = std::mem::replace(&mut self.evidence, specialized);
-        let self_args = self.self_args.replace(args);
-        let thir = std::mem::replace(&mut self.thir, &body.thir);
-        let typing_env = std::mem::replace(&mut self.typing_env, ty::TypingEnv::post_analysis(self.tcx, id));
-        let vars = std::mem::take(&mut self.vars);
-        let names = self.names.clone();
+        let nested = super::Nested::Default {
+            evidence: specialized,
+            self_args: args,
+            typing_env: ty::TypingEnv::post_analysis(self.tcx, id),
+        };
+        let enclosing = self.enter_body(&body.thir, nested)?;
         let mut out = Vec::new();
-        // Checked for what it drops as a body of its own is (ADR 0098).
-        self.drop_facts()?;
         let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut out)?;
-        self.check_drops()?;
-        self.evidence = evidence;
-        self.self_args = self_args;
-        self.thir = thir;
-        self.typing_env = typing_env;
-        self.vars = vars;
-        self.names = names;
+        self.leave_body(enclosing)?;
         Ok(if is_async {
             Expr::async_arrow(params, out)
         } else {

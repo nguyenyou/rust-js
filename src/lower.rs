@@ -179,6 +179,36 @@ struct Loop {
     dest: Dest,
 }
 
+/// A body lowered inside the one being lowered, and what it starts from
+/// (`enter_body`). What isn't said here, it shares with the enclosing body.
+enum Nested<'tcx> {
+    /// A closure's, an arrow: the enclosing variables and captures, loops
+    /// of its own, and these names to start from.
+    Closure { names: HashSet<String> },
+    /// An `async fn`'s coroutine, which in JS is its function's own body.
+    Coroutine,
+    /// A trait's default body, copied into an impl (ADR 0049): variables of
+    /// its own, and the impl's evidence, arguments and typing environment.
+    Default {
+        evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+        self_args: ty::GenericArgsRef<'tcx>,
+        typing_env: ty::TypingEnv<'tcx>,
+    },
+}
+
+/// What a nested body took of the enclosing one's state, given back when
+/// it's left (`leave_body`).
+struct Enclosing<'a, 'tcx> {
+    thir: &'a Thir<'tcx>,
+    stepped: HashSet<LocalVarId>,
+    loops: Option<Vec<Loop>>,
+    names: Option<HashSet<String>>,
+    vars: Option<HashMap<LocalVarId, Var>>,
+    evidence: Option<Vec<(ty::TraitRef<'tcx>, Expr)>>,
+    self_args: Option<Option<ty::GenericArgsRef<'tcx>>>,
+    typing_env: Option<ty::TypingEnv<'tcx>>,
+}
+
 /// Immutable analysis inputs shared by function lowering.
 struct CrateFacts<'a, 'tcx> {
     sources: &'a sources::CapturedSources,
@@ -2863,13 +2893,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => known = false,
             }
         }
-        let thir = std::mem::replace(&mut self.thir, &body.thir);
-        let loops = std::mem::take(&mut self.loops);
-        let names = if known {
-            std::mem::replace(&mut self.names, inner)
-        } else {
-            self.names.clone()
-        };
+        let names = if known { inner } else { self.names.clone() };
+        let enclosing = self.enter_body(&body.thir, Nested::Closure { names })?;
         let mut stmts = Vec::new();
         // An `async` block takes no arguments, and runs as soon as it's
         // made: an async arrow, called right away (ADR 0029).
@@ -2917,10 +2942,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "an `async` closure that owns a value with a destructor"));
         }
         self.close_scope(mark, lowered, span, &mut stmts)?;
-        self.check_drops()?;
-        self.thir = thir;
-        self.loops = loops;
-        self.names = names;
+        self.leave_body(enclosing)?;
         for (path, previous) in shadowed {
             match previous {
                 Some(var) => self.captures.insert(path, var),
@@ -2957,17 +2979,82 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         // Its captures are this function's parameters and variables, so no snapshots.
         let body: &'a Body<'tcx> = self.krate.closures[&coroutine];
-        let thir = std::mem::replace(&mut self.thir, &body.thir);
+        let enclosing = self.enter_body(&body.thir, Nested::Coroutine)?;
         // A future dropped before it's done drops what it holds, which a JS
         // promise can't be (ADR 0098).
         if self.drop_facts()?.has_owners() {
             let span = self.tcx.def_span(body.def_id);
-            self.thir = thir;
             return Err(self.unsupported(span, "`async` code that owns a value with a destructor"));
         }
-        let lowered = self.stmt(body.expr, &Dest::Return, out);
-        self.thir = thir;
-        lowered.map(|()| true)
+        self.stmt(body.expr, &Dest::Return, out)?;
+        self.leave_body(enclosing)?;
+        Ok(true)
+    }
+
+    /// Start lowering `thir`, a body inside the one being lowered, as
+    /// `nested` says it starts. Each body finds its own stepped iterators
+    /// (ADR 0071) and is checked for what it drops (ADR 0098). A body that
+    /// fails leaves the state as it is: its whole item fails with it.
+    fn enter_body(&mut self, thir: &'a Thir<'tcx>, nested: Nested<'tcx>) -> R<Enclosing<'a, 'tcx>> {
+        let own = stepped_locals(self.tcx, thir);
+        let mut enclosing = Enclosing {
+            thir: std::mem::replace(&mut self.thir, thir),
+            stepped: self.stepped.clone(),
+            loops: None,
+            names: None,
+            vars: None,
+            evidence: None,
+            self_args: None,
+            typing_env: None,
+        };
+        match nested {
+            Nested::Closure { names } => {
+                enclosing.loops = Some(std::mem::take(&mut self.loops));
+                enclosing.names = Some(std::mem::replace(&mut self.names, names));
+                self.stepped.extend(own);
+            }
+            Nested::Coroutine => self.stepped.extend(own),
+            Nested::Default {
+                evidence,
+                self_args,
+                typing_env,
+            } => {
+                enclosing.names = Some(self.names.clone());
+                enclosing.vars = Some(std::mem::take(&mut self.vars));
+                enclosing.evidence = Some(std::mem::replace(&mut self.evidence, evidence));
+                enclosing.self_args = Some(self.self_args.replace(self_args));
+                enclosing.typing_env = Some(std::mem::replace(&mut self.typing_env, typing_env));
+                self.stepped = own;
+            }
+        }
+        self.drop_facts()?;
+        Ok(enclosing)
+    }
+
+    /// Finish the body `enter_body` started, and go back to the enclosing one.
+    fn leave_body(&mut self, enclosing: Enclosing<'a, 'tcx>) -> R<()> {
+        self.check_drops()?;
+        self.thir = enclosing.thir;
+        self.stepped = enclosing.stepped;
+        if let Some(loops) = enclosing.loops {
+            self.loops = loops;
+        }
+        if let Some(names) = enclosing.names {
+            self.names = names;
+        }
+        if let Some(vars) = enclosing.vars {
+            self.vars = vars;
+        }
+        if let Some(evidence) = enclosing.evidence {
+            self.evidence = evidence;
+        }
+        if let Some(self_args) = enclosing.self_args {
+            self.self_args = self_args;
+        }
+        if let Some(typing_env) = enclosing.typing_env {
+            self.typing_env = typing_env;
+        }
+        Ok(())
     }
 
     /// A place as a variable and a path of fields, like `p.x` as `(p, [0])`.
