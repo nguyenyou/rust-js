@@ -71,6 +71,11 @@ pub(super) enum Std {
     /// `panic!(x)` before edition 2021, `std::rt::begin_panic(x)`: the
     /// same, with `x` as it is, if it's text.
     BeginPanic,
+    /// `size_of::<T>()`, `align_of::<T>()` and `size_of_val(&x)` of a
+    /// sized `x`: the wasm32 target's, as their constants are (ADR 0090).
+    SizeOf,
+    AlignOf,
+    SizeOfVal,
     /// `println!` and `print!`, or with `error`, `eprintln!` and
     /// `eprint!`: `console.log(..)` of a line (ADR 0087).
     Print {
@@ -232,6 +237,15 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let tcx = self.tcx;
         let diagnostic = |name: &str| tcx.is_diagnostic_item(Symbol::intern(name), def_id);
         let self_ty = args.types().next();
+        if diagnostic("mem_size_of") {
+            return Some(Std::SizeOf);
+        }
+        if diagnostic("mem_align_of") {
+            return Some(Std::AlignOf);
+        }
+        if diagnostic("mem_size_of_val") {
+            return Some(Std::SizeOfVal);
+        }
         if diagnostic("box_new") {
             return Some(Std::Same);
         }

@@ -76,3 +76,10 @@ cfg!(target_pointer_width = "32")// true
 - The native tests' oracle is still a 64-bit binary, so a program that
   prints `usize::MAX` differs from it, as ADR 0025 says; a test checks the
   32-bit answers themselves.
+- **`size_of::<T>()`, `align_of::<T>()` and a sized value's
+  `size_of_val` are the wasm32 target's,** as rustc works them out, as a
+  `const` of one already was: a number in the JS. A type parameter's is
+  rejected, as a generic function is one JS function for every type, and
+  so is an unsized value's. A type with a pointer or a `usize` in it is
+  smaller than on a 64-bit machine, as its `usize` is. 27 of rustc's 42
+  tests that stopped here pass (`size_of.rs`, `size_of_generic.rs`).

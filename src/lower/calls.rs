@@ -13,7 +13,7 @@ use crate::runtime::Helper;
 use rustc_ast::LitKind;
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind};
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
 
@@ -724,6 +724,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Panic | Std::PanicFmt => {
                 out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
                 Expr::undefined()
+            }
+            // The size rustc works out for the wasm32 target, which rust-js
+            // checks programs for, as a `const` of it has (ADR 0090). A
+            // generic function is one JS function for every type, so a type
+            // parameter's has no one answer.
+            Std::SizeOf | Std::AlignOf | Std::SizeOfVal => {
+                let name = match known {
+                    Std::SizeOf => "size_of",
+                    Std::AlignOf => "align_of",
+                    _ => "size_of_val",
+                };
+                let of = generic_args.types().next().expect("a size's type argument");
+                if of.has_param() {
+                    return Err(self.unsupported(span, &format!("`{name}` of a type parameter")));
+                }
+                if !of.is_sized(self.tcx, self.typing_env) {
+                    return Err(self.unsupported(span, &format!("`{name}` of a value without one size")));
+                }
+                let layout = self
+                    .tcx
+                    .layout_of(self.typing_env.as_query_input(of))
+                    .map_err(|_| self.unsupported(span, &format!("`{name}` of this type")))?;
+                // What's measured still runs, if it does anything.
+                if matches!(known, Std::SizeOfVal) {
+                    let measured = arg();
+                    if measured.has_effects() {
+                        out.push(StmtKind::Expr(measured).at(js_span));
+                    }
+                }
+                let bytes = if matches!(known, Std::AlignOf) {
+                    layout.align.abi.bytes()
+                } else {
+                    layout.size.bytes()
+                };
+                Expr::int(bytes as i128)
             }
             // A `&str` or a `String` is the panic's message, as Rust's hook
             // shows it; another payload, `panic!(5)`, has none.
