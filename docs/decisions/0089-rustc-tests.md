@@ -163,3 +163,9 @@ and stderr, and return, under Bun and Node.
   but a pass, are checked as they are, not as their types say. Found in
   review: a listed failure that became a skip passed unseen, and a status
   of `typo` merged as a run with no failures.
+- **What a run had to run is checked in,** in `test/rustc-inventory.txt`:
+  every run-pass test at the pinned rustc commit, and the commit. A merge,
+  or a whole local run, is incomplete unless its shards ran that rustc and
+  those tests, not only the tests they say they had: a bless writes it
+  anew from them, for its diff to be reviewed. Found in review: shards
+  whose inventory left out every passing test merged as a run of none.

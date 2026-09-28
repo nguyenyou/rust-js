@@ -38,6 +38,25 @@ const nativeFile = join(root, "test", "rustc-native-failures.txt");
 // takes in a test, or a test that leaves, changes coverage, and fails the
 // run until it's blessed.
 const outOfScopeFile = join(root, "test", "rustc-out-of-scope.txt");
+// Every run-pass test there is at the pinned rustc commit, which a run is
+// checked against: the shards say what they ran, and this says what they
+// had to, so a run that leaves tests out, in its inventory too, isn't whole.
+const inventoryFile = join(root, "test", "rustc-inventory.txt");
+
+/** What a run must have run: the rustc commit, and every test at it. */
+export type Inventory = { commit: string; tests: string[] };
+
+function readInventory(): Inventory | undefined {
+  if (!existsSync(inventoryFile)) return undefined;
+  const lines = readFileSync(inventoryFile, "utf8").split("\n");
+  const commit = lines.find((line) => line.startsWith("# commit: "))?.slice("# commit: ".length) ?? "";
+  return { commit, tests: lines.filter((line) => line !== "" && !line.startsWith("#")) };
+}
+
+function writeInventory(inventory: Inventory) {
+  const header = `# rustc's run-pass UI tests, every one, at the commit below (ADR 0089).\n# Rewritten by \`bun scripts/rustc-suite.ts --bless\`.\n# commit: ${inventory.commit}\n`;
+  writeFileSync(inventoryFile, header + inventory.tests.map((test) => `${test}\n`).join(""));
+}
 const work = join(root, "target", "rustc-suite");
 
 // A directive whose test needs what a single program run as JS can't have,
@@ -157,7 +176,13 @@ export type Shard = {
  * with the same tests to run, each ran its share, every test has one
  * result, and every known failure is a test. A run that isn't whole isn't
  * checked or blessed. */
-export function validate(shards: Shard[], known: Map<string, string>, source: string): string[] {
+export function validate(
+  shards: Shard[],
+  known: Map<string, string>,
+  source: string,
+  authority: Inventory | undefined,
+  { bless = false }: { bless?: boolean } = {},
+): string[] {
   if (shards.length === 0) return ["there are no shards"];
   // What's read from a file is checked as it is, not as its type says.
   const strings = (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -196,6 +221,20 @@ export function validate(shards: Shard[], known: Map<string, string>, source: st
     if (values.size > 1) problems.push(`the shards ran with different ${key}s: ${[...values].join(", ")}`);
   }
   if (first.source !== source) problems.push(`the shards ran source ${first.source}, and this is ${source}`);
+  // What they had to run, from the checked-in inventory, not from what they
+  // say; a bless writes it anew, from them, for its diff to be reviewed.
+  if (!bless) {
+    if (!authority) problems.push("there's no test/rustc-inventory.txt to check the run against: bless one");
+    else {
+      if (first.toolchain !== authority.commit) problems.push(`the shards ran rustc ${first.toolchain}, and the inventory is of ${authority.commit}`);
+      const had = new Set(first.inventory), listed = new Set(authority.tests);
+      const left = authority.tests.filter((test) => !had.has(test));
+      const added = first.inventory.filter((test) => !listed.has(test));
+      const some = (list: string[]) => `${list.length}, as ${list.slice(0, 3).join(", ")}`;
+      if (left.length > 0) problems.push(`tests the inventory has that the run didn't: ${some(left)}`);
+      if (added.length > 0) problems.push(`tests the run had that the inventory doesn't: ${some(added)}`);
+    }
+  }
   const inventory = first.inventory.join("\n");
   if (first.inventory.length === 0) problems.push("there were no tests to run");
   if (shards.some((shard) => shard.inventory.join("\n") !== inventory)) problems.push("the shards had different tests to run");
@@ -370,7 +409,7 @@ const cell = (s: string) => s.replaceAll("|", "\\|").replaceAll("\n", " ");
 
 /** A whole run's results, against the known failures: rewritten with
  * `bless`, else checked, and the process fails if they've changed. */
-function report(results: Result[], bless: boolean) {
+function report(results: Result[], bless: boolean, inventory: Inventory) {
   const summary = summarize(results);
   console.log(JSON.stringify(summary, null, 2));
   toSummary([
@@ -387,6 +426,7 @@ function report(results: Result[], bless: boolean) {
     writeFileSync(knownFile, `# rustc run-pass UI tests rust-js gets wrong, and its first error (ADR 0089).\n${blessed}${lines(failing)}`);
     writeFileSync(nativeFile, `# rustc run-pass UI tests native Rust gives no answer for here, and why (ADR 0089).\n${blessed}${lines(unanswered)}`);
     writeFileSync(outOfScopeFile, `# rustc run-pass UI tests out of scope, and why (ADR 0089).\n${blessed}${lines(skipped)}`);
+    writeInventory(inventory);
     const wrote = `${failing.length} known failures, ${unanswered.length} tests native Rust gives no answer for, and ${skipped.length} out of scope`;
     console.log(`wrote ${wrote}`);
     toSummary([`Wrote ${wrote}.`]);
@@ -433,14 +473,15 @@ async function main() {
   if (args.includes("--merge")) {
     const files = args.filter((a) => !a.startsWith("--"));
     const shards = files.map((f) => JSON.parse(readFileSync(f, "utf8")) as Shard);
-    const problems = validate(shards, new Map(lists().flatMap((list) => [...list])), source());
+    const problems = validate(shards, new Map(lists().flatMap((list) => [...list])), source(), readInventory(), { bless });
     if (problems.length > 0) {
       for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
       toSummary(["## rustc run-pass tests", "", "The run isn't whole, so it isn't checked:", "", ...problems.map((p) => `- ${cell(p)}`)]);
       process.exitCode = 1;
       return;
     }
-    report(shards.flatMap((shard) => shard.results).sort((a, b) => a.test.localeCompare(b.test)), bless);
+    const results = shards.flatMap((shard) => shard.results).sort((a, b) => a.test.localeCompare(b.test));
+    report(results, bless, { commit: shards[0].toolchain, tests: shards[0].inventory });
     return;
   }
   const selectors = args.filter((a) => !a.startsWith("--"));
@@ -491,8 +532,8 @@ async function main() {
   }
   // A whole run is one shard of one, checked as the workflow's are.
   const names = all.map((file) => relative(ui, file));
-  const whole: Shard = { shard: 1, of: 1, compiler: "", toolchain: "", source: source(), inventory: names, expected: names, results };
-  const problems = validate([whole], new Map(lists().flatMap((list) => [...list])), source());
+  const whole: Shard = { shard: 1, of: 1, compiler: "", toolchain: rustcCommit(), source: source(), inventory: names, expected: names, results };
+  const problems = validate([whole], new Map(lists().flatMap((list) => [...list])), source(), readInventory(), { bless });
   for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
   if (problems.length > 0) {
     process.exitCode = 1;
@@ -500,7 +541,7 @@ async function main() {
   }
   // The whole run's results, which a run of some tests leaves as they were.
   writeFileSync(join(work, "results.json"), JSON.stringify(results, null, 2));
-  report(results, bless);
+  report(results, bless, { commit: whole.toolchain, tests: names });
 }
 
 if (import.meta.main) await main();

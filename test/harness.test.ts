@@ -72,17 +72,14 @@ test("a failing generated program is kept before it's reduced, and a reduction c
 test("shards that aren't one whole run aren't checked", () => {
   const dir = fixture("harness-shards");
   const source = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root }).stdout.toString().trim();
-  // Every listed test is a test, as the merge requires.
-  const known = ["rustc-known-failures.txt", "rustc-native-failures.txt", "rustc-out-of-scope.txt"]
-    .map((name) => join(root, "test", name))
-    .filter((file) => existsSync(file))
-    .flatMap((file) => readFileSync(file, "utf8").split("\n"))
-    .filter((line) => line && !line.startsWith("#"))
-    .map((line) => line.split("\t")[0]);
-  const inventory = [...known, "zz/passes.rs"].sort();
+  // Every test the checked-in inventory has, at its rustc commit, as the
+  // merge requires.
+  const lines = readFileSync(join(root, "test", "rustc-inventory.txt"), "utf8").split("\n");
+  const toolchain = lines.find((line) => line.startsWith("# commit: "))!.slice("# commit: ".length);
+  const inventory = lines.filter((line) => line && !line.startsWith("#"));
   const shard = (i: number): Shard => {
     const expected = inventory.filter((_, k) => k % 2 === i - 1);
-    return { shard: i, of: 2, compiler: "c", toolchain: "t", source, inventory, expected, results: expected.map((test) => ({ test, status: "pass" })) };
+    return { shard: i, of: 2, compiler: "c", toolchain, source, inventory, expected, results: expected.map((test) => ({ test, status: "pass" })) };
   };
   const merge = (...shards: Shard[]) => {
     const files = shards.map((s, k) => {

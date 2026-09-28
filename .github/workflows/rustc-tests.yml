@@ -128,6 +128,7 @@ jobs:
             test/rustc-known-failures.txt
             test/rustc-native-failures.txt
             test/rustc-out-of-scope.txt
+            test/rustc-inventory.txt
 
   # Generated programs, a sixth of the seeds on each of six machines, with
   # the build job's rust-js. One that differs is reduced, and kept.

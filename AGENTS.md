@@ -66,7 +66,8 @@ instead of running them locally:
 - rustc's own tests, all of them ([ADR 0089](docs/decisions/0089-rustc-tests.md)):
   `gh workflow run "rustc tests" --repo rust-js-lang/rust-js`, with
   `-f bless=true` to rewrite the known failures, the tests native Rust
-  gives no answer for, and those out of scope. The rewritten lists are the run's
+  gives no answer for, those out of scope, and the inventory of all of them.
+  The rewritten lists are the run's
   `rustc-known-failures` artifact; download it with `gh run download` and
   review their diffs before committing them.
 - Some of rustc's tests, by file or directory under `tests/ui`:
