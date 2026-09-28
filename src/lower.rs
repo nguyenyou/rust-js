@@ -497,7 +497,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 hir_id,
                 region_scope,
             } => {
-                if let ExprKind::Loop { body } = self.thir[value].kind {
+                if let Some(body) = self.scoped_loop(value) {
                     self.lower_loop(region_scope, hir_id, body, dest, span, out)
                 } else {
                     self.stmt(value, dest, out)
@@ -1037,6 +1037,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 StmtKind::Const(name, value)
             };
             out.push(kind.at(span));
+        }
+    }
+
+    /// The body of the `loop` a scope holds: its value, or, for one that
+    /// never ends used as a value of another type, what `NeverToAny` holds.
+    fn scoped_loop(&self, value: ExprId) -> Option<ExprId> {
+        match self.thir[value].kind {
+            ExprKind::Loop { body } => Some(body),
+            ExprKind::NeverToAny { source } => match self.thir[source].kind {
+                ExprKind::Loop { body } => Some(body),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -1914,9 +1927,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js_span = self.js_span(span);
         let ty = expr.ty;
         match expr.kind {
-            ExprKind::Scope { value, .. } if !matches!(self.thir[value].kind, ExprKind::Loop { .. }) => {
-                self.expr(value, out)
-            }
+            ExprKind::Scope { value, .. } if self.scoped_loop(value).is_none() => self.expr(value, out),
             ExprKind::Use { source }
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.expr(source, out),

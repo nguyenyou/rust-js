@@ -121,3 +121,8 @@ replacing a whole value through a `&mut` held in a variable (`*r = v`).
 - Not yet: indexing (`v[i]`), iterator adapters (`map`, `filter`,
   `enumerate`, `count`), `remove`, `insert`, sorting, `HashMap`, and `&mut`
   to numbers.
+- **A `loop` is a value:** what its `break` gives, by its label from a loop
+  inside it too, or, for one that never ends, any type, as a generic
+  function's result or an argument: rustc has it as `NeverToAny` of the
+  loop, which is the same `while (true)`. 11 of rustc's 25 tests that
+  stopped here pass (`loop_values.rs`).
