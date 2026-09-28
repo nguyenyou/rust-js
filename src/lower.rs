@@ -1059,9 +1059,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Put the `while` back.
         let cond = match self.as_while(body, scope) {
             Some((cond, then)) => {
-                let cond = self.expr(cond, &mut body_out)?; // simple, so no statements
-                self.stmt(then, &Dest::Discard, &mut body_out)?;
-                cond
+                let mut before = Vec::new();
+                let cond = self.expr(cond, &mut before)?;
+                if before.is_empty() {
+                    self.stmt(then, &Dest::Discard, &mut body_out)?;
+                    cond
+                } else {
+                    // A condition whose JS has statements, as `a && f(&mut y)`'s
+                    // does: they run each time round, before its test, so
+                    // `while (true) { ..; if (!c) break; .. }`.
+                    body_out.extend(before);
+                    body_out.push(
+                        StmtKind::If(std_impls::negate(cond), vec![StmtKind::Break(None).at(span)], None).at(span),
+                    );
+                    self.stmt(then, &Dest::Discard, &mut body_out)?;
+                    Expr::bool(true)
+                }
             }
             None => {
                 self.stmt(body, &Dest::Discard, &mut body_out)?;
@@ -2049,15 +2062,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     LogicalOp::And => Op::And,
                     LogicalOp::Or => Op::Or,
                 };
-                if self.is_simple(rhs) {
-                    let r = self.expr(rhs, out)?;
-                    return Ok(Expr::bin(js_op, l, r));
-                }
-                // `a && { .. }`: only run the right side's statements if needed.
+                // `a && { .. }`: only run the right side's statements if needed,
+                // as its JS has them, not as Rust looks: `f(&mut y)` of a
+                // number has its write-back.
+                let mut rhs_out = Vec::new();
+                let simple = if self.is_simple(rhs) {
+                    let r = self.expr(rhs, &mut rhs_out)?;
+                    if rhs_out.is_empty() {
+                        return Ok(Expr::bin(js_op, l, r));
+                    }
+                    Some(r)
+                } else {
+                    None
+                };
                 let tmp = self.fresh("tmp");
                 out.push(StmtKind::Let(tmp.clone(), Some(l)).at(js_span));
-                let mut rhs_out = Vec::new();
-                self.stmt(rhs, &Dest::Assign(tmp.clone()), &mut rhs_out)?;
+                match simple {
+                    Some(r) => rhs_out.push(StmtKind::Assign(Expr::var(&tmp), r).at(js_span)),
+                    None => self.stmt(rhs, &Dest::Assign(tmp.clone()), &mut rhs_out)?,
+                }
                 let test = match op {
                     LogicalOp::And => Expr::var(&tmp),
                     LogicalOp::Or => Expr::unary(UnaryOp::Not, Expr::var(&tmp)),

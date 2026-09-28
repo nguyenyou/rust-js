@@ -67,3 +67,11 @@ code (`fib(n - 1) + fib(n - 2)`) has none.
 - Variables are spilled too, not just calls, because a later block could
   assign to them: `f(x, { x = 5; x })`.
 - Temporaries are named `tmp`, `tmp$1`, ... (see [0010](0010-naming-and-scopes.md)).
+- **What's simple is what the JS has no statements for,** not what Rust
+  looks like: `a || f(&mut y)` of a number `y` needs `y`'s box and its
+  write-back around the call, so `f`'s call runs only if `a` doesn't
+  decide, as a block's would; and a `while` whose condition has statements
+  is `while (true) { ..; if (!c) break; .. }`, which runs them each time
+  round, before the test. Both had run otherwise: the call always, and the
+  condition read a variable before its declaration. Found by rustc's
+  `lazy-and-or.rs` (`lazy_effects.rs`).
