@@ -134,6 +134,9 @@ a function pointer, or a `dyn`.
 - An atomic is `{ value }` wherever it is: `new`, `default()`,
   `into_inner` and `{:?}` are a `Cell`'s. `fetch_nand`, `fetch_update`,
   `get_mut` and `AtomicPtr` are rejected for now.
+- **Of rustc's tests, 76 more pass** (1,411 of 2,691), each of which had
+  stopped at a static; 29 still stop at what's rejected here, most often a
+  function pointer in a static (9) or a reference to a `static mut` (7).
 - A `thread_local!`'s own storage is a static std writes inside it, which
   JS needs none of (ADR 0037): it isn't one of the crate's statics.
 - `#[thread_local]` is unstable, so the corpus, whose cases are modules,

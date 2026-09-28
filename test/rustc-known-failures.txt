@@ -1,9 +1,9 @@
 # rustc run-pass UI tests rust-js gets wrong, and its first error (ADR 0089).
 # Rewritten by `bun scripts/rustc-suite.ts --bless`.
 abi/c-stack-returning-int64.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
-abi/nullable-pointer-ffi-compat.rs	error: rust-js does not support statics yet
+abi/nullable-pointer-ffi-compat.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 abi/numbers-arithmetic/float-struct.rs	error: rust-js does not support calling `std::hint::black_box` yet
-allocator/alloc-shrink-oob-read.rs	error: rust-js does not support statics yet
+allocator/alloc-shrink-oob-read.rs	error: rust-js does not support values of type `*mut u8` yet
 allocator/dyn-compatible.rs	error: rust-js does not support values of type `dyn std::alloc::Allocator` yet
 allocator/empty-alloc-nonnull-guarantee.rs	error: rust-js does not support values of type `std::option::Option<std::boxed::Box<()>>` yet
 allocator/weak-uninhabited-type.rs	error: rust-js does not support calling `std::rc::Weak::<T>::new` yet
@@ -11,19 +11,17 @@ any/try_as_dyn_mut.rs	error: rust-js does not support values of type `&mut T` ye
 any/try_as_dyn_soundness_test1.rs	error: rust-js does not support calling `std::any::try_as_dyn` yet
 any/try_as_dyn_soundness_test2.rs	error: rust-js does not support generic trait parameters yet
 any/try_as_dyn.rs	error: rust-js does not support calling `std::any::try_as_dyn` yet
-array-slice-vec/byte-literals.rs	error: rust-js does not support statics yet
-array-slice-vec/check-static-slice.rs	error: rust-js does not support statics yet
+array-slice-vec/byte-literals.rs	error: rust-js does not support this literal yet
 array-slice-vec/destructure-array-1.rs	error: rust-js does not support user implementations of this standard or external trait yet
 array-slice-vec/estr-slice.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
 array-slice-vec/fixed-length-vector-pattern-matching-7784.rs	error: rust-js does not support this pattern yet
 array-slice-vec/issue-18425.rs	error: rust-js does not support `[x; N]` of a value that isn't `Copy` yet
 array-slice-vec/mutability-inherits-through-fixed-length-vec.rs	error: rust-js does not support values of type `&mut i32` yet
 array-slice-vec/nested-vec-2.rs	error: rust-js does not support user implementations of this standard or external trait yet
-array-slice-vec/new-style-fixed-length-vec.rs	error: rust-js does not support statics yet
 array-slice-vec/slice_binary_search.rs	error: rust-js does not support calling `core::slice::<impl [T]>::binary_search_by_key` yet
-array-slice-vec/slice.rs	error: rust-js does not support statics yet
-array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support statics yet
-array-slice-vec/subslice-patterns-const-eval.rs	error: rust-js does not support statics yet
+array-slice-vec/slice.rs	error: rust-js does not support user implementations of this standard or external trait yet
+array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support this pattern yet
+array-slice-vec/subslice-patterns-const-eval.rs	error: rust-js does not support this pattern yet
 array-slice-vec/vec-dst.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 array-slice-vec/vec-matching-autoslice.rs	error: rust-js does not support this pattern yet
 array-slice-vec/vec-matching-fixed.rs	error: rust-js does not support this pattern yet
@@ -146,15 +144,14 @@ binding/match-vec-alternatives.rs	error: rust-js does not support this pattern y
 binding/mut-in-ident-patterns.rs	error: rust-js does not support this literal yet
 binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
 binding/or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
-binding/order-drop-with-match.rs	error: rust-js does not support statics yet
+binding/order-drop-with-match.rs	error: rust-js does not support user implementations of this standard or external trait yet
 binding/range-inclusive-pattern-precedence.rs	error: rust-js does not support this pattern yet
-binding/ref-pattern-drop-behavior-8860.rs	error: rust-js does not support statics yet
+binding/ref-pattern-drop-behavior-8860.rs	error: rust-js does not support user implementations of this standard or external trait yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this pattern yet
 binop/augmented-assignment.rs	error: rust-js does not support user implementations of this standard or external trait yet
 binop/binop-evaluation-order-primitive.rs	error: rust-js does not support calling `std::mem::drop` yet
 binop/compound-assign-by-ref.rs	error: rust-js does not support values of type `f32` yet
 block-result/blocks-without-results-11709.rs	error: rust-js does not support calling `std::option::Option::<T>::take` yet
-borrowck/borrowck-assignment-to-static-mut.rs	error: rust-js does not support statics yet
 borrowck/borrowck-borrow-from-expr-block.rs	error: rust-js does not support values of type `*const isize` yet
 borrowck/borrowck-borrow-of-mut-base-ptr-safe.rs	error: rust-js does not support values of type `&mut isize` yet
 borrowck/borrowck-box-sensitivity.rs	error: rust-js does not support values of type `&mut std::boxed::Box<isize>` yet
@@ -163,8 +160,7 @@ borrowck/borrowck-field-sensitivity-rpass.rs	error: rust-js does not support cal
 borrowck/borrowck-macro-interaction-issue-6304.rs	error: rust-js does not support this pattern yet
 borrowck/borrowck-mut-uniq.rs	error: rust-js does not support calling `std::mem::swap` yet
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support values of type `&mut A` yet
-borrowck/borrowck-static-item-in-fn.rs	error: rust-js does not support statics yet
-borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support statics yet
+borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support references to a `static mut` yet
 borrowck/borrowck-use-mut-borrow-rpass.rs	error: rust-js does not support values of type `&mut std::boxed::Box<isize>` yet
 borrowck/fsu-moves-and-copies.rs	error: rust-js does not support user implementations of this standard or external trait yet
 borrowck/incorrect-loan-error-on-local-update-5550.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
@@ -237,15 +233,12 @@ closures/issue-42463.rs	error: rust-js does not support user implementations of 
 closures/once-move-out-on-heap.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<bool>` yet
 codegen/dynamic-size-of-prefix-correctly-36278.rs	error: rust-js does not support `size_of_val` of a value without one size yet
 codegen/issue-101585-128bit-repeat.rs	error: rust-js does not support values of type `i128` yet
-codegen/issue-16602-3.rs	error: rust-js does not support statics yet
 codegen/issue-27859.rs	error: rust-js does not support values of type `f32` yet
 codegen/issue-55976.rs	error: rust-js does not support this expression yet
 codegen/llvm-miscompile-metadata-invalidation-36023.rs	error: rust-js does not support calling `std::result::Result::<T, E>::as_ref` yet
-codegen/mono-respects-abi-alignment.rs	error: rust-js does not support statics yet
 codegen/rvalue-mut-ref-box-drop.rs	error: rust-js does not support assigning to this place yet
 codegen/shift-right-operand-mutation.rs	error: rust-js does not support calling `std::hint::black_box` yet
 codegen/StackColoring-not-blowup-stack-issue-40883.rs	error: rust-js does not support calling `test::black_box` yet
-codegen/static-array-comparison-7012.rs	error: rust-js does not support statics yet
 coercion/any-trait-object-debug-12744.rs	error: rust-js does not support `{:?}` of a `dyn std::any::Any` yet
 coercion/basic-ptr-coercions.rs	error: rust-js does not support values of type `&mut isize` yet
 coercion/coerce-mut-trait-object-8248.rs	error: rust-js does not support values of type `&mut dyn A` yet
@@ -329,7 +322,7 @@ const-generics/type-dependent/qpath.rs	error: rust-js does not support const gen
 const-generics/type-dependent/simple.rs	error: rust-js does not support const generics yet
 const-generics/uninferred-consts-during-codegen-1.rs	error: rust-js does not support const generics yet
 const-generics/uninferred-consts-during-codegen-2.rs	error: rust-js does not support const generics yet
-const-ptr/allowed_slices.rs	error: rust-js does not support statics yet
+const-ptr/allowed_slices.rs	error: rust-js does not support statics of type `&'static [()]` yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
 consts/assoc-const.rs	error: rust-js does not support associated constants yet
 consts/cast-discriminant-zst-enum.rs	error: rust-js does not support constants of type `i128` yet
@@ -342,11 +335,8 @@ consts/const_in_pattern/custom-eq-branch-pass.rs	error: rust-js does not support
 consts/const_in_pattern/issue-73431.rs	error: rust-js does not support associated constants yet
 consts/const_in_pattern/null-raw-ptr-issue-119270.rs	error: rust-js does not support constants of type `&'static &'static WrapEmbedded` yet
 consts/const_let_eq_float.rs	error: rust-js does not support constants of type `f32` yet
-consts/const_refs_to_static.rs	error: rust-js does not support statics yet
+consts/const_refs_to_static.rs	error: rust-js does not support constants of type `*const i32` yet
 consts/const_unsafe_unreachable.rs	error: rust-js does not support calling `std::hint::unreachable_unchecked` yet
-consts/const-adt-align-mismatch.rs	error: rust-js does not support statics yet
-consts/const-big-enum.rs	error: rust-js does not support statics yet
-consts/const-binops.rs	error: rust-js does not support statics yet
 consts/const-block.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/const-blocks/const-repeat.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/const-blocks/fn-call-in-const.rs	error: rust-js does not support values of type `std::option::Option<Bar>` yet
@@ -354,23 +344,7 @@ consts/const-byte-str-cast.rs	error: rust-js does not support this literal yet
 consts/const-cast-ptr-int.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/const-cast.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/const-closure-fn-trait-object.rs	error: rust-js does not support constants of type `&'static (dyn std::ops::Fn() + 'static)` yet
-consts/const-contents.rs	error: rust-js does not support statics yet
-consts/const-deref.rs	error: rust-js does not support statics yet
 consts/const-endianess.rs	error: rust-js does not support constants of type `u128` yet
-consts/const-enum-byref-self.rs	error: rust-js does not support statics yet
-consts/const-enum-byref.rs	error: rust-js does not support statics yet
-consts/const-enum-cast.rs	error: rust-js does not support statics yet
-consts/const-enum-ptr.rs	error: rust-js does not support statics yet
-consts/const-enum-struct.rs	error: rust-js does not support statics yet
-consts/const-enum-struct2.rs	error: rust-js does not support statics yet
-consts/const-enum-structlike.rs	error: rust-js does not support statics yet
-consts/const-enum-tuple.rs	error: rust-js does not support statics yet
-consts/const-enum-tuple2.rs	error: rust-js does not support statics yet
-consts/const-enum-tuplestruct.rs	error: rust-js does not support statics yet
-consts/const-enum-tuplestruct2.rs	error: rust-js does not support statics yet
-consts/const-enum-vec-index.rs	error: rust-js does not support statics yet
-consts/const-enum-vec-ptr.rs	error: rust-js does not support statics yet
-consts/const-enum-vector.rs	error: rust-js does not support statics yet
 consts/const-err-rpass.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/const-eval/c-variadic.rs	error: rust-js does not support this expression yet
 consts/const-eval/heap/alloc_intrinsic_nontransient.rs	error: rust-js does not support constants of type `*const i32` yet
@@ -379,72 +353,56 @@ consts/const-eval/heap/alloc_intrinsic_zero_sized.rs	error: rust-js does not sup
 consts/const-eval/heap/dealloc_intrinsic_zero_sized.rs	error: rust-js does not support this expression yet
 consts/const-eval/heap/make-global.rs	error: rust-js does not support constants of type `*const i32` yet
 consts/const-eval/issue-64908.rs	error: rust-js does not support associated types yet
-consts/const-eval/ptr_fragments.rs	error: rust-js does not support statics yet
+consts/const-eval/ptr_fragments.rs	error: rust-js does not support constants of type `std::mem::MaybeUninit<*const i32>` yet
 consts/const-eval/strlen.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
 consts/const-extern-fn/const-extern-fn.rs	error: rust-js does not support this expression yet
-consts/const-extern-function.rs	error: rust-js does not support statics yet
-consts/const-fields-and-indexing.rs	error: rust-js does not support statics yet
+consts/const-extern-function.rs	error: rust-js does not support statics of type `extern "C" fn()` yet
 consts/const-fn-type-name-any.rs	error: rust-js does not support calling `std::any::type_name` yet
 consts/const-fn-type-name.rs	error: rust-js does not support this expression yet
-consts/const-fn-val.rs	error: rust-js does not support statics yet
+consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn() -> isize>` yet
 consts/const-int-arithmetic.rs	error: rust-js does not support constants of type `i128` yet
 consts/const-int-saturating-arith.rs	error: rust-js does not support constants of type `u128` yet
-consts/const-item-with-block-body/macro-codegen.rs	error: rust-js does not support statics yet
-consts/const-item-with-block-body/static.rs	error: rust-js does not support statics yet
-consts/const-needs_drop.rs	error: rust-js does not support statics yet
-consts/const-negative.rs	error: rust-js does not support statics yet
-consts/const-nullary-enum.rs	error: rust-js does not support statics yet
-consts/const-nullary-univariant-enum.rs	error: rust-js does not support statics yet
+consts/const-item-with-block-body/macro-codegen.rs	error: rust-js does not support statics of type `MyType` yet
+consts/const-item-with-block-body/static.rs	error: rust-js does not support statics of type `fn(usize) -> usize` yet
 consts/const-ptr-nonnull-rpass.rs	error: rust-js does not support constants of type `std::ptr::NonNull<u32>` yet
 consts/const-ptr-unique-rpass.rs	error: rust-js does not support constants of type `*mut u32` yet
-consts/const-rec-and-tup.rs	error: rust-js does not support statics yet
 consts/const-region-ptrs-noncopy.rs	error: rust-js does not support this expression yet
 consts/const-size_of_val-align_of_val.rs	error: rust-js does not support constants of type `Ugh` yet
 consts/const-size_of-align_of.rs	error: rust-js does not support `size_of` of a type parameter yet
-consts/const-struct-offsets.rs	error: rust-js does not support statics yet
 consts/const-trait-to-trait.rs	error: rust-js does not support constants of type `&'static (dyn Trait + 'static)` yet
-consts/const-tuple-struct.rs	error: rust-js does not support statics yet
-consts/const-typeid-of-rpass.rs	error: rust-js does not support statics yet
-consts/const-unit-struct.rs	error: rust-js does not support statics yet
+consts/const-typeid-of-rpass.rs	error: rust-js does not support statics of type `std::any::TypeId` yet
 consts/const-variant-count.rs	error: rust-js does not support calling `std::mem::variant_count` yet
-consts/const-vec-of-fns.rs	error: rust-js does not support statics yet
-consts/const-vecs-and-slices.rs	error: rust-js does not support statics yet
-consts/const.rs	error: rust-js does not support statics yet
+consts/const-vec-of-fns.rs	error: rust-js does not support statics of type `&'static [fn()]` yet
 consts/consts-in-patterns.rs	error: rust-js does not support this literal yet
 consts/control-flow/drop-precise.rs	error: rust-js does not support constants of type `std::vec::Vec<i32>` yet
 consts/deref_in_pattern.rs	error: rust-js does not support this literal yet
 consts/is_val_statically_known.rs	error: rust-js does not support calling `core::panicking::unreachable_display` yet
-consts/issue-105536-const-val-roundtrip-ptr-eq.rs	error: rust-js does not support statics yet
-consts/issue-17074.rs	error: rust-js does not support statics yet
-consts/issue-17718-borrow-interior.rs	error: rust-js does not support statics yet
-consts/issue-21721.rs	error: rust-js does not support statics yet
-consts/issue-27890.rs	error: rust-js does not support statics yet
+consts/issue-105536-const-val-roundtrip-ptr-eq.rs	error: rust-js does not support constants of type `*const u8` yet
+consts/issue-17718-borrow-interior.rs	error: rust-js does not support statics of type `&'static usize` yet
+consts/issue-21721.rs	error: rust-js does not support values of type `*const u8` yet
+consts/issue-27890.rs	error: rust-js does not support statics of type `&'static (dyn std::ops::Fn(i32) -> i32 + std::marker::Sync + 'static)` yet
 consts/issue-33537.rs	error: rust-js does not support values of type `*const i8` yet
-consts/issue-37222.rs	error: rust-js does not support statics yet
 consts/issue-44255.rs	error: rust-js does not support generic trait parameters yet
-consts/issue-46553.rs	error: rust-js does not support statics yet
-consts/issue-54582.rs	error: rust-js does not support statics yet
+consts/issue-46553.rs	error: rust-js does not support statics of type `Data<i32>` yet
+consts/issue-54582.rs	error: rust-js does not support statics of type `[(&'static (dyn Stage + 'static), &'static str); 1]` yet
 consts/issue-58435-ice-with-assoc-const.rs	error: rust-js does not support this constant yet
-consts/issue-69532.rs	error: rust-js does not support statics yet
+consts/issue-69532.rs	error: rust-js does not support statics of type `(f64, f64, f32, f32)` yet
 consts/issue-90762.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/issue-broken-mir.rs	error: rust-js does not support this literal yet
 consts/load-preserves-partial-init.rs	error: rust-js does not support constants of type `BagOfBits<[usize; 1]>` yet
-consts/locals-in-const-fn.rs	error: rust-js does not support statics yet
 consts/mozjs-error.rs	error: rust-js does not support associated constants yet
 consts/mut-ptr-to-static.rs	error: rust-js does not support user implementations of this standard or external trait yet
-consts/offset.rs	error: rust-js does not support statics yet
 consts/oncecell-const-init-57781.rs	error: rust-js does not support this constant yet
-consts/promoted_const_call4.rs	error: rust-js does not support statics yet
-consts/promotion-mutable-ref.rs	error: rust-js does not support statics yet
+consts/promoted_const_call4.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/references.rs	error: rust-js does not support this pattern yet
 consts/repeat_match.rs	error: rust-js does not support this pattern yet
-consts/static-mut-refs.rs	error: rust-js does not support statics yet
-consts/static-raw-pointer-interning.rs	error: rust-js does not support statics yet
-consts/static-raw-pointer-interning2.rs	error: rust-js does not support statics yet
+consts/static-mut-refs.rs	error: rust-js does not support statics of type `*mut [isize]` yet
+consts/static-raw-pointer-interning.rs	error: rust-js does not support user implementations of this standard or external trait yet
+consts/static-raw-pointer-interning2.rs	error: rust-js does not support user implementations of this standard or external trait yet
 consts/std/iter.rs	error: rust-js does not support constants of type `std::iter::Empty<u32>` yet
 consts/try-operator.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 consts/tuple-struct-constructors.rs	error: rust-js does not support constants of type `std::num::NonZero<u64>` yet
-consts/zst_no_llvm_alloc.rs	error: rust-js does not support statics yet
+consts/zst_no_llvm_alloc.rs	error: rust-js does not support constants of type `*const ()` yet
 contracts/contracts-disabled-side-effect-declarations.rs	error: rust-js does not support calling `std::intrinsics::contract_check_requires` yet
 contracts/contracts-disabled-side-effect-ensures.rs	error: rust-js does not support calling `core::contracts::build_check_ensures` yet
 contracts/internal_machinery/lowering/basics.rs	error: rust-js does not support calling `std::intrinsics::contract_check_requires` yet
@@ -471,7 +429,7 @@ coroutine/pin-box-coroutine.rs	error: rust-js does not support this expression y
 coroutine/postfix-yield.rs	error: rust-js does not support this expression yet
 coroutine/reborrow-mut-upvar.rs	error: rust-js does not support this expression yet
 coroutine/resume-arg-size.rs	error: rust-js does not support calling `std::mem::drop` yet
-coroutine/resume-live-across-yield.rs	error: rust-js does not support statics yet
+coroutine/resume-live-across-yield.rs	error: rust-js does not support user implementations of this standard or external trait yet
 coroutine/size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 coroutine/static-coroutine.rs	error: rust-js does not support this expression yet
 coroutine/too-live-local-in-immovable-gen.rs	error: rust-js does not support this expression yet
@@ -502,7 +460,6 @@ deriving/deriving-associated-types.rs	error: rust-js does not support associated
 deriving/deriving-cmp-generic-enum.rs	error: rust-js does not support comparing `E<i32>`s yet
 deriving/deriving-cmp-generic-struct-enum.rs	error: rust-js does not support comparing `ES<i32>`s yet
 deriving/deriving-coerce-pointee.rs	error: rust-js does not support user implementations of this standard or external trait yet
-deriving/deriving-copyclone.rs	error: rust-js does not support statics yet
 deriving/deriving-default-box.rs	error: rust-js does not support `Default` of `[bool]` yet
 deriving/deriving-from.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 deriving/deriving-hash.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -518,15 +475,15 @@ destructuring-assignment/warn-unused-duplication.rs	error: rust-js does not supp
 drop-bounds/drop-bounds-impl-drop.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/box-conditional-drop-allocator.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/box-drop-unused-value-statement-regression.rs	error: rust-js does not support calling `std::mem::drop` yet
-drop/conditional-drop-10734.rs	error: rust-js does not support statics yet
-drop/destructor-run-for-expression-4734.rs	error: rust-js does not support statics yet
-drop/destructor-run-for-let-ignore-6892.rs	error: rust-js does not support statics yet
-drop/drop-count-assertion-16151.rs	error: rust-js does not support statics yet
+drop/conditional-drop-10734.rs	error: rust-js does not support user implementations of this standard or external trait yet
+drop/destructor-run-for-expression-4734.rs	error: rust-js does not support user implementations of this standard or external trait yet
+drop/destructor-run-for-let-ignore-6892.rs	error: rust-js does not support user implementations of this standard or external trait yet
+drop/drop-count-assertion-16151.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-immediate-non-box-ty-9446.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-once-on-move.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-order-comparisons-let-chains.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-scope-exit.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/drop-struct-as-object.rs	error: rust-js does not support statics yet
+drop/drop-struct-as-object.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-trait-generic.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-trait.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/drop-uninhabited-enum.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -534,16 +491,16 @@ drop/dropck_legal_cycles.rs	error: rust-js does not support generic trait parame
 drop/dropck-eyepatch-reorder.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/dropck-eyepatch.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/enum-drop-impl-15063.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support statics yet
-drop/generic-drop-trait-bound-15858.rs	error: rust-js does not support statics yet
+drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support user implementations of this standard or external trait yet
+drop/generic-drop-trait-bound-15858.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/if-let-guards-2.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-21486.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support statics yet
+drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-2735-2.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-2735-3.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-30018-nopanic.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/issue-48962.rs	error: rust-js does not support statics yet
+drop/issue-48962.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-90752.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/issue-979.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -552,10 +509,10 @@ drop/nested-return-drop-order.rs	error: rust-js does not support user implementa
 drop/no-drop-flag-size.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/nondrop-cycle.rs	error: rust-js does not support this `let` pattern without a value yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support statics yet
-drop/static-issue-17302.rs	error: rust-js does not support statics yet
+drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support user implementations of this standard or external trait yet
+drop/static-issue-17302.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/struct-field-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/trait-object-drop-10802.rs	error: rust-js does not support statics yet
+drop/trait-object-drop-10802.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dropck/dropck_fn_type.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dropck/dropck_traits.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dropck/dropck-empty-array.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -564,14 +521,13 @@ dropck/issue-28498-ugeh-with-lifetime-param.rs	error: rust-js does not support u
 dropck/issue-28498-ugeh-with-passed-to-fn.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dropck/issue-28498-ugeh-with-trait-bound.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dropck/issue-29844.rs	error: rust-js does not support associated types yet
-dropck/issue-34053.rs	error: rust-js does not support statics yet
+dropck/issue-34053.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dst/dst-coerce-custom.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dst/dst-coerce-rc.rs	error: rust-js does not support values of type `*const std::rc::RcInner<i32>` yet
 dst/dst-coercions.rs	error: rust-js does not support values of type `*const dyn T` yet
 dst/dst-deref-mut.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dst/dst-deref.rs	error: rust-js does not support user implementations of this standard or external trait yet
 dst/dst-field-align.rs	error: rust-js does not support a `Baz<dyn Bar>`, whose last field is a `dyn` yet
-dst/dst-index-success.rs	error: rust-js does not support statics yet
 dst/dst-raw.rs	error: rust-js does not support values of type `*const dyn Trait` yet
 dst/dst-trait.rs	error: rust-js does not support a `Fat<dyn ToBar>`, whose last field is a `dyn` yet
 dst/unsized-str-mutability.rs	error: rust-js does not support values of type `&mut T` yet
@@ -586,13 +542,12 @@ enum-discriminant/actually_not_an_enum-discriminant.rs	error: rust-js does not s
 enum-discriminant/arbitrary_enum_discriminant.rs	error: rust-js does not support calling `test::black_box` yet
 enum-discriminant/discriminant_size.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
 enum-discriminant/discriminant_value-wrapper.rs	error: rust-js does not support calling `std::mem::discriminant` yet
-enum-discriminant/discriminant_value.rs	error: rust-js does not support statics yet
+enum-discriminant/discriminant_value.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
 enum-discriminant/issue-51582.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
 enum-discriminant/niche-prefer-zero.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 enum-discriminant/ptr_niche.rs	error: rust-js does not support values of type `*const u8` yet
 enum-discriminant/repr128-get-discriminant-issue-43398.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
 enum-discriminant/repr128.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
-enum/simple-enum-usage-8506.rs	error: rust-js does not support statics yet
 ergonomic-clones/closure/nested.rs	error: rust-js does not support user implementations of this standard or external trait yet
 ergonomic-clones/closure/once-move-out-on-heap.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<bool>` yet
 explicit-tail-calls/callee_is_track_caller_polymorphic.rs	error: rust-js does not support this expression yet
@@ -613,7 +568,7 @@ extern/issue-13655.rs	error: rust-js does not support user implementations of th
 float/minmax.rs	error: rust-js does not support constants of type `f32` yet
 fn_traits/call-unit-struct-impl-fn-once.rs	error: rust-js does not support user implementations of this standard or external trait yet
 fn/dyn-fn-alignment.rs	error: rust-js does not support values of type `*const A` yet
-for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support statics yet
+for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support user implementations of this standard or external trait yet
 for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 for-loop-while/for-loop-into-iterator.rs	error: rust-js does not support values of type `&mut i32` yet
 for-loop-while/for-loop-lifetime-of-unbound-values.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -631,9 +586,8 @@ functions-closures/clone-closure.rs	error: rust-js does not support cloning a cl
 functions-closures/closure_to_fn_coercion-expected-types.rs	error: rust-js does not support this expression yet
 functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support constants of type `fn(u8) -> u8` yet
-functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics yet
+functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics of type `std::option::Option<fn(isize) -> isize>` yet
 functions-closures/fn-item-type-zero-sized.rs	error: rust-js does not support this expression yet
-functions-closures/return-from-closure.rs	error: rust-js does not support statics yet
 generic-associated-types/collections.rs	error: rust-js does not support generic trait parameters yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support const generics yet
@@ -659,7 +613,6 @@ higher-ranked/trait-bounds/hrtb-trait-object-paren-notation.rs	error: rust-js do
 higher-ranked/trait-bounds/hrtb-type-outlives.rs	error: rust-js does not support generic trait parameters yet
 higher-ranked/trait-bounds/issue-36139-normalize-closure-sig.rs	error: rust-js does not support associated types yet
 higher-ranked/trait-bounds/issue-39292.rs	error: rust-js does not support generic trait parameters yet
-impl-header-lifetime-elision/bare_type.rs	error: rust-js does not support statics yet
 impl-header-lifetime-elision/explicit-and-elided-same-header.rs	error: rust-js does not support generic trait parameters yet
 impl-trait/bounds_regression.rs	error: rust-js does not support associated types yet
 impl-trait/closure-in-impl-trait-arg.rs	error: rust-js does not support calling `std::iter::empty` yet
@@ -675,7 +628,6 @@ impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Int
 impl-trait/not_general_enough_regression_106630.rs	error: rust-js does not support associated types yet
 impl-trait/type-alias-generic-param.rs	error: rust-js does not support associated types yet
 impl-trait/universal_in_trait_defn_parameters.rs	error: rust-js does not support generic trait methods yet
-imports/export-glob-imports-target.rs	error: rust-js does not support statics yet
 imports/global-path-resolution-drop.rs	error: rust-js does not support calling `std::mem::drop` yet
 imports/import-glob-crate.rs	error: rust-js does not support calling `std::mem::swap` yet
 imports/import-in-block.rs	error: rust-js does not support calling `std::mem::replace` yet
@@ -701,7 +653,7 @@ intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32:
 issues/issue-16278.rs	error: rust-js does not support this literal yet
 issues/issue-16530.rs	error: rust-js does not support calling `std::hash::SipHasher::new` yet
 issues/issue-16739.rs	error: rust-js does not support user implementations of this standard or external trait yet
-issues/issue-16774.rs	error: rust-js does not support statics yet
+issues/issue-16774.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-17216.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-17322.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
 issues/issue-17734.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -731,7 +683,7 @@ issues/issue-24086.rs	error: rust-js does not support user implementations of th
 issues/issue-24533.rs	error: rust-js does not support values of type `(dyn std::error::Error + std::marker::Send + std::marker::Sync + 'static)` yet
 issues/issue-24589.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-24947.rs	error: rust-js does not support associated constants yet
-issues/issue-25145.rs	error: rust-js does not support statics yet
+issues/issue-25145.rs	error: rust-js does not support statics of type `[u8; S::N]` yet
 issues/issue-25515.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-25679.rs	error: rust-js does not support associated types yet
 issues/issue-25693.rs	error: rust-js does not support associated types yet
@@ -743,7 +695,7 @@ issues/issue-26709.rs	error: rust-js does not support user implementations of th
 issues/issue-27054-primitive-binary-ops.rs	error: rust-js does not support values of type `&mut i32` yet
 issues/issue-27240.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-27401-dropflag-reinit.rs	error: rust-js does not support user implementations of this standard or external trait yet
-issues/issue-27997.rs	error: rust-js does not support statics yet
+issues/issue-27997.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-28498-ugeh-ex1.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-28550.rs	error: rust-js does not support values of type `<F as std::ops::FnOnce<()>>::Output` yet
 issues/issue-28828.rs	error: rust-js does not support associated types yet
@@ -763,16 +715,15 @@ issues/issue-32389.rs	error: rust-js does not support `ref mut` bindings to this
 issues/issue-33387.rs	error: rust-js does not support a `Bar<dyn Foo>`, whose last field is a `dyn` yet
 issues/issue-33461.rs	error: rust-js does not support generic trait parameters yet
 issues/issue-34427.rs	error: rust-js does not support values of type `*mut ()` yet
-issues/issue-3447.rs	error: rust-js does not support statics yet
 issues/issue-34503.rs	error: rust-js does not support generic trait parameters yet
 issues/issue-35600.rs	error: rust-js: trait dictionary names collide or use reserved `__proto__`
 issues/issue-35815.rs	error: rust-js does not support values of type `dyn std::marker::Send` yet
-issues/issue-36036-associated-type-layout.rs	error: rust-js does not support statics yet
+issues/issue-36036-associated-type-layout.rs	error: rust-js does not support associated types yet
 issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_raw_parts` yet
 issues/issue-36936.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-37109.rs	error: rust-js does not support associated types yet
 issues/issue-38437.rs	error: rust-js does not support user implementations of this standard or external trait yet
-issues/issue-39367.rs	error: rust-js does not support statics yet
+issues/issue-39367.rs	error: rust-js does not support references to a `static mut` yet
 issues/issue-3979.rs	error: rust-js does not support values of type `&mut Self` yet
 issues/issue-39827.rs	error: rust-js does not support calling `std::intrinsics::volatile_copy_memory` yet
 issues/issue-41498.rs	error: rust-js does not support values of type `&mut T` yet
@@ -790,7 +741,7 @@ issues/issue-4735.rs	error: rust-js does not support user implementations of thi
 issues/issue-48006.rs	error: rust-js does not support calling `std::iter::Step::steps_between` yet
 issues/issue-48132.rs	error: rust-js does not support values of type `<I as std::iter::Iterator>::Item` yet
 issues/issue-50415.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
-issues/issue-50811.rs	error: rust-js does not support statics yet
+issues/issue-50811.rs	error: rust-js does not support calling `test::black_box` yet
 issues/issue-5315.rs	error: rust-js does not support this expression yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
 iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
@@ -818,20 +769,19 @@ let-else/let-else-run-pass.rs	error: rust-js does not support bindings inside `|
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/matcher-trait-equality-13323.rs	error: rust-js does not support generic trait parameters yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
-lifetimes/rvalue-lifetime-drop-timing.rs	error: rust-js does not support statics yet
+lifetimes/rvalue-lifetime-drop-timing.rs	error: rust-js does not support user implementations of this standard or external trait yet
 lifetimes/struct-with-lifetime-parameters-9259.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
 lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
-linkage-attr/link-section-placement.rs	error: rust-js does not support statics yet
-linking/executable-no-mangle-strip.rs	error: rust-js does not support statics yet
+linkage-attr/link-section-placement.rs	error: rust-js does not support references to a `static mut` yet
+linking/executable-no-mangle-strip.rs	error: rust-js does not support statics of type `unsafe fn()` yet
 lint/dead-code/associated-type.rs	error: rust-js does not support associated types yet
-lint/dead-code/leading-underscore.rs	error: rust-js does not support statics yet
 lint/issue-20343.rs	error: rust-js does not support generic trait parameters yet
 lint/must_not_suspend/generic.rs	error: rust-js does not support calling `std::mem::drop` yet
 lint/must_not_suspend/mutex-guard-dropped-before-await.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 lint/must_not_suspend/warn.rs	error: rust-js does not support calling `std::mem::drop` yet
 lint/overflowing-literals-valid.rs	error: rust-js does not support this literal yet
 loop-match/break-to-block.rs	error: rust-js does not support this expression yet
-loop-match/drop-in-match-arm.rs	error: rust-js does not support statics yet
+loop-match/drop-in-match-arm.rs	error: rust-js does not support user implementations of this standard or external trait yet
 loop-match/loop-match.rs	error: rust-js does not support this expression yet
 loop-match/macro.rs	error: rust-js does not support this expression yet
 loop-match/nested.rs	error: rust-js does not support this expression yet
@@ -841,25 +791,21 @@ macros/colorful-write-macros.rs	error: rust-js does not support user implementat
 macros/concat-bytes.rs	error: rust-js does not support this literal yet
 macros/macro-in-or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
-macros/macro-pub-matcher.rs	error: rust-js does not support statics yet
 macros/macro-self-mutability-7911.rs	error: rust-js does not support values of type `&mut dyn FooBar` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-macros/metavar-expressions/macro-expansion.rs	error: rust-js does not support statics yet
-macros/nested-macro-expansion.rs	error: rust-js does not support statics yet
 macros/parse-complex-macro-invoc-op.rs	error: rust-js does not support calling `std::mem::drop` yet
 macros/try-macro.rs	error: rust-js does not support this literal yet
 macros/type-macros-hlist.rs	error: rust-js does not support values of type `<Xs as std::ops::Add<Ys>>::Output` yet
 macros/type-macros-simple.rs	error: rust-js does not support generic trait parameters yet
 marker_trait_attr/overlap-permitted-for-annotated-marker-traits.rs	error: rust-js: generated trait implementation name `tMyMarker` collides; put the implementations in separate modules
 match/issue-114691.rs	error: rust-js does not support values of type `f32` yet
-match/issue-36401.rs	error: rust-js does not support statics yet
 match/issue-42679.rs	error: rust-js does not support this pattern yet
 match/issue-46920-byte-array-patterns.rs	error: rust-js does not support this pattern yet
 match/match-large-array.rs	error: rust-js does not support this pattern yet
 match/match-on-negative-integer-ranges.rs	error: rust-js does not support this expression yet
 match/match-ref-mut-stability.rs	error: rust-js does not support values of type `*const i32` yet
 match/match-tuple-slice.rs	error: rust-js does not support this pattern yet
-match/overeager-sub-match-pruning-13027.rs	error: rust-js does not support statics yet
+match/overeager-sub-match-pruning-13027.rs	error: rust-js does not support this pattern yet
 match/pattern-deref-miscompile.rs	error: rust-js does not support this literal yet
 match/postfix-match/postfix-match.rs	error: rust-js does not support calling `core::str::<impl str>::eq_ignore_ascii_case` yet
 match/struct-reference-patterns-12285.rs	error: rust-js does not support values of type `std::option::Option<&S>` yet
@@ -871,8 +817,8 @@ methods/method-normalize-bounds-issue-20604.rs	error: rust-js does not support g
 methods/method-probe-no-guessing-dyn-trait.rs	error: rust-js does not support user implementations of this standard or external trait yet
 methods/method-projection.rs	error: rust-js does not support associated types yet
 methods/method-recursive-blanket-impl.rs	error: rust-js does not support generic trait parameters yet
-methods/method-self-arg-trait.rs	error: rust-js does not support statics yet
-methods/method-self-arg.rs	error: rust-js does not support statics yet
+methods/method-self-arg-trait.rs	error: rust-js does not support references to a `static mut` yet
+methods/method-self-arg.rs	error: rust-js does not support references to a `static mut` yet
 methods/method-two-trait-defer-resolution-1.rs	error: rust-js: generated trait implementation name `vecfoo` collides; put the implementations in separate modules
 methods/method-two-trait-defer-resolution-2.rs	error: rust-js: generated trait implementation name `vecFoo` collides; put the implementations in separate modules
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
@@ -886,13 +832,13 @@ mir/mir_call_with_associated_type.rs	error: rust-js does not support associated 
 mir/mir_codegen_calls.rs	error: rust-js does not support generic trait parameters yet
 mir/mir_codegen_critical_edge.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = u32>` yet
 mir/mir_coercions.rs	error: rust-js does not support user implementations of this standard or external trait yet
-mir/mir_early_return_scope.rs	error: rust-js does not support statics yet
-mir/mir_fat_ptr_drop.rs	error: rust-js does not support statics yet
+mir/mir_early_return_scope.rs	error: rust-js does not support user implementations of this standard or external trait yet
+mir/mir_fat_ptr_drop.rs	error: rust-js does not support user implementations of this standard or external trait yet
 mir/mir_fat_ptr.rs	error: rust-js does not support values of type `&mut &[u8]` yet
 mir/mir_heavy_promoted.rs	error: rust-js does not support constants of type `[u8; 32 * 1024 * 1024]` yet
 mir/mir_misc_casts.rs	error: rust-js does not support values of type `*const ()` yet
 mir/mir_raw_fat_ptr.rs	error: rust-js does not support values of type `*const S<[u8]>` yet
-mir/mir_static_subtype.rs	error: rust-js does not support statics yet
+mir/mir_static_subtype.rs	error: rust-js does not support statics of type `fn(&'static ())` yet
 mir/mir_struct_with_assoc_ty.rs	error: rust-js does not support associated types yet
 mir/mir_temp_promotions.rs	error: rust-js does not support values of type `f32` yet
 mir/mir-typeck-normalize-fn-sig.rs	error: rust-js does not support associated types yet
@@ -903,7 +849,7 @@ never_type/basic/never-result.rs	error: rust-js does not support values of type 
 never_type/basic/never-type-rvalues.rs	error: rust-js does not support values of type `!` yet
 never_type/regress/never-as-function-argument.rs	error: rust-js does not support calling `std::process::exit` yet
 never_type/regress/never-type-fallback-option.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
-nll/borrowck-thread-local-static-mut-borrow-outlives-fn.rs	error: rust-js does not support statics yet
+nll/borrowck-thread-local-static-mut-borrow-outlives-fn.rs	error: rust-js does not support `#[thread_local]` statics yet
 nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support assigning to this place yet
 nll/issue-45696-long-live-borrows-in-boxes.rs	error: rust-js does not support user implementations of this standard or external trait yet
 nll/issue-47153-generic-const.rs	error: rust-js does not support associated constants yet
@@ -927,7 +873,6 @@ numbers-arithmetic/float2.rs	error: rust-js does not support values of type `f32
 numbers-arithmetic/i128-min-literal-parses.rs	error: rust-js does not support values of type `i128` yet
 numbers-arithmetic/i128.rs	error: rust-js does not support values of type `i128` yet
 numbers-arithmetic/integer-literal-suffix-inference-2.rs	error: rust-js does not support values of type `*const ()` yet
-numbers-arithmetic/shift.rs	error: rust-js does not support statics yet
 numbers-arithmetic/u128-as-f32.rs	error: rust-js does not support constants of type `f32` yet
 numbers-arithmetic/u128.rs	error: rust-js does not support values of type `u128` yet
 object-lifetime/object-lifetime-default-from-ref-struct.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
@@ -972,15 +917,13 @@ packed/packed-struct-drop-aligned.rs	error: rust-js does not support user implem
 packed/packed-struct-generic-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expression yet
-packed/packed-struct-size.rs	error: rust-js does not support statics yet
+packed/packed-struct-size.rs	error: rust-js does not support statics of type `P4S16` yet
 packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::DebugStruct::<'a, 'b>::finish` yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-with-inference-vars-issue-61402.rs	error: rust-js does not support generic trait parameters yet
-parser/generics-rangle-eq-15043.rs	error: rust-js does not support statics yet
 parser/macro/statement-boundaries.rs	error: rust-js does not support const generics yet
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
-parser/super-fast-paren-parsing.rs	error: rust-js does not support statics yet
 parser/syntactic-trailing-commas.rs	error: rust-js does not support this pattern yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 pattern/bindings-after-at/box-patterns.rs	error: rust-js does not support this pattern yet
@@ -1001,7 +944,7 @@ pattern/issue-27320.rs	error: rust-js does not support bindings inside `|` patte
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support user implementations of this standard or external trait yet
 pattern/mut_preserve_binding_mode_2024.rs	error: rust-js does not support `&mut` to a `u8` yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<bool>` yet
-pattern/premature-match-scrutinee-temporary-drop-10683.rs	error: rust-js does not support statics yet
+pattern/premature-match-scrutinee-temporary-drop-10683.rs	error: rust-js does not support calling `std::str::<impl str>::to_ascii_lowercase` yet
 pattern/skipped-ref-pats-issue-125058.rs	error: rust-js does not support `&mut` to a `std::option::Option<&mut std::option::Option<u32>>` yet
 pattern/slice-pattern-recursion-15104.rs	error: rust-js does not support this pattern yet
 pin-ergonomics/pin-coercion.rs	error: rust-js does not support values of type `&mut T` yet
@@ -1027,15 +970,13 @@ regions/regions-early-bound-used-in-bound.rs	error: rust-js does not support gen
 regions/regions-early-bound-used-in-type-param.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-infer-borrow-scope-addr-of.rs	error: rust-js does not support calling `std::mem::swap` yet
 regions/regions-infer-reborrow-ref-mut-recurse.rs	error: rust-js does not support values of type `&mut isize` yet
-regions/regions-infer-static-from-proc.rs	error: rust-js does not support statics yet
 regions/regions-issue-21422.rs	error: rust-js does not support values of type `*const &u8` yet
 regions/regions-issue-22246.rs	error: rust-js does not support generic trait parameters yet
-regions/regions-lifetime-static-items-enclosing-scopes.rs	error: rust-js does not support statics yet
+regions/regions-lifetime-static-items-enclosing-scopes.rs	error: rust-js does not support assigning to this place yet
 regions/regions-mock-codegen.rs	error: rust-js does not support calling `std::alloc::Layout::new` yet
 regions/regions-no-bound-in-argument-cleanup.rs	error: rust-js does not support user implementations of this standard or external trait yet
 regions/regions-simple.rs	error: rust-js does not support values of type `&mut isize` yet
-regions/regions-static-bound-rpass.rs	error: rust-js does not support statics yet
-repeat-expr/repeat-expr-in-static.rs	error: rust-js does not support statics yet
+regions/regions-static-bound-rpass.rs	error: rust-js does not support values of type `&mut &()` yet
 resolve/primitive-usage.rs	error: rust-js does not support constants of type `f128` yet
 resolve/reference-clone-nonclone-11820.rs	error: rust-js does not support values of type `std::option::Option<NoClone>` yet
 resolve/struct-function-same-name-2708.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -1044,7 +985,7 @@ rfcs/rfc-0107-bind-by-move-pattern-guards/bind-by-move-no-guards.rs	error: rust-
 rfcs/rfc-1445-restrict-constants-in-patterns/allow-use-behind-cousin-variant.rs	error: rust-js does not support this pattern yet
 rfcs/rfc-1445-restrict-constants-in-patterns/match-empty-array-allowed-without-eq-issue-62336.rs	error: rust-js does not support this pattern yet
 rfcs/rfc-1445-restrict-constants-in-patterns/phantom-data-is-structurally-matchable.rs	error: rust-js does not support `Default` of `std::marker::PhantomData<main::NotSM>` yet
-rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics yet
+rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics of type `&'static for<'a> fn(&'a [u8]) -> &'a [u8]` yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
 rfcs/rfc-2005-default-binding-mode/box.rs	error: rust-js does not support this pattern yet
 rfcs/rfc-2005-default-binding-mode/constref.rs	error: rust-js does not support associated constants yet
@@ -1086,13 +1027,11 @@ self/dispatch_from_dyn_zst.rs	error: rust-js does not support user implementatio
 self/dyn-compatibility-sized-self-by-value-self.rs	error: rust-js does not support `&mut` to a `C` yet
 self/dyn-compatibility-sized-self-generic-method.rs	error: rust-js does not support generic trait methods yet
 self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support `&mut` to a `C` yet
-self/explicit-self.rs	error: rust-js does not support statics yet
 self/self-impl-2.rs	error: rust-js does not support generic trait parameters yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 self/string-self-append.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
-self/where-for-self.rs	error: rust-js does not support statics yet
+self/where-for-self.rs	error: rust-js does not support references to a `static mut` yet
 simd/array-type.rs	error: rust-js does not support calling `std::intrinsics::simd::simd_insert` yet
-simd/issue-17170.rs	error: rust-js does not support statics yet
 simd/issue-32947.rs	error: rust-js does not support values of type `*mut u8` yet
 simd/libm_std_can_float.rs	error: rust-js does not support values of type `f32` yet
 simd/size-align.rs	error: rust-js does not support `size_of` of a type parameter yet
@@ -1113,23 +1052,17 @@ specialization/specialization-translate-projections-with-params.rs	error: rust-j
 specialization/specialization-translate-projections.rs	error: rust-js does not support associated types yet
 specialization/trait-specialization-default-methods-55380.rs	error: rust-js: generated trait implementation name `tFoo` collides; put the implementations in separate modules
 specialization/transmute-specialization.rs	error: rust-js does not support associated types yet
-static/issue-1660.rs	error: rust-js does not support statics yet
-static/refer-to-other-statics-by-value.rs	error: rust-js does not support statics yet
-static/static-list-initialization-5917.rs	error: rust-js does not support statics yet
-static/static-struct-initialization-5688.rs	error: rust-js does not support statics yet
-statics/conditional-static-declaration-16010.rs	error: rust-js does not support statics yet
-statics/issue-17233.rs	error: rust-js does not support statics yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support user implementations of this standard or external trait yet
-statics/static-function-pointer.rs	error: rust-js does not support statics yet
+statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
 statics/static-impl.rs	error: rust-js does not support generic trait parameters yet
 statics/static-method-in-trait-with-tps-intracrate.rs	error: rust-js does not support generic trait parameters yet
 statics/static-methods-in-traits2.rs	error: rust-js does not support generic trait methods yet
-statics/static-promotion.rs	error: rust-js does not support statics yet
-statics/static-recursive.rs	error: rust-js does not support statics yet
+statics/static-promotion.rs	error: rust-js does not support this literal yet
+statics/static-recursive.rs	error: rust-js does not support references to a `static mut` yet
 std/issue-3563-3.rs	error: rust-js does not support user implementations of this standard or external trait yet
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/nul-char-equivalence.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
-structs-enums/align-struct.rs	error: rust-js does not support statics yet
+structs-enums/align-struct.rs	error: rust-js does not support this expression yet
 structs-enums/borrow-tuple-fields.rs	error: rust-js does not support values of type `&mut i32` yet
 structs-enums/class-cast-to-trait-multiple-types.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
 structs-enums/class-cast-to-trait.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
@@ -1137,26 +1070,19 @@ structs-enums/class-dtor.rs	error: rust-js does not support user implementations
 structs-enums/class-impl-very-parameterized-trait.rs	error: rust-js does not support values of type `&mut T` yet
 structs-enums/class-implement-traits.rs	error: rust-js does not support `&mut` to a `C` yet
 structs-enums/class-separate-impl.rs	error: rust-js does not support values of type `dyn std::string::ToString` yet
-structs-enums/codegen-tag-static-padding.rs	error: rust-js does not support statics yet
 structs-enums/enum-alignment.rs	error: rust-js does not support this expression yet
 structs-enums/enum-clike-ffi-as-int.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-structs-enums/enum-discrim-width-stuff.rs	error: rust-js does not support statics yet
 structs-enums/enum-non-c-like-repr-c-and-int.rs	error: rust-js does not support values of type `(u32) is 0..=999999999` yet
 structs-enums/enum-non-c-like-repr-c.rs	error: rust-js does not support values of type `(u32) is 0..=999999999` yet
 structs-enums/enum-non-c-like-repr-int.rs	error: rust-js does not support values of type `(u32) is 0..=999999999` yet
 structs-enums/enum-null-pointer-opt.rs	error: rust-js does not support associated types yet
-structs-enums/enum-nullable-const-null-with-fields.rs	error: rust-js does not support statics yet
 structs-enums/enum-univariant-repr.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-structs-enums/field-destruction-order.rs	error: rust-js does not support statics yet
+structs-enums/field-destruction-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
 structs-enums/issue-38002.rs	error: rust-js does not support this pattern yet
 structs-enums/newtype-struct-drop-run.rs	error: rust-js does not support user implementations of this standard or external trait yet
 structs-enums/newtype-struct-with-dtor.rs	error: rust-js does not support user implementations of this standard or external trait yet
 structs-enums/resource-in-struct.rs	error: rust-js does not support user implementations of this standard or external trait yet
-structs-enums/small-enum-range-edge.rs	error: rust-js does not support statics yet
-structs-enums/small-enums-with-fields.rs	error: rust-js does not support statics yet
 structs-enums/struct-literal-dtor.rs	error: rust-js does not support user implementations of this standard or external trait yet
-structs-enums/struct-order-of-eval-3.rs	error: rust-js does not support statics yet
-structs-enums/struct-order-of-eval-4.rs	error: rust-js does not support statics yet
 structs-enums/struct-partial-move-1.rs	error: rust-js does not support user implementations of this standard or external trait yet
 structs-enums/struct-partial-move-2.rs	error: rust-js does not support user implementations of this standard or external trait yet
 structs-enums/struct-path-associated-type.rs	error: rust-js does not support associated types yet
@@ -1169,7 +1095,7 @@ structs/destructuring-struct-with-dtor-6344.rs	error: rust-js does not support u
 structs/mutable-unit-struct-borrow-11267.rs	error: rust-js does not support generic trait parameters yet
 structs/struct-size-with-drop-2895.rs	error: rust-js does not support user implementations of this standard or external trait yet
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
-thread-local/thread-local-static-reference-70673.rs	error: rust-js does not support statics yet
+thread-local/thread-local-static-reference-70673.rs	error: rust-js does not support `#[thread_local]` statics yet
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send-is-not-static-par-for.rs	error: rust-js does not support values of type `<I as std::iter::Iterator>::Item` yet
@@ -1206,7 +1132,7 @@ traits/default-method/bound-subst2.rs	error: rust-js does not support generic tr
 traits/default-method/bound-subst3.rs	error: rust-js does not support generic trait methods yet
 traits/default-method/bound-subst4.rs	error: rust-js does not support generic trait parameters yet
 traits/dyn-drop-principal.rs	error: rust-js does not support user implementations of this standard or external trait yet
-traits/dyn-trait.rs	error: rust-js does not support statics yet
+traits/dyn-trait.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/early-vtbl-resolution.rs	error: rust-js does not support generic trait parameters yet
 traits/elaborate-type-region.rs	error: rust-js does not support generic trait parameters yet
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support generic trait parameters yet
@@ -1233,7 +1159,6 @@ traits/issue-23825.rs	error: rust-js does not support this literal yet
 traits/issue-26339.rs	error: rust-js: supertrait dictionary names collide
 traits/issue-38033.rs	error: rust-js does not support associated types yet
 traits/issue-3979-generics.rs	error: rust-js does not support generic trait parameters yet
-traits/issue-40085.rs	error: rust-js does not support statics yet
 traits/issue-4107.rs	error: rust-js does not support generic trait parameters yet
 traits/issue-43132.rs	error: rust-js does not support generic trait methods yet
 traits/issue-6128.rs	error: rust-js does not support generic trait parameters yet
@@ -1251,7 +1176,7 @@ traits/normalize-associated-type-in-where-clause.rs	error: rust-js does not supp
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support associated types yet
 traits/object/generics.rs	error: rust-js does not support generic trait parameters yet
-traits/object/lifetime-first.rs	error: rust-js does not support statics yet
+traits/object/lifetime-first.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/overlap-permitted-for-marker-traits.rs	error: rust-js: generated trait implementation name `tMyMarker` collides; put the implementations in separate modules
 traits/parameterized-with-bounds.rs	error: rust-js does not support generic trait parameters yet
 traits/pointee-deduction.rs	error: rust-js does not support associated types yet
@@ -1305,7 +1230,7 @@ unboxed-closures/fn-traits-overloading-arity-18952.rs	error: rust-js does not su
 unboxed-closures/type-id-higher-rank.rs	error: rust-js does not support values of type `*const ()` yet
 unboxed-closures/unboxed-closures-blanket-fn-mut.rs	error: rust-js does not support values of type `&mut F` yet
 unboxed-closures/unboxed-closures-call-sugar-autoderef.rs	error: rust-js does not support values of type `&mut F` yet
-unboxed-closures/unboxed-closures-drop.rs	error: rust-js does not support statics yet
+unboxed-closures/unboxed-closures-drop.rs	error: rust-js does not support user implementations of this standard or external trait yet
 unboxed-closures/unboxed-closures-extern-fn-hr.rs	error: rust-js does not support values of type `&mut F` yet
 unboxed-closures/unboxed-closures-extern-fn.rs	error: rust-js does not support values of type `&mut F` yet
 unboxed-closures/unboxed-closures-fn-as-fnmut-and-fnonce.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -1349,10 +1274,9 @@ unsized/unsized.rs	error: rust-js does not support generic trait parameters yet
 unsized/unsized2.rs	error: rust-js does not support generic trait parameters yet
 unsized/unsized3-rpass.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 variance/variance-intersection-of-ref-and-opt-ref.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
-where-clauses/where-clause-early-bound-lifetimes.rs	error: rust-js does not support statics yet
 where-clauses/where-clause-method-substituion-rpass.rs	error: rust-js does not support generic trait parameters yet
 where-clauses/where-clauses.rs	error: rust-js does not support generic trait methods yet
-zero-sized/zero-size-type-destructors.rs	error: rust-js does not support statics yet
+zero-sized/zero-size-type-destructors.rs	error: rust-js does not support user implementations of this standard or external trait yet
 zero-sized/zero-sized-binary-heap-push.rs	error: rust-js does not support calling `std::collections::BinaryHeap::<T, A>::capacity` yet
 zero-sized/zero-sized-btreemap-insert.rs	error: rust-js does not support values of type `Zst` yet
 zero-sized/zero-sized-linkedlist-push.rs	error: rust-js does not support values of type `*const std::collections::linked_list::Node<()>` yet
