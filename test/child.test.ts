@@ -2,8 +2,11 @@
 // rust-js's rejection, or a crash, whatever it said first.
 
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { compileFailure, run, runSync, type Exit } from "./child";
+import { fixture } from "./support";
 
 const exit = (code: number | null, stderr: string, more: Partial<Exit> = {}): Exit => ({
   code,
@@ -51,4 +54,28 @@ test("a process that doesn't end, or prints without end, is stopped and says so"
   expect(runSync(["sh", "-c", "yes"], ".", 10_000).overflowed).toBe(true);
   const failed = await run(["sh", "-c", "echo out; echo err >&2; exit 3"], ".", 10_000);
   expect(failed).toEqual({ code: 3, signal: null, timedOut: false, overflowed: false, stdout: "out\n", stderr: "err\n" });
+});
+
+// What a process started, holding its output open, is stopped with it, so
+// a deadline is kept. Found in review: `sleep 3 & wait` took 3s of 100ms.
+test("a process's descendants are stopped with it, and its deadline kept", async () => {
+  const pidFile = join(fixture("child-descendant"), "pid");
+  const started = Date.now();
+  const slow = await run(["sh", "-c", `sleep 30 & echo $! > ${pidFile}; wait`], ".", 100);
+  expect(slow.timedOut).toBe(true);
+  expect(Date.now() - started).toBeLessThan(2000);
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  await Bun.sleep(50);
+  expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
+  const sync = runSync(["sh", "-c", `sleep 30 & echo $! > ${pidFile}; wait`], ".", 100);
+  expect(sync.timedOut).toBe(true);
+  await Bun.sleep(50);
+  expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
 });

@@ -14,10 +14,25 @@ export type Exit = {
 
 // What a process may print before it's stopped: far more than any test's.
 const maxBuffer = 16 * 1024 * 1024;
+// How long output is still read after a process is stopped, if something it
+// started, outside its group, holds it open.
+const grace = 1000;
+
+/** Stop `pid` and what it started: each process runs as the leader of a
+ * group of its own, and the group is what's killed. */
+function stopGroup(pid: number) {
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // The group has ended already.
+  }
+}
 
 /** `cmd`, stopped after `timeout` ms or `maxBuffer` bytes of output. */
 export function runSync(cmd: string[], cwd: string, timeout: number): Exit {
-  const p = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout, maxBuffer });
+  const p = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout, maxBuffer, detached: true });
+  // What it started and left running goes with it.
+  stopGroup(p.pid);
   return {
     code: p.exitCode,
     signal: p.signalCode ?? null,
@@ -30,31 +45,38 @@ export function runSync(cmd: string[], cwd: string, timeout: number): Exit {
 
 /** `cmd`, as `runSync` runs it, without blocking the others running. */
 export async function run(cmd: string[], cwd: string, timeout: number): Promise<Exit> {
-  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", detached: true });
   let timedOut = false;
   let overflowed = false;
-  const stop = () => p.kill("SIGKILL");
+  const readers = [p.stdout.getReader(), p.stderr.getReader()];
+  let cut: Timer | undefined;
+  const stop = () => {
+    stopGroup(p.pid);
+    cut ??= setTimeout(() => readers.forEach((reader) => reader.cancel()), grace);
+  };
   const timer = setTimeout(() => {
     timedOut = true;
     stop();
   }, timeout);
-  const read = async (stream: ReadableStream<Uint8Array>) => {
+  const read = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
     const chunks: Uint8Array[] = [];
     let size = 0;
-    for await (const chunk of stream) {
-      if (size + chunk.length > maxBuffer) {
+    for (let next = await reader.read(); !next.done; next = await reader.read()) {
+      if (size + next.value.length > maxBuffer) {
         overflowed = true;
         stop();
         break;
       }
-      chunks.push(chunk);
-      size += chunk.length;
+      chunks.push(next.value);
+      size += next.value.length;
     }
     return Buffer.concat(chunks).toString();
   };
-  const [stdout, stderr] = await Promise.all([read(p.stdout), read(p.stderr)]);
+  const [stdout, stderr] = await Promise.all(readers.map(read));
   await p.exited;
+  stopGroup(p.pid);
   clearTimeout(timer);
+  clearTimeout(cut);
   return { code: p.exitCode, signal: p.signalCode ?? null, timedOut, overflowed, stdout, stderr };
 }
 

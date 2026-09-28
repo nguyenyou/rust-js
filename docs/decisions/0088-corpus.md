@@ -102,7 +102,11 @@ What it expects is in a `//@` directive:
   reject or answer wrongly, but not crash on. The corpus, generated
   programs and rustc's tests all
   judge a compile this way. Found in review: a compiler that printed the
-  expected rejection, then panicked, passed.
+  expected rejection, then panicked, passed. Each process leads a group
+  of its own, and what's stopped, at a deadline, too much output, or its
+  end, is the group, so what it started can't keep its output open past
+  a deadline, or run on after it. Found in review: `sleep 3 & wait` took
+  3 seconds of a 100 ms deadline.
 - **The harness's own failures are tested, made on purpose**
   (`test/harness.test.ts`): a compiler that crashes after the rejection a
   case expects, one that never ends, JS wrong under Bun only, a generated
