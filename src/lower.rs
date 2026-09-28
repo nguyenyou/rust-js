@@ -1812,13 +1812,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 subpatterns,
                 ..
             } if self.tcx.is_lang_item(adt_def.did(), LangItem::Option) => {
+                // `None`, or `Some(..)`, whose `..` names no field but is `Some`.
+                let some = self
+                    .tcx
+                    .is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome);
                 let Some(field) = subpatterns.first() else {
-                    return Ok(Some(Expr::bin(Op::LooseEq, subject.clone(), Expr::null())));
+                    let op = if some { Op::LooseNe } else { Op::LooseEq };
+                    return Ok(Some(Expr::bin(op, subject.clone(), Expr::null())));
                 };
-                debug_assert!(
-                    self.tcx
-                        .is_lang_item(adt_def.variant(*variant_index).def_id, LangItem::OptionSome)
-                );
                 // A generic `T`'s value may be boxed (ADR 0051): the pattern is on what's inside.
                 let value = match self.option_of(pat.ty) {
                     Some(inner) if self.boxed_payload(inner) => self.some_value(subject.clone()),

@@ -91,3 +91,7 @@ The rules:
   copy, if it's `Copy` and something changes it. `n @ 1..=9`, which binds
   nothing else, is as it was. Found by rustc's `bind-by-copy.rs`
   (`binding_after_at.rs`).
+- **`Some(..)` is `Some`:** its `..` names no field, as `None` has none,
+  and it was taken for `None`, so `if let Some(..) = x` ran when `x` was
+  `None`. Which variant a pattern names is what's tested. Found by rustc's
+  `nonzero-enum.rs` (`option_rest_pattern.rs`).
