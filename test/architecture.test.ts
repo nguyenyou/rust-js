@@ -8,8 +8,28 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const files = (directory: string): string[] => readdirSync(join(root, directory), { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? files(`${directory}/${entry.name}`) : [`${directory}/${entry.name}`]);
 
+// Every source module is in a layer, so a module added later is checked
+// by the rules of its layer, not left out of a list (found in review).
+//
+//   driver ──► front end (rustc) ──► owned output ──► printing (oxc)
+const layers = {
+  driver: ["src/main.rs"],
+  front: ["src/lower.rs", "src/lower/", "src/jsx_syntax.rs", "src/jsx_syntax/"],
+  owned: ["src/library.rs", "src/reachability.rs", "src/link.rs", "src/names.rs", "src/program.rs", "src/js.rs",
+    "src/prepare.rs", "src/output.rs", "src/publish.rs", "src/manifest.rs", "src/runtime.rs"],
+  printing: ["src/to_oxc.rs", "src/format.rs"],
+};
+const layerOf = (file: string) =>
+  Object.entries(layers).find(([, paths]) => paths.some(p => p.endsWith("/") ? file.startsWith(p) : file === p))?.[0];
+const sources = files("src").filter(path => path.endsWith(".rs"));
+
+test("every source module is in a layer", () => {
+  expect(sources.filter(file => !layerOf(file))).toEqual([]);
+  expect(sources.length).toBeGreaterThan(40);
+});
+
 test("owned compiler output and downstream phases do not depend on rustc", () => {
-  for (const file of ["src/library.rs", "src/reachability.rs", "src/link.rs", "src/names.rs", "src/program.rs", "src/js.rs", "src/prepare.rs", "src/output.rs", "src/publish.rs", "src/manifest.rs", "src/to_oxc.rs", "src/format.rs"]) {
+  for (const file of sources.filter(file => layerOf(file) === "owned" || layerOf(file) === "printing")) {
     expect(read(file), file).not.toMatch(/(?:use\s+|\b)rustc_\w+::/);
   }
 });
@@ -21,7 +41,7 @@ test("linking uses owned output without lowering dependencies", () => {
 });
 
 test("oxc APIs stay behind the printing and formatting adapters", () => {
-  for (const file of files("src").filter(path => path.endsWith(".rs") && !["src/to_oxc.rs", "src/format.rs"].includes(path))) {
+  for (const file of sources.filter(file => layerOf(file) !== "printing")) {
     expect(read(file), file).not.toMatch(/\boxc_\w+::/);
   }
 });
