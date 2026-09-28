@@ -221,6 +221,12 @@ pilot. No delivery dates are assigned yet.
   plugin, and WASM artifacts. Record commit, versions, results, known issues,
   and performance budgets. No unresolved wrong-code, data-loss, or critical
   security defects within the supported scope.
+  Started: `scripts/qualify.ts` checks a distribution's checksums, installs
+  it outside the checkout, and runs the whole suite through the installed
+  launcher, and the package test with the packaged binary, writing a report
+  of commit, host, runtimes and results; the [Qualify](.github/workflows/qualify.yml)
+  workflow does it per host ([ADR 0094](docs/decisions/0094-qualification.md)).
+  The support matrix, the WASM compiler and performance budgets remain open.
 - [ ] **M6.2 — Complete a pilot release and upgrade.** Deploy the pilot,
   observe it for an agreed period with agreed success criteria, fix blockers,
   and test an upgrade and rollback. Publish the support matrix, release notes,

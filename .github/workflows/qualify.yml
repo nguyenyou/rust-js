@@ -1,0 +1,77 @@
+name: Qualify
+
+# A distribution, made from this commit on each host named, checked,
+# installed outside the checkout, and the test suite run through the
+# compiler installed (ADR 0094). Each host's distribution and report are
+# kept as artifacts; a host is qualified only if all of it passed.
+on:
+  workflow_dispatch:
+    inputs:
+      hosts:
+        description: 'GitHub runners to qualify on, as JSON, like ["ubuntu-latest", "ubuntu-24.04-arm", "macos-latest"].'
+        required: false
+        default: '["ubuntu-latest"]'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualify-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJSON(inputs.hosts) }}
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      # The corpus runs its cases under Node too, whose TypeScript runner
+      # needs Node 22.18 or later.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - run: bun install --frozen-lockfile
+      # Chromium for the browser tests; on Linux, with the libraries it needs.
+      - if: runner.os == 'Linux'
+        run: bunx --bun playwright install --with-deps chromium
+      - if: runner.os != 'Linux'
+        run: bunx --bun playwright install chromium
+      # Else what the last build on this host left: dependencies aren't
+      # compiled again, only rust-js is.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+          key: qualify-${{ matrix.host }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: qualify-${{ matrix.host }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - name: Build rust-js
+        run: cargo build --release --locked
+      - name: Make the distribution
+        run: bun run pack:distribution target/release/rust-js dist
+      - name: Qualify it
+        run: bun scripts/qualify.ts dist qualification
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: distribution-${{ matrix.host }}
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 30
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: qualification-${{ matrix.host }}
+          path: qualification/
+          if-no-files-found: ignore
+          retention-days: 90

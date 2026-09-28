@@ -20,6 +20,10 @@ for (const directory of ["tooling", "vite-plugin"]) {
   const pkg = JSON.parse(readFileSync(join(root, directory, "package.json"), "utf8"));
   if (pkg.version !== identity.version) throw new Error(`${pkg.name} ${pkg.version} does not match compiler ${identity.version}`);
 }
+// The commit it's made from, and whether the checkout had changes of its
+// own, before anything is made in it, so what qualifies it can be run from
+// the same one.
+const source = { commit: run(["git", "rev-parse", "HEAD"]).trim(), clean: run(["git", "status", "--porcelain"]).trim() === "" };
 mkdirSync(dirname(output), { recursive: true });
 const staging = mkdtempSync(join(dirname(output), ".rust-js-distribution-"));
 try {
@@ -32,7 +36,7 @@ try {
   const sha256 = (file: string) => createHash("sha256").update(readFileSync(join(staging, file))).digest("hex");
   const artifacts = files.map(file => ({ file, sha256: sha256(file) }));
   writeFileSync(join(staging, "distribution.json"), JSON.stringify({
-    version: 1, compiler: identity, platform: process.platform, arch: process.arch, artifacts,
+    version: 1, compiler: identity, source, platform: process.platform, arch: process.arch, artifacts,
   }, null, 2) + "\n");
   writeFileSync(join(staging, "SHA256SUMS"), [...files, "distribution.json"].map(file => `${sha256(file)}  ${file}\n`).join(""));
   // The destination must be new; never replace a previous bundle on failure.
