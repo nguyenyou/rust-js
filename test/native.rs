@@ -134,34 +134,34 @@ fn main() {
     panic::set_hook(Box::new(|_| {}));
 
     for n in 0..=25 {
-        case("fib", &[n], || fib(n as u32) as i64);
-        case("fib_match", &[n], || fib_match(n as u32) as i64);
+        case("fib", &[n], || fib(n as u32));
+        case("fib_match", &[n], || fib_match(n as u32));
     }
     // Past n = 47 the result no longer fits in u32 and wraps.
     for n in 0..=60 {
-        case("fib_iter", &[n], || fib_iter(n as u32) as i64);
-        case("fib_loop", &[n], || fib_loop(n as u32) as i64);
+        case("fib_iter", &[n], || fib_iter(n as u32));
+        case("fib_loop", &[n], || fib_loop(n as u32));
     }
     for n in 0..=20 {
-        case("nth_asc", &[n], || nth(Order::Ascending, n as u32) as i64);
-        case("nth_desc", &[n], || nth(Order::Descending, n as u32) as i64);
+        case("nth_asc", &[n], || nth(Order::Ascending, n as u32));
+        case("nth_desc", &[n], || nth(Order::Descending, n as u32));
     }
     for x in [0, 1, -1, 715_827_882, 715_827_883, i32::MAX, i32::MIN, 1_000_000_000] {
-        case("wrap_demo", &[x as i64], || wrap_demo(x) as i64);
+        case("wrap_demo", &[x as i64], || wrap_demo(x));
     }
     for (a, b) in [(7, 2), (-7, 2), (7, -2), (i32::MIN, 1), (i32::MAX, -1), (5, 0), (i32::MIN, -1)] {
-        case("ratio", &[a as i64, b as i64], || ratio(a, b) as i64);
+        case("ratio", &[a as i64, b as i64], || ratio(a, b));
     }
 
     for (a, b) in [(0, 0), (3, 5), (10, 20), (999, 1001), (2000, 3000), (65_535, 7)] {
-        case("modules.summary", &[a as i64, b as i64], || modules::summary(a, b) as i64);
-        case("modules.doubled_mean", &[a as i64, b as i64], || modules::doubled_mean(a, b) as i64);
-        case("modules.stats.mean", &[a as i64, b as i64], || modules::stats::mean(a, b) as i64);
+        case("modules.summary", &[a as i64, b as i64], || modules::summary(a, b));
+        case("modules.doubled_mean", &[a as i64, b as i64], || modules::doubled_mean(a, b));
+        case("modules.stats.mean", &[a as i64, b as i64], || modules::stats::mean(a, b));
     }
     for x in [0, 1, 7, 999, 1000, 5000, u32::MAX] {
-        case("modules.mixed", &[x as i64], || modules::mixed(x) as i64);
-        case("modules.shadowed", &[x as i64], || modules::shadowed(x) as i64);
-        case("modules.util.double", &[x as i64], || modules::util::double(x) as i64);
+        case("modules.mixed", &[x as i64], || modules::mixed(x));
+        case("modules.shadowed", &[x as i64], || modules::shadowed(x));
+        case("modules.util.double", &[x as i64], || modules::util::double(x));
     }
 
     let ints = [0, 1, -1, 7, -7, 100, i32::MAX, i32::MIN];
@@ -171,8 +171,8 @@ fn main() {
             case("structs.moved", &[x as i64, y as i64, 3], || structs::moved(x, y, 3));
             case("structs.with_x", &[x as i64, y as i64], || structs::with_x(x, y));
             case("structs.written_order", &[x as i64, y as i64], || structs::written_order(x, y));
-            case("structs.quadrant", &[x as i64, y as i64], || structs::quadrant(x, y) as i64);
-            case_with("structs.classify", &[&(x, y)], || structs::classify((x, y)) as i64);
+            case("structs.quadrant", &[x as i64, y as i64], || structs::quadrant(x, y));
+            case_with("structs.classify", &[&(x, y)], || structs::classify((x, y)));
         }
         case("structs.copies_are_separate", &[x as i64], || structs::copies_are_separate(x));
         case("structs.caller_keeps_its_point", &[x as i64], || structs::caller_keeps_its_point(x));
@@ -186,7 +186,7 @@ fn main() {
         case("structs.rect", &[-1, 2, w as i64, h as i64], || structs::rect(-1, 2, w, h));
         case("structs.grow", &[w as i64, h as i64, 5], || structs::grow(w, h, 5));
         let r = structs::rect(0, 0, w, h);
-        case_with("structs.area", &[&r], || structs::area(structs::rect(0, 0, w, h)) as i64);
+        case_with("structs.area", &[&r], || structs::area(structs::rect(0, 0, w, h)));
     }
     for &a in &ints {
         case("closures.move_copies", &[a as i64], || closures::move_copies(a));
@@ -244,7 +244,7 @@ fn main() {
         case("options.chained_loop", &[n], || options::chained_loop(n as i32));
         case("options.mapped_more", &[n], || options::mapped_more(n as i32));
         let slot = Slot { id: 1, value: Some(5) };
-        case_with("options.fill", &[&slot, &(n as i64)], || options::fill(slot, n as i32));
+        case_with("options.fill", &[&slot, &(n as i32)], || options::fill(slot, n as i32));
     }
     case("generic_options.units", &[], generic_options::units);
     case("generic_options.nones", &[], generic_options::nones);
@@ -275,6 +275,9 @@ fn main() {
     case("dynamic.report", &[], dynamic::report);
     // 64-bit integers past 2^53, to the digit, and their JSON.
     case("wide.report", &[], wide::report);
+    // 2^53 + 1, which a JSON number reads as 2^53. Found in review: an `i64`
+    // was one, where a `u64` was tagged.
+    case_with("wide.scaled", &[&3_002_399_751_580_331i64], || wide::scaled(3_002_399_751_580_331));
     for i in [0, 1, 2, 3] {
         case("wide.panics", &[i as i64], || wide::panics(i));
     }
@@ -373,7 +376,7 @@ fn main() {
         case("results.halves", &[n], || results::halves(n as u32));
     }
     for n in [0, 1, 3] {
-        case_with("strings.labeled", &[&"box", &(n as i64)], || strings::labeled("box", n));
+        case_with("strings.labeled", &[&"box", &n], || strings::labeled("box", n));
         case("strings.built", &[n as i64], || strings::built(n));
         case("strings.format_order", &[n as i64], || strings::format_order(n));
         for name in ["ab", "héllo", "日本語テキスト"] {
@@ -384,7 +387,7 @@ fn main() {
         for q in [n as i32, 1, 2, 3, 5, 6, 10, -2, -6] {
             case("strings.rounded", &[q as i64], || strings::rounded(q));
         }
-        case_with("strings.repeated", &[&"ab", &(n as i64)], || strings::repeated("ab", n));
+        case_with("strings.repeated", &[&"ab", &n], || strings::repeated("ab", n));
     }
     for s in ["", "abc", "ab/c", "/a//b/", "  Mixed Case  ", "src/geometry.rs", "stats.rs", "äbc/Ö"] {
         case_with("strings.tests", &[&s], || strings::tests(s));
@@ -447,7 +450,7 @@ fn main() {
     }
     for (a, b) in [(7, 2), (0, 5), (u32::MAX, 10), (5, 0)] {
         case("structs.divmod", &[a as i64, b as i64], || structs::divmod(a, b));
-        case("structs.divmod_sum", &[a as i64, b as i64], || structs::divmod_sum(a, b) as i64);
+        case("structs.divmod_sum", &[a as i64, b as i64], || structs::divmod_sum(a, b));
     }
     // The harness's own values, which the JS test answers as JS holds them:
     // text JSON must escape, what JSON has no number for, and a panic's
@@ -458,7 +461,9 @@ fn main() {
     case("harness.panic", &[], || -> u32 { panic!("a \"quoted\"\nmessage") });
 }
 
+/// Arguments that are each a Number in JS, as an `i32` or a `u32` is.
 fn case<T: Json>(name: &str, args: &[i64], f: impl FnOnce() -> T + UnwindSafe) {
+    let args: Vec<Number> = args.iter().map(|&a| Number(a)).collect();
     let args: Vec<&dyn Json> = args.iter().map(|a| a as &dyn Json).collect();
     case_with(name, &args, f);
 }
@@ -503,9 +508,20 @@ trait Json {
     fn json(&self) -> String;
 }
 
+/// An `i64` is a BigInt in JS, as a `u64` is (ADR 0086).
 impl Json for i64 {
     fn json(&self) -> String {
-        self.to_string()
+        format!("{{\"$bigint\":\"{self}\"}}")
+    }
+}
+
+/// A Number in JS, which holds an integer to the digit only up to 2^53.
+struct Number(i64);
+
+impl Json for Number {
+    fn json(&self) -> String {
+        assert!(self.0.unsigned_abs() <= 1 << 53, "{} isn't a Number to the digit", self.0);
+        self.0.to_string()
     }
 }
 

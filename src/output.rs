@@ -207,13 +207,18 @@ impl OutputPlan {
 }
 
 /// `#[should_panic]`: the test passes only if it panics, and if `expected`
-/// is given, only if the panic message contains it, as with libtest.
+/// is given, only if the panic message contains it, as with libtest. A
+/// panic is a plain `Error` (ADR 0012); anything else thrown, a `TypeError`
+/// say, is the JS going wrong, and fails the test as it is.
 const SHOULD_PANIC: &str = r#"
 function shouldPanic(f, expected) {
   try {
     f();
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    if (!(e instanceof Error && e.constructor === Error)) {
+      throw e;
+    }
+    const message = e.message;
     if (expected === undefined || message.includes(expected)) {
       return;
     }

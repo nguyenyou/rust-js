@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { compileFailure, run, runSync, type Exit } from "./child";
-import { fixture } from "./support";
+import { fixture, run as setUp } from "./support";
 
 const exit = (code: number | null, stderr: string, more: Partial<Exit> = {}): Exit => ({
   code,
@@ -15,6 +15,7 @@ const exit = (code: number | null, stderr: string, more: Partial<Exit> = {}): Ex
   overflowed: false,
   stdout: "",
   stderr,
+  bytes: { stdout: Buffer.alloc(0), stderr: Buffer.from(stderr) },
   ...more,
 });
 const rejection = "error: rust-js does not support 128-bit integers yet\n --> case.rs:1:1\n\nerror: aborting due to 1 previous error\n";
@@ -53,7 +54,7 @@ test("a process that doesn't end, or prints without end, is stopped and says so"
   expect([loud.overflowed, loud.timedOut]).toEqual([true, false]);
   expect(runSync(["sh", "-c", "yes"], ".", 10_000).overflowed).toBe(true);
   const failed = await run(["sh", "-c", "echo out; echo err >&2; exit 3"], ".", 10_000);
-  expect(failed).toEqual({ code: 3, signal: null, timedOut: false, overflowed: false, stdout: "out\n", stderr: "err\n" });
+  expect(failed).toEqual({ code: 3, signal: null, timedOut: false, overflowed: false, stdout: "out\n", stderr: "err\n", bytes: { stdout: Buffer.from("out\n"), stderr: Buffer.from("err\n") } });
 });
 
 // What a process started, holding its output open, is stopped with it, so
@@ -80,6 +81,32 @@ test("a process's descendants are stopped with it, and its deadline kept", async
   expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
 });
 
+// A process that ends, leaving what it started holding its output open,
+// ended as it did; what it started goes with it. Found in review: it
+// waited out its deadline, and said it had run out of time. `run` sees the
+// end at once; `runSync` can't before the output closes, so only says it.
+test("a process that ends is seen to, whatever it left running", async () => {
+  const pidFile = join(fixture("child-left-running"), "pid");
+  const started = Date.now();
+  const done = await run(["sh", "-c", `sleep 30 & echo $! > ${pidFile}; echo done`], ".", 5000);
+  expect(done).toEqual({ code: 0, signal: null, timedOut: false, overflowed: false, stdout: "done\n", stderr: "", bytes: { stdout: Buffer.from("done\n"), stderr: Buffer.alloc(0) } });
+  expect(Date.now() - started).toBeLessThan(2000);
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  await Bun.sleep(50);
+  expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
+  const sync = runSync(["sh", "-c", `sleep 30 & echo $! > ${pidFile}; echo done`], ".", 500);
+  expect([sync.code, sync.signal, sync.timedOut, sync.stdout]).toEqual([0, null, false, "done\n"]);
+  await Bun.sleep(50);
+  expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
+});
+
 // A setting for a child is given to it, as `process.env` changed later
 // isn't. Found by the mutation runner, whose tests never saw its compiler.
 test("a process gets the environment it's given", async () => {
@@ -96,4 +123,13 @@ test("a setting given as undefined isn't passed on", () => {
   } finally {
     delete process.env.CHILD_LEFT_OUT;
   }
+});
+
+// A command the tests set up with, as they load, keeps a deadline too, or
+// a native program that doesn't end would stall them before any test's
+// deadline applies. Found in review.
+test("a setup command that doesn't end is stopped, and says so", () => {
+  const started = Date.now();
+  expect(() => setUp(["sh", "-c", "sleep 30"], 200)).toThrow("didn't finish in 0.2s");
+  expect(Date.now() - started).toBeLessThan(2000);
 });

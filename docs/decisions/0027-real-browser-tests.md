@@ -39,7 +39,10 @@ RUST_JS_TESTS=out/app.test.js bunx --bun vitest run -c browser/vitest.config.ts
   page loads the compiled file as an ES module, next to a global `test()`
   that only records, and runs that one test. The files are served from a
   made-up origin by `page.route`, so there's no server to start. A panic in
-  an event handler, which a browser only reports, fails the test too. This
+  an event handler, which a browser only reports, fails the test too. So
+  does a promise it rejected that no one handles, as with bun test: the
+  test is awaited, and what it left for later has run before it passes.
+  Vitest fails the run for one, not the test. Found in review: they passed. This
   is Scala.js's `PWEnv` model, with Playwright's reporters, `--ui`, traces
   and parallel workers.
 - **Vitest's browser mode** (`browser/vitest.config.ts`) runs each test

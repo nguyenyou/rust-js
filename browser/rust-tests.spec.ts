@@ -29,15 +29,21 @@ const page = (testFile: string) => `<!doctype html>
   test.skip = () => {};
   const loaded = import(${JSON.stringify(`./${testFile}`)});
   // A panic in an event handler doesn't reach the test: the browser reports it.
+  // Nor does a promise it rejected that no one handles, as bun test fails.
   const escaped = [];
   addEventListener("error", (e) => escaped.push(e.message));
+  addEventListener("unhandledrejection", (e) => escaped.push(e.reason instanceof Error ? e.reason.message : String(e.reason)));
   window.runRustTest = async (name) => {
     await loaded;
     try {
-      tests.get(name)();
+      await tests.get(name)();
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }
+    // What it left for later has run by then: its microtasks, as this task
+    // ends, and the task that reports the rejections they left unhandled,
+    // queued as they end, before the second of these.
+    for (let i = 0; i < 2; i++) await new Promise((settled) => setTimeout(settled));
     return escaped.length ? escaped.join("\\n") : null;
   };
 </script>`;

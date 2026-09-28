@@ -2732,6 +2732,10 @@ export function report() {
   return out;
 }
 
+export function scaled(n) {
+  return BigInt.asIntN(64, n * 3n);
+}
+
 export function panics(i) {
   const zero = BigInt.asIntN(64, BigInt(i) - BigInt(i));
   if (i === 0) {

@@ -109,8 +109,9 @@ written, and what it breaks, as Rust would see it:
 - The set is a start: a fix worth keeping is worth a mutation, as its
   corpus case is.
 - **A mutation is caught only by a test that failed:** the runner ends as
-  it does when one does, and names at least one. One that ran out of
-  time, was stopped, or failed before any test did is inconclusive, which
+  it does when one does, and names at least one that didn't run out of
+  time. One that ran out of time, or whose tests did, was stopped, or
+  failed before any test did is inconclusive, which
   fails the run as a survivor does, without saying it's caught; each
   mutation's log is kept in `target/mutants/logs/`. Found in review: every
-  failed process had counted as caught.
+  failed process had counted as caught. Later, a test that timed out had.

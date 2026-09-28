@@ -405,6 +405,14 @@ export const mutations: Mutation[] = [
     replace: "        for path in Vec::<Path>::new() {\n",
     tests: ["test/corpus.test.ts", "-t", "drop_partial"],
   },
+  {
+    name: "should-panic-takes-any-throw",
+    breaks: "a `#[should_panic]` test passes when the JS throws a `TypeError`, not only when it panics",
+    file: "src/output.rs",
+    find: "    if (!(e instanceof Error && e.constructor === Error)) {\n",
+    replace: "    if (false) {\n",
+    tests: ["test/browser.test.ts", "-t", "fails the way Rust's would"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
@@ -452,12 +460,15 @@ const count = (output: string, what: string) => Number(new RegExp(String.raw`^ (
 
 /** What a run of a mutant's tests says of it: `caught` by a test that
  * failed, the runner ending as it does when one does; `survived`, as its
- * tests ran and passed; or `inconclusive`, as the runner ran out of time,
- * was stopped, or failed before any test did, which says nothing of it. */
+ * tests ran and passed; or `inconclusive`, as the runner or its tests ran
+ * out of time, it was stopped, or failed before any test did, which says
+ * nothing of it. */
 export function judge(p: Exit, output: string): "caught" | "survived" | "inconclusive" {
   if (stopped(p, testTimeout)) return "inconclusive";
   if (p.code === 0) return count(output, "pass") > 0 && count(output, "fail") === 0 ? "survived" : "inconclusive";
-  const failed = [...output.matchAll(/^\(fail\) (.*)$/gm)].filter((m) => !m[1].startsWith("(unnamed)"));
+  const failed = [...output.matchAll(/^\(fail\) (.*)$\n?(  \^ this test timed out)?/gm)].filter(
+    (m) => !m[1].startsWith("(unnamed)") && m[2] === undefined,
+  );
   return p.code === 1 && failed.length > 0 ? "caught" : "inconclusive";
 }
 

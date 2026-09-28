@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { agree, execute, type Run } from "./programs";
 import { fixture } from "./support";
 
-const clean: Run = { stdout: "", stderr: "", outcome: { value: null } };
+const clean: Run = { stdout: "", stderr: "", bytes: { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }, outcome: { value: null } };
 const script = (code: string) => [process.execPath, "-e", code];
 
 test("a run that fails after writing its outcome failed", () => {
@@ -30,4 +30,14 @@ test("a run that exits 0 with its outcome is taken at its word", () => {
   const file = join(fixture("programs-ok"), "outcome.json");
   const run = execute(script(`require("fs").writeFileSync(${JSON.stringify(file)}, '{"value":null}')`), file);
   expect(agree(run, clean)).toBe(true);
+});
+
+// What a run printed is compared byte for byte: a byte that isn't UTF-8
+// isn't the U+FFFD it reads as. Found in review: they compared equal.
+test("what a run printed is compared byte for byte", () => {
+  const file = join(fixture("programs-bytes"), "outcome.json");
+  const printing = (hex: string) =>
+    execute(script(`process.stdout.write(Buffer.from("${hex}", "hex")); require("fs").writeFileSync(${JSON.stringify(file)}, '{"value":null}')`), file);
+  expect(agree(printing("ff"), printing("efbfbd"))).toBe(false);
+  expect(agree(printing("efbfbd"), printing("efbfbd"))).toBe(true);
 });

@@ -65,7 +65,10 @@ expected u64`), and a `Value`'s `as_u64()` and `as_i64()` work.
   with a wrapping multiply, totals cents past 2^53, casts, parses and
   converts at every edge, reads and writes JSON of `u64::MAX` and
   `i64::MIN`, and panics where Rust does; each value and message matches
-  native Rust.
+  native Rust. The native side writes an `i64` as it writes a `u64`,
+  tagged as a BigInt, not a JSON number, which reads `2^53 + 1` as `2^53`;
+  the small numbers it passes as arguments are Numbers of their own, which
+  stop the run past `2^53`. Found in review: an `i64` was a JSON number.
 - **A caller from JS sees what JS has for it:** a BigInt in and out, which
   `JSON`, `Intl` and `===` all understand, and never a number that's lost
   digits.

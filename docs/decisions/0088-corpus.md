@@ -106,7 +106,11 @@ What it expects is in a `//@` directive:
   of its own, and what's stopped, at a deadline, too much output, or its
   end, is the group, so what it started can't keep its output open past
   a deadline, or run on after it. Found in review: `sleep 3 & wait` took
-  3 seconds of a 100 ms deadline.
+  3 seconds of a 100 ms deadline. Its end is seen when it comes, not when what it
+  started closes its output, which `runSync` can only wait for, then says
+  it ended; what the tests set up with as they load, before any test's
+  deadline, has one too. What it printed is compared as bytes, a byte
+  that isn't UTF-8 not the U+FFFD it reads as. Found in review, each.
 - **The harness's own failures are tested, made on purpose**
   (`test/harness.test.ts`): a compiler that crashes after the rejection a
   case expects, one that never ends, JS wrong as compiled only, a generated

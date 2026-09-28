@@ -10,6 +10,9 @@ export type Exit = {
   overflowed: boolean;
   stdout: string;
   stderr: string;
+  /** What it printed as it printed it: `stdout` and `stderr` read it as
+   * UTF-8, where a byte that isn't is U+FFFD, as U+FFFD itself is. */
+  bytes: { stdout: Buffer; stderr: Buffer };
 };
 
 // What a process may print before it's stopped: far more than any test's.
@@ -32,16 +35,29 @@ function stopGroup(pid: number) {
  * this process's environment and `env`, which a change to `process.env`
  * wouldn't give it; a setting that's `undefined` in `env` is left out. */
 export function runSync(cmd: string[], cwd: string, timeout: number, env: Record<string, string | undefined> = {}): Exit {
-  const p = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout, maxBuffer, detached: true, env: { ...process.env, ...env } });
+  const p = Bun.spawnSync(cmd, {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout,
+    killSignal: "SIGKILL",
+    maxBuffer,
+    detached: true,
+    env: { ...process.env, ...env },
+  });
   // What it started and left running goes with it.
   stopGroup(p.pid);
   return {
     code: p.exitCode,
     signal: p.signalCode ?? null,
-    timedOut: p.exitedDueToTimeout ?? false,
+    // `spawnSync` returns only once its output closes, which what it
+    // started may hold open past the deadline after it ended by itself.
+    // Stopped at the deadline, it has a signal; without one, it had ended.
+    timedOut: (p.exitedDueToTimeout ?? false) && p.signalCode != null,
     overflowed: p.exitedDueToMaxBuffer ?? false,
     stdout: p.stdout.toString(),
     stderr: p.stderr.toString(),
+    bytes: { stdout: p.stdout, stderr: p.stderr },
   };
 }
 
@@ -72,14 +88,26 @@ export async function run(cmd: string[], cwd: string, timeout: number, env: Reco
       chunks.push(next.value);
       size += next.value.length;
     }
-    return Buffer.concat(chunks).toString();
+    return Buffer.concat(chunks);
   };
+  // Its end is seen when it comes, not when its output closes, which what
+  // it started may hold open: that goes with it then.
+  void p.exited.then(() => {
+    clearTimeout(timer);
+    stop();
+  });
   const [stdout, stderr] = await Promise.all(readers.map(read));
   await p.exited;
-  stopGroup(p.pid);
-  clearTimeout(timer);
   clearTimeout(cut);
-  return { code: p.exitCode, signal: p.signalCode ?? null, timedOut, overflowed, stdout, stderr };
+  return {
+    code: p.exitCode,
+    signal: p.signalCode ?? null,
+    timedOut,
+    overflowed,
+    stdout: stdout.toString(),
+    stderr: stderr.toString(),
+    bytes: { stdout, stderr },
+  };
 }
 
 /** Why a process didn't end as a program does, or nothing if it did: it

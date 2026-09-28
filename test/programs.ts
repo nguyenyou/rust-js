@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { compileFailure, runSync, stopped } from "./child";
+import { compileFailure, runSync, stopped, type Exit } from "./child";
 import { decode, encode, same, type Outcome } from "./oracle";
 import { compiler, root, run } from "./support";
 
@@ -27,7 +27,9 @@ export function callInNode(modules: Record<string, string>, calls: Call[], dir: 
   return decode(readFileSync(outcomesFile, "utf8"));
 }
 
-export type Run = { stdout: string; stderr: string; outcome: Outcome | string };
+/** What a run printed, as text for its reports and as bytes to compare
+ * (`Exit`), and how it ended. */
+export type Run = { stdout: string; stderr: string; bytes: Exit["bytes"]; outcome: Outcome | string };
 
 // A case runs for at most this long, so one that never ends fails instead
 // of stopping the suite, and is compiled for at most the other, natively or
@@ -43,13 +45,13 @@ const compileTimeout = Number(process.env.RUST_JS_COMPILE_TIMEOUT ?? 120_000);
 export function execute(cmd: string[], outcomeFile: string): Run {
   rmSync(outcomeFile, { force: true });
   const p = runSync(cmd, root, timeout);
-  const { stdout, stderr } = p;
+  const { stdout, stderr, bytes } = p;
   const why = stopped(p, timeout);
-  if (why) return { stdout, stderr, outcome: why };
-  if (!existsSync(outcomeFile)) return { stdout, stderr, outcome: `exited ${p.code} without an outcome` };
+  if (why) return { stdout, stderr, bytes, outcome: why };
+  if (!existsSync(outcomeFile)) return { stdout, stderr, bytes, outcome: `exited ${p.code} without an outcome` };
   const outcome = readFileSync(outcomeFile, "utf8");
-  if (p.code !== 0) return { stdout, stderr, outcome: `exited ${p.code} after it ended ${outcome}` };
-  return { stdout, stderr, outcome: JSON.parse(outcome) };
+  if (p.code !== 0) return { stdout, stderr, bytes, outcome: `exited ${p.code} after it ended ${outcome}` };
+  return { stdout, stderr, bytes, outcome: JSON.parse(outcome) };
 }
 
 /** A string as a Rust string literal, for the wrappers' `include!`. */
@@ -119,8 +121,8 @@ export function runJs(runtime: string[], js: string, dir: string, name: string):
 
 export const show = (outcome: Outcome | string) => (typeof outcome === "string" ? outcome : JSON.stringify(outcome));
 export const agree = (a: Run, b: Run) =>
-  a.stdout === b.stdout &&
-  a.stderr === b.stderr &&
+  a.bytes.stdout.equals(b.bytes.stdout) &&
+  a.bytes.stderr.equals(b.bytes.stderr) &&
   typeof a.outcome !== "string" &&
   typeof b.outcome !== "string" &&
   same(a.outcome, b.outcome);

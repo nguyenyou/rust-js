@@ -21,7 +21,8 @@ run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--crate-type=lib", "--
   "examples/modules/lib.rs", "-o", join(target, "libmodules.rlib")]);
 run(["rustc", "--edition=2024", "-Coverflow-checks=off", "--extern", `modules=${join(target, "libmodules.rlib")}`,
   ...buildSerde("rlib"), "test/native.rs", "-o", join(target, "native")]);
-const cases: Case[] = run([join(target, "native")]).trim().split("\n").map(decode);
+// A minute, well past what it takes, so one that doesn't end fails the file.
+const cases: Case[] = run([join(target, "native")], 60_000).trim().split("\n").map(decode);
 let fib: Record<string, (...args: any[]) => number>;
 let structs: Record<string, (...args: any[]) => unknown>;
 let closures: Record<string, (...args: any[]) => unknown>;

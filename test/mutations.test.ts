@@ -31,7 +31,7 @@ test("a mutation whose code moved, or is there twice, says so", () => {
 // time, was stopped, or failed before any test did, says nothing of it.
 // Found in review: every failed process counted as caught.
 test("a mutant is caught, survives, or the run says nothing of it", () => {
-  const exit = (code: number | null, more: Partial<Exit> = {}): Exit => ({ code, signal: null, timedOut: false, overflowed: false, stdout: "", stderr: "", ...more });
+  const exit = (code: number | null, more: Partial<Exit> = {}): Exit => ({ code, signal: null, timedOut: false, overflowed: false, stdout: "", stderr: "", bytes: { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }, ...more });
   const failed = "(fail) wrapping.rs [12.00ms]\n\n 0 pass\n 1 fail\n";
   expect(judge(exit(1), failed)).toBe("caught");
   expect(judge(exit(0), "(pass) wrapping.rs\n\n 1 pass\n 0 fail\n")).toBe("survived");
@@ -40,4 +40,9 @@ test("a mutant is caught, survives, or the run says nothing of it", () => {
   expect(judge(exit(1), "error: Cannot find module './corpus'\n\n 0 pass\n 1 fail\n")).toBe("inconclusive");
   expect(judge(exit(1), "(fail) (unnamed) [0.3ms]\n\n 0 pass\n 1 fail\n")).toBe("inconclusive");
   expect(judge(exit(0), " 0 pass\n 0 fail\n")).toBe("inconclusive");
+  // A test that ran out of time failed as bun test prints it, but said
+  // nothing of what the JS does. Found in review: it counted as caught.
+  const timedOut = "(fail) wrapping.rs [5001.00ms]\n  ^ this test timed out after 5000ms.\n";
+  expect(judge(exit(1), `${timedOut}\n 0 pass\n 1 fail\n`)).toBe("inconclusive");
+  expect(judge(exit(1), `${timedOut}${failed}`)).toBe("caught");
 });

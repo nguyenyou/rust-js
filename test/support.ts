@@ -2,6 +2,8 @@ import { expect } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { runSync, stopped } from "./child";
+
 export const root = join(import.meta.dir, "..");
 export const target = join(root, "target");
 // This checkout's debug build, or with `RUST_JS_COMPILER`, another, as the
@@ -9,10 +11,14 @@ export const target = join(root, "target");
 const given = process.env.RUST_JS_COMPILER;
 export const compiler = given ? resolve(given) : join(target, "debug", "rust-js");
 
-export function run(cmd: string[]): string {
-  const p = Bun.spawnSync(cmd, { cwd: root, stderr: "pipe" });
-  if (p.exitCode !== 0) throw new Error(`${cmd.join(" ")} failed:\n${p.stderr.toString()}`);
-  return p.stdout.toString();
+/** What `cmd` printed, or why it failed. It's stopped after `timeout` ms:
+ * as the tests load, no test's deadline applies yet. The default is what
+ * a setup hook is allowed, for the first build. */
+export function run(cmd: string[], timeout = 600_000): string {
+  const p = runSync(cmd, root, timeout);
+  const why = stopped(p, timeout);
+  if (p.code !== 0 || why) throw new Error(`${cmd.join(" ")} failed${why ? `: it ${why}` : ""}:\n${p.stderr}`);
+  return p.stdout;
 }
 
 let built = false;

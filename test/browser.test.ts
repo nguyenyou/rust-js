@@ -41,14 +41,16 @@ test("the example apps' own tests pass, in a DOM", () => {
 test("a failing test fails the way Rust's would", () => {
   const { exit, output } = rustTests(["target/rust-tests/asserts/asserts.test.js"]);
   expect(exit).toBe(1);
-  expect([output.match(/(\d+) pass/)?.[1], output.match(/(\d+) skip/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual(["3", "1", "4"]);
+  expect([output.match(/(\d+) pass/)?.[1], output.match(/(\d+) skip/)?.[1], output.match(/(\d+) fail/)?.[1]]).toEqual(["3", "1", "7"]);
   // `assert!` with a message; `assert_eq!` showing both sides, as Rust does.
   expect(output).toContain("error: n was 3");
   expect(output).toContain("error: assertion `left == right` failed\n  left: Point { x: 1, y: 2 }\n right: Point { x: 1, y: 3 }");
   // `#[should_panic]`: the wrong message, and no panic at all.
   expect(output).toContain('panic message: "\\"something\\" happened"\n expected substring: "nope"');
   expect(output).toContain("error: test did not panic as expected");
-  for (const name of ["fails_an_assert", "fails_an_assert_eq", "panics_with_the_wrong_message", "does_not_panic"]) {
+  // A `TypeError` is the JS going wrong, whatever it says: never a panic.
+  expect(output).toContain("TypeError");
+  for (const name of ["fails_an_assert", "fails_an_assert_eq", "panics_with_the_wrong_message", "does_not_panic", "throws_a_type_error", "throws_a_type_error_with_the_message", "rejects_a_promise"]) {
     expect(output).toContain(`(fail) tests::${name}`);
   }
 });
@@ -72,15 +74,19 @@ test("in real browsers, with Playwright Test on Bun", () => {
   // 8 tests, the layout one included, on Chromium.
   expect([exit, output.match(/(\d+) passed/)?.[1]], output).toEqual([0, "8"]);
   const failing = inBrowsers("playwright", ["target/browser-tests/asserts/asserts.test.js"]);
-  expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "4", "1"]);
+  expect([failing.exit, failing.output.match(/(\d+) failed/)?.[1], failing.output.match(/(\d+) skipped/)?.[1]]).toEqual([1, "7", "1"]);
   expect(failing.output).toContain("Error: assertion `left == right` failed\n      left: Point { x: 1, y: 2 }");
+  // A promise it rejected that no one handled, found once it has run.
+  expect(failing.output).toContain("rejected later");
 }, 120_000);
 
 test("in real browsers, with Vitest's browser mode", () => {
   const { exit, output } = inBrowsers("vitest", browserTests);
   expect([exit, output.match(/Tests\s+(\d+) passed/)?.[1]], output).toEqual([0, "8"]);
   const failing = inBrowsers("vitest", ["target/browser-tests/asserts/asserts.test.js"]);
-  expect([failing.exit, failing.output.match(/Tests\s+(\d+) failed/)?.[1]]).toEqual([1, "4"]);
+  expect([failing.exit, failing.output.match(/Tests\s+(\d+) failed/)?.[1]]).toEqual([1, "6"]);
+  // Vitest fails the run for that promise, not the test.
+  expect(failing.output).toMatch(/Errors\s+1 error/);
   // Vitest follows the source map back into the Rust.
   expect(failing.output).toContain("fails_an_assert test/asserts.rs:");
 }, 120_000);

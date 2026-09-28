@@ -71,7 +71,7 @@ bun test --preload ./test/happydom.ts out/app.test.js
 | `panic!("n was {} and {:?}", n, s)` | `"n was " + args[0] + " and " + args[1]`, built from the args |
 | `assert_eq!(a, b)`, `assert_ne!` | `$assertFailed("Eq", a, b)`: Rust's message, with both sides |
 | `==` on structs, tuples, arrays, `Vec`s | `$eq(a, b)`, field by field |
-| `#[should_panic(expected = "..")]` | passes only on a panic whose message contains it |
+| `#[should_panic(expected = "..")]` | passes only on a panic whose message contains it; anything else thrown, a `TypeError` say, fails the test as it is |
 
 `format_args!` is decoded at compile time from the template rustc builds
 (its encoding is documented in core's `fmt::Arguments`). `{}` takes strings,

@@ -160,6 +160,11 @@ pub fn report() -> String {
     out
 }
 
+/// An `i64` in and out, each past what a double holds to the digit.
+pub fn scaled(n: i64) -> i64 {
+    n * 3
+}
+
 /// What panics: dividing by zero, and `i64::MIN / -1`, whose answer an
 /// `i64` can't hold, even in release.
 pub fn panics(i: u32) -> i64 {
