@@ -12,7 +12,9 @@
 // A test rust-js gets wrong is listed, with its first error, in
 // test/rustc-known-failures.txt. One that isn't listed must pass, and one
 // that is must still fail: when it passes, it's taken off, so the list only
-// shrinks.
+// shrinks. A test native Rust gives no answer for, as it can't build or run
+// it, is listed in test/rustc-native-failures.txt, which changes only by a
+// bless too.
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
@@ -27,6 +29,11 @@ const root = join(import.meta.dir, "..");
 // tests a release build passes. `--compiler=path` says another.
 let compiler = join(root, "target", "release", "rust-js");
 const knownFile = join(root, "test", "rustc-known-failures.txt");
+// Tests native Rust can't give an answer for here: it can't build or run
+// them, or they print what changes from run to run. They can't be compared,
+// so they're listed, and one that native Rust newly can't run, or now
+// can, fails the run as a changed known failure does.
+const nativeFile = join(root, "test", "rustc-native-failures.txt");
 const work = join(root, "target", "rustc-suite");
 
 // A directive whose test needs what a single program run as JS can't have,
@@ -61,7 +68,9 @@ export function scope(source: string): Scope {
   return { edition };
 }
 
-export type Result = { test: string; status: "pass" } | { test: string; status: "fail" | "skip"; reason: string };
+// `skip` is a test out of scope, by what its source says; `native`, one
+// native Rust gives no answer for.
+export type Result = { test: string; status: "pass" } | { test: string; status: "fail" | "skip" | "native"; reason: string };
 
 /** How a test fails, from what its reason says: `rejected`, rust-js's
  * own clear error; `crashed`, another compile error, such as a panic of
@@ -73,8 +82,10 @@ export function failureKind(reason: string): "rejected" | "crashed" | "wrong" {
 
 /** What's changed since the known failures were written: a test that fails
  * and isn't listed, one that's listed and passes, and one that fails worse
- * than it's listed as, a clear rejection now a crash or a wrong answer. */
-export function ratchet(results: Result[], known: Map<string, string>) {
+ * than it's listed as, a clear rejection now a crash or a wrong answer; and
+ * one native Rust gives no answer for that isn't listed, or that's listed
+ * and native Rust now answers. */
+export function ratchet(results: Result[], known: Map<string, string>, native = new Map<string, string>()) {
   const failing = results.filter((r): r is Result & { reason: string } => r.status === "fail");
   return {
     regressions: failing.filter((r) => !known.has(r.test)),
@@ -83,14 +94,16 @@ export function ratchet(results: Result[], known: Map<string, string>) {
       const listed = known.get(r.test);
       return listed !== undefined && failureKind(listed) === "rejected" && failureKind(r.reason) !== "rejected";
     }),
+    unanswered: results.filter((r): r is Result & { reason: string } => r.status === "native" && !native.has(r.test)),
+    answered: results.filter((r) => r.status !== "native" && native.has(r.test)),
   };
 }
 
 /** The tests of a run of some that aren't as the known failures say, as
  * the ratchet says of a whole run. */
-export function surprises(results: Result[], known: Map<string, string>): Set<string> {
-  const { regressions, fixed, worse } = ratchet(results, known);
-  return new Set([...regressions, ...fixed, ...worse].map((r) => r.test));
+export function surprises(results: Result[], known: Map<string, string>, native = new Map<string, string>()): Set<string> {
+  const changed = ratchet(results, known, native);
+  return new Set(Object.values(changed).flatMap((list) => list.map((r: Result) => r.test)));
 }
 
 /** A diagnostic's first line, as short as it can say it, with nothing of
@@ -187,15 +200,15 @@ async function runTest(ui: string, file: string): Promise<Result> {
       dirname(file),
       120_000,
     );
-    if (failed(build, 120_000)) return { test, status: "skip", reason: `rustc: ${stopped(build, 120_000) ?? firstError(build.stderr)}` };
+    if (failed(build, 120_000)) return { test, status: "native", reason: `rustc: ${stopped(build, 120_000) ?? firstError(build.stderr)}` };
     const native = await run([binary], dirname(file), 10_000);
-    if (failed(native, 10_000)) return { test, status: "skip", reason: "doesn't pass natively with overflow checks off" };
+    if (failed(native, 10_000)) return { test, status: "native", reason: `doesn't pass natively with overflow checks off: ${stopped(native, 10_000) ?? `exited ${native.code}`}` };
     // What a `HashMap` prints, say, changes from run to run: no answer to compare with.
     for (let i = 0; i < 2; i++) {
       const again = await run([binary], dirname(file), 10_000);
-      if (failed(again, 10_000)) return { test, status: "skip", reason: "doesn't pass natively on every run" };
+      if (failed(again, 10_000)) return { test, status: "native", reason: "doesn't pass natively on every run" };
       if (again.stdout !== native.stdout || again.stderr !== native.stderr) {
-        return { test, status: "skip", reason: "prints what changes from run to run" };
+        return { test, status: "native", reason: "prints what changes from run to run" };
       }
     }
     rmSync(binary, { force: true });
@@ -247,11 +260,12 @@ function findTests(ui: string): string[] {
   return found.sort();
 }
 
-/** `test<TAB>reason` lines: what rust-js gets wrong, and how. */
-function readKnown(): Map<string, string> {
+/** `test<TAB>reason` lines: what rust-js gets wrong, and how, or what
+ * native Rust gives no answer for, and why. */
+function readKnown(file = knownFile): Map<string, string> {
   const known = new Map<string, string>();
-  if (!existsSync(knownFile)) return known;
-  for (const line of readFileSync(knownFile, "utf8").split("\n")) {
+  if (!existsSync(file)) return known;
+  for (const line of readFileSync(file, "utf8").split("\n")) {
     if (line === "" || line.startsWith("#")) continue;
     const [test, reason = ""] = line.split("\t");
     known.set(test, reason);
@@ -290,8 +304,8 @@ function summarize(results: Result[]) {
     inScope: count("pass") + count("fail"),
     pass: count("pass"),
     fail: count("fail"),
-    skipped: Object.fromEntries([...skipped].sort((a, b) => b[1] - a[1]).filter(([reason]) => !reason.startsWith("rustc: "))),
-    skippedByRustc: [...skipped].filter(([reason]) => reason.startsWith("rustc: ")).reduce((n, [, k]) => n + k, 0),
+    skipped: Object.fromEntries([...skipped].sort((a, b) => b[1] - a[1])),
+    noNativeAnswer: count("native"),
   };
 }
 
@@ -314,20 +328,25 @@ function report(results: Result[], bless: boolean) {
     `**${summary.pass}** of ${summary.inScope} in scope pass; ${summary.tests - summary.inScope} out of scope.`,
     "",
   ]);
-  const failing = results.filter((r): r is Result & { reason: string } => r.status === "fail");
+  const listed = (status: string) => results.filter((r): r is Result & { reason: string } => r.status === status);
   if (bless) {
-    const header = "# rustc run-pass UI tests rust-js gets wrong, and its first error (ADR 0089).\n# Rewritten by `bun scripts/rustc-suite.ts --bless`.\n";
-    writeFileSync(knownFile, header + failing.map((r) => `${r.test}\t${r.reason}\n`).join(""));
-    console.log(`wrote ${failing.length} known failures`);
-    toSummary([`Wrote ${failing.length} known failures.`]);
+    const failing = listed("fail"), unanswered = listed("native");
+    const blessed = "# Rewritten by `bun scripts/rustc-suite.ts --bless`.\n";
+    const lines = (list: { test: string; reason: string }[]) => list.map((r) => `${r.test}\t${r.reason}\n`).join("");
+    writeFileSync(knownFile, `# rustc run-pass UI tests rust-js gets wrong, and its first error (ADR 0089).\n${blessed}${lines(failing)}`);
+    writeFileSync(nativeFile, `# rustc run-pass UI tests native Rust gives no answer for here, and why (ADR 0089).\n${blessed}${lines(unanswered)}`);
+    console.log(`wrote ${failing.length} known failures and ${unanswered.length} tests native Rust gives no answer for`);
+    toSummary([`Wrote ${failing.length} known failures and ${unanswered.length} tests native Rust gives no answer for.`]);
     return;
   }
-  const known = readKnown();
-  const { regressions, fixed, worse } = ratchet(results, known);
+  const { regressions, fixed, worse, unanswered, answered } = ratchet(results, readKnown(), readKnown(nativeFile));
   for (const r of regressions) console.log(`FAILS\t${r.test}\t${r.reason}`);
   for (const r of fixed) console.log(`PASSES\t${r.test}\tremove it from test/rustc-known-failures.txt`);
   for (const r of worse) console.log(`WORSE\t${r.test}\t${failureKind(r.reason)}, listed as rejected: ${r.reason}`);
-  if (regressions.length === 0 && fixed.length === 0 && worse.length === 0) {
+  for (const r of unanswered) console.log(`NO ANSWER\t${r.test}\tnative Rust: ${r.reason}`);
+  for (const r of answered) console.log(`ANSWERS\t${r.test}\tremove it from test/rustc-native-failures.txt`);
+  const changes = regressions.length + fixed.length + worse.length + unanswered.length + answered.length;
+  if (changes === 0) {
     toSummary(["The known failures are as listed."]);
     return;
   }
@@ -337,8 +356,12 @@ function report(results: Result[], bless: boolean) {
     ...regressions.map((r) => `| ${r.test} | fails | ${cell(r.reason)} |`),
     ...fixed.map((r) => `| ${r.test} | passes | take it off the known failures |`),
     ...worse.map((r) => `| ${r.test} | ${failureKind(r.reason)} | listed as rejected: ${cell(r.reason)} |`),
+    ...unanswered.map((r) => `| ${r.test} | no native answer | ${cell(r.reason)} |`),
+    ...answered.map((r) => `| ${r.test} | native Rust answers | take it off the native failures |`),
   ]);
-  console.log(`${regressions.length} newly failing, ${fixed.length} newly passing, ${worse.length} failing worse: run with --bless once they're intended`);
+  console.log(
+    `${regressions.length} newly failing, ${fixed.length} newly passing, ${worse.length} failing worse, ${unanswered.length} newly without a native answer, ${answered.length} newly with one: run with --bless once they're intended`,
+  );
   process.exitCode = 1;
 }
 
@@ -353,7 +376,7 @@ async function main() {
   if (args.includes("--merge")) {
     const files = args.filter((a) => !a.startsWith("--"));
     const shards = files.map((f) => JSON.parse(readFileSync(f, "utf8")) as Shard);
-    const problems = validate(shards, readKnown(), source());
+    const problems = validate(shards, new Map([...readKnown(), ...readKnown(nativeFile)]), source());
     if (problems.length > 0) {
       for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
       toSummary(["## rustc run-pass tests", "", "The run isn't whole, so it isn't checked:", "", ...problems.map((p) => `- ${cell(p)}`)]);
@@ -393,7 +416,7 @@ async function main() {
   const results = await runAll(ui, tests);
   if (selectors.length > 0) {
     // Some tests: each, and whether it's what the known failures say.
-    const unlisted = surprises(results, readKnown());
+    const unlisted = surprises(results, readKnown(), readKnown(nativeFile));
     const rows = results.map((r) => ({ r, surprise: unlisted.has(r.test) }));
     for (const { r, surprise } of rows) {
       console.log(`${r.status}\t${r.test}${"reason" in r ? `\t${r.reason}` : ""}${surprise ? "\t(not as the known failures say)" : ""}`);
@@ -412,7 +435,7 @@ async function main() {
   // A whole run is one shard of one, checked as the workflow's are.
   const names = all.map((file) => relative(ui, file));
   const whole: Shard = { shard: 1, of: 1, compiler: "", toolchain: "", source: source(), inventory: names, expected: names, results };
-  const problems = validate([whole], readKnown(), source());
+  const problems = validate([whole], new Map([...readKnown(), ...readKnown(nativeFile)]), source());
   for (const problem of problems) console.log(`INCOMPLETE\t${problem}`);
   if (problems.length > 0) {
     process.exitCode = 1;

@@ -134,3 +134,11 @@ and stderr, and return, under Bun and Node.
   test has one result, and every known failure is a test. A whole local
   run is checked as one shard of one. Found in review: an empty list of
   results passed, with no tests run.
+- **What native Rust gives no answer for is listed too,** in
+  `test/rustc-native-failures.txt`: a test it can't build, one that
+  doesn't end, or ends otherwise than by exiting 0, on its first run or a
+  later one, and one that prints what changes from run to run. It's not a
+  test out of scope, which its source says, and it isn't passed over: one
+  that isn't listed, as a passing test that no longer builds natively, or
+  one that's listed and native Rust now answers, fails the run until it's
+  blessed. Found in review: a listed test that became a skip passed unseen.

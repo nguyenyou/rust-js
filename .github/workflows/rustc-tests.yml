@@ -118,7 +118,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: rustc-known-failures
-          path: test/rustc-known-failures.txt
+          path: |
+            test/rustc-known-failures.txt
+            test/rustc-native-failures.txt
 
   # Generated programs, a sixth of the seeds on each of six machines, with
   # the build job's rust-js. One that differs is reduced, and kept.

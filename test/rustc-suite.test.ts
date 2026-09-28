@@ -51,7 +51,7 @@ test("the ratchet reports a new failure and a listed test that passes", () => {
   expect(regressions.map((r) => r.test)).toEqual(["c.rs"]);
   expect(fixed.map((r) => r.test)).toEqual(["d.rs"]);
   // Nothing new: nothing to say.
-  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({ regressions: [], fixed: [], worse: [] });
+  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({ regressions: [], fixed: [], worse: [], unanswered: [], answered: [] });
 });
 
 test("a failure is rejected, crashed or wrong, and one listed as rejected may not get worse", () => {
@@ -131,4 +131,23 @@ test("shards are checked as one whole run before their results are", () => {
   ]);
   expect(validate([shard(1), shard(2)], new Map([["gone.rs", "x"]]), "s1")).toEqual(["known failures that aren't tests: 1, as gone.rs"]);
   expect(validate([shard(1, { inventory: [], expected: [], results: [] }), shard(2, { inventory: [], expected: [], results: [] })], new Map(), "s1")).toEqual(["there were no tests to run"]);
+});
+
+// What native Rust gives no answer for is listed too: a test that passed and
+// no longer builds natively, or a listed one that now runs, isn't as listed.
+// Found in review: a listed test that became a skip passed unseen.
+test("a test native Rust newly gives no answer for, or newly does, isn't as listed", () => {
+  const known = new Map([["a.rs", "error: rust-js does not support statics yet"]]);
+  const native = new Map([["c.rs", "rustc: error: linking with `cc` failed"]]);
+  const now: Result[] = [
+    { test: "a.rs", status: "native", reason: "doesn't pass natively with overflow checks off: didn't finish in 10s" },
+    { test: "b.rs", status: "native", reason: "rustc: error: linking with `cc` failed" },
+    { test: "c.rs", status: "pass" },
+    { test: "d.rs", status: "native", reason: "prints what changes from run to run" },
+    { test: "e.rs", status: "skip", reason: "has revisions" },
+  ];
+  const { unanswered, answered } = ratchet(now, known, new Map([...native, ["d.rs", "prints what changes from run to run"]]));
+  expect(unanswered.map((r) => r.test)).toEqual(["a.rs", "b.rs"]);
+  expect(answered.map((r) => r.test)).toEqual(["c.rs"]);
+  expect([...surprises(now, known, native)].sort()).toEqual(["a.rs", "b.rs", "c.rs", "d.rs"]);
 });
