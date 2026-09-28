@@ -63,11 +63,19 @@ print the same and end the same. A program rustc rejects is the
 generator's bug and fails the test; one rust-js says it doesn't support is
 skipped.
 
-**A program that differs is reduced:** statements are taken away, an `if`
-or a loop made what's in it, an expression made one of its parts or a
-literal, each change kept if the program still fails the same way and is
-shorter, so the reducing ends. What's
-left is written with its seed to `target/fuzz/`, to become a corpus case.
+**A program that differs is kept, then reduced:** before anything else,
+`target/fuzz/` gets the program as generated, `seed-N.original.rs`, and
+`seed-N.json`: its seed, the compiler's path and SHA-256, the source's
+commit, how it failed and what each run printed. Then statements are taken
+away, an `if` or a loop made what's in it, an expression made one of its
+parts or a literal, each change kept if the program still fails the same
+way and is shorter, so the reducing ends. The same way is the same
+signature: the same runtimes differing from native Rust in the same of
+stdout, stderr and how it ended, or the same crash, so a reduction can't
+drift to another bug. Each smaller program is written to `seed-N.rs` as
+it's found, and reducing stops after five minutes, saying it didn't
+finish, so a reduction that never ends, or a job stopped, loses nothing.
+Found in review. What's left becomes a corpus case.
 
 - `bun test` runs the first 12 seeds, which must compile and match: they
   did, so one rust-js rejects is a regression. `FUZZ_START` and

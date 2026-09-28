@@ -45,10 +45,19 @@ test("a failing program is reduced to as little as still fails", async () => {
     { kind: "print", format: "{:x}", value: one },
   ];
   let tried = 0;
-  const smallest = await reduce(program, async (candidate) => {
-    tried++;
-    return print(candidate).includes("id(7i32)");
-  });
+  const kept: Program[] = [];
+  const { program: smallest, complete } = await reduce(
+    program,
+    async (candidate) => {
+      tried++;
+      return print(candidate).includes("id(7i32)");
+    },
+    { kept: (p) => kept.push(p) },
+  );
+  expect(complete).toBe(true);
+  // Each smaller one, as it's found, the last the smallest.
+  expect(kept.at(-1)).toEqual(smallest);
+  expect(kept.map((p) => print(p).length)).toEqual(kept.map((p) => print(p).length).sort((a, b) => b - a));
   expect(size(program)).toBe(6);
   // The loop and the `if` around it, and the `+` in it, are gone.
   expect(smallest).toEqual([{ kind: "print", format: "{}", value: seven }]);
@@ -58,5 +67,28 @@ test("a failing program is reduced to as little as still fails", async () => {
 test("a program that fails only as it is stays as it is", async () => {
   const program = generate(5);
   const text = print(program);
-  expect(await reduce(program, async (candidate) => print(candidate) === text)).toEqual(program);
+  expect(await reduce(program, async (candidate) => print(candidate) === text)).toEqual({ program, complete: true });
+});
+
+// A reduction that runs out of time keeps what it found, and says it
+// isn't done. Found in review: a reduction cut short lost the failure.
+test("a reduction cut short is the smallest found so far, and says so", async () => {
+  const program = generate(5);
+  const kept: Program[] = [];
+  let calls = 0;
+  const until = Date.now() + 50;
+  const { program: smallest, complete } = await reduce(
+    program,
+    async () => {
+      calls++;
+      await Bun.sleep(20);
+      return true;
+    },
+    { until, kept: (p) => kept.push(p) },
+  );
+  expect(complete).toBe(false);
+  expect(calls).toBeGreaterThan(0);
+  expect(kept.length).toBe(calls);
+  expect(smallest).toEqual(kept.at(-1)!);
+  expect(size(smallest)).toBeLessThan(size(program));
 });

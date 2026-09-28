@@ -746,23 +746,31 @@ function* simpler(e: Expr): Generator<Expr> {
 }
 
 /** `program` made as small as it still `fails`: each change that keeps it
- * failing is kept, until none does. A change is kept only if it makes the
- * program shorter, so there's an end to them. */
-export async function reduce(program: Program, fails: (p: Program) => Promise<boolean>): Promise<Program> {
+ * failing is kept, until none does, or until `until`, a time, has passed,
+ * when it's the smallest so far and not `complete`. A change is kept only
+ * if it makes the program shorter, so there's an end to them, and each one
+ * kept is given to `kept`, so what's found so far is never lost. */
+export async function reduce(
+  program: Program,
+  fails: (p: Program) => Promise<boolean>,
+  { until = Infinity, kept = () => {} }: { until?: number; kept?: (p: Program) => void } = {},
+): Promise<{ program: Program; complete: boolean }> {
   let current = program;
   let changed = true;
   while (changed) {
     changed = false;
     const length = print(current).length;
     for (const candidate of smaller(current)) {
+      if (Date.now() > until) return { program: current, complete: false };
       if (print(candidate).length < length && (await fails(candidate))) {
         current = candidate;
+        kept(current);
         changed = true;
         break;
       }
     }
   }
-  return current;
+  return { program: current, complete: true };
 }
 
 /** How many statements a program has, at every depth. */
