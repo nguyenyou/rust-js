@@ -169,3 +169,8 @@ and stderr, and return, under Bun and Node.
   those tests, not only the tests they say they had: a bless writes it
   anew from them, for its diff to be reviewed. Found in review: shards
   whose inventory left out every passing test merged as a run of none.
+- A test listed as printing what changes from run to run is run natively
+  until it does, up to 30 times; others three times. Two ways to print, as
+  a two-entry `HashMap`'s order gives, are the same three runs in four, and
+  such a run looked like native Rust answered: `issue-3559.rs` did, and the
+  ratchet said so.

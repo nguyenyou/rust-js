@@ -268,7 +268,12 @@ const source = () => Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root }).
 /** Did a process end otherwise than by exiting 0? */
 const failed = (exit: Exit, timeout: number) => exit.code !== 0 || stopped(exit, timeout) !== undefined;
 
-export async function runTest(ui: string, file: string): Promise<Result> {
+/** The tests listed as printing what changes from run to run, read once. */
+let listed: Set<string> | undefined;
+const changing = () =>
+  (listed ??= new Set([...readKnown(nativeFile)].filter(([, reason]) => reason === "prints what changes from run to run").map(([test]) => test)));
+
+export async function runTest(ui: string, file: string, listedChanging: Set<string> = changing()): Promise<Result> {
   const test = relative(ui, file);
   const source = readFileSync(file, "utf8");
   const s = scope(source);
@@ -286,7 +291,10 @@ export async function runTest(ui: string, file: string): Promise<Result> {
     const native = await run([binary], dirname(file), 10_000);
     if (failed(native, 10_000)) return { test, status: "native", reason: `doesn't pass natively with overflow checks off: ${stopped(native, 10_000) ?? `exited ${native.code}`}` };
     // What a `HashMap` prints, say, changes from run to run: no answer to compare with.
-    for (let i = 0; i < 2; i++) {
+    // One listed so is run until it does, up to 30 times: two ways to print
+    // are the same three runs in four.
+    const reruns = listedChanging.has(test) ? 29 : 2;
+    for (let i = 0; i < reruns; i++) {
       const again = await run([binary], dirname(file), 10_000);
       if (failed(again, 10_000)) return { test, status: "native", reason: "doesn't pass natively on every run" };
       if (again.stdout !== native.stdout || again.stderr !== native.stderr) {

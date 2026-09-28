@@ -135,3 +135,21 @@ test("fuzz settings that aren't whole numbers fail the run", () => {
   expect(past.code).toBe(1);
   expect(past.output).toContain("FUZZ_START=4294967290 FUZZ_SEEDS=10: the seeds end past 4294967296");
 }, 120_000);
+
+// A test listed as printing what changes is run natively until it does, up
+// to 30 times: a coin flip, as a two-entry HashMap's order is, is the same
+// three runs in four, and would look like it answers. Found by a run in
+// which rustc's issue-3559.rs did.
+test("a test that prints what changes, listed so, is run until it does", async () => {
+  const ui = fixture("harness-changing");
+  const file = join(ui, "coin.rs");
+  writeFileSync(
+    file,
+    "//@ run-pass\nuse std::collections::hash_map::RandomState;\nuse std::hash::{BuildHasher, Hasher};\nfn main() {\n    let flip = RandomState::new().build_hasher().finish() % 2;\n    println!(\"{flip}\");\n}\n",
+  );
+  mkdirSync(join(target, "rustc-suite"), { recursive: true });
+  const listed = new Set(["coin.rs"]);
+  for (let i = 0; i < 3; i++) {
+    expect(await runTest(ui, file, listed)).toEqual({ test: "coin.rs", status: "native", reason: "prints what changes from run to run" });
+  }
+}, 120_000);
