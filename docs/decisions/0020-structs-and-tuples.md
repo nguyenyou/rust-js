@@ -152,3 +152,9 @@ return { x, y };
   `place`'s type in place.
 - oxc prints an object with more than one field across several lines.
   ReScript's output does the same.
+- **`[x; N]` is `N` copies of `x`, which runs once,** even for none:
+  `new Array(N).fill(x)` where copies can't be told apart, `[0, 0, 0]` for
+  a few of a literal, and each its own where something changes them,
+  `Array.from({ length: N }, () => item.slice())`, so `[[0; 3]; 2]`'s rows
+  are two. A generic length, and a value that isn't `Copy`, are rejected.
+  33 of rustc's 46 tests that stopped here pass (`array_repeat.rs`).

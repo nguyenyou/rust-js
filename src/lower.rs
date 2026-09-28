@@ -1972,6 +1972,49 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
             }
             ExprKind::Array { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),
+            // `[x; N]`: `x` runs once, even for none, and the array is `N`
+            // copies of it: `Array(N).fill(x)` where copies can't be told
+            // apart, else each its own, `Array.from({ length: N }, () => ..)`.
+            ExprKind::Repeat { value, count } => {
+                let item_ty = self.thir[value].ty;
+                let count = self.tcx.normalize_erasing_regions(self.typing_env, count);
+                let Some(n) = count.try_to_target_usize(self.tcx) else {
+                    return Err(self.unsupported(span, "`[x; N]` of a generic length"));
+                };
+                let item = self.expr(value, out)?;
+                // A `Copy` value's copies are copies of its bits, which a
+                // value that nothing changes needs none of; one that isn't
+                // `Copy` is a constant's, made again for each.
+                let copied = if self.is_copy(item_ty) {
+                    self.contains_mutated(item_ty)
+                } else if self.needs_clone(item_ty) {
+                    return Err(self.unsupported(span, "`[x; N]` of a value that isn't `Copy`"));
+                } else {
+                    false
+                };
+                if !copied {
+                    if n <= 4 && item.is_constant() {
+                        return Ok(Expr::array(vec![item; n as usize]));
+                    }
+                    let array = Expr::new_(Expr::var("Array"), vec![Expr::int(n as i128)]);
+                    return Ok(Expr::call(Expr::member(array, "fill"), vec![item]));
+                }
+                let item = if item.reads_same() {
+                    item
+                } else {
+                    self.spill("item", item, out)
+                };
+                let copy = self.copy(item, item_ty);
+                let length = Expr::object(vec![Prop::Field("length".into(), Expr::int(n as i128))]);
+                let from = Expr::member(Expr::var("Array"), "from");
+                Ok(Expr::call(
+                    from,
+                    vec![
+                        length,
+                        Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(copy)).at(js::Span::NONE)]),
+                    ],
+                ))
+            }
             ExprKind::Index { lhs, index } => {
                 let values = self.indexed(lhs, index, out)?;
                 let item = self.checked_index(lhs, values);
