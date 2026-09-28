@@ -226,12 +226,15 @@ value, and a `dyn Trait` of one.
   never dropped. The safety net saw none of them: it knows only what's
   bound by value. Each is fixed, or an error, now.
 - **Done first, and not yet:** variables, parameters, moves, assignments,
-  statements' values and `mem::drop`, then temporaries that end with their
-  statement or a `let`'s block, and operands. A temporary of a condition or
-  a block's tail, one made in a branch of its statement or taken apart, a
-  partial move, generic code given a value with a destructor, a `let x;`
-  without its value, and `async` code that owns one are errors until
-  they're done.
+  statements' values and `mem::drop`; then temporaries that end with their
+  statement or a `let`'s block, and operands; generic code given a value
+  with a destructor; and partial moves, by a field, by a `let`'s pattern
+  and by a `match` arm's, whose bindings own what they bind, each a
+  `const` of its own, for the rest of the block or the arm. A temporary of
+  a condition or a block's tail, one made in a branch of its statement, one
+  taken apart or partly moved, an `if let` that moves part of a value, a
+  struct update from one, a `let x;` without its value, and `async` code
+  or a closure that owns one are errors until they're done.
 - A generic function given a value with a destructor has a JS parameter
   more than its Rust one has, as its dictionaries are (ADR 0052). A JS
   caller of an exported one passes none, and the drop doesn't run: a Rust

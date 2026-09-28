@@ -1091,6 +1091,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return self.destructure(pat, subject, true, out);
                 }
                 let (subject, stable) = self.subject(init, "tmp", out)?;
+                // What it binds by value is moved out of `init` (ADR 0098).
+                self.clear_parts(init, pat, out);
                 self.destructure(pat, subject, stable, out)
             }
         }
@@ -1102,8 +1104,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {
             return Err(self.unsupported(pat.span, "this refutable pattern"));
         }
-        self.bind_all(bindings, stable, self.js_span(pat.span), out);
-        Ok(())
+        self.bind_all(bindings, stable, self.js_span(pat.span), out)
     }
 
     /// Where a `match` or `let` finds the value it takes apart, and whether
@@ -1174,7 +1175,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// a stable subject just name the place they matched, as ReScript does:
     /// `P { x, y } => x + y` becomes `p.x + p.y`. The rest get a variable
     /// holding their own value.
-    fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) {
+    fn bind_all(&mut self, bindings: Vec<Binding<'tcx>>, stable: bool, span: js::Span, out: &mut Vec<Stmt>) -> R<()> {
         // `x @ B { b, .. }`: `x`, or where it's moved, is the same JS object
         // as the value, and a change to it would change what `b` reads in
         // place, so each binding has its own. `n @ 1..=9` binds nothing else.
@@ -1182,7 +1183,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for b in bindings {
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
             // A `ref mut` one always does: `*r = x` writes the place it names.
-            if (stable || b.by_ref_mut) && !b.mutable && !b.place.has_effects() {
+            // One that owns what it binds, by value, drops it as its scope
+            // ends (ADR 0098): a `const` of its own, named as in Rust.
+            let owns = self.is_owner(b.var)?;
+            if (stable || b.by_ref_mut) && !b.mutable && !b.place.has_effects() && !owns {
                 self.vars.insert(
                     b.var,
                     Var {
@@ -1196,12 +1200,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let value = self.copy_if_needed(b.place, b.ty).or_at(span);
             let name = self.bind(b.var, &b.name, b.mutable);
             let kind = if b.mutable {
-                StmtKind::Let(name, Some(value))
+                StmtKind::Let(name.clone(), Some(value))
             } else {
-                StmtKind::Const(name, value)
+                StmtKind::Const(name.clone(), value)
             };
             out.push(kind.at(span));
+            if owns {
+                self.own_at(b.var, Expr::var(&name), b.ty, span, out)?;
+            }
         }
+        Ok(())
     }
 
     /// The body of the `loop` a scope holds: its value, or, for one that
@@ -1604,14 +1612,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     guarded = Some((before, guard));
                 }
             }
+            // The arm owns what its pattern moves out of the scrutinee, and
+            // drops it as it ends (ADR 0098).
             let mut body = Vec::new();
-            self.bind_all(bindings, stable, pat_span, &mut body);
+            let mark = self.owned_mark();
+            self.clear_parts(scrutinee, &arm.pattern, &mut body);
+            self.bind_all(bindings, stable, pat_span, &mut body)?;
             // Rust checked the match is exhaustive, so if we reach the last
             // unguarded arm, it matches. No need to test it.
             if i == arms.len() - 1 && arm.guard.is_none() {
                 test = None;
             }
-            self.stmt(arm.body, dest, &mut body)?;
+            let mut arm_body = Vec::new();
+            self.stmt(arm.body, dest, &mut arm_body)?;
+            self.close_scope(mark, arm_body, arm.span, &mut body)?;
             let done = test.is_none() && guarded.is_none();
             chain.push((test, guarded, body, arm_span));
             if done {
@@ -1784,7 +1798,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (subject, stable) = self.subject(scrutinee, &base, out)?;
         let mut bindings = Vec::new();
         let test = self.pattern_test(pat, &subject, &mut bindings)?;
-        self.bind_all(bindings, stable, self.js_span(pat.span), then_out);
+        self.bind_all(bindings, stable, self.js_span(pat.span), then_out)?;
         Ok(test.unwrap_or_else(|| Expr::bool(true)))
     }
 
@@ -1898,7 +1912,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(self.thir[first].pattern.span, "this binding in `matches!`"));
         }
         let span = self.js_span(self.thir[first].span);
-        self.bind_all(bindings, stable, span, out);
+        self.bind_all(bindings, stable, span, out)?;
         let guard = match self.thir[first].guard {
             Some(guard) if self.is_simple(guard) => Some(self.expr(guard, out)?),
             Some(guard) => return Err(self.unsupported(self.thir[guard].span, "this guard")),

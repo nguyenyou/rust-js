@@ -64,6 +64,8 @@ written, and what it breaks, as Rust would see it:
 | `unsize-array-as-dyn` | an array unsized to a slice is taken for a `dyn`, and rejected | `drop_temporaries.rs` |
 | `generic-drop-not-given` | a generic function given a value with a destructor isn't given its drop | `drop_generic.rs` |
 | `generic-drop-not-passed-on` | a generic function doesn't pass its `dropT` on to another | `drop_generic.rs` |
+| `part-move-kept-owned` | a field moved out of a value is dropped with it too | `drop_partial.rs` |
+| `pattern-parts-kept-owned` | a part a pattern moves out is dropped with what it's matched against too | `drop_partial.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

@@ -389,6 +389,22 @@ export const mutations: Mutation[] = [
     replace: "            return Ok(None);\n",
     tests: ["test/corpus.test.ts", "-t", "drop_generic"],
   },
+  {
+    name: "part-move-kept-owned",
+    breaks: "a field moved out of a value is dropped with it too",
+    file: "src/lower/drops.rs",
+    find: "            self.drop_state.part_flags.get(&(*var, path.clone())).cloned()\n",
+    replace: "            None\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_partial"],
+  },
+  {
+    name: "pattern-parts-kept-owned",
+    breaks: "a part a `match` arm or a `let` pattern moves out is dropped with what it's matched against too",
+    file: "src/lower/drops.rs",
+    find: "        for path in self.pattern_paths(pat).unwrap_or_default() {\n",
+    replace: "        for path in Vec::<Path>::new() {\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_partial"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

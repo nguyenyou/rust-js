@@ -57,6 +57,8 @@ struct Owned<'tcx> {
     value: Expr,
     ty: Ty<'tcx>,
     flag: Option<String>,
+    /// Each part moved somewhere, and its flag.
+    parts: Vec<(Path, String)>,
 }
 
 /// What a body does with its values that have destructors.
@@ -72,6 +74,10 @@ pub(super) struct Facts {
     /// place, borrowed or taken apart, and one made before an operand after
     /// it that can leave early, which a call then moves.
     temps: HashMap<ExprId, TempKind>,
+    /// The parts of each owner that are moved somewhere, which get flags of
+    /// their own, and each field that moves one, with its owner and part.
+    parts: HashMap<LocalVarId, Vec<Path>>,
+    part_moves: HashMap<ExprId, (LocalVarId, Path)>,
     /// What this body does that isn't supported yet.
     problems: Vec<(Span, String)>,
 }
@@ -81,6 +87,10 @@ impl Facts {
         !self.owners.is_empty()
     }
 }
+
+/// A part of a value, field by field: each step the variant it's in, by
+/// index, for an enum's, and the field.
+pub(super) type Path = Vec<(Option<u32>, usize)>;
 
 /// Why a value with a destructor is a temporary.
 #[derive(Clone, Copy, PartialEq)]
@@ -134,6 +144,7 @@ pub(super) struct DropState<'tcx> {
     /// The function being lowered's drop functions, by the index of the
     /// type parameter each drops.
     param_drops: HashMap<u32, String>,
+    part_flags: HashMap<(LocalVarId, Path), String>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -404,6 +415,93 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// Drop `value`, a `ty` some of whose parts may have moved: a part with
+    /// a flag only if it's still owned, the rest as `drop_value` would. Rust
+    /// forbids moving out of a type with a `Drop` of its own (E0509), so
+    /// what's around a moved part has no `drop` to call.
+    fn drop_owned(
+        &mut self,
+        value: Expr,
+        ty: Ty<'tcx>,
+        parts: &[(Path, String)],
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
+        if parts.is_empty() {
+            return self.drop_value(value, ty, span, out);
+        }
+        let js_span = self.js_span(span);
+        // This part itself moved, on some path: all of it only if it's owned.
+        if let Some((_, flag)) = parts.iter().find(|(p, _)| p.is_empty()) {
+            let rest: Vec<(Path, String)> = parts.iter().filter(|(p, _)| !p.is_empty()).cloned().collect();
+            let mut owned = Vec::new();
+            self.drop_owned(value, ty, &rest, span, &mut owned)?;
+            if !owned.is_empty() {
+                out.push(StmtKind::If(Expr::var(flag), owned, None).at(js_span));
+            }
+            return Ok(());
+        }
+        let under = |step: (Option<u32>, usize)| -> Vec<(Path, String)> {
+            parts
+                .iter()
+                .filter(|(p, _)| p[0] == step)
+                .map(|(p, f)| (p[1..].to_vec(), f.clone()))
+                .collect()
+        };
+        match ty.kind() {
+            ty::Tuple(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    let part = self.project(value.clone(), ty, i);
+                    self.drop_owned(part, item, &under((None, i)), span, out)?;
+                }
+            }
+            ty::Adt(adt, args) if adt.is_struct() => {
+                for (i, field) in adt.non_enum_variant().fields.iter().enumerate() {
+                    let part = self.project(value.clone(), ty, i);
+                    self.drop_owned(part, field.ty(self.tcx, args), &under((None, i)), span, out)?;
+                }
+            }
+            // `Some(x)` is `x` itself (ADR 0030).
+            ty::Adt(adt, _) if let Some(inner) = self.option_of(ty) => {
+                let some = adt.variants().iter().position(|v| !v.fields.is_empty()).unwrap_or(1) as u32;
+                let mut body = Vec::new();
+                self.drop_owned(value.clone(), inner, &under((Some(some), 0)), span, &mut body)?;
+                if !body.is_empty() {
+                    out.push(StmtKind::If(Expr::bin(Op::LooseNe, value, Expr::null()), body, None).at(js_span));
+                }
+            }
+            ty::Adt(adt, args) if adt.is_enum() => {
+                for (index, variant) in adt.variants().iter().enumerate() {
+                    let mut fields = Vec::new();
+                    for (i, field) in variant.fields.iter().enumerate() {
+                        let part = Expr::member(value.clone(), variant_field(self.tcx, variant, i));
+                        self.drop_owned(
+                            part,
+                            field.ty(self.tcx, args),
+                            &under((Some(index as u32), i)),
+                            span,
+                            &mut fields,
+                        )?;
+                    }
+                    if fields.is_empty() {
+                        continue;
+                    }
+                    let test = match adt.variants().len() {
+                        1 => Expr::bool(true),
+                        _ => Expr::bin(
+                            Op::Eq,
+                            Expr::member(value.clone(), "TAG"),
+                            Expr::str(variant_name(self.tcx, variant)),
+                        ),
+                    };
+                    out.push(StmtKind::If(test, fields, None).at(js_span));
+                }
+            }
+            _ => return Err(self.unsupported(span, &format!("dropping what's left of a `{ty}`"))),
+        }
+        Ok(())
+    }
+
     /// Each item of an array, in order: `for (const item of v) { .. }`.
     fn drop_items(
         &mut self,
@@ -452,20 +550,154 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `var`, just bound to `value` in `out`, owns a value with a
     /// destructor: its scope drops it. One that's moved gets a flag.
     pub(super) fn own(&mut self, var: LocalVarId, value: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
+        let js_span = self.js_span(span);
+        self.own_at(var, value, ty, js_span, out)
+    }
+
+    /// `own`, with the flags' statements at `js_span`. A part that's moved
+    /// somewhere, `pair.a`, gets a flag of its own, `pair$a$live`.
+    pub(super) fn own_at(
+        &mut self,
+        var: LocalVarId,
+        value: Expr,
+        ty: Ty<'tcx>,
+        js_span: js::Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
         let facts = self.drop_facts()?;
+        let base = match &value.kind {
+            js::ExprKind::Var(name) => name.clone(),
+            _ => "value".into(),
+        };
         let flag = facts.moved.contains(&var).then(|| {
-            let base = match &value.kind {
-                js::ExprKind::Var(name) => name.clone(),
-                _ => "value".into(),
-            };
             let flag = self.fresh(&format!("{base}$live"));
-            out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(self.js_span(span)));
+            out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
             self.drop_state.flags.insert(var, flag.clone());
             flag
         });
+        let mut parts: Vec<(Path, String)> = Vec::new();
+        for path in facts.parts.get(&var).into_iter().flatten() {
+            if parts.iter().any(|(p, _)| p == path) {
+                continue;
+            }
+            let named = self.path_name(ty, path);
+            let flag = self.fresh(&format!("{base}${named}$live"));
+            out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
+            self.drop_state.part_flags.insert((var, path.clone()), flag.clone());
+            parts.push((path.clone(), flag));
+        }
         self.drop_state.registered.insert(var);
-        self.drop_state.owned.push(Owned { value, ty, flag });
+        self.drop_state.owned.push(Owned { value, ty, flag, parts });
         Ok(())
+    }
+
+    /// A part's path as a name, its fields' and variants': `a`, `0$1`, `Some$0`.
+    fn path_name(&self, ty: Ty<'tcx>, path: &Path) -> String {
+        let mut names = Vec::new();
+        let mut at = ty;
+        for &(variant, field) in path {
+            match at.kind() {
+                ty::Adt(adt, args) => {
+                    let def = match variant {
+                        Some(v) => {
+                            let def = adt.variants().iter().nth(v as usize).expect("the variant");
+                            names.push(def.name.to_string());
+                            def
+                        }
+                        None => adt.non_enum_variant(),
+                    };
+                    let f = def.fields.iter().nth(field).expect("the field");
+                    names.push(f.name.to_string());
+                    at = f.ty(self.tcx, args);
+                }
+                ty::Tuple(items) => {
+                    names.push(field.to_string());
+                    at = items[field];
+                }
+                _ => names.push(field.to_string()),
+            }
+        }
+        names.join("$")
+    }
+
+    /// The parts a pattern moves out of what it's matched against, by value:
+    /// those it binds that have a destructor. None if it moves one a way this
+    /// doesn't follow yet, as through a `Box` or into `x @ ..`.
+    pub(super) fn pattern_paths(&self, pat: &Pat<'tcx>) -> Option<Vec<Path>> {
+        let mut found = Vec::new();
+        self.paths_in(pat, &mut Path::new(), &mut found).then_some(found)
+    }
+
+    fn paths_in(&self, pat: &Pat<'tcx>, at: &mut Path, found: &mut Vec<Path>) -> bool {
+        let moves = |p: &Pat<'tcx>| {
+            let mut any = false;
+            p.walk_always(|p| {
+                if let PatKind::Binding {
+                    mode: BindingMode(ByRef::No, _),
+                    ty,
+                    ..
+                } = p.kind
+                {
+                    any |= self.has_drops(ty);
+                }
+            });
+            any
+        };
+        match &pat.kind {
+            PatKind::Wild => true,
+            PatKind::Binding {
+                mode: BindingMode(ByRef::No, _),
+                subpattern: None,
+                ty,
+                ..
+            } => {
+                if self.has_drops(*ty) {
+                    found.push(at.clone());
+                }
+                true
+            }
+            PatKind::Binding {
+                mode: BindingMode(ByRef::Yes(..), _),
+                subpattern: None,
+                ..
+            } => true,
+            PatKind::Leaf { subpatterns } => subpatterns.iter().all(|f| {
+                at.push((None, f.field.as_usize()));
+                let ok = self.paths_in(&f.pattern, at, found);
+                at.pop();
+                ok
+            }),
+            PatKind::Variant {
+                variant_index,
+                subpatterns,
+                ..
+            } => subpatterns.iter().all(|f| {
+                at.push((Some(variant_index.as_u32()), f.field.as_usize()));
+                let ok = self.paths_in(&f.pattern, at, found);
+                at.pop();
+                ok
+            }),
+            _ => !moves(pat),
+        }
+    }
+
+    /// What `pat`, matched against `scrutinee`, a variable whose parts have
+    /// flags, moves out of it: those parts' flags are cleared.
+    pub(super) fn clear_parts(&mut self, scrutinee: ExprId, pat: &Pat<'tcx>, out: &mut Vec<Stmt>) {
+        let ExprKind::VarRef { id } = self.thir[self.strip(scrutinee)].kind else {
+            return;
+        };
+        let js_span = self.js_span(pat.span);
+        for path in self.pattern_paths(pat).unwrap_or_default() {
+            if let Some(flag) = self.drop_state.part_flags.get(&(id, path)) {
+                out.push(StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span));
+            }
+        }
+    }
+
+    /// Whether `var` owns a value with a destructor.
+    pub(super) fn is_owner(&mut self, var: LocalVarId) -> R<bool> {
+        Ok(self.drop_facts()?.owners.contains_key(&var))
     }
 
     /// Whether `e` is a temporary, and why.
@@ -683,7 +915,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A value its scope drops that no variable names, as a `_` parameter.
     pub(super) fn own_value(&mut self, value: Expr, ty: Ty<'tcx>) {
-        self.drop_state.owned.push(Owned { value, ty, flag: None });
+        self.drop_state.owned.push(Owned {
+            value,
+            ty,
+            flag: None,
+            parts: Vec::new(),
+        });
     }
 
     /// How many owners are in scope: where a new scope's start.
@@ -703,7 +940,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut finally = Vec::new();
         for o in owned.into_iter().rev() {
             let mut drop = Vec::new();
-            self.drop_value(o.value, o.ty, span, &mut drop)?;
+            self.drop_owned(o.value, o.ty, &o.parts, span, &mut drop)?;
             match o.flag {
                 Some(flag) => finally.push(StmtKind::If(Expr::var(&flag), drop, None).at(js_span)),
                 None => finally.extend(drop),
@@ -780,15 +1017,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// owned from here, so its flag is cleared first.
     pub(super) fn moved(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<()> {
         let e = self.strip(e);
-        let ExprKind::VarRef { id } = self.thir[e].kind else {
+        let facts = self.drop_facts()?;
+        let key = std::ptr::from_ref(self.thir) as usize;
+        // A part moved out, `pair.a`: its flag.
+        let flag = if let Some((var, path)) = facts.part_moves.get(&e) {
+            self.drop_state.part_flags.get(&(*var, path.clone())).cloned()
+        } else if let ExprKind::VarRef { id } = self.thir[e].kind
+            && facts.moves.contains(&e)
+        {
+            self.drop_state.flags.get(&id).cloned()
+        } else {
             return Ok(());
         };
-        if !self.drop_facts()?.moves.contains(&e) {
-            return Ok(());
-        }
-        let key = std::ptr::from_ref(self.thir) as usize;
         self.drop_state.lowered_moves.insert((key, e));
-        if let Some(flag) = self.drop_state.flags.get(&id) {
+        if let Some(flag) = &flag {
             let js_span = self.js_span(self.thir[e].span);
             let clear = StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span);
             match self.drop_state.deferred.get_mut(&(key, e)) {
@@ -808,10 +1050,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let moves: Vec<ExprId> = list
             .iter()
             .map(|&e| self.strip(e))
-            .filter(|e| facts.moves.contains(e) || facts.temps.get(e) == Some(&TempKind::Operand))
+            .filter(|e| {
+                facts.moves.contains(e)
+                    || facts.part_moves.contains_key(e)
+                    || facts.temps.get(e) == Some(&TempKind::Operand)
+            })
             .collect();
         for &e in &moves {
-            if facts.moves.contains(&e) {
+            if facts.moves.contains(&e) || facts.part_moves.contains_key(&e) {
                 self.drop_state.deferred.insert((key, e), None);
             }
         }
@@ -861,7 +1107,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let flag = match self.thir[self.strip(lhs)].kind {
             ExprKind::VarRef { id } => self.drop_state.flags.get(&id).cloned(),
-            _ => None,
+            // A part that may have moved, `pair.a = ..` after `consume(pair.a)`.
+            _ => self.place_path(lhs).and_then(|(var, fields)| {
+                let path: Path = fields.into_iter().map(|f| (None, f)).collect();
+                self.drop_state.part_flags.get(&(var, path)).cloned()
+            }),
         };
         let mut drop = Vec::new();
         self.drop_value(target.clone(), ty, rust_span, &mut drop)?;
@@ -898,7 +1148,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 failed = Some(self.unsupported(*span, "binding a value with a destructor here"));
             }
         }
-        for &e in &facts.moves {
+        for &e in facts.moves.iter().chain(facts.part_moves.keys()) {
             if !self.drop_state.lowered_moves.contains(&(key, e)) {
                 failed = Some(self.unsupported(self.thir[e].span, "moving a value with a destructor here"));
             }
@@ -1061,6 +1311,14 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         let (parent, child) = self.context();
         let taken = match parent.map(|p| &self.thir[p].kind) {
             None => match self.lets.get(&child) {
+                // `let (c, d) = b;` moves the parts it binds.
+                Some(pat) if self.taken(pat) == Taken::Part => {
+                    match self.cx.pattern_paths(pat) {
+                        Some(paths) => self.facts.parts.entry(var).or_default().extend(paths),
+                        None => self.problem(span, "moving part of a value with a destructor"),
+                    }
+                    return;
+                }
                 Some(pat) => self.taken(pat),
                 // A statement of its own, `x;`, moves it, and drops it.
                 None => Taken::Whole,
@@ -1070,16 +1328,33 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
             // Written over: its old value is dropped where it's lowered.
             Some(ExprKind::Assign { lhs, .. }) if *lhs == child => Taken::Nothing,
             Some(ExprKind::Field { lhs, .. }) if *lhs == child => {
-                let field = parent.expect("a field");
-                match self.cx.has_drops(self.thir[field].ty) && self.projection_moved() {
-                    true => Taken::Part,
-                    false => Taken::Nothing,
+                // A field moved out, `consume(pair.a)`: a part of its own.
+                match self.moved_projection() {
+                    Ok(Some((field, path))) => {
+                        self.facts.parts.entry(var).or_default().push(path.clone());
+                        self.facts.part_moves.insert(field, (var, path));
+                    }
+                    Ok(None) => {}
+                    Err(()) => self.problem(span, "moving part of a value with a destructor"),
                 }
+                return;
             }
             Some(ExprKind::Match { scrutinee, arms, .. }) if *scrutinee == child => {
                 let taken: Vec<Taken> = arms.iter().map(|&a| self.taken(&self.thir[a].pattern)).collect();
                 if taken.contains(&Taken::Part) {
-                    Taken::Part
+                    // Each arm moves the parts its pattern binds.
+                    let mut paths = Vec::new();
+                    for (&arm, taken) in arms.iter().zip(&taken) {
+                        match (taken, self.cx.pattern_paths(&self.thir[arm].pattern)) {
+                            (Taken::Whole, _) | (_, None) => {
+                                self.problem(span, "moving part of a value with a destructor");
+                                return;
+                            }
+                            (_, Some(found)) => paths.extend(found),
+                        }
+                    }
+                    self.facts.parts.entry(var).or_default().extend(paths);
+                    return;
                 } else if taken.contains(&Taken::Whole) {
                     Taken::Whole
                 } else {
@@ -1105,6 +1380,35 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
             }
             Taken::Part => self.problem(span, "moving part of a value with a destructor"),
         }
+    }
+
+    /// The field of a projection chain from the variable at the top of the
+    /// walk that's used as a value, moving it, and its path: none if what's
+    /// used has nothing to drop, and an error through what isn't a struct or
+    /// a tuple, as a `Box`.
+    fn moved_projection(&self) -> Result<Option<(ExprId, Path)>, ()> {
+        if !self.projection_moved() {
+            return Ok(None);
+        }
+        let mut child = *self.stack.last().expect("the variable");
+        let mut field = child;
+        let mut path = Path::new();
+        for &parent in self.stack.iter().rev().skip(1) {
+            match &self.thir[parent].kind {
+                ExprKind::Scope { .. } | ExprKind::PlaceTypeAscription { .. } => {}
+                ExprKind::Field { lhs, name, .. } if *lhs == child => {
+                    let ty = self.thir[*lhs].ty;
+                    if !matches!(ty.kind(), ty::Tuple(_)) && !matches!(ty.kind(), ty::Adt(adt, _) if adt.is_struct()) {
+                        return Err(());
+                    }
+                    path.push((None, name.as_usize()));
+                    field = parent;
+                }
+                _ => break,
+            }
+            child = parent;
+        }
+        Ok(self.cx.has_drops(self.thir[field].ty).then_some((field, path)))
     }
 
     /// Whether the field at the top of the walk, of a projection chain, is
