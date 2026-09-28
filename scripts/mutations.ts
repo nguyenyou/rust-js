@@ -173,6 +173,14 @@ export const mutations: Mutation[] = [
     replace: "                let copied = if self.is_copy(item_ty) {\n                    false",
     tests: ["test/corpus.test.ts", "-t", "array_repeat"],
   },
+  {
+    name: "never-loop-value",
+    breaks: "a `loop` that never ends, used as a value, is rejected",
+    file: "src/lower.rs",
+    find: "            ExprKind::NeverToAny { source } => match self.thir[source].kind {\n                ExprKind::Loop { body } => Some(body),",
+    replace: "            ExprKind::NeverToAny { source } => match self.thir[source].kind {\n                ExprKind::Loop { body } if false => Some(body),",
+    tests: ["test/corpus.test.ts", "-t", "loop_values"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

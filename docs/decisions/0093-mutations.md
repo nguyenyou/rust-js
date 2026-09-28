@@ -37,6 +37,7 @@ written, and what it breaks, as Rust would see it:
 | `option-some-rest` | `Some(..)` is taken as `None` | `option_rest_pattern.rs` |
 | `size-align-swap` | `align_of` is the type's size | `size_of.rs` |
 | `array-repeat-shared` | `[x; N]` of what's changed is one object, `N` times | `array_repeat.rs` |
+| `never-loop-value` | a `loop` that never ends, used as a value, is rejected | `loop_values.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a
