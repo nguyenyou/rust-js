@@ -121,6 +121,7 @@ jobs:
           path: |
             test/rustc-known-failures.txt
             test/rustc-native-failures.txt
+            test/rustc-out-of-scope.txt
 
   # Generated programs, a sixth of the seeds on each of six machines, with
   # the build job's rust-js. One that differs is reduced, and kept.
@@ -151,6 +152,10 @@ jobs:
           RUST_JS_COMPILER: bin/rust-js
           FUZZ_REPORT: '1'
         run: |
+          # Whole numbers, or the batch fails, not as a run of none.
+          case "$SEEDS" in ''|*[!0-9]*|0) echo "fuzz_seeds=$SEEDS: a whole number, at least 1"; exit 1;; esac
+          case "$START" in ''|*[!0-9]*) echo "fuzz_start=$START: a whole number"; exit 1;; esac
+          touch "ran-$PART.txt"
           per=$(( (SEEDS + 5) / 6 ))
           first=$(( START + (PART - 1) * per ))
           count=$(( SEEDS - (PART - 1) * per ))
@@ -160,6 +165,8 @@ jobs:
           FUZZ_START=$first FUZZ_SEEDS=$count bun test test/fuzz.test.ts > fuzz.log 2>&1
           status=$?
           cat fuzz.log
+          # The seeds this part ran to the end, for the batch to be counted.
+          grep -oE '^seed [0-9]+:' fuzz.log | tr -d ':' | awk '{ print $2 }' > "ran-$PART.txt"
           {
             echo "### Seeds $first to $(( first + count - 1 ))"
             echo
@@ -173,3 +180,38 @@ jobs:
           path: target/fuzz/
           if-no-files-found: ignore
           retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-ran-${{ matrix.part }}
+          path: ran-${{ matrix.part }}.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The batch is every seed asked for, each run once, or it isn't one.
+  fuzz-report:
+    needs: fuzz
+    if: always() && inputs.fuzz_seeds != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: fuzz-ran-*
+          path: ran
+          merge-multiple: true
+      - name: Check every seed ran
+        env:
+          START: ${{ inputs.fuzz_start }}
+          SEEDS: ${{ inputs.fuzz_seeds }}
+        run: |
+          case "$SEEDS" in ''|*[!0-9]*|0) echo "fuzz_seeds=$SEEDS: a whole number, at least 1"; exit 1;; esac
+          case "$START" in ''|*[!0-9]*) echo "fuzz_start=$START: a whole number"; exit 1;; esac
+          cat ran/*.txt 2>/dev/null | sort -n > ran.txt
+          seq "$START" $(( START + SEEDS - 1 )) > asked.txt
+          if ! diff -q asked.txt ran.txt > /dev/null; then
+            echo "asked for $SEEDS seeds from $START; ran $(wc -l < ran.txt), and these differ:"
+            diff asked.txt ran.txt | head -20
+            exit 1
+          fi
+          echo "all $SEEDS seeds from $START ran, each once"

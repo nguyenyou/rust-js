@@ -54,7 +54,15 @@ test("the ratchet reports a new failure and a listed test that passes", () => {
   expect(regressions.map((r) => r.test)).toEqual(["c.rs"]);
   expect(fixed.map((r) => r.test)).toEqual(["d.rs"]);
   // Nothing new: nothing to say.
-  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({ regressions: [], fixed: [], worse: [], unanswered: [], answered: [] });
+  expect(ratchet(results.slice(0, 2), new Map([["b.rs", "x"]]))).toEqual({
+    regressions: [],
+    fixed: [],
+    worse: [],
+    unanswered: [],
+    answered: [],
+    excluded: [],
+    included: [],
+  });
 });
 
 test("a failure is rejected, crashed or wrong, and one listed as rejected may not get worse", () => {
@@ -98,7 +106,7 @@ test("a run of some tests says which aren't as listed, a worse failure too", () 
     { test: "e.rs", status: "pass" },
     { test: "f.rs", status: "skip", reason: "has revisions" },
   ];
-  expect([...surprises(now, listed)].sort()).toEqual(["b.rs", "c.rs", "d.rs"]);
+  expect([...surprises(now, listed, new Map(), new Map([["f.rs", "has revisions"]]))].sort()).toEqual(["b.rs", "c.rs", "d.rs"]);
 });
 
 // The shards of a run are one whole run, or it isn't checked or blessed.
@@ -123,6 +131,13 @@ test("shards are checked as one whole run before their results are", () => {
   expect(validate([shard(1), shard(2)], known, "s1")).toEqual([]);
   expect(validate([], known, "s1")).toEqual(["there are no shards"]);
   expect(validate([[] as unknown as Shard], known, "s1")).toEqual(["1 of the 1 files aren't a shard's record"]);
+  // What's read from a file is checked, field by field: a status that isn't
+  // one, or a failure with no reason, isn't counted. Found in review: a
+  // status of `typo` merged as a run with no failures.
+  const typo = shard(2, { results: [{ test: "b.rs", status: "typo" }, { test: "d.rs", status: "fail" }] as unknown as Result[] });
+  expect(validate([shard(1), typo], known, "s1")).toEqual(["results that aren't one: 2, as b.rs, d.rs"]);
+  expect(validate([shard(1), shard(2, { of: "2" as unknown as number })], known, "s1")).toEqual(["1 of the 2 files aren't a shard's record"]);
+  expect(validate([shard(1), shard(2, { expected: [7] as unknown as string[] })], known, "s1")).toEqual(["1 of the 2 files aren't a shard's record"]);
   expect(validate([shard(1)], known, "s1")).toEqual(["shards missing, of 2: 2", "tests with no result: 2, as b.rs, d.rs"]);
   expect(validate([shard(1), shard(1), shard(2)], known, "s1")).toEqual(["shards there more than once, of 2: 1", "tests with more than one result: 2, as a.rs, c.rs"]);
   expect(validate([shard(1), shard(2, { compiler: "c2" })], known, "s1")).toEqual(["the shards ran with different compilers: c1, c2"]);
@@ -152,5 +167,23 @@ test("a test native Rust newly gives no answer for, or newly does, isn't as list
   const { unanswered, answered } = ratchet(now, known, new Map([...native, ["d.rs", "prints what changes from run to run"]]));
   expect(unanswered.map((r) => r.test)).toEqual(["a.rs", "b.rs"]);
   expect(answered.map((r) => r.test)).toEqual(["c.rs"]);
-  expect([...surprises(now, known, native)].sort()).toEqual(["a.rs", "b.rs", "c.rs", "d.rs"]);
+  expect([...surprises(now, known, native, new Map([["e.rs", "has revisions"]]))].sort()).toEqual(["a.rs", "b.rs", "c.rs", "d.rs"]);
+});
+
+// What's out of scope is listed: a test that was run and now isn't, as a
+// broader scope rule makes it, or one that's run now, isn't as listed.
+// Found in review: a listed failure that became a skip passed unseen.
+test("a test newly out of scope, or newly in it, isn't as listed", () => {
+  const known = new Map([["a.rs", "error: rust-js does not support statics yet"]]);
+  const outOfScope = new Map([["c.rs", "has revisions"], ["d.rs", "has revisions"]]);
+  const now: Result[] = [
+    { test: "a.rs", status: "skip", reason: "needs another crate" },
+    { test: "b.rs", status: "skip", reason: "has revisions" },
+    { test: "c.rs", status: "pass" },
+    { test: "d.rs", status: "skip", reason: "has revisions" },
+  ];
+  const { excluded, included } = ratchet(now, known, new Map(), outOfScope);
+  expect(excluded.map((r) => r.test)).toEqual(["a.rs", "b.rs"]);
+  expect(included.map((r) => r.test)).toEqual(["c.rs"]);
+  expect([...surprises(now, known, new Map(), outOfScope)].sort()).toEqual(["a.rs", "b.rs", "c.rs"]);
 });

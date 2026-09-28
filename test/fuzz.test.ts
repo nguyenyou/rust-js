@@ -17,14 +17,24 @@ import { same } from "./oracle";
 import { agree, compileJs, runJs, runNative, runtimes, show, type Run } from "./programs";
 import { buildCompiler, compiler, fixture, root, target } from "./support";
 
-const start = Number(process.env.FUZZ_START ?? 1);
-const seeds = Number(process.env.FUZZ_SEEDS ?? 12);
+/** A setting that's a whole number, at least `least`, or none, and then
+ * `otherwise`: anything else fails the run before a seed does, not as a
+ * run of none. */
+function whole(name: string, otherwise: number, least: number): number {
+  const value = process.env[name];
+  if (value === undefined) return otherwise;
+  if (!/^\d+$/.test(value) || Number(value) < least) throw new Error(`${name}=${value}: a whole number, at least ${least}, is a setting`);
+  return Number(value);
+}
+
+const start = whole("FUZZ_START", 1, 0);
+const seeds = whole("FUZZ_SEEDS", 12, 1);
 // The seeds `bun test` runs are known to compile, so one rust-js rejects is
 // a regression; exploring others, a program it doesn't support is skipped.
 const exploring = process.env.FUZZ_START !== undefined || process.env.FUZZ_SEEDS !== undefined;
 
 // A reduction stops after this long, with the smallest program so far.
-const reduceBudget = Number(process.env.FUZZ_REDUCE_BUDGET ?? 300_000);
+const reduceBudget = whole("FUZZ_REDUCE_BUDGET", 300_000, 1);
 
 beforeAll(buildCompiler);
 

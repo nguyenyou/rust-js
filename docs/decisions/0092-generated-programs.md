@@ -115,3 +115,8 @@ Found in review. What's left becomes a corpus case.
 - A seed is a program only for this version of the generator: a change to
   it makes other programs of the same seeds, so a failure is kept as its
   reduced program, not its seed.
+- A batch is the seeds it's asked for, or it fails: `FUZZ_START`,
+  `FUZZ_SEEDS` and `FUZZ_REDUCE_BUDGET` are whole numbers, or the run
+  fails before a seed does, and on GitHub each part says which seeds it
+  ran to the end, which must be each one asked for, once. Found in review:
+  `FUZZ_START=invalid` passed, as a run of none.

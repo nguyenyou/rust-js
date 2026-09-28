@@ -154,3 +154,12 @@ and stderr, and return, under Bun and Node.
   of rustc with its lifetime still bound
   (`any-lifetime-escape-higher-rank.rs`); it's made with it erased, as a
   bound's is.
+- **What's out of scope is listed too,** in `test/rustc-out-of-scope.txt`,
+  with the rule that put it there, so the three lists and the tests that
+  pass are every test there is. A test that leaves scope, as a broader
+  rule makes it, or one that comes in, fails the run until it's blessed,
+  as a test that changes list does. A merge counts nothing it can't read:
+  each shard's fields, and each result's name, status, and reason for any
+  but a pass, are checked as they are, not as their types say. Found in
+  review: a listed failure that became a skip passed unseen, and a status
+  of `typo` merged as a run with no failures.

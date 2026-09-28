@@ -73,7 +73,7 @@ test("shards that aren't one whole run aren't checked", () => {
   const dir = fixture("harness-shards");
   const source = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root }).stdout.toString().trim();
   // Every listed test is a test, as the merge requires.
-  const known = ["rustc-known-failures.txt", "rustc-native-failures.txt"]
+  const known = ["rustc-known-failures.txt", "rustc-native-failures.txt", "rustc-out-of-scope.txt"]
     .map((name) => join(root, "test", name))
     .filter((file) => existsSync(file))
     .flatMap((file) => readFileSync(file, "utf8").split("\n"))
@@ -115,4 +115,14 @@ test("a test native Rust never ends has no answer, and isn't as listed", async (
   expect(result).toEqual({ test: "forever.rs", status: "native", reason: "doesn't pass natively with overflow checks off: didn't finish in 10s" });
   if (result.status !== "native") throw new Error(`Expected native failure, got ${result.status}`);
   expect(ratchet([result], new Map(), new Map()).unanswered).toEqual([result]);
+}, 120_000);
+
+// A batch of generated programs says which seeds: one that isn't a whole
+// number fails before any runs, not as a run of none. Found in review.
+test("fuzz settings that aren't whole numbers fail the run", () => {
+  for (const [name, value] of [["FUZZ_START", "invalid"], ["FUZZ_SEEDS", "0"], ["FUZZ_SEEDS", "1.5"], ["FUZZ_REDUCE_BUDGET", "-1"]]) {
+    const run = bunTest(["test/fuzz.test.ts"], { FUZZ_START: "1", FUZZ_SEEDS: "1", [name]: value });
+    expect([name, run.code]).toEqual([name, 1]);
+    expect(run.output).toContain(`${name}=${value}: `);
+  }
 }, 120_000);
