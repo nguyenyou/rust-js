@@ -79,7 +79,12 @@ export type Expr =
   | { kind: "match"; ty: Ty; a: Expr; whenA: Expr; bind: string; guard?: Expr; whenB: Expr; otherB?: Expr; x: string; y: string; whenC: Expr }
   // `({ x = a; b })`: a write, then a value, so what's read before and after
   // it says in which order an expression's parts run.
-  | { kind: "write"; ty: Ty; name: string; value: Expr; result: Expr };
+  | { kind: "write"; ty: Ty; name: string; value: Expr; result: Expr }
+  // `note(3, a)`, which prints its tag, and `bump(&mut s)`, which changes
+  // `s.a` and gives it: effects inside an expression, which JS may run in
+  // another order than Rust does.
+  | { kind: "note"; ty: Ty; tag: number; a: Expr }
+  | { kind: "bump"; ty: Ty; name: string };
 
 export type Stmt =
   | { kind: "let"; name: string; ty: Ty; value: Expr }
@@ -92,7 +97,7 @@ export type Stmt =
   | { kind: "vec-op"; name: string; op: "push" | "pop" | "sort" | "reverse"; value?: Expr }
   // `v[i] = x`, `v[i] += x` or `s.a = x`; an index may write first,
   // `v[{ y = a; i }] = x`.
-  | { kind: "set"; name: string; index?: number; field?: string; op: string; write?: { name: string; value: Expr }; value: Expr }
+  | { kind: "set"; name: string; index?: number; field?: string; op: string; write?: { name: string; value: Expr }; note?: number; value: Expr }
   | { kind: "closure"; name: string; param: IntTy; body: Expr }
   | { kind: "text-op"; name: string; op: "push_str" | "push"; value: Expr }
   | { kind: "map-op"; name: string; op: "insert" | "remove" | "entry"; key: Expr; value?: Expr }
@@ -146,6 +151,9 @@ function expr(r: Random, ty: Ty, scope: Scope, depth: number): Expr {
     const w = r.pick(written);
     return { kind: "write", ty, name: w.name, value: sub(w.ty), result: sub(ty) };
   }
+  if (r.chance(0.05)) return { kind: "note", ty, tag: r.int(100), a: sub(ty) };
+  const structs = written.filter((v) => v.ty === "S");
+  if (ty === "i32" && structs.length > 0 && r.chance(0.3)) return { kind: "bump", ty, name: r.pick(structs).name };
   if (ty === "bool") {
     const choice = r.int(6);
     if (choice === 0) {
@@ -385,7 +393,9 @@ function block(r: Random, scope: Scope, depth: number, counter: { n: number }, s
           index: r.chance(0.8) ? 0 : r.int(4),
           op: r.pick(["=", "=", "+=", "-=", "^="]),
           write: w && { name: w.name, value: expr(r, w.ty, inner, 2) },
-          value: expr(r, elem, inner, 2),
+          note: r.chance(0.3) ? r.int(100) : undefined,
+          // Sometimes what the index wrote, read after it.
+          value: w && w.ty === elem && r.chance(0.5) ? { kind: "var", ty: elem, name: w.name } : expr(r, elem, inner, 2),
         });
       } else if (structs.length > 0) {
         const [field, t] = r.pick(struct.fields);
@@ -486,6 +496,10 @@ function show(e: Expr): string {
       return isCopy(e.ty) ? e.name : `${e.name}.clone()`;
     case "write":
       return `({ ${e.name} = ${show(e.value)}; ${show(e.result)} })`;
+    case "note":
+      return `note(${e.tag}, ${show(e.a)})`;
+    case "bump":
+      return `bump(&mut ${e.name})`;
     case "bin":
     case "cmp":
     case "logic":
@@ -627,7 +641,8 @@ function lines(stmts: Stmt[], indent: string): string[] {
       case "vec-op":
         return [`${indent}${s.name}.${s.op}(${s.value ? show(s.value) : ""});`];
       case "set": {
-        const index = s.write ? `{ ${s.write.name} = ${show(s.write.value)}; id(${s.index}usize) }` : `id(${s.index}usize)`;
+        const at = s.note === undefined ? `id(${s.index}usize)` : `note(${s.note}, id(${s.index}usize))`;
+        const index = s.write ? `{ ${s.write.name} = ${show(s.write.value)}; ${at} }` : at;
         return [`${indent}${s.name}${s.field !== undefined ? `.${s.field}` : `[${index}]`} ${s.op} ${show(s.value)};`];
       }
       case "closure":
@@ -653,6 +668,16 @@ export function print(program: Program, seed?: number): string {
     ...(seed === undefined ? [] : [`// Generated from seed ${seed}.`]),
     "fn id<T>(x: T) -> T {",
     "    x",
+    "}",
+    "",
+    "fn note<T>(tag: u32, x: T) -> T {",
+    '    println!("note {tag}");',
+    "    x",
+    "}",
+    "",
+    "fn bump(s: &mut S) -> i32 {",
+    "    s.a = s.a.wrapping_add(1);",
+    "    s.a",
     "}",
     "",
     "use std::collections::BTreeMap;",
@@ -698,6 +723,7 @@ function* smaller(program: Program): Generator<Program> {
         yield* inBlock(s.body, (next) => put([{ ...s, body: next }]));
       }
       if (s.kind === "set" && s.write) yield put([{ ...s, write: undefined }]);
+      if (s.kind === "set" && s.note !== undefined) yield put([{ ...s, note: undefined }]);
       if (s.kind === "set" && s.op !== "=") yield put([{ ...s, op: "=" }]);
       if ("value" in s && s.value) for (const value of simpler(s.value)) yield put([{ ...s, value } as Stmt]);
       if (s.kind === "closure") for (const body of simpler(s.body)) yield put([{ ...s, body }]);
