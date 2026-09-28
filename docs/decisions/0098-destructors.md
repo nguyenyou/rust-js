@@ -190,6 +190,10 @@ value, and a `dyn Trait` of one.
   written in place, would have been as long. What a type drops is found
   once for each type now, and a long drop is a function. The blessed run
   failed on it, as a new failure that crashed (ADR 0089).
+- **Of rustc's tests, 39 more pass** (1,464 of 2,691), 31 of them ones that
+  had stopped at a `Drop` impl. 40 stop at what destructors don't do yet,
+  most often a borrowed temporary (13) and a value made before what may
+  panic (7).
 - **Done first, and not yet:** variables, parameters, moves, assignments,
   statements' values and `mem::drop`. A temporary that's borrowed or taken
   apart, a partial move, generic code given a value with a destructor, a
