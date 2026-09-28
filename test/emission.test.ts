@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
-import { root, target, run, buildReact } from "./support";
+import { root, target, run, buildReact, compiler } from "./support";
 
 test("copied trait defaults map to their original source file", async () => {
   const { buildCompiler, fixture, compiler } = await import("./support");
@@ -28,7 +28,7 @@ test("copied trait defaults map to their original source file", async () => {
 
 beforeAll(() => {
   buildReact();
-  run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
+  run([compiler, "examples/fib.rs", "-o", join(target, "fib.js")]);
 }, 600_000);
 
 // Source map: generated JS positions must point at the Rust that produced them.

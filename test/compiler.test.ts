@@ -8,7 +8,7 @@ import { copyFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { decode, expected, observe, same, type Outcome } from "./oracle";
-import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb } from "./support";
+import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb, compiler } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -59,91 +59,91 @@ let asyncs: Record<string, (...args: any[]) => any>;
 
 beforeAll(async () => {
   buildCompiler();
-  run([join(target, "debug", "rust-js"), "examples/fib.rs", "-o", join(target, "fib.js")]);
+  run([compiler, "examples/fib.rs", "-o", join(target, "fib.js")]);
   fib = await import(join(target, "fib.js"));
-  run([join(target, "debug", "rust-js"), "examples/structs.rs", "-o", join(target, "structs.js")]);
+  run([compiler, "examples/structs.rs", "-o", join(target, "structs.js")]);
   structs = await import(join(target, "structs.js"));
-  run([join(target, "debug", "rust-js"), "examples/closures.rs", "-o", join(target, "closures.js")]);
+  run([compiler, "examples/closures.rs", "-o", join(target, "closures.js")]);
   closures = await import(join(target, "closures.js"));
-  run([join(target, "debug", "rust-js"), "examples/collections.rs", "-o", join(target, "collections.js")]);
+  run([compiler, "examples/collections.rs", "-o", join(target, "collections.js")]);
   collections = await import(join(target, "collections.js"));
-  run([join(target, "debug", "rust-js"), "examples/options.rs", "-o", join(target, "options.js")]);
+  run([compiler, "examples/options.rs", "-o", join(target, "options.js")]);
   options = await import(join(target, "options.js"));
-  run([join(target, "debug", "rust-js"), "examples/methods.rs", "-o", join(target, "methods.js")]);
+  run([compiler, "examples/methods.rs", "-o", join(target, "methods.js")]);
   methods = await import(join(target, "methods.js"));
-  run([join(target, "debug", "rust-js"), "examples/generic_options.rs", "-o", join(target, "generic_options.js")]);
+  run([compiler, "examples/generic_options.rs", "-o", join(target, "generic_options.js")]);
   genericOptions = await import(join(target, "generic_options.js"));
-  run([join(target, "debug", "rust-js"), "examples/std_traits.rs", "-o", join(target, "std_traits.js")]);
+  run([compiler, "examples/std_traits.rs", "-o", join(target, "std_traits.js")]);
   stdTraits = await import(join(target, "std_traits.js"));
-  run([join(target, "debug", "rust-js"), "examples/combinators.rs", "-o", join(target, "combinators.js")]);
+  run([compiler, "examples/combinators.rs", "-o", join(target, "combinators.js")]);
   combinators = await import(join(target, "combinators.js"));
-  run([join(target, "debug", "rust-js"), "examples/text.rs", "-o", join(target, "text.js")]);
+  run([compiler, "examples/text.rs", "-o", join(target, "text.js")]);
   text = await import(join(target, "text.js"));
-  run([join(target, "debug", "rust-js"), "examples/calc.rs", "-o", join(target, "calc.js")]);
+  run([compiler, "examples/calc.rs", "-o", join(target, "calc.js")]);
   calc = await import(join(target, "calc.js"));
-  run([join(target, "debug", "rust-js"), "examples/numbers.rs", "-o", join(target, "numbers.js")]);
+  run([compiler, "examples/numbers.rs", "-o", join(target, "numbers.js")]);
   numbers = await import(join(target, "numbers.js"));
-  run([join(target, "debug", "rust-js"), "examples/inventory.rs", "-o", join(target, "inventory.js")]);
+  run([compiler, "examples/inventory.rs", "-o", join(target, "inventory.js")]);
   inventory = await import(join(target, "inventory.js"));
-  run([join(target, "debug", "rust-js"), "examples/queues.rs", "-o", join(target, "queues.js")]);
+  run([compiler, "examples/queues.rs", "-o", join(target, "queues.js")]);
   queues = await import(join(target, "queues.js"));
-  run([join(target, "debug", "rust-js"), "examples/report.rs", "-o", join(target, "report.js")]);
+  run([compiler, "examples/report.rs", "-o", join(target, "report.js")]);
   report = await import(join(target, "report.js"));
-  run([join(target, "debug", "rust-js"), "examples/lexer.rs", "-o", join(target, "lexer.js")]);
+  run([compiler, "examples/lexer.rs", "-o", join(target, "lexer.js")]);
   lexer = await import(join(target, "lexer.js"));
-  run([join(target, "debug", "rust-js"), "examples/values.rs", "-o", join(target, "values.js")]);
+  run([compiler, "examples/values.rs", "-o", join(target, "values.js")]);
   values = await import(join(target, "values.js"));
-  run([join(target, "debug", "rust-js"), "examples/versions.rs", "-o", join(target, "versions.js")]);
+  run([compiler, "examples/versions.rs", "-o", join(target, "versions.js")]);
   versions = await import(join(target, "versions.js"));
-  run([join(target, "debug", "rust-js"), "examples/wire.rs", "-o", join(target, "wire.js"), "--", ...buildSerde()]);
+  run([compiler, "examples/wire.rs", "-o", join(target, "wire.js"), "--", ...buildSerde()]);
   wire = await import(join(target, "wire.js"));
-  run([join(target, "debug", "rust-js"), "examples/inbox.rs", "-o", join(target, "inbox.js"), "--", ...buildSerde()]);
+  run([compiler, "examples/inbox.rs", "-o", join(target, "inbox.js"), "--", ...buildSerde()]);
   inbox = await import(join(target, "inbox.js"));
-  run([join(target, "debug", "rust-js"), "examples/api.rs", "-o", join(target, "api.js"), "--", ...buildSerde()]);
+  run([compiler, "examples/api.rs", "-o", join(target, "api.js"), "--", ...buildSerde()]);
   api = await import(join(target, "api.js"));
-  run([join(target, "debug", "rust-js"), "examples/dynamic.rs", "-o", join(target, "dynamic.js"), "--", ...buildSerde()]);
+  run([compiler, "examples/dynamic.rs", "-o", join(target, "dynamic.js"), "--", ...buildSerde()]);
   dynamic = await import(join(target, "dynamic.js"));
-  run([join(target, "debug", "rust-js"), "examples/wide.rs", "-o", join(target, "wide.js"), "--", ...buildSerde()]);
+  run([compiler, "examples/wide.rs", "-o", join(target, "wide.js"), "--", ...buildSerde()]);
   wide = await import(join(target, "wide.js"));
-  run([join(target, "debug", "rust-js"), "examples/consts.rs", "-o", join(target, "consts.js")]);
+  run([compiler, "examples/consts.rs", "-o", join(target, "consts.js")]);
   consts = await import(join(target, "consts.js"));
-  run([join(target, "debug", "rust-js"), "examples/enums.rs", "-o", join(target, "enums.js")]);
+  run([compiler, "examples/enums.rs", "-o", join(target, "enums.js")]);
   enums = await import(join(target, "enums.js"));
-  run([join(target, "debug", "rust-js"), "examples/strings.rs", "-o", join(target, "strings.js")]);
+  run([compiler, "examples/strings.rs", "-o", join(target, "strings.js")]);
   strings = await import(join(target, "strings.js"));
-  run([join(target, "debug", "rust-js"), "examples/results.rs", "-o", join(target, "results.js")]);
+  run([compiler, "examples/results.rs", "-o", join(target, "results.js")]);
   results = await import(join(target, "results.js"));
-  run([join(target, "debug", "rust-js"), "examples/iterators.rs", "-o", join(target, "iterators.js")]);
+  run([compiler, "examples/iterators.rs", "-o", join(target, "iterators.js")]);
   iterators = await import(join(target, "iterators.js"));
-  run([join(target, "debug", "rust-js"), "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
+  run([compiler, "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
   threadLocals = await import(join(target, "thread_locals.js"));
   // The web crate is used from its metadata (ADR 0024).
   buildWeb();
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
-  run([join(target, "debug", "rust-js"), "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
-  run([join(target, "debug", "rust-js"), "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
-  run([join(target, "debug", "rust-js"), "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
-  run([join(target, "debug", "rust-js"), "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
-  run([join(target, "debug", "rust-js"), "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
-  run([join(target, "debug", "rust-js"), "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
+  run([compiler, "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
+  run([compiler, "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
+  run([compiler, "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
+  run([compiler, "examples/countdown.rs", "-o", join(target, "countdown.js"), ...withWeb]);
+  run([compiler, "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
+  run([compiler, "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
   throws = await import(join(target, "throws.js"));
   // The playground's own Rust (ADRs 0032, 0044), as compile-rust.ts compiles it with
   // rust-js.wasm: with React.
   buildReact();
   // Into an empty folder, so a file an older layout wrote can't pass for its output.
   rmSync(join(target, "playground"), { recursive: true, force: true });
-  run([join(target, "debug", "rust-js"), "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"),
+  run([compiler, "wasm/web/rust/lib.rs", "-o", join(target, "playground", "lib.js"),
     ...withWeb, "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
-  run([join(target, "debug", "rust-js"), "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
+  run([compiler, "test/async.rs", "-o", join(target, "async.js"), ...withWeb]);
   asyncs = await import(join(target, "async.js"));
-  run([join(target, "debug", "rust-js"), "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
+  run([compiler, "examples/modules/lib.rs", "-o", join(target, "modules", "lib.js")]);
   modules = {
     lib: await import(join(target, "modules", "lib.js")),
     stats: await import(join(target, "modules", "stats.js")),
     util: await import(join(target, "modules", "util.js")),
   };
   // Imports (ADR 0028): `./greet.js` is relative to the root's JS, so it goes beside it.
-  run([join(target, "debug", "rust-js"), "test/imports/lib.rs", "-o", join(target, "imports", "lib.js")]);
+  run([compiler, "test/imports/lib.rs", "-o", join(target, "imports", "lib.js")]);
   copyFileSync(join(root, "test/imports/greet.js"), join(target, "imports", "greet.js"));
   imports = {
     lib: await import(join(target, "imports", "lib.js")),

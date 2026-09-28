@@ -144,7 +144,7 @@ pub fn App() -> Element {
 }
 `;
   writeFileSync(join(dir, "src/App.rs"), app("font-bold"));
-  const plugins = [rustJs(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()];
+  const plugins = [rustJs({ rustJs: compiler }), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()];
   const server = await createServer({ root: dir, configFile: false, plugins, logLevel: "silent", server: { port: 0 } });
   let browser;
   try {
@@ -192,7 +192,7 @@ pub fn App() -> Element {
     }
 }
 `);
-  await build({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent" });
+  await build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], logLevel: "silent" });
   const committed = readFileSync(join(dir, "src/App.jsx"), "utf8");
   unlinkSync(join(dir, "src/App.jsx.map"));
 
@@ -268,7 +268,7 @@ pub fn App() -> Element {
 }
 `;
   writeFileSync(join(dir, "src/App.rs"), app("Count"));
-  const server = await createServer({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent", server: { port: 0 } });
+  const server = await createServer({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], logLevel: "silent", server: { port: 0 } });
   let browser;
   try {
     await server.listen();

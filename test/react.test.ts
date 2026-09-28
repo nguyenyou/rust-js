@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { copyFileSync } from "node:fs";
-import { root, target, run, buildCompiler, buildReact } from "./support";
+import { root, target, run, buildCompiler, buildReact, compiler } from "./support";
 
 beforeAll(buildCompiler, 600_000);
 
@@ -10,7 +10,7 @@ beforeAll(buildCompiler, 600_000);
 test("React components are hand-written JSX, and React runs them", () => {
   buildReact();
   const out = join(target, "react-test");
-  run([join(target, "debug", "rust-js"), "test/components.rs", "-o", join(out, "components.js"),
+  run([compiler, "test/components.rs", "-o", join(out, "components.js"),
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   // A module with JSX is a `.jsx` file.
   const js = require("node:fs").readFileSync(join(out, "components.jsx"), "utf8");
@@ -178,7 +178,7 @@ pub fn ComponentOrder() -> Element {
 test("React's and React DOM's APIs are hand-written React, and they run", () => {
   buildReact();
   const out = join(target, "react-apis");
-  run([join(target, "debug", "rust-js"), "test/apis.rs", "-o", join(out, "apis.js"),
+  run([compiler, "test/apis.rs", "-o", join(out, "apis.js"),
     "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
   const js = require("node:fs").readFileSync(join(out, "apis.jsx"), "utf8");
   // Built-in components are JSX tags, and `use` is `use`.

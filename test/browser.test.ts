@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { root, target, run, buildCompiler, buildWeb } from "./support";
+import { root, target, run, buildCompiler, buildWeb, compiler } from "./support";
 
 beforeAll(() => {
   buildCompiler();
@@ -9,14 +9,14 @@ beforeAll(() => {
   const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
   // Test mode (ADR 0026): the same programs with their `#[test]`s, and some failing on purpose.
   const tests = (rs: string, name: string, flags: string[] = []) =>
-    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "rust-tests", name, `${name}.js`), ...flags]);
+    run([compiler, "--test", rs, "-o", join(target, "rust-tests", name, `${name}.js`), ...flags]);
   tests("examples/counter.rs", "counter", withWeb);
   tests("examples/todo.rs", "todo", withWeb);
   tests("examples/countdown.rs", "countdown", withWeb);
   tests("test/asserts.rs", "asserts");
   // For real browsers (ADR 0027): `--cfg browser` turns on tests that need one.
   const forBrowser = (rs: string, name: string, flags: string[] = []) =>
-    run([join(target, "debug", "rust-js"), "--test", rs, "-o", join(target, "browser-tests", name, `${name}.js`), ...flags, "--cfg=browser"]);
+    run([compiler, "--test", rs, "-o", join(target, "browser-tests", name, `${name}.js`), ...flags, "--cfg=browser"]);
   forBrowser("examples/counter.rs", "counter", withWeb);
   forBrowser("examples/todo.rs", "todo", withWeb);
   forBrowser("test/asserts.rs", "asserts", ["--"]);

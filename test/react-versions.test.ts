@@ -172,6 +172,6 @@ test("The Vite plugin builds for the React a project has installed", async () =>
   writeFileSync(join(dir, "node_modules", "react", "package.json"), '{ "name": "react", "version": "18.2.0" }\n');
   writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/App.jsx"></script>');
   writeFileSync(join(dir, "src/App.rs"), usesUseEffectEvent);
-  const attempt = build({ root: dir, configFile: false, plugins: [rustJs(), react()], logLevel: "silent" });
+  const attempt = build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], logLevel: "silent" });
   await expect(attempt).rejects.toThrow("this project has React 18.2.0");
 }, 120_000);

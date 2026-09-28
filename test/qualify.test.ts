@@ -5,11 +5,11 @@
 
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { rmSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { checksums } from "../scripts/qualify";
-import { fixture } from "./support";
+import { fixture, root } from "./support";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -34,4 +34,16 @@ test("a distribution's files are what its checksums say, or it isn't qualified",
   const extra = distribution();
   writeFileSync(join(extra, "SHA256SUMS"), `${sha256("c")}  c.tgz\n`, { flag: "a" });
   expect(checksums(extra)).toEqual(["SHA256SUMS lists c.tgz, which the distribution doesn't"]);
+});
+
+// Qualification runs the tests through the compiler it gives them, so none
+// may reach for the checkout's debug build by name, or let the Vite plugin
+// find it: one that did passed only where a debug build was left behind.
+test("tests use the compiler they're given", () => {
+  const named: string[] = [];
+  for (const file of readdirSync(join(root, "test")).filter((f) => f.endsWith(".ts") && f !== "support.ts")) {
+    const source = readFileSync(join(root, "test", file), "utf8");
+    if (/join\(target, "debug", "rust-js"\)|target\/debug\/rust-js|rustJs\(\)/.test(source)) named.push(file);
+  }
+  expect(named).toEqual([]);
 });
