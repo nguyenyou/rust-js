@@ -226,6 +226,11 @@ pilot. No delivery dates are assigned yet.
   launcher, and the package test with the packaged binary, writing a report
   of commit, host, runtimes and results; the [Qualify](.github/workflows/qualify.yml)
   workflow does it per host ([ADR 0094](docs/decisions/0094-qualification.md)).
+  First qualified: the distribution of `4bd4366` for Linux x64, on GitHub's
+  `ubuntu-latest`, with 605 tests through the installed launcher and the
+  package test on the packaged binary, all passing; its four packages rebuilt
+  byte for byte from the same source on another machine. Other hosts wait on
+  correctness and completeness (M7–M10) before a release is made for them.
   The support matrix, the WASM compiler and performance budgets remain open.
 - [ ] **M6.2 — Complete a pilot release and upgrade.** Deploy the pilot,
   observe it for an agreed period with agreed success criteria, fix blockers,
