@@ -2173,7 +2173,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn is_assignment_call(&self, fun: ExprId) -> bool {
         if matches!(
             self.std_fn(fun),
-            Some(Std::CellSet | Std::Clear | Std::Panic | Std::PanicFmt | Std::PushStr | Std::AssignOperator(_))
+            Some(
+                Std::CellSet
+                    | Std::Clear
+                    | Std::Panic
+                    | Std::PanicFmt
+                    | Std::BeginPanic
+                    | Std::PushStr
+                    | Std::AssignOperator(_)
+            )
         ) {
             return true;
         }

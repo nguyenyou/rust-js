@@ -725,6 +725,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
                 Expr::undefined()
             }
+            // A `&str` or a `String` is the panic's message, as Rust's hook
+            // shows it; another payload, `panic!(5)`, has none.
+            Std::BeginPanic => {
+                let payload = generic_args.types().next().expect("`begin_panic` has a type argument");
+                let text = matches!(payload.kind(), ty::Ref(_, inner, _) if inner.is_str())
+                    || self.is_lang_adt(payload, LangItem::String);
+                if !text {
+                    return Err(self.unsupported(span, "a panic whose payload isn't text"));
+                }
+                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
+                Expr::undefined()
+            }
             // A whole line is `console.log`'s, which ends it; text that may
             // not end one is written as it is (ADR 0087).
             Std::Print { error } => match without_newline(arg()) {

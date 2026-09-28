@@ -68,6 +68,9 @@ pub(super) enum Std {
     Panic,
     /// `panic!("{}", x)`: the same, with a formatted message.
     PanicFmt,
+    /// `panic!(x)` before edition 2021, `std::rt::begin_panic(x)`: the
+    /// same, with `x` as it is, if it's text.
+    BeginPanic,
     /// `println!` and `print!`, or with `error`, `eprintln!` and
     /// `eprint!`: `console.log(..)` of a line (ADR 0087).
     Print {
@@ -290,6 +293,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             match tcx.def_path_str(def_id).as_str() {
                 "std::io::_print" => return Some(Std::Print { error: false }),
                 "std::io::_eprint" => return Some(Std::Print { error: true }),
+                "std::rt::begin_panic" => return Some(Std::BeginPanic),
                 _ => {}
             }
         }

@@ -56,3 +56,9 @@ we read. We have to add them back ourselves.
   ([0010](0010-naming-and-scopes.md)).
 - Each module that divides carries its own copy of the helpers. When a
   project has several modules, move to a shared runtime module.
+- **`panic!` of one argument before edition 2021** calls
+  `std::rt::begin_panic` with it as it is, not as a format string: a
+  `&str` or a `String` is the message, `panic!("{}")` two braces and
+  `panic!()` "explicit panic", as Rust's hook shows them. Another payload,
+  `panic!(5)`, has no message in Rust, and is rejected. rustc's own tests
+  panic so in 72 of them (`begin_panic_*.rs`).
