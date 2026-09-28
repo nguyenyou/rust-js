@@ -427,9 +427,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn dyn_trait_ref(&self, ty: Ty<'tcx>, self_ty: Ty<'tcx>) -> Option<ty::TraitRef<'tcx>> {
         match self.pointee(ty).kind() {
-            ty::Dynamic(predicates, ..) => predicates
-                .principal()
-                .map(|p| p.with_self_ty(self.tcx, self_ty).skip_binder()),
+            // `dyn for<'a> AsStr<'a, 'a>`: its lifetimes erased, as a
+            // dictionary is the same for any.
+            ty::Dynamic(predicates, ..) => predicates.principal().map(|p| {
+                self.tcx
+                    .instantiate_bound_regions_with_erased(p.with_self_ty(self.tcx, self_ty))
+            }),
             _ => None,
         }
     }

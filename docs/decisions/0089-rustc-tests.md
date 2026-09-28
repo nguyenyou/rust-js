@@ -147,6 +147,10 @@ and stderr, and return, under Bun and Node.
   which rustc was given as it is; compiletest reads one as half-open and
   runs it at its lowest edition, and so does the runner.
 - Judged by how it ended (ADR 0088), a compile that crashes after its
-  rejection is a crash: two tests listed as rejected are crashes, a union
-  constant (`union-const-codegen.rs`) and a higher-ranked `downcast_ref`
-  (`any-lifetime-escape-higher-rank.rs`).
+  rejection is a crash: two tests listed as rejected were crashes, and
+  are rejections now. A union's field, read from a union constant rust-js
+  had rejected, was taken as a struct's (`union-const-codegen.rs`); it's
+  rejected too. And a `dyn for<'a> AsStr<'a, 'a>`'s dictionary was asked
+  of rustc with its lifetime still bound
+  (`any-lifetime-escape-higher-rank.rs`); it's made with it erased, as a
+  bound's is.
