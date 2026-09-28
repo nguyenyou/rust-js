@@ -1,0 +1,201 @@
+// Mutations of the compiler, each a bug it had, or one a rule of it keeps
+// out, put back: the tests named for each must fail against a compiler
+// built with it, and pass against the compiler as it is (ADR 0093). A
+// mutation that no longer applies, doesn't build, or that its tests don't
+// catch fails the run, so the tests are shown to see what they're for.
+//
+//   bun scripts/mutations.ts                  # every mutation
+//   bun scripts/mutations.ts copy-on-read ..  # the ones named
+//
+// Each builds natively a few test programs, which macOS makes slow; the
+// rustc tests workflow runs them all on Linux with `mutations`.
+
+import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { runSync, stopped } from "../test/child";
+
+const root = join(import.meta.dir, "..");
+
+export type Mutation = {
+  name: string;
+  /** What it breaks, as Rust would see it. */
+  breaks: string;
+  file: string;
+  find: string;
+  replace: string;
+  /** `bun test` arguments whose tests must catch it. */
+  tests: string[];
+};
+
+export const mutations: Mutation[] = [
+  {
+    name: "element-value-first",
+    breaks: "`v[i] = f()` checks `i` before `f` runs, and reads what the index wrote",
+    file: "src/lower.rs",
+    find: "        if (writes && !value.is_constant()) || (panics && value.has_effects()) {",
+    replace: "        if false && ((writes && !value.is_constant()) || (panics && value.has_effects())) {",
+    tests: ["test/corpus.test.ts", "-t", "assignment_order"],
+  },
+  {
+    name: "compound-place-read",
+    breaks: "`x += g()` reads `x` before `g`, which changes it, runs",
+    file: "src/lower.rs",
+    find: "let rhs_js = if rhs_js.has_effects() && self.may_change(lhs) {",
+    replace: "let rhs_js = if false && rhs_js.has_effects() && self.may_change(lhs) {",
+    tests: ["test/corpus.test.ts", "-t", "assignment_order\\.rs"],
+  },
+  {
+    name: "i32-wrap",
+    breaks: "`i32` arithmetic doesn't wrap at 32 bits",
+    file: "src/lower/representation.rs",
+    find: "            Num::I32 => Expr::bin(Op::BitOr, e, Expr::num(0)),",
+    replace: "            Num::I32 => e,",
+    tests: ["test/corpus.test.ts", "-t", "wrapping\\.rs"],
+  },
+  {
+    name: "u64-wrap",
+    breaks: "`u64` arithmetic doesn't wrap at 64 bits",
+    file: "src/lower/representation.rs",
+    find: '            Num::U64 => as_n("asUintN"),',
+    replace: "            Num::U64 => e,",
+    tests: ["test/corpus.test.ts", "-t", "wrapping\\.rs"],
+  },
+  {
+    name: "index-panic-message",
+    breaks: "an index out of bounds panics with another message than Rust's",
+    file: "src/runtime.rs",
+    find: String.raw`function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(` + "`index out of bounds: the len is",
+    replace: String.raw`function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(` + "`index out of bounds: the length is",
+    tests: ["test/corpus.test.ts", "-t", "index_out_of_bounds"],
+  },
+  {
+    name: "copy-on-read",
+    breaks: "a `Copy` value read from a place is that place, not a copy",
+    file: "src/lower/representation.rs",
+    find: "        if self.contains_mutated(ty) && self.is_copy(ty) {",
+    replace: "        if false && self.contains_mutated(ty) && self.is_copy(ty) {",
+    tests: ["test/corpus.test.ts", "-t", "copy_mutation"],
+  },
+  {
+    name: "guard-statements",
+    breaks: "a guard's statements don't run before its test",
+    file: "src/lower.rs",
+    find: "                before.push(StmtKind::If(guard, body, None).at(span));",
+    replace: "                before.clear();\n                before.push(StmtKind::If(guard, body, None).at(span));",
+    tests: ["test/corpus.test.ts", "-t", "guard_statements"],
+  },
+  {
+    name: "crash-after-rejection",
+    breaks: "rust-js panics after it says what it doesn't support",
+    file: "src/lower.rs",
+    find: '        self.tcx\n            .dcx()\n            .span_err(span, format!("rust-js does not support {what} yet"))\n    }',
+    replace: '        self.tcx.dcx().span_err(span, format!("rust-js does not support {what} yet"));\n        panic!("a crash after the rejection")\n    }',
+    tests: ["test/corpus.test.ts", "-t", "union_const|closure_clone\\.rs"],
+  },
+  {
+    name: "operand-capture",
+    breaks: "an earlier operand runs after a later one's statements",
+    file: "src/lower.rs",
+    find: "            if !evaluated.statements.is_empty() {",
+    replace: "            if false {",
+    tests: ["test/semantics.test.ts", "-t", "operand_prerequisites"],
+  },
+];
+
+// Where the mutated crate is built, and the compilers kept: one copy of
+// the crate, remade for each mutation, and one target, so only rust-js is
+// built again.
+const work = join(root, "target", "mutants");
+const crate = join(work, "crate");
+const crateFiles = ["Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain.toml", "src"];
+const buildTimeout = 20 * 60_000;
+const testTimeout = 20 * 60_000;
+
+/** The source as it is, with `mutation` in it, or why it can't be. */
+export function mutate(source: string, mutation: Mutation): string | { problem: string } {
+  const at = source.indexOf(mutation.find);
+  if (at < 0) return { problem: `doesn't apply: ${mutation.file} has no \`${mutation.find.split("\n")[0].trim()}\`` };
+  if (source.indexOf(mutation.find, at + 1) >= 0) return { problem: `applies more than once in ${mutation.file}` };
+  return source.slice(0, at) + mutation.replace + source.slice(at + mutation.find.length);
+}
+
+/** A compiler built from this checkout's crate, with `mutation` in it, or
+ * without one; or why it can't be built. */
+function build(mutation?: Mutation): string | { problem: string } {
+  rmSync(crate, { recursive: true, force: true });
+  mkdirSync(crate, { recursive: true });
+  for (const file of crateFiles) cpSync(join(root, file), join(crate, file), { recursive: true });
+  if (mutation) {
+    const file = join(crate, mutation.file);
+    const mutated = mutate(readFileSync(file, "utf8"), mutation);
+    if (typeof mutated !== "string") return mutated;
+    writeFileSync(file, mutated);
+  }
+  const target = join(work, "target");
+  const p = runSync(["cargo", "build", "--quiet", "--locked", "--target-dir", target], crate, buildTimeout);
+  if (p.code !== 0 || stopped(p, buildTimeout)) {
+    const why = stopped(p, buildTimeout) ?? p.stderr.split("\n").find((line) => line.startsWith("error")) ?? `exited ${p.code}`;
+    return { problem: `doesn't build: ${why}` };
+  }
+  const kept = join(work, "bin", mutation?.name ?? "unmutated");
+  mkdirSync(join(work, "bin"), { recursive: true });
+  cpSync(join(target, "debug", "rust-js"), kept);
+  return kept;
+}
+
+/** Whether `tests` pass with `compiler`, and how many ran. */
+function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string } {
+  const p = runSync([process.execPath, "test", ...tests], root, testTimeout, { RUST_JS_COMPILER: compiler });
+  const output = p.stdout + p.stderr;
+  const count = (what: string) => Number(new RegExp(String.raw`^ (\d+) ` + what + "$", "m").exec(output)?.[1] ?? 0);
+  return { passed: p.code === 0 && !stopped(p, testTimeout), ran: count("pass") + count("fail"), output };
+}
+
+async function main() {
+  const named = process.argv.slice(2);
+  const unknown = named.filter((name) => !mutations.some((m) => m.name === name));
+  if (unknown.length > 0) throw new Error(`no mutation ${unknown.join(", ")}; there are ${mutations.map((m) => m.name).join(", ")}`);
+  const chosen = named.length > 0 ? mutations.filter((m) => named.includes(m.name)) : mutations;
+  // Each mutation's tests pass as the compiler is, and run at all, so
+  // their failing is the mutation's doing.
+  const unmutated = build();
+  if (typeof unmutated !== "string") throw new Error(`the compiler as it is ${unmutated.problem}`);
+  // And they use the compiler they're given: with one that compiles
+  // nothing, each fails, or a mutation passing them would say nothing.
+  const broken = join(work, "bin", "broken");
+  writeFileSync(broken, "#!/bin/sh\necho 'error: rust-js compiles nothing here' >&2\nexit 101\n");
+  chmodSync(broken, 0o755);
+  for (const tests of new Set(chosen.map((m) => m.tests.join("\0")))) {
+    const control = test(tests.split("\0"), unmutated);
+    if (!control.passed || control.ran === 0) {
+      throw new Error(`\`bun test ${tests.split("\0").join(" ")}\` doesn't pass, or runs nothing, as the compiler is:\n${control.output.slice(-2000)}`);
+    }
+    if (test(tests.split("\0"), broken).passed) {
+      throw new Error(`\`bun test ${tests.split("\0").join(" ")}\` passes with a compiler that compiles nothing: it isn't using the one it's given`);
+    }
+  }
+  const rows: [Mutation, string][] = [];
+  for (const mutation of chosen) {
+    const compiler = build(mutation);
+    if (typeof compiler !== "string") {
+      rows.push([mutation, compiler.problem]);
+      continue;
+    }
+    const { passed, ran } = test(mutation.tests, compiler);
+    rows.push([mutation, passed ? `SURVIVED: its ${ran} tests passed with it` : "caught"]);
+  }
+  for (const [mutation, result] of rows) console.log(`${mutation.name}\t${result}`);
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (summary) {
+    const cell = (s: string) => s.replaceAll("|", "\\|");
+    const lines = ["## Mutations", "", "| Mutation | Breaks | Result |", "|---|---|---|"];
+    for (const [mutation, result] of rows) lines.push(`| ${mutation.name} | ${cell(mutation.breaks)} | ${cell(result)} |`);
+    writeFileSync(summary, lines.join("\n") + "\n", { flag: "a" });
+  }
+  const missed = rows.filter(([, result]) => result !== "caught");
+  console.log(`${rows.length - missed.length} of ${rows.length} mutations caught`);
+  if (missed.length > 0) process.exitCode = 1;
+}
+
+if (import.meta.main) await main();

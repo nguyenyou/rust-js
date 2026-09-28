@@ -28,9 +28,11 @@ function stopGroup(pid: number) {
   }
 }
 
-/** `cmd`, stopped after `timeout` ms or `maxBuffer` bytes of output. */
-export function runSync(cmd: string[], cwd: string, timeout: number): Exit {
-  const p = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout, maxBuffer, detached: true });
+/** `cmd`, stopped after `timeout` ms or `maxBuffer` bytes of output, with
+ * this process's environment and `env`, which a change to `process.env`
+ * wouldn't give it. */
+export function runSync(cmd: string[], cwd: string, timeout: number, env: Record<string, string> = {}): Exit {
+  const p = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout, maxBuffer, detached: true, env: { ...process.env, ...env } });
   // What it started and left running goes with it.
   stopGroup(p.pid);
   return {
@@ -44,8 +46,8 @@ export function runSync(cmd: string[], cwd: string, timeout: number): Exit {
 }
 
 /** `cmd`, as `runSync` runs it, without blocking the others running. */
-export async function run(cmd: string[], cwd: string, timeout: number): Promise<Exit> {
-  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", detached: true });
+export async function run(cmd: string[], cwd: string, timeout: number, env: Record<string, string> = {}): Promise<Exit> {
+  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", detached: true, env: { ...process.env, ...env } });
   let timedOut = false;
   let overflowed = false;
   const readers = [p.stdout.getReader(), p.stderr.getReader()];

@@ -74,6 +74,9 @@ instead of running them locally:
 - A batch of generated programs ([ADR 0092](docs/decisions/0092-generated-programs.md)):
   `-f fuzz_start=1000 -f fuzz_seeds=600`. A program that differs is reduced,
   and the reduced programs are the run's `fuzz` artifact.
+- Known bugs put back into the compiler, each of which its tests must
+  catch ([ADR 0093](docs/decisions/0093-mutations.md)): `-f mutations=true`,
+  or `bun scripts/mutations.ts copy-on-read` for one or two locally.
 
 A handful of tests, such as the corpus in `bun test` or a few named rustc
 tests, is fine locally. Start the workflow, share the run's link, and read

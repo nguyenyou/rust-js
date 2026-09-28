@@ -4,7 +4,9 @@ name: rustc tests
 # Linux (AGENTS.md): rustc's own run-pass UI tests, run as JS (ADR 0089), the
 # ones named or, with none named, all of them, split across machines and
 # checked as one run against test/rustc-known-failures.txt; or, with
-# `fuzz_seeds`, a batch of generated programs (ADR 0092), split the same way.
+# `fuzz_seeds`, a batch of generated programs (ADR 0092), split the same way;
+# or, with `mutations`, known bugs put back into the compiler, which the
+# tests must catch (ADR 0093).
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +26,10 @@ on:
         description: 'The first generated program''s seed.'
         required: false
         default: '1'
+      mutations:
+        description: 'Instead: put back each known bug, and check its tests catch it.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,7 +58,7 @@ jobs:
   # rust-js, built once for the shards: a release build, as it's run some
   # 2,700 times, and the binary finds the toolchain where every runner has it.
   build:
-    if: inputs.tests == ''
+    if: inputs.tests == '' && !inputs.mutations
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -67,7 +73,7 @@ jobs:
   # All of them: every sixth test on each of six machines.
   shard:
     needs: build
-    if: inputs.fuzz_seeds == ''
+    if: inputs.fuzz_seeds == '' && !inputs.mutations
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -215,3 +221,29 @@ jobs:
             exit 1
           fi
           echo "all $SEEDS seeds from $START ran, each once"
+
+  # Known bugs, each put back into the compiler, one at a time: the tests
+  # named for each must fail against it, and pass as the compiler is.
+  mutations:
+    if: inputs.mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rustc-tests-setup
+        with:
+          build: 'false'
+      # Else what the last run left: dependencies aren't compiled again,
+      # only rust-js, for each mutation.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/mutants/target
+          key: mutants-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: mutants-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      # The corpus ships each case through Vite too.
+      - run: bun install --frozen-lockfile
+      - name: Put back each known bug
+        run: bun scripts/mutations.ts

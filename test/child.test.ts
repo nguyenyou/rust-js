@@ -79,3 +79,10 @@ test("a process's descendants are stopped with it, and its deadline kept", async
   await Bun.sleep(50);
   expect(alive(Number(readFileSync(pidFile, "utf8")))).toBe(false);
 });
+
+// A setting for a child is given to it, as `process.env` changed later
+// isn't. Found by the mutation runner, whose tests never saw its compiler.
+test("a process gets the environment it's given", async () => {
+  expect(runSync(["sh", "-c", "echo $CHILD_SETTING"], ".", 10_000, { CHILD_SETTING: "given" }).stdout).toBe("given\n");
+  expect((await run(["sh", "-c", "echo $CHILD_SETTING"], ".", 10_000, { CHILD_SETTING: "given" })).stdout).toBe("given\n");
+});
