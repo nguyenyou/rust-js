@@ -3165,10 +3165,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// An element, or a field of one: what `element_target` writes.
+    /// An element, or a field of one: what `element_target` writes. Or a
+    /// field of what a call's reference points to, as `w.x = 1` through a
+    /// `DerefMut` is `deref_mut(&mut w).x = 1`.
     fn in_element(&self, e: ExprId) -> bool {
         self.element(e).is_some()
-            || matches!(self.thir[self.strip(e)].kind, ExprKind::Field { lhs, .. } if self.in_element(lhs))
+            || matches!(self.thir[self.strip(e)].kind, ExprKind::Field { lhs, .. } if self.in_element(lhs) || self.returned(lhs))
+    }
+
+    /// `*f(..)`: what a call's reference points to.
+    fn returned(&self, e: ExprId) -> bool {
+        matches!(self.thir[self.strip(e)].kind, ExprKind::Deref { arg } if matches!(self.thir[self.strip(arg)].kind, ExprKind::Call { .. }))
     }
 
     /// `v[i]`, checked: `$index(v, i)`, or just `v[i]` for an array whose
@@ -3220,6 +3227,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let base = match (self.place(lhs), self.element(lhs)) {
                     (Some((place, _)), _) => place,
                     (None, Some(_)) => self.referent(lhs, out)?,
+                    (None, None) if self.returned(lhs) => self.referent(lhs, out)?,
                     (None, None) => self.element_target(lhs, out)?,
                 };
                 Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))

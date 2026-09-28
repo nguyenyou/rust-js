@@ -1360,6 +1360,9 @@ pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || tcx.is_diagnostic_item(sym::Eq, id)
         || tcx.is_diagnostic_item(sym::Iterator, id)
         || is_operator(tcx, id)
+        // An auto trait, as `Send`, `Sync`, `Unpin` or `UnwindSafe`, has no
+        // items: its impl says what the type may be used for, and runs nothing.
+        || tcx.trait_is_auto(id)
 }
 
 pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
@@ -1377,6 +1380,9 @@ pub(super) fn is_operator(tcx: TyCtxt<'_>, id: DefId) -> bool {
         LangItem::DivAssign,
         LangItem::RemAssign,
         LangItem::Index,
+        LangItem::IndexMut,
+        LangItem::Deref,
+        LangItem::DerefMut,
     ]
     .into_iter()
     .any(|item| tcx.is_lang_item(id, item))

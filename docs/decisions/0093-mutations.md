@@ -43,6 +43,9 @@ written, and what it breaks, as Rust would see it:
 | `static-mut-reference` | a reference to a `static mut` is allowed | `static_mut_reference.rs` |
 | `atomic-fetch-new-value` | an atomic's `fetch_add` gives the new value, not the old | `atomics.rs` |
 | `thread-local-storage-static` | std's storage for a `thread_local!` is taken as a static, and rejected | `thread_local_syntax.rs` |
+| `auto-trait-impl` | an impl of an auto trait, as `unsafe impl Sync`, is rejected | `marker_traits.rs` |
+| `user-deref-impl` | a user `Deref` is rejected | `user_deref.rs` |
+| `returned-field-write` | a field of what a call's `&mut` points to can't be written | `user_deref.rs`, `returned_references.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

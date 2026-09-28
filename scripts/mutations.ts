@@ -221,6 +221,30 @@ export const mutations: Mutation[] = [
     replace: "            DefKind::Static { .. } => !tcx.is_foreign_item(d),",
     tests: ["test/corpus.test.ts", "-t", "thread_local_syntax"],
   },
+  {
+    name: "auto-trait-impl",
+    breaks: "an impl of an auto trait, as `unsafe impl Sync`, is rejected",
+    file: "src/lower/recognition.rs",
+    find: "        || tcx.trait_is_auto(id)\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "marker_traits"],
+  },
+  {
+    name: "user-deref-impl",
+    breaks: "a user `Deref` is rejected",
+    file: "src/lower/recognition.rs",
+    find: "        LangItem::Deref,\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "user_deref"],
+  },
+  {
+    name: "returned-field-write",
+    breaks: "a field of what a call's `&mut` points to can't be written",
+    file: "src/lower.rs",
+    find: "                    (None, None) if self.returned(lhs) => self.referent(lhs, out)?,\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "user_deref|returned_references"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
