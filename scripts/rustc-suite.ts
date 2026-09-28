@@ -95,7 +95,17 @@ export function scope(source: string): Scope {
 
 // `skip` is a test out of scope, by what its source says; `native`, one
 // native Rust gives no answer for.
-export type Result = { test: string; status: "pass" } | { test: string; status: "fail" | "skip" | "native"; reason: string };
+// A failure's `detail`, for output that differs, says where, for a person
+// to see; its `reason` stays what the lists are compared by.
+export type Result = { test: string; status: "pass" } | { test: string; status: "fail" | "skip" | "native"; reason: string; detail?: string };
+
+/** Where two outputs first differ: their lengths, and each around there. */
+export function difference(native: string, js: string): string {
+  let at = 0;
+  while (at < native.length && at < js.length && native[at] === js[at]) at++;
+  const around = (text: string) => JSON.stringify(text.slice(Math.max(0, at - 40), at + 40));
+  return `${native.length} and ${js.length} characters, first differing at ${at}: native ${around(native)}, JS ${around(js)}`;
+}
 
 /** How a test fails, from what its reason says: `rejected`, rust-js's
  * own clear error; `crashed`, another compile error, such as a panic of
@@ -325,8 +335,12 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
       const written = existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : undefined;
       const outcome = written !== undefined && ran.code === 0 ? written : `exited ${ran.code}: ${written ?? firstError(ran.stderr)}`;
       if (outcome !== '{"value":null}') return { test, status: "fail", reason: `${name}: ended ${outcome.slice(0, 200)}` };
-      if (ran.stdout !== native.stdout) return { test, status: "fail", reason: `${name}: different stdout` };
-      if (ran.stderr !== native.stderr) return { test, status: "fail", reason: `${name}: different stderr` };
+      if (ran.stdout !== native.stdout) {
+        return { test, status: "fail", reason: `${name}: different stdout`, detail: difference(native.stdout, ran.stdout) };
+      }
+      if (ran.stderr !== native.stderr) {
+        return { test, status: "fail", reason: `${name}: different stderr`, detail: difference(native.stderr, ran.stderr) };
+      }
     }
     return { test, status: "pass" };
   } finally {
@@ -526,6 +540,7 @@ async function main() {
     const rows = results.map((r) => ({ r, surprise: unlisted.has(r.test) }));
     for (const { r, surprise } of rows) {
       console.log(`${r.status}\t${r.test}${"reason" in r ? `\t${r.reason}` : ""}${surprise ? "\t(not as the known failures say)" : ""}`);
+      if ("detail" in r && r.detail) console.log(`\t${r.detail}`);
     }
     console.log(JSON.stringify(summarize(results), null, 2));
     toSummary([
