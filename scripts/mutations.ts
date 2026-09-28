@@ -463,7 +463,12 @@ export function judge(p: Exit, output: string): "caught" | "survived" | "inconcl
 
 /** How `tests` do with `compiler`, what they printed, and how many ran. */
 function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string; exit: Exit } {
-  const p = runSync([process.execPath, "test", ...tests], root, testTimeout, { RUST_JS_COMPILER: compiler });
+  // What the JS does is what's checked: a corpus snapshot differs with
+  // nearly any change to the compiler, a mutation's or not.
+  const p = runSync([process.execPath, "test", ...tests], root, testTimeout, {
+    RUST_JS_COMPILER: compiler,
+    RUST_JS_SNAPSHOTS: "ignore",
+  });
   const output = p.stdout + p.stderr;
   return { passed: p.code === 0 && !stopped(p, testTimeout), ran: count(output, "pass") + count(output, "fail"), output, exit: p };
 }

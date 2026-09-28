@@ -81,6 +81,10 @@ written, and what it breaks, as Rust would see it:
   built again for each.
 - It builds a few native programs for each, which macOS makes slow, so the
   rustc tests workflow runs it on Linux with `mutations` (AGENTS.md).
+- **A mutation's tests skip the corpus's snapshots** (`RUST_JS_SNAPSHOTS=ignore`):
+  nearly any change to the compiler changes some case's JS, so they'd
+  catch every mutation, and say nothing of whether what the JS does is
+  checked.
 
 ## Why
 

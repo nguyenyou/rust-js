@@ -16,9 +16,10 @@ import { runSync, stopped } from "../test/child";
 
 const root = join(import.meta.dir, "..");
 // Settings that would change what the suite checks, left out of every run:
-// `BLESS` rewrites what snapshots expect, the others choose tests or how
-// long they have. The suite runs as it would with none of them.
-const unset = ["BLESS", "FUZZ_START", "FUZZ_SEEDS", "FUZZ_REDUCE_BUDGET", "FUZZ_REPORT", "RUST_JS_COMPILE_TIMEOUT", "RUST_JS_REQUIRE_WASM", "RUST_JS_DISTRIBUTION"];
+// `BLESS` rewrites what snapshots expect, `RUST_JS_SNAPSHOTS` skips the
+// corpus's, the others choose tests or how long they have. The suite runs
+// as it would with none of them.
+const unset = ["BLESS", "RUST_JS_SNAPSHOTS", "FUZZ_START", "FUZZ_SEEDS", "FUZZ_REDUCE_BUDGET", "FUZZ_REPORT", "RUST_JS_COMPILE_TIMEOUT", "RUST_JS_REQUIRE_WASM", "RUST_JS_DISTRIBUTION"];
 const cleared = Object.fromEntries(unset.map((name) => [name, undefined]));
 const installTimeout = 5 * 60_000;
 const suiteTimeout = 60 * 60_000;

@@ -113,3 +113,10 @@ What it expects is in a `//@` directive:
   program's reduction cut short, shards that aren't one run, and a test
   native Rust never ends. Each fails the run, or says it's incomplete,
   with what it saw.
+- **A case that runs keeps its JS beside it,** `<case>.js`, as the
+  examples' is kept in `test/snapshots/` (ADR 0050), its header naming the
+  case, not the wrapper it's compiled through: what each feature's JS is,
+  to read, and any change to it a diff. The case fails when its JS isn't
+  its snapshot, and `bun run bless` writes them anew; a snapshot left of a
+  case that doesn't run, or of none, fails too. The features since ADR
+  0088 were tested here, and their JS had been nowhere to read.

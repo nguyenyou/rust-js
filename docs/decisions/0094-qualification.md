@@ -83,7 +83,8 @@ artifacts, the report for 90 days.
 - **Qualification runs the suite as it is:** it refuses to run with `BLESS`
   set, which would rewrite what snapshots expect, and leaves out of every
   run the settings that choose tests or how long they have (`FUZZ_*`,
-  `RUST_JS_COMPILE_TIMEOUT`, `RUST_JS_REQUIRE_WASM`), recording what it left
+  `RUST_JS_COMPILE_TIMEOUT`, `RUST_JS_REQUIRE_WASM`, and `RUST_JS_SNAPSHOTS`,
+  which skips the corpus's snapshots), recording what it left
   out and the seeds that ran. The checkout must have no changes when it
   starts, and the suite none when it ends, but the distribution and report.
   Found in review: `BLESS=1` passed a snapshot that didn't match.
