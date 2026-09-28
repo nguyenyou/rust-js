@@ -24,6 +24,14 @@ impl OutputPlan {
         sources: &program::Sources,
     ) -> Result<Vec<Artifact>, String> {
         let mut artifacts = Vec::new();
+        // Each source's path is resolved once: every module's source map
+        // names every source, from its own directory, which is resolved once
+        // too, and what's left is path arithmetic (found in review).
+        let resolved: Vec<PathBuf> = sources
+            .files
+            .iter()
+            .map(|source| resolve(source.path.as_deref().unwrap_or(&self.input)))
+            .collect();
         for module in modules {
             let js_path = self.js_path(&module.path);
             let rust_path = module.file.clone().unwrap_or_else(|| self.input.clone());
@@ -58,18 +66,14 @@ impl OutputPlan {
             };
 
             crate::prepare::module(&mut js_module);
-            let dir = parent_dir(&js_path);
-            let source_paths: Vec<_> = sources
-                .files
-                .iter()
-                .map(|source| relative(dir, source.path.as_deref().unwrap_or(&self.input)))
-                .collect();
+            let dir = resolve(parent_dir(&js_path));
+            let source_paths: Vec<_> = resolved.iter().map(|source| relative_resolved(&dir, source)).collect();
             let js_file_name = js_path.file_name().unwrap_or_default().to_string_lossy();
             let output = to_oxc::emit(
                 &js_module,
                 sources,
                 &source_paths,
-                &relative(dir, &rust_path),
+                &relative_resolved(&dir, &resolve(&rust_path)),
                 &js_file_name,
             );
             let map_path = PathBuf::from(format!("{}.map", js_path.display()));
@@ -239,8 +243,16 @@ fn parent_dir(path: &Path) -> &Path {
 /// `to` as seen from directory `from`, e.g. `../examples/fib.rs`. Resolve
 /// existing ancestors without requiring the output directory to exist yet.
 pub(crate) fn relative(from: &Path, to: &Path) -> String {
-    let resolve = |p: &Path| absolute(p).unwrap_or_else(|_| p.to_path_buf());
-    let (from, to) = (resolve(from), resolve(to));
+    relative_resolved(&resolve(from), &resolve(to))
+}
+
+/// A path with what exists of it resolved, as `relative` compares them.
+fn resolve(path: &Path) -> PathBuf {
+    absolute(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// `relative` of two paths already resolved.
+fn relative_resolved(from: &Path, to: &Path) -> String {
     let from: Vec<_> = from.components().collect();
     let to: Vec<_> = to.components().collect();
     let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
