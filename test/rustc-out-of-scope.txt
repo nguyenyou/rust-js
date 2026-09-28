@@ -114,11 +114,11 @@ c-variadic/naked.rs	is for some targets only
 c-variadic/same-program-multiple-abis-arm.rs	is for some targets only
 c-variadic/same-program-multiple-abis-x86_64.rs	is for some targets only
 cfg/assume-incomplete-release/assume-incomplete.rs	needs another crate
+cfg/cfg_attr.rs	needs flags or an environment of its own
+cfg/cfg_inner_static.rs	needs another crate
 cfg/cfg-in-crate-1.rs	needs flags or an environment of its own
 cfg/cfg-macros-foo.rs	needs flags or an environment of its own
 cfg/cfg-version/cfg-version-expand.rs	needs flags or an environment of its own
-cfg/cfg_attr.rs	needs flags or an environment of its own
-cfg/cfg_inner_static.rs	needs another crate
 cfg/cfgs-on-items.rs	needs flags or an environment of its own
 cfg/conditional-compile.rs	has modules in other files
 cfg/crt-static-off-works.rs	needs flags or an environment of its own
@@ -155,13 +155,13 @@ codegen/msvc-opt-level-z-no-corruption.rs	is for some targets only
 codegen/subtyping-impacts-selection-1.rs	has revisions
 codegen/subtyping-impacts-selection-2.rs	has revisions
 coercion/issue-39823.rs	needs another crate
+coherence/coherence_copy_like.rs	needs another crate
 coherence/coherence-bigint-int.rs	needs another crate
 coherence/coherence-bigint-vecint.rs	needs another crate
 coherence/coherence-blanket.rs	needs another crate
 coherence/coherence-covered-type-parameter.rs	needs another crate
 coherence/coherence-iterator-vec-any-elem.rs	needs another crate
 coherence/coherence-iterator-vec.rs	needs another crate
-coherence/coherence_copy_like.rs	needs another crate
 coherence/pr-review-132289-2.rs	needs another crate
 coherence/pr-review-132289-3.rs	needs another crate
 coherence/re-rebalance-coherence-default-generic-associated-type.rs	needs another crate
@@ -181,6 +181,9 @@ compiletest-self-test/normalize-with-revision.rs	has revisions
 compiletest-self-test/rustc-env.rs	needs another crate
 compiletest-self-test/test-aux-bin.rs	needs another crate
 compiletest-self-test/trim-env-name.rs	has revisions
+const_prop/apfloat-f64-roundtrip.rs	needs flags or an environment of its own
+const_prop/apfloat-remainder-regression.rs	needs flags or an environment of its own
+const_prop/overwrite_with_const_with_params.rs	needs flags or an environment of its own
 const-generics/const-argument-cross-crate.rs	has revisions
 const-generics/core-types.rs	has revisions
 const-generics/cross_crate_complex.rs	needs another crate
@@ -194,17 +197,14 @@ const-generics/legacy-const-generics.rs	needs another crate
 const-generics/transparent-maybeunit-array-wrapper.rs	has revisions
 const-generics/type-dependent/const-arg-in-const-arg.rs	has revisions
 const-generics/type-dependent/non-local.rs	needs another crate
-const_prop/apfloat-f64-roundtrip.rs	needs flags or an environment of its own
-const_prop/apfloat-remainder-regression.rs	needs flags or an environment of its own
-const_prop/overwrite_with_const_with_params.rs	needs flags or an environment of its own
+consts/const_in_pattern/cross-crate-pass.rs	needs another crate
 consts/const-block-cross-crate-fn.rs	needs another crate
-consts/const-eval/const_fn_ptr.rs	needs flags or an environment of its own
 consts/const-eval/const_fn_ptr_fail.rs	needs flags or an environment of its own
+consts/const-eval/const_fn_ptr.rs	needs flags or an environment of its own
 consts/const-eval/simd/insert_extract.rs	is the standard library's own API
 consts/const-fn-stability-calls.rs	needs another crate
 consts/const-int-arithmetic-overflow.rs	needs flags or an environment of its own
 consts/const-mut-refs-crate.rs	needs another crate
-consts/const_in_pattern/cross-crate-pass.rs	needs another crate
 consts/control-flow/drop-pass.rs	has revisions
 consts/issue-17718.rs	needs another crate
 consts/issue-64059.rs	has revisions
@@ -251,8 +251,8 @@ cross-crate/cross-crate-method-reexport.rs	needs another crate
 cross-crate/cross-crate-refcell-match.rs	needs another crate
 cross-crate/cross-crate-unit-struct-reexport.rs	needs another crate
 cross-crate/exporting-impl-from-root-causes-ice-2472.rs	needs another crate
-cross-crate/generic-newtypes-cross-crate-usage-9155.rs	needs another crate
 cross-crate/generic_fn_nested_return.rs	needs another crate
+cross-crate/generic-newtypes-cross-crate-usage-9155.rs	needs another crate
 cross-crate/inline-cross-crate.rs	needs another crate
 cross-crate/issue-64872/issue-64872.rs	needs another crate
 cross-crate/llvm-miscompile-MarkValue-MaybeLive.rs	needs flags or an environment of its own
@@ -287,11 +287,11 @@ deprecation/deprecated_main_function.rs	needs flags or an environment of its own
 deriving/derive-no-std.rs	needs another crate
 dest-prop/skeptic-miscompile.rs	needs flags or an environment of its own
 dist/cranelift-x86_64-unknown-linux-gnu-dist.rs	is for some targets only
-drop/drop-order-comparisons.rs	has revisions
-drop/drop-trait-enum.rs	needs a capability of its own
-drop/drop_order.rs	needs flags or an environment of its own
 drop/drop_order_if_let_rescope.rs	needs flags or an environment of its own
 drop/drop_order_let_chain.rs	needs flags or an environment of its own
+drop/drop_order.rs	needs flags or an environment of its own
+drop/drop-order-comparisons.rs	has revisions
+drop/drop-trait-enum.rs	needs a capability of its own
 drop/dropck-eyepatch-extern-crate.rs	needs another crate
 drop/if-let-guards.rs	has revisions
 drop/if-let-super-let.rs	has revisions
@@ -307,8 +307,8 @@ editions/edition-keywords-2015-2018.rs	needs another crate
 editions/edition-keywords-2018-2015.rs	needs another crate
 editions/edition-keywords-2018-2018.rs	needs another crate
 editions/never-type-fallback.rs	has revisions
-eii/default/call_default.rs	needs another crate
 eii/default/call_default_panics.rs	needs another crate
+eii/default/call_default.rs	needs another crate
 eii/default/call_impl.rs	needs another crate
 eii/linking/codegen_cross_crate.rs	needs another crate
 eii/privacy1.rs	needs another crate
@@ -326,6 +326,7 @@ errors/remap-path-prefix-macro.rs	has revisions
 explicit-tail-calls/become-cast-return.rs	doesn't apply to wasm, whose integers rust-js has
 explicit-tail-calls/become-indirect-return.rs	doesn't apply to wasm, whose integers rust-js has
 explicit-tail-calls/indirect.rs	doesn't apply to wasm, whose integers rust-js has
+extern/extern_fat_drop.rs	needs another crate
 extern/extern-calling-convention-test.rs	needs another crate
 extern/extern-methods.rs	is for some targets only
 extern/extern-mod-ordering-exe.rs	needs another crate
@@ -333,7 +334,6 @@ extern/extern-prelude-no-speculative.rs	needs flags or an environment of its own
 extern/extern-take-value.rs	needs another crate
 extern/extern-thiscall.rs	is for some targets only
 extern/extern-vectorcall.rs	has revisions
-extern/extern_fat_drop.rs	needs another crate
 extern/issue-10764-rpass.rs	has no `fn main() {`
 extern/issue-64655-allow-unwind-when-calling-panic-directly.rs	needs a capability of its own
 extern/issue-64655-extern-rust-must-allow-unwind.rs	needs a capability of its own
@@ -368,8 +368,8 @@ hygiene/cross-crate-variants.rs	needs another crate
 hygiene/nested-dollar-crate.rs	needs another crate
 hygiene/xcrate.rs	needs another crate
 impl-trait/call_method_ambiguous.rs	has revisions
-impl-trait/xcrate.rs	needs another crate
 impl-trait/xcrate_simple.rs	needs another crate
+impl-trait/xcrate.rs	needs another crate
 imports/extern-crate-alias-impl-method.rs	needs another crate
 imports/extern-crate-indirect-fn-ptr.rs	needs another crate
 imports/extern-crate-no-prefer-dynamic.rs	needs another crate
@@ -503,6 +503,7 @@ lto/weak-works.rs	needs flags or an environment of its own
 macros/assert-format-lazy.rs	needs flags or an environment of its own
 macros/attr-from-macro.rs	needs another crate
 macros/issue-40469.rs	reads files beside it
+macros/macro_with_super_2.rs	needs another crate
 macros/macro-comma-behavior-rpass.rs	needs flags or an environment of its own
 macros/macro-comma-support-rpass.rs	needs flags or an environment of its own
 macros/macro-crate-def-only.rs	needs another crate
@@ -519,7 +520,6 @@ macros/macro-use-both.rs	needs another crate
 macros/macro-use-one.rs	needs another crate
 macros/macro-with-attrs1.rs	needs flags or an environment of its own
 macros/macro-with-braces-in-expr-position.rs	needs a capability of its own
-macros/macro_with_super_2.rs	needs another crate
 macros/metavar_cross_edition_recursive_macros.rs	needs another crate
 macros/paths-in-macro-invocations.rs	needs another crate
 macros/proc_macro.rs	needs another crate
@@ -568,6 +568,10 @@ mir/issue-74739.rs	needs flags or an environment of its own
 mir/issue-76740-copy-propagation.rs	needs flags or an environment of its own
 mir/issue-77002.rs	needs flags or an environment of its own
 mir/issue-78496.rs	needs flags or an environment of its own
+mir/mir_const_prop_identity.rs	needs flags or an environment of its own
+mir/mir_match_guard_let_chains_drop_order.rs	has revisions
+mir/mir_overflow_off.rs	needs flags or an environment of its own
+mir/mir_refs_correct.rs	needs another crate
 mir/mir-inlining/ice-issue-45493.rs	needs flags or an environment of its own
 mir/mir-inlining/ice-issue-45885.rs	needs flags or an environment of its own
 mir/mir-inlining/ice-issue-68347.rs	needs flags or an environment of its own
@@ -576,29 +580,25 @@ mir/mir-inlining/ice-issue-77306-2.rs	needs flags or an environment of its own
 mir/mir-inlining/ice-issue-77564.rs	needs flags or an environment of its own
 mir/mir-inlining/no-trait-method-issue-40473.rs	needs flags or an environment of its own
 mir/mir-inlining/var-debuginfo-issue-67586.rs	needs flags or an environment of its own
-mir/mir_const_prop_identity.rs	needs flags or an environment of its own
-mir/mir_match_guard_let_chains_drop_order.rs	has revisions
-mir/mir_overflow_off.rs	needs flags or an environment of its own
-mir/mir_refs_correct.rs	needs another crate
 mir/null/addrof_null.rs	needs flags or an environment of its own
-mir/null/place_without_read.rs	needs flags or an environment of its own
 mir/null/place_without_read_zst.rs	needs flags or an environment of its own
+mir/null/place_without_read.rs	needs flags or an environment of its own
 mir/null/zero_sized_access.rs	needs flags or an environment of its own
 mir/static_fnptr.rs	needs flags or an environment of its own
 mir/validate/needs-reveal-all.rs	needs flags or an environment of its own
 modules/issue-13872.rs	needs another crate
-modules/mod_dir_implicit.rs	has modules in other files
 modules/mod_dir_implicit_aux/mod.rs	has no `fn main() {`
+modules/mod_dir_implicit.rs	has modules in other files
+modules/mod_dir_path_multi.rs	has modules in other files
 modules/mod_dir_path.rs	has modules in other files
 modules/mod_dir_path2.rs	has modules in other files
 modules/mod_dir_path3.rs	has modules in other files
-modules/mod_dir_path_multi.rs	has modules in other files
 modules/mod_dir_recursive.rs	has modules in other files
 modules/mod_dir_simple.rs	has modules in other files
 modules/mod_dir_simple/load_another_mod.rs	has no `fn main() {`
 modules/mod_dir_simple/test.rs	has no `fn main() {`
-modules/mod_file.rs	has modules in other files
 modules/mod_file_with_path_attr.rs	has modules in other files
+modules/mod_file.rs	has modules in other files
 modules/module-polymorphism3-files/float-template/inst_f32.rs	has no `fn main() {`
 modules/module-polymorphism3-files/float-template/inst_f64.rs	has no `fn main() {`
 modules/module-polymorphism3-files/float-template/inst_float.rs	has no `fn main() {`
@@ -666,8 +666,8 @@ privacy/impl-privacy-cross-crate-1.rs	needs another crate
 privacy/impl-privacy-cross-crate-2.rs	needs another crate
 privacy/priv-impl-prim-ty.rs	needs another crate
 privacy/privacy-reexport.rs	needs another crate
-privacy/pub-use-xcrate.rs	needs another crate
 privacy/pub_use_mods_xcrate_exe.rs	needs another crate
+privacy/pub-use-xcrate.rs	needs another crate
 privacy/reachable-unnameable-items.rs	needs another crate
 proc-macro/add-impl.rs	needs another crate
 proc-macro/append-impl.rs	needs another crate
@@ -893,10 +893,10 @@ structs-enums/namespaced-enum-glob-import-xcrate.rs	needs another crate
 structs-enums/namespaced-enums-xcrate.rs	needs another crate
 structs-enums/newtype-struct-xc-2.rs	needs another crate
 structs-enums/newtype-struct-xc.rs	needs another crate
+structs-enums/struct_variant_xc_match.rs	needs another crate
+structs-enums/struct_variant_xc.rs	needs another crate
 structs-enums/struct-aliases-xcrate.rs	needs another crate
 structs-enums/struct-destructuring-cross-crate.rs	needs another crate
-structs-enums/struct_variant_xc.rs	needs another crate
-structs-enums/struct_variant_xc_match.rs	needs another crate
 structs-enums/type-sizes.rs	needs a capability of its own
 structs-enums/unit-like-struct-drop-run.rs	needs a capability of its own
 structs/btree-struct-usage-8044.rs	needs another crate

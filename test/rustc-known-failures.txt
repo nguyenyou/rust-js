@@ -139,46 +139,25 @@ autoref-autoderef/autoderef-privacy.rs	error: rust-js does not support user impl
 autoref-autoderef/deref-chain-method-calls-13264.rs	error: rust-js does not support user implementations of this standard or external trait yet
 bench/issue-32062.rs	error: rust-js does not support generic trait methods yet
 binding/empty-types-in-patterns.rs	error: rust-js does not support values of type `!` yet
-binding/expr-match-generic-unique1.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/expr-match-generic-unique2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/expr-match-generic.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/expr-match-panic-all.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/expr-match-panic.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/expr-match-unique.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of type `*const usize` yet
 binding/func-arg-ref-pattern.rs	error: rust-js does not support this pattern yet
-binding/if-let.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/irrefutable-slice-patterns.rs	error: rust-js does not support this pattern yet
 binding/match-beginning-vert.rs	error: rust-js does not support this expression yet
-binding/match-bot-2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/match-bot.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-byte-array-patterns.rs	error: rust-js does not support this expression yet
-binding/match-enum-struct-0.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/match-enum-struct-1.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-larger-const.rs	error: rust-js does not support this pattern yet
-binding/match-pattern-lit.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-pipe-binding.rs	error: rust-js does not support bindings inside `|` patterns yet
-binding/match-range-infer.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/match-range.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-ref-binding-in-guard-3256.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 binding/match-ref-binding-mut-option.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
-binding/match-str.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/match-struct-0.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-unique-bind.rs	error: rust-js does not support this pattern yet
 binding/match-vec-alternatives.rs	error: rust-js does not support this pattern yet
 binding/mut-in-ident-patterns.rs	error: rust-js does not support this literal yet
 binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
-binding/nested-pattern.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 binding/order-drop-with-match.rs	error: rust-js does not support statics yet
-binding/pat-ranges.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-binding/pat-tuple-2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/range-inclusive-pattern-precedence.rs	error: rust-js does not support this pattern yet
 binding/ref-pattern-drop-behavior-8860.rs	error: rust-js does not support statics yet
-binding/use-uninit-match2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this pattern yet
 binop/augmented-assignment.rs	error: rust-js does not support user implementations of this standard or external trait yet
-binop/binary-minus-without-space.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binop/binop-evaluation-order-primitive.rs	error: rust-js does not support calling `std::mem::drop` yet
 binop/compound-assign-by-ref.rs	error: rust-js does not support values of type `f32` yet
 block-result/blocks-without-results-11709.rs	error: rust-js does not support calling `std::option::Option::<T>::take` yet
@@ -189,7 +168,6 @@ borrowck/borrowck-box-sensitivity.rs	error: rust-js does not support values of t
 borrowck/borrowck-closures-slice-patterns-ok.rs	error: rust-js does not support this pattern yet
 borrowck/borrowck-field-sensitivity-rpass.rs	error: rust-js does not support calling `std::mem::drop` yet
 borrowck/borrowck-macro-interaction-issue-6304.rs	error: rust-js does not support this pattern yet
-borrowck/borrowck-multiple-borrows-interior-boxes.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 borrowck/borrowck-mut-uniq.rs	error: rust-js does not support calling `std::mem::swap` yet
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support values of type `&mut A` yet
 borrowck/borrowck-static-item-in-fn.rs	error: rust-js does not support statics yet
@@ -373,8 +351,7 @@ consts/const_constructor/const-construct-call.rs	error: rust-js does not support
 consts/const_discriminant.rs	error: rust-js does not support constants of type `std::mem::Discriminant<Test>` yet
 consts/const_fn_unsize.rs	error: rust-js does not support constants of type `std::ptr::NonNull<[i32]>` yet
 consts/const_in_pattern/accept_structural.rs	error: rust-js does not support associated constants yet
-consts/const_in_pattern/custom-eq-branch-pass.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-consts/const_in_pattern/issue-62614.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+consts/const_in_pattern/custom-eq-branch-pass.rs	error: rust-js does not support this pattern yet
 consts/const_in_pattern/issue-73431.rs	error: rust-js does not support associated constants yet
 consts/const_in_pattern/null-raw-ptr-issue-119270.rs	error: rust-js does not support constants of type `&'static &'static WrapEmbedded` yet
 consts/const_let_eq_float.rs	error: rust-js does not support constants of type `f32` yet
@@ -432,7 +409,6 @@ consts/const-int-arithmetic.rs	error: rust-js does not support constants of type
 consts/const-int-saturating-arith.rs	error: rust-js does not support constants of type `u128` yet
 consts/const-item-with-block-body/macro-codegen.rs	error: rust-js does not support statics yet
 consts/const-item-with-block-body/static.rs	error: rust-js does not support statics yet
-consts/const-meth-pattern.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 consts/const-needs_drop.rs	error: rust-js does not support statics yet
 consts/const-negative.rs	error: rust-js does not support statics yet
 consts/const-nullary-enum.rs	error: rust-js does not support statics yet
@@ -550,7 +526,6 @@ derives/derive-hrtb-for-bare-fn-field-with-lifetime.rs	error: rust-js does not s
 deriving/deriving-associated-types.rs	error: rust-js does not support associated types yet
 deriving/deriving-cmp-generic-enum.rs	error: rust-js does not support comparing `E<i32>`s yet
 deriving/deriving-cmp-generic-struct-enum.rs	error: rust-js does not support comparing `ES<i32>`s yet
-deriving/deriving-cmp-shortcircuit.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 deriving/deriving-coerce-pointee.rs	error: rust-js does not support user implementations of this standard or external trait yet
 deriving/deriving-copyclone.rs	error: rust-js does not support statics yet
 deriving/deriving-default-box.rs	error: rust-js does not support `Default` of `[bool]` yet
@@ -653,10 +628,6 @@ explicit-tail-calls/indexer.rs	error: rust-js does not support this expression y
 explicit-tail-calls/recursion-etc.rs	error: rust-js does not support calling `std::hint::black_box` yet
 expr/compound-assignment/eval-order.rs	error: rust-js does not support assigning to this place yet
 expr/early-return-in-binop.rs	error: rust-js does not support calling `std::ops::Add::add` yet
-expr/if-bot.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-expr/if-panic-all.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-expr/if/expr-if-panic-pass.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-expr/if/if-check.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 expr/weird-exprs.rs	error: rust-js does not support generic trait methods yet
 extern/extern-prelude-core.rs	error: rust-js does not support calling `core::cmp::min` yet
 extern/extern-prelude-std.rs	error: rust-js does not support calling `std::cmp::min` yet
@@ -672,7 +643,6 @@ for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling
 for-loop-while/for-loop-into-iterator.rs	error: rust-js does not support values of type `&mut i32` yet
 for-loop-while/for-loop-lifetime-of-unbound-values.rs	error: rust-js does not support user implementations of this standard or external trait yet
 for-loop-while/for-loop-mut-ref-element.rs	error: rust-js does not support calling `std::iter::once` yet
-for-loop-while/for-loop-panic.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 for-loop-while/foreach-external-iterators-break.rs	error: rust-js does not support this expression yet
 for-loop-while/foreach-external-iterators-hashmap-break-restart.rs	error: rust-js does not support calling `std::iter::Iterator::by_ref` yet
 for-loop-while/foreach-external-iterators-loop.rs	error: rust-js does not support this expression yet
@@ -689,7 +659,6 @@ for-loop-while/loop-diverges.rs	error: rust-js does not support values of type `
 for-loop-while/loop-labeled-break-value.rs	error: rust-js does not support this expression yet
 for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support user implementations of this standard or external trait yet
 for-loop-while/nested-loop-break-unit.rs	error: rust-js does not support this expression yet
-for-loop-while/while-label.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
@@ -727,7 +696,6 @@ higher-ranked/trait-bounds/hrtb-trait-object-paren-notation.rs	error: rust-js do
 higher-ranked/trait-bounds/hrtb-type-outlives.rs	error: rust-js does not support generic trait parameters yet
 higher-ranked/trait-bounds/issue-36139-normalize-closure-sig.rs	error: rust-js does not support associated types yet
 higher-ranked/trait-bounds/issue-39292.rs	error: rust-js does not support generic trait parameters yet
-hygiene/hygienic-labels.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 impl-header-lifetime-elision/bare_type.rs	error: rust-js does not support statics yet
 impl-header-lifetime-elision/explicit-and-elided-same-header.rs	error: rust-js does not support generic trait parameters yet
 impl-trait/bounds_regression.rs	error: rust-js does not support associated types yet
@@ -848,10 +816,8 @@ issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_
 issues/issue-36936.rs	error: rust-js does not support user implementations of this standard or external trait yet
 issues/issue-37109.rs	error: rust-js does not support associated types yet
 issues/issue-38437.rs	error: rust-js does not support user implementations of this standard or external trait yet
-issues/issue-3895.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 issues/issue-39367.rs	error: rust-js does not support statics yet
 issues/issue-3979.rs	error: rust-js does not support values of type `&mut Self` yet
-issues/issue-39808.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 issues/issue-39827.rs	error: rust-js does not support calling `std::intrinsics::volatile_copy_memory` yet
 issues/issue-41498.rs	error: rust-js does not support values of type `&mut T` yet
 issues/issue-41677.rs	error: rust-js does not support associated types yet
@@ -898,7 +864,6 @@ layout/issue-112048-unsizing-niche.rs	error: rust-js does not support this expre
 layout/issue-60431-unsized-tail-behind-projection.rs	error: rust-js does not support associated types yet
 layout/null-pointer-optimization-sizes.rs	error: rust-js does not support calling `std::mem::size_of` yet
 layout/null-pointer-optimization.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
-let-else/let-else-bindings.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 let-else/let-else-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
 let-else/let-else-run-pass.rs	error: rust-js does not support bindings inside `|` patterns yet
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
@@ -925,13 +890,9 @@ loop-match/or-patterns.rs	error: rust-js does not support this expression yet
 loop-match/valid-patterns.rs	error: rust-js does not support this literal yet
 macros/colorful-write-macros.rs	error: rust-js does not support user implementations of this standard or external trait yet
 macros/concat-bytes.rs	error: rust-js does not support this literal yet
-macros/conditional-debug-macro-on.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-macros/die-macro.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 macros/macro-first-set.rs	error: rust-js does not support calling `std::mem::size_of` yet
 macros/macro-in-or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
-macros/macro-lifetime-used-with-labels.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
-macros/macro-pat-neg-lit.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 macros/macro-pub-matcher.rs	error: rust-js does not support statics yet
 macros/macro-self-mutability-7911.rs	error: rust-js does not support values of type `&mut dyn FooBar` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -941,11 +902,8 @@ macros/parse-complex-macro-invoc-op.rs	error: rust-js does not support calling `
 macros/try-macro.rs	error: rust-js does not support this literal yet
 macros/type-macros-hlist.rs	error: rust-js does not support values of type `<Xs as std::ops::Add<Ys>>::Output` yet
 macros/type-macros-simple.rs	error: rust-js does not support generic trait parameters yet
-macros/typeck-macro-interaction-issue-8852.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 marker_trait_attr/overlap-permitted-for-annotated-marker-traits.rs	error: rust-js: generated trait implementation name `tMyMarker` collides; put the implementations in separate modules
-match/guard-pattern-ordering-14865.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 match/issue-114691.rs	error: rust-js does not support values of type `f32` yet
-match/issue-26251.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 match/issue-36401.rs	error: rust-js does not support statics yet
 match/issue-42679.rs	error: rust-js does not support this pattern yet
 match/issue-46920-byte-array-patterns.rs	error: rust-js does not support this pattern yet
@@ -955,7 +913,6 @@ match/match-ref-mut-stability.rs	error: rust-js does not support values of type 
 match/match-tuple-slice.rs	error: rust-js does not support this pattern yet
 match/overeager-sub-match-pruning-13027.rs	error: rust-js does not support statics yet
 match/pattern-deref-miscompile.rs	error: rust-js does not support this literal yet
-match/postfix-match/pf-match-chain.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 match/postfix-match/postfix-match.rs	error: rust-js does not support calling `core::str::<impl str>::eq_ignore_ascii_case` yet
 match/struct-reference-patterns-12285.rs	error: rust-js does not support values of type `std::option::Option<&S>` yet
 methods/call_method_unknown_referent2.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -1001,7 +958,7 @@ never_type/basic/never-type-rvalues.rs	error: rust-js does not support values of
 never_type/regress/never-as-function-argument.rs	error: rust-js does not support this expression yet
 never_type/regress/never-type-fallback-option.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 nll/borrowck-thread-local-static-mut-borrow-outlives-fn.rs	error: rust-js does not support statics yet
-nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support assigning to this place yet
 nll/issue-45696-long-live-borrows-in-boxes.rs	error: rust-js does not support user implementations of this standard or external trait yet
 nll/issue-47153-generic-const.rs	error: rust-js does not support associated constants yet
 nll/issue-47589.rs	error: rust-js does not support associated types yet
@@ -1040,7 +997,6 @@ or-patterns/box-patterns.rs	error: rust-js does not support this pattern yet
 or-patterns/for-loop.rs	error: rust-js does not support bindings inside `|` patterns yet
 or-patterns/if-let-while-let.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/lazy-and-or.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 or-patterns/let-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 or-patterns/search-via-bindings.rs	error: rust-js does not support bindings inside `|` patterns yet
 or-patterns/slice-patterns.rs	error: rust-js does not support this pattern yet
@@ -1079,15 +1035,12 @@ packed/packed-tuple-struct-size.rs	error: rust-js does not support calling `std:
 packed/packed-with-inference-vars-issue-61402.rs	error: rust-js does not support generic trait parameters yet
 parser/generics-rangle-eq-15043.rs	error: rust-js does not support statics yet
 parser/macro/statement-boundaries.rs	error: rust-js does not support const generics yet
-parser/parse-panic.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
 parser/super-fast-paren-parsing.rs	error: rust-js does not support statics yet
 parser/syntactic-trailing-commas.rs	error: rust-js does not support this pattern yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
-pattern/bindings-after-at/bind-by-copy.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 pattern/bindings-after-at/box-patterns.rs	error: rust-js does not support this pattern yet
-pattern/bindings-after-at/nested-patterns.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 pattern/bindings-after-at/or-patterns-box-patterns.rs	error: rust-js does not support this pattern yet
 pattern/bindings-after-at/or-patterns-slice-patterns.rs	error: rust-js does not support this pattern yet
 pattern/bindings-after-at/slice-patterns.rs	error: rust-js does not support this pattern yet
@@ -1099,18 +1052,13 @@ pattern/deref-patterns/implicit-cow-deref.rs	error: rust-js does not support val
 pattern/deref-patterns/strings.rs	error: rust-js does not support `&mut` to a `str` yet
 pattern/ignore-all-the-things.rs	error: rust-js does not support this pattern yet
 pattern/integer-range-binding.rs	error: rust-js does not support this refutable pattern yet
-pattern/issue-10392.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 pattern/issue-15080.rs	error: rust-js does not support this pattern yet
 pattern/issue-22546.rs	error: rust-js does not support associated types yet
 pattern/issue-27320.rs	error: rust-js does not support bindings inside `|` patterns yet
-pattern/issue-6449.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-pattern/issue-8351-1.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-pattern/issue-8351-2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support user implementations of this standard or external trait yet
 pattern/mut_preserve_binding_mode_2024.rs	error: rust-js does not support `&mut` to a `u8` yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<bool>` yet
 pattern/premature-match-scrutinee-temporary-drop-10683.rs	error: rust-js does not support statics yet
-pattern/size-and-align.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 pattern/skipped-ref-pats-issue-125058.rs	error: rust-js does not support `&mut` to a `std::option::Option<&mut std::option::Option<u32>>` yet
 pattern/slice-pattern-recursion-15104.rs	error: rust-js does not support this pattern yet
 pin-ergonomics/pin-coercion.rs	error: rust-js does not support values of type `&mut T` yet
@@ -1122,8 +1070,7 @@ ptr_ops/ptr-write-bool-representation.rs	error: rust-js does not support calling
 ptr_ops/raw-pointer-type-basic.rs	error: rust-js does not support values of type `*const isize` yet
 range/range_inclusive.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
 raw-ref-op/raw-ref-op.rs	error: rust-js does not support values of type `*const i32` yet
-reachable/diverging-expressions-unreachable-code.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-reachable/unreachable-code-diverging-expressions.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+reachable/unreachable-code-diverging-expressions.rs	error: rust-js does not support this expression yet
 recursion/future-stream-buffer-unordered-40003.rs	error: rust-js does not support generic trait methods yet
 recursion/instantiable.rs	error: rust-js does not support values of type `*const foo` yet
 regions/init-res-into-things.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -1131,10 +1078,8 @@ regions/issue-6157.rs	error: rust-js does not support values of type `&mut dyn O
 regions/rcvr-borrowed-to-region.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 regions/regions-assoc-type-region-bound.rs	error: rust-js does not support associated types yet
 regions/regions-assoc-type-static-bound.rs	error: rust-js does not support associated types yet
-regions/regions-bot.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-regions/regions-dependent-addr-of.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+regions/regions-dependent-addr-of.rs	error: rust-js does not support this pattern yet
 regions/regions-early-bound-lifetime-in-assoc-fn.rs	error: rust-js does not support generic trait parameters yet
-regions/regions-early-bound-trait-param.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 regions/regions-early-bound-used-in-bound.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-early-bound-used-in-type-param.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-infer-borrow-scope-addr-of.rs	error: rust-js does not support calling `std::mem::swap` yet
@@ -1145,7 +1090,6 @@ regions/regions-issue-22246.rs	error: rust-js does not support generic trait par
 regions/regions-lifetime-static-items-enclosing-scopes.rs	error: rust-js does not support statics yet
 regions/regions-mock-codegen.rs	error: rust-js does not support calling `std::alloc::Layout::new` yet
 regions/regions-no-bound-in-argument-cleanup.rs	error: rust-js does not support user implementations of this standard or external trait yet
-regions/regions-return-interior-of-option.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 regions/regions-simple.rs	error: rust-js does not support values of type `&mut isize` yet
 regions/regions-static-bound-rpass.rs	error: rust-js does not support statics yet
 regions/regions-trait-object-1.rs	error: rust-js does not support this expression yet
@@ -1162,14 +1106,10 @@ rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
 rfcs/rfc-2005-default-binding-mode/box.rs	error: rust-js does not support this pattern yet
 rfcs/rfc-2005-default-binding-mode/constref.rs	error: rust-js does not support associated constants yet
-rfcs/rfc-2005-default-binding-mode/enum-ok.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+rfcs/rfc-2005-default-binding-mode/enum-ok.rs	error: rust-js does not support `&mut` to a `std::option::Option<i32>` yet
 rfcs/rfc-2005-default-binding-mode/general.rs	error: rust-js does not support values of type `&mut std::option::Option<i32>` yet
-rfcs/rfc-2005-default-binding-mode/lit-ok.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-rfcs/rfc-2005-default-binding-mode/range.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-rfcs/rfc-2005-default-binding-mode/ref-region.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
+rfcs/rfc-2005-default-binding-mode/lit-ok.rs	error: rust-js does not support this literal yet
 rfcs/rfc-2005-default-binding-mode/slice-ok.rs	error: rust-js does not support this literal yet
-rfcs/rfc-2005-default-binding-mode/tuple-struct.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
-rfcs/rfc-2005-default-binding-mode/tuple.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 rfcs/rfc-2091-track-caller/file-is-nul-terminated.rs	error: rust-js does not support values of type `*const str` yet
 rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support values of type `*const str` yet
 rfcs/rfc-2091-track-caller/tracked-closure.rs	error: rust-js does not support values of type `*const str` yet
@@ -1269,10 +1209,8 @@ structs-enums/enum-non-c-like-repr-c.rs	error: rust-js does not support values o
 structs-enums/enum-non-c-like-repr-int.rs	error: rust-js does not support values of type `(u32) is 0..=999999999` yet
 structs-enums/enum-null-pointer-opt.rs	error: rust-js does not support associated types yet
 structs-enums/enum-nullable-const-null-with-fields.rs	error: rust-js does not support statics yet
-structs-enums/enum-nullable-simplifycfg-misopt.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 structs-enums/enum-univariant-repr.rs	error: rust-js does not support calling `std::mem::size_of` yet
 structs-enums/enum-vec-initializer.rs	error: rust-js does not support this expression yet
-structs-enums/expr-match-struct.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 structs-enums/field-destruction-order.rs	error: rust-js does not support statics yet
 structs-enums/issue-38002.rs	error: rust-js does not support this pattern yet
 structs-enums/multiple-reprs.rs	error: rust-js does not support calling `std::mem::size_of` yet
@@ -1300,7 +1238,6 @@ structs/destructuring-struct-with-dtor-6344.rs	error: rust-js does not support u
 structs/mutable-unit-struct-borrow-11267.rs	error: rust-js does not support generic trait parameters yet
 structs/struct-size-with-drop-2895.rs	error: rust-js does not support user implementations of this standard or external trait yet
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support calling `std::mem::size_of` yet
-target-feature/target-feature-detection.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 thread-local/thread-local-static-reference-70673.rs	error: rust-js does not support statics yet
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
@@ -1345,10 +1282,8 @@ traits/encoder-trait-bounds-regression.rs	error: rust-js does not support generi
 traits/error-trait-object-from-string.rs	error: rust-js does not support values of type `dyn std::error::Error + std::marker::Send + std::marker::Sync` yet
 traits/final/dyn-compat.rs	error: rust-js does not support generic trait methods yet
 traits/generic.rs	error: rust-js does not support generic trait parameters yet
-traits/impl-inherent-prefer-over-trait.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support implementation evidence for `<dyn Bar as Foo>` yet
 traits/infer-from-object-issue-26952.rs	error: rust-js does not support generic trait parameters yet
-traits/inherent-method-order.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 traits/inheritance/num.rs	error: rust-js does not support this expression yet
 traits/inheritance/num2.rs	error: rust-js does not support this literal yet
 traits/inheritance/num3.rs	error: rust-js does not support this literal yet
@@ -1430,7 +1365,6 @@ type-inference/issue-113283-alllocator-trait-eq.rs	error: rust-js does not suppo
 type/type-ascription.rs	error: rust-js does not support calling `std::mem::size_of_val` yet
 type/type-name-basic.rs	error: rust-js does not support generic trait parameters yet
 typeck/infer-struct-with-trait-object.rs	error: rust-js does not support generic trait parameters yet
-typeck/inference-method-chain-diverging-fallback.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 typeck/issue-18937-1.rs	error: rust-js does not support generic trait parameters yet
 typeck/nested-generic-traits-performance.rs	error: rust-js does not support generic trait parameters yet
 typeck/osstring-str-equality.rs	error: rust-js does not support calling `std::convert::From::from` yet
