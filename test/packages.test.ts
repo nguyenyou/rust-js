@@ -59,7 +59,7 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
     const installedCompiler = join(root, "node_modules/.bin/rust-js");
     expect(JSON.parse(run([runtime, installedCompiler, "--version-json"]))).toEqual(JSON.parse(run([compiler, "--version-json"])));
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
-    expect(resourcePackage.version).toBe(Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")).package.version);
+    expect(resourcePackage.version).toBe((Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version);
     expect(readFileSync(join(resources, "rust-toolchain.toml"), "utf8")).toBe(readFileSync(join(repository, "rust-toolchain.toml"), "utf8"));
     writeFileSync(join(root, "lib.rs"), `
 #[derive(serde::Deserialize)]

@@ -177,6 +177,12 @@ bun run react-example                 # React + Vite at localhost:5173
 
 ## Testing
 
+Run `bun run typecheck` for strict TypeScript checking with the pinned TypeScript 7 compiler.
+This checks scripts, tests, generators, and browser code without building Rust.
+Bun runs TypeScript directly but does not type-check it. The manual Check workflow
+also runs this command. JavaScript dependencies and generated JavaScript are not
+subject to strict source checking.
+
 Run `bun test` for native Rust comparisons, output snapshots, compiler
 diagnostics, source maps, React, browser, and Vite integration tests.
 Run `bun run fmt` to format Rust and playground JSX, or `bun run fmt:check` to check.

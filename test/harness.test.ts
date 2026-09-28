@@ -113,5 +113,6 @@ test("a test native Rust never ends has no answer, and isn't as listed", async (
   mkdirSync(join(target, "rustc-suite"), { recursive: true });
   const result = await runTest(ui, file);
   expect(result).toEqual({ test: "forever.rs", status: "native", reason: "doesn't pass natively with overflow checks off: didn't finish in 10s" });
+  if (result.status !== "native") throw new Error(`Expected native failure, got ${result.status}`);
   expect(ratchet([result], new Map(), new Map()).unanswered).toEqual([result]);
 }, 120_000);

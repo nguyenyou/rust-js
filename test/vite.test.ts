@@ -53,6 +53,7 @@ process.exit(code);
   let browser;
   try {
     await server.listen();
+    if (!server.resolvedUrls) throw new Error("Vite did not expose a listening URL");
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     await page.goto(server.resolvedUrls.local[0]);
@@ -148,6 +149,7 @@ pub fn App() -> Element {
   let browser;
   try {
     await server.listen();
+    if (!server.resolvedUrls) throw new Error("Vite did not expose a listening URL");
     const url = server.resolvedUrls.local[0];
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
@@ -207,6 +209,7 @@ pub fn App() -> Element {
   const server = await createServer({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], customLogger: logger, logLevel: "warn", server: { port: 0 } });
   try {
     await server.listen();
+    if (!server.resolvedUrls) throw new Error("Vite did not expose a listening URL");
     expect((await server.transformRequest("/src/App.jsx"))?.code).toContain("Committed");
     expect(warnings.join("\n")).toContain("using the committed src/App.jsx");
     expect(warnings.join("\n")).not.toContain("source map");
@@ -269,6 +272,7 @@ pub fn App() -> Element {
   let browser;
   try {
     await server.listen();
+    if (!server.resolvedUrls) throw new Error("Vite did not expose a listening URL");
     const theme = readFileSync(join(dir, "src/theme.js"), "utf8");
     expect(theme).toContain('export const THEME = createContext("light");');
     expect(readFileSync(join(dir, "src/App.jsx"), "utf8")).toContain('<THEME value="dark">');

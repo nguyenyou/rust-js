@@ -55,7 +55,7 @@ fn main() {
     // The client's serde is built for rust-js's target (ADR 0090); the
     // server's, for the machine it runs on, as its own Cargo build would.
     const nativeFlags = buildSerde("rlib");
-    const pin = Bun.TOML.parse(readFileSync(join(repository, "rust-toolchain.toml"), "utf8")).toolchain.channel;
+    const pin = (Bun.TOML.parse(readFileSync(join(repository, "rust-toolchain.toml"), "utf8")) as { toolchain: { channel: string } }).toolchain.channel;
     // Fresh processes also reload imported model modules after the shared edit.
     const callClient = (method: string, value: string | number) => JSON.parse(run([
       process.execPath, "-e",

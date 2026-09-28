@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { root } from "./support";
 
-const channel = Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")).toolchain.channel;
+const channel = (Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")) as { toolchain: { channel: string } }).toolchain.channel;
 const run = (...args: string[]) => Bun.spawnSync([process.execPath, "scripts/toolchain.ts", ...args], {
   cwd: root, stdout: "pipe", stderr: "pipe",
 });
@@ -16,7 +16,9 @@ test("toolchain helper resolves the root pin and installed compiler source", () 
   expect(version.exitCode).toBe(0);
   const commit = run("commit");
   expect(commit.exitCode).toBe(0);
-  expect(commit.stdout.toString().trim()).toBe(version.stdout.toString().match(/^commit-hash: (.+)$/m)?.[1]);
+  const hash = version.stdout.toString().match(/^commit-hash: (.+)$/m)?.[1];
+  if (!hash) throw new Error("rustc did not report a commit hash");
+  expect(commit.stdout.toString().trim()).toBe(hash);
 });
 
 test("toolchain helper rejects a checkout at a different commit", () => {

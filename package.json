@@ -38,7 +38,8 @@
     "test:playground": "bun test test/playground.test.ts",
     "test:snapshots": "bun test test/snapshots.test.ts test/jsx.test.ts",
     "bless": "BLESS=1 bun test test/snapshots.test.ts test/jsx.test.ts",
-    "bench:lowering": "cargo build --locked && bun bench/lowering.ts"
+    "bench:lowering": "cargo build --locked && bun bench/lowering.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
@@ -46,6 +47,9 @@
     "@playwright/test": "1.63.0",
     "@rolldown/plugin-babel": "0.2.4",
     "@tailwindcss/vite": "4.3.3",
+    "@types/bun": "1.4.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
     "@vitest/browser-playwright": "5.0.2",
     "babel-plugin-react-compiler": "1.0.0",
@@ -53,6 +57,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
     "vite": "8.3.0",
     "vitest": "5.0.2"
   }

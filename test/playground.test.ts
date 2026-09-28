@@ -118,7 +118,7 @@ pub fn App() -> Element { jsx! { <Tile text="Hello JSX" /> } }
     await page.evaluate(() => { (window as any).lastResult = undefined; });
     await page.locator("#compile").click();
     await page.waitForFunction(() => (window as any).lastResult !== undefined, undefined, { timeout: 60_000 });
-    const jsxResult = await page.evaluate(() => ({ ok: (window as any).lastResult.ok, stderr: (window as any).lastResult.stderr }));
+    const jsxResult: { ok: boolean; stderr: string } = await page.evaluate(() => ({ ok: (window as any).lastResult.ok, stderr: (window as any).lastResult.stderr }));
     expect(jsxResult.ok, jsxResult.stderr).toBe(true);
     await status.filter({ hasText: "Compiled: 1 JS file." }).waitFor({ timeout: 60_000 });
     await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "Hello JSX" }).waitFor();

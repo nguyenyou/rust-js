@@ -16,8 +16,8 @@ const run = (args: string[], cwd: string) => {
   return result.stdout.toString();
 };
 const identity = parseCompilerIdentity(run([compiler, "--version-json"], root));
-const version = Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")).package.version;
-const toolchain = Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")).toolchain.channel;
+const version = (Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
+const toolchain = (Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")) as { toolchain: { channel: string } }).toolchain.channel;
 if (identity.version !== version || identity.toolchain !== toolchain) throw new Error("Compiler does not match this checkout's version and Rust pin");
 const staging = mkdtempSync(join(tmpdir(), "rust-js-native-"));
 try {

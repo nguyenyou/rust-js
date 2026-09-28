@@ -63,7 +63,7 @@ for (const file of files) {
           return target.startsWith(dir + sep) ? route.fulfill({ path: target }) : route.fulfill({ status: 404 });
         });
         await tab.goto(`${ORIGIN}/`);
-        const failure = await tab.evaluate(`window.runRustTest(${JSON.stringify(name)})`);
+        const failure = await tab.evaluate<string | null>(`window.runRustTest(${JSON.stringify(name)})`);
         if (failure !== null) throw new Error(failure);
       });
     }

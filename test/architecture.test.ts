@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { root } from "./support";
 
-const read = path => readFileSync(join(root, path), "utf8");
-const files = directory => readdirSync(join(root, directory), { withFileTypes: true }).flatMap(entry =>
+const read = (path: string) => readFileSync(join(root, path), "utf8");
+const files = (directory: string): string[] => readdirSync(join(root, directory), { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? files(`${directory}/${entry.name}`) : [`${directory}/${entry.name}`]);
 
 test("owned compiler output and downstream phases do not depend on rustc", () => {
@@ -60,7 +60,7 @@ test("Vite delegates build preparation and validates build results", () => {
 });
 
 test("native and WASI compiler dependency versions agree", () => {
-  const dependencies = path => {
+  const dependencies = (path: string) => {
     const section = read(path).split("[dependencies]\n")[1].split(/\n\[/)[0];
     return new Map(section.split("\n").filter(line => /^(?:serde|oxc_)/.test(line)).map(line => {
       const equals = line.indexOf("=");

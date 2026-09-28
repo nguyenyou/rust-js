@@ -101,7 +101,7 @@ type Def = {
   extAttrs?: { name: string; rhs?: { value: string } }[];
 };
 
-const all: Record<string, Def[]> = await idl.parseAll();
+const all = await idl.parseAll() as Record<string, Def[]>;
 const read: Def[] = SPECS.flatMap((spec) => all[spec]);
 const everywhere: Def[] = Object.values(all).flat();
 

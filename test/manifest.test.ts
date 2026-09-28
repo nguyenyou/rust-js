@@ -38,7 +38,7 @@ test("scalar library manifests validate signatures and remap fingerprinted input
   };
   const value = { ...manifest, library };
   expect(parseManifest(JSON.stringify(value))).toEqual(value);
-  const mapped = mapManifestPaths(value, path => path.replace("/virtual", "/local"));
+  const mapped = mapManifestPaths(value, (path: string) => path.replace("/virtual", "/local"));
   expect(mapped.library.inputs[0].file).toBe("/local/shared.rs");
   expect(mapped.library.functions).toEqual(library.functions);
   for (const invalid of [null, { ...library, version: 2 }, { ...library, inputs: [{ file: "relative.rs", hash: "bad" }] },
@@ -51,7 +51,7 @@ test("scalar library manifests validate signatures and remap fingerprinted input
 test("virtual path mapping preserves JSON escaping and unrelated values", () => {
   const directory = '/local/a"quoted\\folder';
   const value = { ...manifest, note: "/virtual/not-a-path-field" };
-  const mapped = mapManifestPaths(parseManifest(JSON.stringify(value)), path => path.replace("/virtual", directory));
+  const mapped = mapManifestPaths(parseManifest(JSON.stringify(value)), (path: string) => path.replace("/virtual", directory));
   const reread = parseManifest(JSON.stringify(mapped));
   expect(reread.input).toBe(`${directory}/lib.rs`);
   expect(reread.modules[0].map).toBe(`${directory}/lib.js.map`);

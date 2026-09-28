@@ -13,7 +13,9 @@ import { fileURLToPath } from "node:url";
 const versions = JSON.parse(readFileSync(new URL("./versions.json", import.meta.url), "utf8"));
 
 export const releases = Object.keys(versions.releases);
-export const latest = releases.at(-1);
+const lastRelease = releases.at(-1);
+if (lastRelease === undefined) throw new Error("React versions must contain at least one release");
+export const latest = lastRelease;
 
 function minor(version) {
   const [major, minor] = version.split(".").map(Number);

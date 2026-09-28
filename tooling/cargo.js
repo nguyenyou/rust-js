@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
+/** @param {{ manifestPath: string, toolchain: string, target: string, packageName?: string, features?: string[], noDefaultFeatures?: boolean }} options */
 export async function planCargoLibraries({ manifestPath, toolchain, target, packageName, features = [], noDefaultFeatures = false }) {
   if (!/^nightly-\d{4}-\d{2}-\d{2}$/.test(toolchain ?? "")) throw new Error("Cargo planning requires an exact nightly toolchain pin");
   if (typeof target !== "string" || !target) throw new Error("Cargo planning requires an explicit target triple");

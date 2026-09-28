@@ -29,7 +29,7 @@ try {
   run([process.execPath, "scripts/package-resources.ts", join(staging, "resources.tgz")]);
   run([process.execPath, "scripts/package-compiler.ts", compiler, join(staging, "native.tgz")]);
   const files = ["rust-js-build.tgz", "vite-plugin-rust-js.tgz", "resources.tgz", "native.tgz"];
-  const sha256 = file => createHash("sha256").update(readFileSync(join(staging, file))).digest("hex");
+  const sha256 = (file: string) => createHash("sha256").update(readFileSync(join(staging, file))).digest("hex");
   const artifacts = files.map(file => ({ file, sha256: sha256(file) }));
   writeFileSync(join(staging, "distribution.json"), JSON.stringify({
     version: 1, compiler: identity, platform: process.platform, arch: process.arch, artifacts,

@@ -223,7 +223,7 @@ const lines: string[] = [
   "impl Element {",
 ];
 const methods = new Set(["children", "key", "r#ref", "attr"]);
-for (const [name, entry] of Object.entries(versions.attributes)) {
+for (const [name, entry] of Object.entries<Since>(versions.attributes)) {
   if (entry.removed || HAND_WRITTEN.has(name) || name.startsWith("on")) continue;
   const method = snake(name);
   if (methods.has(method)) throw new Error(`two attributes are \`${method}\``);
@@ -239,7 +239,7 @@ for (const [name, entry] of Object.entries(versions.attributes)) {
   );
 }
 lines.push("}", "", "/// Event handlers: `on_click` is `onClick`. A handler must not borrow", "/// anything, since it runs later: write it `move |e| ..`.", "#[doc(hidden)]", "impl Element {");
-for (const [name, entry] of Object.entries(versions.events)) {
+for (const [name, entry] of Object.entries<Since>(versions.events)) {
   if (entry.removed) continue;
   const base = name.replace(/Capture$/, "");
   const type = EVENT_TYPES[base] ?? "Event";

@@ -19,7 +19,7 @@ test("copied trait defaults map to their original source file", async () => {
   run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
   expect((await import(join(dir, "lib.js"))).answer()).toBe(42);
   const map = JSON.parse(readFileSync(join(dir, "implementation.js.map"), "utf8"));
-  const source = map.sources.findIndex(path => path.endsWith("contract.rs"));
+  const source = map.sources.findIndex((path: string) => path.endsWith("contract.rs"));
   expect(source).toBeGreaterThanOrEqual(0);
   expect(map.sourcesContent[source]).toBe(contract);
   expect(decodeMappings(map.mappings).some(segment => segment.source === source
@@ -104,7 +104,7 @@ test("manifest owns artifacts and records even modules that emit no code", async
   run(args);
   const first = await Bun.file(manifest).json();
   expect(first.sources).toContain(join(dir, "types.rs"));
-  expect(first.artifacts.map(a => a.file)).toContain(join(dir, "lib.jsx"));
+  expect(first.artifacts.map((a: { file: string }) => a.file)).toContain(join(dir, "lib.jsx"));
   writeFileSync(input, "pub fn f() -> i32 { 2 }");
   run(args);
   expect(existsSync(join(dir, "lib.jsx"))).toBe(false);
@@ -128,8 +128,8 @@ test("mixed JS and JSX modules use their final paths in imports and the manifest
   expect(code).toContain('from "./view.jsx"');
   expect(code).toContain('from "./plain.js"');
   const result = await Bun.file(manifest).json();
-  expect(result.modules.find(m => m.module.length === 0).imports.sort()).toEqual([join(dir, "plain.js"), join(dir, "view.jsx")]);
-  expect(result.modules.find(m => m.module[0] === "view").map).toBe(join(dir, "view.jsx.map"));
+  expect(result.modules.find((m: { module: string[] }) => m.module.length === 0).imports.sort()).toEqual([join(dir, "plain.js"), join(dir, "view.jsx")]);
+  expect(result.modules.find((m: { module: string[] }) => m.module[0] === "view").map).toBe(join(dir, "view.jsx.map"));
 });
 
 test("an output map symlink cannot overwrite an input source", async () => {

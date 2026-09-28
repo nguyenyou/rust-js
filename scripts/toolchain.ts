@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
-const config = Bun.TOML.parse(readFileSync(resolve(root, "rust-toolchain.toml"), "utf8"));
+const config = Bun.TOML.parse(readFileSync(resolve(root, "rust-toolchain.toml"), "utf8")) as { toolchain?: { channel?: unknown } };
 const channel = config.toolchain?.channel;
 if (typeof channel !== "string" || !channel) throw new Error("rust-toolchain.toml must declare a channel");
 

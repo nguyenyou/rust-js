@@ -10,7 +10,7 @@ if (!destination || extra.length) throw new Error("Usage: bun scripts/package-re
 const output = resolve(destination);
 const staging = mkdtempSync(join(tmpdir(), "rust-js-resources-"));
 try {
-  const version = Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")).package.version;
+  const version = (Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
   const files = resourceInputs(Object.keys(bindingInputs));
   for (const file of files) {
     const target = join(staging, file);
