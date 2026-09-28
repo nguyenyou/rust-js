@@ -119,7 +119,9 @@ pilot. No delivery dates are assigned yet.
   ([ADR 0092](docs/decisions/0092-generated-programs.md)). Of 600 run on
   GitHub, one differed: an element assignment checked its index before its
   value ran, now fixed and kept as a [corpus case](test/corpus/assignment_order.rs).
-  Other kinds of program remain.
+  Programs now write and call functions with effects inside expressions:
+  run against a compiler with the assignment-order fixes undone, 2 of 600
+  differed and reduced to those bugs. Other kinds of program remain.
 
 ### M3 — Prove a complete application
 
