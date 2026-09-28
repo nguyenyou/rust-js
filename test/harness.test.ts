@@ -117,9 +117,21 @@ test("a test native Rust never ends has no answer, and isn't as listed", async (
 // A batch of generated programs says which seeds: one that isn't a whole
 // number fails before any runs, not as a run of none. Found in review.
 test("fuzz settings that aren't whole numbers fail the run", () => {
-  for (const [name, value] of [["FUZZ_START", "invalid"], ["FUZZ_SEEDS", "0"], ["FUZZ_SEEDS", "1.5"], ["FUZZ_REDUCE_BUDGET", "-1"]]) {
+  // A seed is a 32-bit number to the generator, so a batch past 2^32 would
+  // repeat seeds, or, past 2^53, not count up at all. Found in review.
+  for (const [name, value] of [
+    ["FUZZ_START", "invalid"],
+    ["FUZZ_SEEDS", "0"],
+    ["FUZZ_SEEDS", "1.5"],
+    ["FUZZ_REDUCE_BUDGET", "-1"],
+    ["FUZZ_START", "9007199254740992"],
+    ["FUZZ_START", "4294967296"],
+  ]) {
     const run = bunTest(["test/fuzz.test.ts"], { FUZZ_START: "1", FUZZ_SEEDS: "1", [name]: value });
     expect([name, run.code]).toEqual([name, 1]);
     expect(run.output).toContain(`${name}=${value}: `);
   }
+  const past = bunTest(["test/fuzz.test.ts"], { FUZZ_START: "4294967290", FUZZ_SEEDS: "10" });
+  expect(past.code).toBe(1);
+  expect(past.output).toContain("FUZZ_START=4294967290 FUZZ_SEEDS=10: the seeds end past 4294967296");
 }, 120_000);

@@ -120,3 +120,6 @@ Found in review. What's left becomes a corpus case.
   fails before a seed does, and on GitHub each part says which seeds it
   ran to the end, which must be each one asked for, once. Found in review:
   `FUZZ_START=invalid` passed, as a run of none.
+- A seed is a 32-bit number to the generator, so `FUZZ_START` and the
+  batch's last seed must be in that range, or the run fails before a seed
+  does. Found in review: a start past 2^53 didn't count up, and ran none.

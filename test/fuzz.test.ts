@@ -20,15 +20,23 @@ import { buildCompiler, compiler, fixture, root, target } from "./support";
 /** A setting that's a whole number, at least `least`, or none, and then
  * `otherwise`: anything else fails the run before a seed does, not as a
  * run of none. */
-function whole(name: string, otherwise: number, least: number): number {
+function whole(name: string, otherwise: number, least: number, most = Number.MAX_SAFE_INTEGER): number {
   const value = process.env[name];
   if (value === undefined) return otherwise;
-  if (!/^\d+$/.test(value) || Number(value) < least) throw new Error(`${name}=${value}: a whole number, at least ${least}, is a setting`);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < least || Number(value) > most) {
+    throw new Error(`${name}=${value}: a whole number, from ${least} to ${most}, is a setting`);
+  }
   return Number(value);
 }
 
-const start = whole("FUZZ_START", 1, 0);
-const seeds = whole("FUZZ_SEEDS", 12, 1);
+// A seed is a 32-bit number to the generator (`random`), so each batch's
+// seeds are in that range: past it, a seed would be another's program.
+const seedLimit = 2 ** 32;
+const start = whole("FUZZ_START", 1, 0, seedLimit - 1);
+const seeds = whole("FUZZ_SEEDS", 12, 1, seedLimit);
+if (start + seeds > seedLimit) {
+  throw new Error(`FUZZ_START=${start} FUZZ_SEEDS=${seeds}: the seeds end past ${seedLimit}, where the generator's seeds do`);
+}
 // The seeds `bun test` runs are known to compile, so one rust-js rejects is
 // a regression; exploring others, a program it doesn't support is skipped.
 const exploring = process.env.FUZZ_START !== undefined || process.env.FUZZ_SEEDS !== undefined;
