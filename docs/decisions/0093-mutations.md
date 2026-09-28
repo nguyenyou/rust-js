@@ -28,6 +28,8 @@ written, and what it breaks, as Rust would see it:
 | `guard-statements` | a guard's statements don't run | `guard_statements.rs` |
 | `crash-after-rejection` | rust-js panics after it says what it doesn't support | `union_const.rs`, `closure_clone.rs` |
 | `operand-capture` | an earlier operand runs after a later one's statements | `operand_prerequisites` (`test/semantics.rs`) |
+| `union-field` | a union's field is read as a struct's, and rust-js panics | `union_const.rs` |
+| `dyn-bound-lifetimes` | a `dyn for<'a>` trait's lifetime is left bound, and rustc panics | `higher_ranked_dyn.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

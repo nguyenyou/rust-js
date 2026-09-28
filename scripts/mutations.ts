@@ -101,6 +101,22 @@ export const mutations: Mutation[] = [
     replace: "            if false {",
     tests: ["test/semantics.test.ts", "-t", "operand_prerequisites"],
   },
+  {
+    name: "union-field",
+    breaks: "a union's field is read as a struct's, and rust-js panics",
+    file: "src/lower.rs",
+    find: "    ty.ty_adt_def().is_some_and(|adt| adt.is_union())",
+    replace: "    ty.ty_adt_def().is_some_and(|adt| adt.is_union() && false)",
+    tests: ["test/corpus.test.ts", "-t", "union_const"],
+  },
+  {
+    name: "dyn-bound-lifetimes",
+    breaks: "a `dyn for<'a>` trait's dictionary is asked of rustc with its lifetime bound, and rustc panics",
+    file: "src/lower/traits.rs",
+    find: "                self.tcx\n                    .instantiate_bound_regions_with_erased(p.with_self_ty(self.tcx, self_ty))",
+    replace: "                p.with_self_ty(self.tcx, self_ty).skip_binder()",
+    tests: ["test/corpus.test.ts", "-t", "higher_ranked_dyn"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

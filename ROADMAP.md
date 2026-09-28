@@ -122,6 +122,8 @@ pilot. No delivery dates are assigned yet.
   Programs now write and call functions with effects inside expressions:
   run against a compiler with the assignment-order fixes undone, 2 of 600
   differed and reduced to those bugs. Other kinds of program remain.
+  Eleven known bugs, each put back into the compiler, are caught by the
+  tests named for them ([ADR 0093](docs/decisions/0093-mutations.md)).
 
 ### M3 — Prove a complete application
 
