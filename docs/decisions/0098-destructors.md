@@ -1,6 +1,6 @@
 # 0098. A destructor runs where rustc runs it, in a `finally`
 
-Status: Proposed. Extends [0020](0020-structs-and-tuples.md) and [0052](0052-std-trait-impls.md).
+Status: Accepted. Extends [0020](0020-structs-and-tuples.md) and [0052](0052-std-trait-impls.md).
 
 ## Context
 
@@ -85,15 +85,52 @@ function main() {
 - **A moved variable isn't dropped.** One moved only by a statement of its
   own scope, not in a branch, a loop or a closure, is left out of the
   `finally`. One moved elsewhere gets a flag, `b$live`, cleared as it
-  moves. A field moved out gets a flag of its own.
+  moves.
+- **A field moved out isn't dropped, and the rest are, each on its own,**
+  as a person cleaning up would: what's still owned. Rust forbids moving a
+  field out of a type with a `Drop` of its own (E0509), so the value's
+  drop is its remaining fields'. A field moved on some paths gets a flag,
+  as a variable does.
+
+  ```rust
+  let pair = Pair { a: Noisy(1), b: Noisy(2) };
+  consume(pair.a);
+  println!("end");
+  ```
+
+  ```js
+  const pair = { a: [1], b: [2] };
+  try {
+    consume(pair.a);
+    console.log("end");
+  } finally {
+    dropNoisy(pair.b);
+  }
+  ```
 - **A temporary is dropped at the end of its temporary scope**, as rustc's
   region scope tree gives it, so the edition's rule is rustc's.
 - **An assignment drops the old value** after the new one is computed, as
   Rust does.
-- **A generic function drops a `T` through a drop function it's given**, as
-  it's given a `Clone` dictionary (ADR 0052): only a function that drops a
-  value of a type parameter takes one, `undefined` for a type with nothing
-  to run.
+- **A generic function drops a `T` through a drop function it's given**,
+  as JS hands generic code what depends on the type, the way `sort` takes a
+  comparator. Only a function that drops a value of a type parameter takes
+  one, after its other arguments and dictionaries, and a caller whose `T`
+  has nothing to run passes none. A generic type's drop function takes its
+  parameters' the same way: `dropWrapper(wrapper, dropT)`.
+
+  ```rust
+  fn consume<T>(value: T) {}
+  consume(Noisy(1));
+  consume(5);
+  ```
+
+  ```js
+  function consume(value, dropT) {
+    dropT?.(value);
+  }
+  consume([1], dropNoisy);
+  consume(5);
+  ```
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096).
 
@@ -128,12 +165,6 @@ value, and a `dyn Trait` of one.
   replaces the first.
 - A flag and a `try` are more JS than the program without drops had; it's
   what the Rust means.
-
-## Questions
-
-1. The generic ABI: a drop function passed to generic code that drops a
-   `T` changes that code's JS signature, which JS callers see (ADR 0052).
-   Is that acceptable, or should generic code dropping a `T` be an error
-   at first?
-2. Should the first version take partial moves out of a value with a
-   destructor, or reject them, as two of the 49 tests do them?
+- A generic function that drops a `T` has a JS parameter more than its
+  Rust one has. Nothing depends on the old signatures yet, and rejecting
+  generic drops would reject correct Rust for none of that.
