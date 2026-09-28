@@ -107,7 +107,11 @@ async function main() {
         overrides: { "rust-js-build": dependency("rust-js-build.tgz") },
       }),
     );
-    const install = runSync([process.execPath, "install", "--offline", "--ignore-scripts", "--omit", "peer", "--backend", "copyfile"], project, installTimeout);
+    // With an empty cache, as a new machine has, so nothing but the
+    // packages can be what it installs.
+    const install = runSync([process.execPath, "install", "--offline", "--ignore-scripts", "--omit", "peer", "--backend", "copyfile"], project, installTimeout, {
+      BUN_INSTALL_CACHE_DIR: join(project, "bun-cache"),
+    });
     const launcher = join(project, "node_modules", ".bin", "rust-js");
     const binary = join(project, "node_modules", "rust-js-native", "bin", "compiler");
     if (install.code !== 0 || !existsSync(launcher)) {

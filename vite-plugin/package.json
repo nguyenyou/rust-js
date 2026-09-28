@@ -11,5 +11,10 @@
   },
   "peerDependencies": {
     "vite": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }

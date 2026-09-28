@@ -17,7 +17,10 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
   writeFileSync(other, "#!/bin/sh\necho 'Unexpected dependency on the other JS runtime' >&2\nexit 99\n");
   chmodSync(other, 0o755);
   const run = (args: string[], cwd = root) => {
-    const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, PATH: `${blocked}:${process.env.PATH}` } });
+    // An empty cache of its own, as a new machine has: a warm one hid that an
+    // offline install needed Vite's registry entry.
+    const env = { ...process.env, PATH: `${blocked}:${process.env.PATH}`, BUN_INSTALL_CACHE_DIR: join(root, "bun-cache") };
+    const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe", env });
     if (result.exitCode !== 0) throw new Error(result.stderr.toString());
     return result.stdout.toString();
   };

@@ -67,3 +67,8 @@ artifacts, the report for 90 days.
 - `package-compiler.ts` packages only a native binary: a launcher packaged
   as the compiler started itself, again and again, and a first trial of
   this hung on one until it was stopped.
+- Vite is the Vite plugin's optional peer: an offline install that leaves
+  peers out still wanted Vite's registry entry for a required one, which a
+  new machine hasn't cached, and the first qualification on GitHub failed to
+  install. Installs here and in the package test use an empty cache of
+  their own, as a new machine has, so a warm one can't hide it again.
