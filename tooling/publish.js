@@ -1,6 +1,6 @@
 // Host publication for a successful WASI build. The manifest is committed last.
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parseManifest } from "./manifest.js";
 
@@ -8,6 +8,32 @@ export function fingerprint(bytes) {
   let hash = 0xcbf29ce484222325n;
   for (const byte of bytes) hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * 0x100000001b3n);
   return hash.toString(16).padStart(16, "0");
+}
+
+// A path with its symlinks resolved, as the native compiler's `absolute`
+// resolves them, so aliases of one file are one path; one that doesn't
+// exist yet, through the part of it that does.
+function real(path) {
+  if (existsSync(path)) return realpathSync(path);
+  const parent = dirname(resolve(path));
+  return parent === resolve(path) ? parent : join(real(parent), basename(path));
+}
+
+// What an older build wrote that this one may remove, by the native
+// compiler's rules (src/output.rs): a generated file, in the output's
+// directory, that this build neither writes nor reads, still as it was
+// written. Anything else, a person's file or a source, is left alone.
+function staleArtifacts(previous, manifest, writes) {
+  const outputDir = real(dirname(manifest.output));
+  const kept = new Set([manifest.input, ...manifest.sources, ...writes.keys()].map(real));
+  return (previous?.artifacts ?? []).filter(({ file, hash }) => {
+    if (!existsSync(file)) return false;
+    const path = real(file);
+    return [".js", ".jsx", ".map"].includes(extname(path))
+      && path.startsWith(outputDir + sep)
+      && !kept.has(path)
+      && fingerprint(readFileSync(path)) === hash;
+  }).map(({ file }) => ({ file: real(file) }));
 }
 
 export function publishArtifacts(manifestPath, manifest, files) {
@@ -23,8 +49,7 @@ export function publishArtifacts(manifestPath, manifest, files) {
   }
   const writes = new Map(files);
   writes.set(manifestPath, Buffer.from(JSON.stringify(manifest, null, 2) + "\n"));
-  const stale = (previous?.artifacts ?? []).filter(({ file, hash }) =>
-    !writes.has(file) && existsSync(file) && fingerprint(readFileSync(file)) === hash);
+  const stale = staleArtifacts(previous, manifest, writes);
   const id = randomUUID();
   const staged = [];
   const changed = [];
