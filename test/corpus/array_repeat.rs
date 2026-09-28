@@ -28,4 +28,10 @@ fn main() {
     println!("{:?} {}", once, none.len());
     let options = [Some(2u8); 2];
     println!("{:?}", options);
+    // The case this was, while rust-js didn't support `[x; N]`.
+    let mut row = [0; 3];
+    row[1] = 5;
+    let mut pair = [[0; 3]; 2];
+    pair[0][1] = 5;
+    println!("{row:?} {pair:?}");
 }
