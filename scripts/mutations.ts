@@ -181,6 +181,46 @@ export const mutations: Mutation[] = [
     replace: "            ExprKind::NeverToAny { source } => match self.thir[source].kind {\n                ExprKind::Loop { body } if false => Some(body),",
     tests: ["test/corpus.test.ts", "-t", "loop_values"],
   },
+  {
+    name: "static-struct-variant",
+    breaks: "a static struct's fields are read one place along, after a variant index only an enum has",
+    file: "src/lower/representation.rs",
+    find: "            let variant = parts.variant.filter(|_| ty.is_enum()).map(|v| {",
+    replace: "            let variant = parts.variant.map(|v| {",
+    tests: ["test/corpus.test.ts", "-t", "statics"],
+  },
+  {
+    name: "static-mut-place",
+    breaks: "a `static mut` is read and written as its value, not its `{ value }`",
+    file: "src/lower.rs",
+    find: '                    true => (Expr::member(item, "value"), true),',
+    replace: "                    true => (item, true),",
+    tests: ["test/corpus.test.ts", "-t", "static_mut"],
+  },
+  {
+    name: "static-mut-reference",
+    breaks: "a reference to a `static mut` is allowed",
+    file: "src/lower/analysis.rs",
+    find: '                Some(d) if tcx.is_mutable_static(d) => "references to a `static mut`",',
+    replace: '                Some(d) if tcx.is_mutable_static(d) && false => "references to a `static mut`",',
+    tests: ["test/corpus.test.ts", "-t", "static_mut_reference"],
+  },
+  {
+    name: "atomic-fetch-new-value",
+    breaks: "an atomic's `fetch_add` and the like give the new value, not the old",
+    file: "src/lower/calls.rs",
+    find: "                out.push(StmtKind::Assign(slot, next).at(js_span));\n                previous\n",
+    replace: "                out.push(StmtKind::Assign(slot.clone(), next).at(js_span));\n                slot\n",
+    tests: ["test/corpus.test.ts", "-t", "atomics"],
+  },
+  {
+    name: "thread-local-storage-static",
+    breaks: "std's storage for a `thread_local!` is taken as a static of the crate's, and rejected",
+    file: "src/lower/analysis.rs",
+    find: "            DefKind::Static { .. } => !tcx.is_foreign_item(d) && in_thread_local(tcx, d).is_none(),",
+    replace: "            DefKind::Static { .. } => !tcx.is_foreign_item(d),",
+    tests: ["test/corpus.test.ts", "-t", "thread_local_syntax"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

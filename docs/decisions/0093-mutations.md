@@ -38,6 +38,11 @@ written, and what it breaks, as Rust would see it:
 | `size-align-swap` | `align_of` is the type's size | `size_of.rs` |
 | `array-repeat-shared` | `[x; N]` of what's changed is one object, `N` times | `array_repeat.rs` |
 | `never-loop-value` | a `loop` that never ends, used as a value, is rejected | `loop_values.rs` |
+| `static-struct-variant` | a static struct's fields are read one place along | `statics.rs` |
+| `static-mut-place` | a `static mut` is read and written as its value, not its `{ value }` | `static_mut.rs` |
+| `static-mut-reference` | a reference to a `static mut` is allowed | `static_mut_reference.rs` |
+| `atomic-fetch-new-value` | an atomic's `fetch_add` gives the new value, not the old | `atomics.rs` |
+| `thread-local-storage-static` | std's storage for a `thread_local!` is taken as a static, and rejected | `thread_local_syntax.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

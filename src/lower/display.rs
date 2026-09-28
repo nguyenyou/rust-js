@@ -402,6 +402,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.shows_inside(ty) => {
                 self.debug_string(value, args.types().next().expect("what it holds"), span)
             }
+            // An atomic shows what it holds.
+            ty::Adt(_, args) if std("Atomic") => self.debug_string(Expr::member(value, "value"), args.type_at(0), span),
             ty::Adt(_, args) if std("Cell") || std("RefCell") => {
                 let name = if std("Cell") {
                     "Cell { value: "

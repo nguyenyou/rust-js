@@ -50,6 +50,15 @@ pub(super) enum Std {
     CellSet,
     /// `RefCell::borrow`, `borrow_mut`: the cell's `value`.
     Borrow,
+    /// An atomic's operations (ADR 0096), on its `{ value }` as a `Cell`'s:
+    /// `load` and `into_inner`, `store`, `swap`, the `fetch_` ones, with
+    /// the operator or whether it's `fetch_max`, and `compare_exchange`.
+    AtomicLoad,
+    AtomicStore,
+    AtomicSwap,
+    AtomicFetch(BinOp),
+    AtomicFetchMax(bool),
+    AtomicCompareExchange,
     ToString,
     /// `String + &str`.
     Concat,
@@ -613,10 +622,21 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "new_upper_exp" if argument => Std::FmtExp(true),
             "from_usize" if argument => Std::FmtUsize,
             "new" if adt("Rc") => Std::Same,
-            "new" if adt("Cell") || adt("RefCell") => Std::CellNew,
+            "new" if adt("Cell") || adt("RefCell") || adt("Atomic") => Std::CellNew,
             "get" if adt("Cell") => Std::CellGet,
             "set" if adt("Cell") => Std::CellSet,
             "borrow" | "borrow_mut" if adt("RefCell") => Std::Borrow,
+            "load" | "into_inner" if adt("Atomic") => Std::AtomicLoad,
+            "store" if adt("Atomic") => Std::AtomicStore,
+            "swap" if adt("Atomic") => Std::AtomicSwap,
+            "fetch_add" if adt("Atomic") => Std::AtomicFetch(BinOp::Add),
+            "fetch_sub" if adt("Atomic") => Std::AtomicFetch(BinOp::Sub),
+            "fetch_and" if adt("Atomic") => Std::AtomicFetch(BinOp::BitAnd),
+            "fetch_or" if adt("Atomic") => Std::AtomicFetch(BinOp::BitOr),
+            "fetch_xor" if adt("Atomic") => Std::AtomicFetch(BinOp::BitXor),
+            "fetch_max" if adt("Atomic") => Std::AtomicFetchMax(true),
+            "fetch_min" if adt("Atomic") => Std::AtomicFetchMax(false),
+            "compare_exchange" | "compare_exchange_weak" if adt("Atomic") => Std::AtomicCompareExchange,
             "new" if adt("Vec") => Std::VecNew,
             "push" if adt("Vec") => Std::Push,
             // JS's `pop()` gives `undefined` when empty: `None` (ADR 0030).
@@ -1165,7 +1185,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
         ty.is_box()
             || self.is_lang_adt(ty, LangItem::String)
-            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut"]
+            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut", "Atomic"]
                 .into_iter()
                 .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_vec_like(ty)

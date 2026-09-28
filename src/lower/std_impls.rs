@@ -93,7 +93,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.is_vec_like(ty) => {
                 self.vec_changed(ty) || self.needs_clone_in(args.type_at(0), seen)
             }
-            ty::Adt(..) if std("Cell") || std("RefCell") => true,
+            ty::Adt(..) if std("Cell") || std("RefCell") || std("Atomic") => true,
             // A map or a set changes in place (ADR 0059).
             ty::Adt(..) if self.is_map(ty) => true,
             ty::Adt(..) if std("Rc") || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
@@ -401,7 +401,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if self.is_vec_like(ty) => Expr::array(Vec::new()),
             _ if self.is_map(ty) => Expr::new_(Expr::var(if self.is_set(ty) { "Set" } else { "Map" }), Vec::new()),
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
-            ty::Adt(_, args) if std("Cell") || std("RefCell") => Expr::object(vec![Prop::Field(
+            ty::Adt(_, args) if std("Cell") || std("RefCell") || std("Atomic") => Expr::object(vec![Prop::Field(
                 "value".into(),
                 self.default_value(args.type_at(0), span)?,
             )]),

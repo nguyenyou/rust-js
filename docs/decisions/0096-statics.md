@@ -125,3 +125,16 @@ a function pointer, or a `dyn`.
 - Left for later: a reference to a `static mut`, a static holding a
   reference to another, and `Mutex` or `OnceLock` in a static, which none of
   the tests use.
+- **rustc makes value trees only of constants,** so a static's is read out
+  of the memory rustc computed for it, a field at a time with rustc's own
+  destructuring of a constant, following each `&` in it. That gives a
+  struct a variant index too, which only an enum's value tree has: the
+  first version read `Point { x: 3, y: 4 }` as `{ x: 0, y: 3 }`, and
+  `statics.rs` found it.
+- An atomic is `{ value }` wherever it is: `new`, `default()`,
+  `into_inner` and `{:?}` are a `Cell`'s. `fetch_nand`, `fetch_update`,
+  `get_mut` and `AtomicPtr` are rejected for now.
+- A `thread_local!`'s own storage is a static std writes inside it, which
+  JS needs none of (ADR 0037): it isn't one of the crate's statics.
+- `#[thread_local]` is unstable, so the corpus, whose cases are modules,
+  can't enable it: its rejection is a diagnostics test.

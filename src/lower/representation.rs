@@ -6,13 +6,14 @@ use crate::js;
 use crate::js::{Expr, Op, Prop};
 use rustc_ast::Mutability;
 use rustc_hir as hir;
-use rustc_hir::def::CtorKind;
+use rustc_hir::def::{CtorKind, DefKind};
 use rustc_hir::{BindingMode, ByRef, LangItem};
-use rustc_middle::mir::interpret::GlobalId;
+use rustc_middle::mir::ConstValue;
+use rustc_middle::mir::interpret::{AllocId, ConstAllocation, GlobalAlloc, GlobalId, Pointer, Scalar, alloc_range};
 use rustc_middle::ty;
 use rustc_middle::ty::Ty;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::def_id::DefId;
+use rustc_span::def_id::{DefId, LocalDefId};
 use rustc_span::{Span, Symbol, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -159,7 +160,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A slice or an array is a JS array: `&mut` to one, as `sort` takes, is it.
             || ty.is_slice()
             || ty.is_array()
-            || ["Cell", "RefCell"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || ["Cell", "RefCell", "Atomic"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_vec_like(ty)
             || self.is_map(ty)
             // An enum with fields: those variants are objects (ADR 0033). A
@@ -774,6 +775,128 @@ pub(super) fn eval_const<'tcx>(
     })
 }
 
+/// What rustc computed for a `static` (ADR 0096), as a `const`'s value tree.
+/// rustc makes value trees only of constants, since a static is a place, so
+/// this reads one out of the static's memory. None for a value no value tree
+/// holds: a reference to another static, a pointer, a `dyn`.
+pub(super) fn static_value<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Option<ty::Value<'tcx>> {
+    let memory = tcx.eval_static_initializer(def_id).ok()?;
+    let ty = tcx.type_of(def_id).instantiate_identity();
+    let valtree = valtree_at(tcx, Pointer::from(unchanging(tcx, memory)), ty)?;
+    Some(ty::Value { ty, valtree })
+}
+
+/// Memory rustc reads for a value tree only if it can't change, as a `static
+/// mut`'s or an atomic's can: a copy of it, marked so.
+fn unchanging<'tcx>(tcx: TyCtxt<'tcx>, memory: ConstAllocation<'tcx>) -> AllocId {
+    let mut copy = memory.inner().clone();
+    copy.mutability = Mutability::Not;
+    tcx.reserve_and_set_memory_alloc(tcx.mk_const_alloc(copy))
+}
+
+/// Where a pointer in a static's memory points, readable. A `&` in one is
+/// to memory of its own, a nested static; one to another static is `None`.
+fn pointee(tcx: TyCtxt<'_>, pointer: Scalar) -> Option<Pointer> {
+    let pointer = pointer.to_pointer(&tcx).discard_err()?.into_pointer_or_addr().ok()?;
+    let (prov, offset) = pointer.prov_and_relative_offset();
+    let memory = match tcx.try_get_global_alloc(prov.alloc_id())? {
+        GlobalAlloc::Memory(memory) if memory.inner().mutability == Mutability::Not => return Some(pointer),
+        GlobalAlloc::Memory(memory) => memory,
+        GlobalAlloc::Static(d) if matches!(tcx.def_kind(d), DefKind::Static { nested: true, .. }) => {
+            tcx.eval_static_initializer(d).ok()?
+        }
+        _ => return None,
+    };
+    Some(Pointer::new(unchanging(tcx, memory).into(), offset))
+}
+
+/// The value tree of the `ty` at `at`, as rustc makes one for a constant.
+fn valtree_at<'tcx>(tcx: TyCtxt<'tcx>, at: Pointer, ty: Ty<'tcx>) -> Option<ty::ValTree<'tcx>> {
+    let (prov, offset) = at.prov_and_relative_offset();
+    valtree_of(
+        tcx,
+        ConstValue::Indirect {
+            alloc_id: prov.alloc_id(),
+            offset,
+        },
+        ty,
+    )
+}
+
+fn valtree_of<'tcx>(tcx: TyCtxt<'tcx>, value: ConstValue, ty: Ty<'tcx>) -> Option<ty::ValTree<'tcx>> {
+    let typing_env = ty::TypingEnv::fully_monomorphized();
+    let word = tcx.data_layout.pointer_size();
+    let read = |words: u64, size, provenance| {
+        let ConstValue::Indirect { alloc_id, offset } = value else {
+            return None;
+        };
+        let memory = tcx.global_alloc(alloc_id).unwrap_memory();
+        memory
+            .inner()
+            .read_scalar(&tcx, alloc_range(offset + word * words, size), provenance)
+            .ok()
+    };
+    match ty.kind() {
+        ty::Bool | ty::Char | ty::Int(_) | ty::Uint(_) | ty::Float(_) => {
+            let scalar = match value {
+                ConstValue::Scalar(scalar) => scalar,
+                _ => read(0, tcx.layout_of(typing_env.as_query_input(ty)).ok()?.size, false)?,
+            };
+            Some(ty::ValTree::from_scalar_int(tcx, scalar.try_to_scalar_int().ok()?))
+        }
+        // A reference's value tree is its referent's. A `&str` or a `&[T]`
+        // is two words: where its items are, and how many.
+        ty::Ref(_, inner, _) if matches!(inner.kind(), ty::Str | ty::Slice(_)) => {
+            let (data, len) = match value {
+                ConstValue::Slice { alloc_id, meta } => (Scalar::from_pointer(alloc_id.into(), &tcx), meta),
+                _ => (
+                    read(0, word, true)?,
+                    read(1, word, false)?.to_target_usize(&tcx).discard_err()?,
+                ),
+            };
+            let len_usize = usize::try_from(len).ok()?;
+            match *inner.kind() {
+                ty::Str if len == 0 => Some(ty::ValTree::from_raw_bytes(tcx, &[])),
+                ty::Str => {
+                    let (prov, offset) = pointee(tcx, data)?.prov_and_relative_offset();
+                    let memory = tcx.global_alloc(prov.alloc_id()).unwrap_memory();
+                    let start = usize::try_from(offset.bytes()).ok()?;
+                    let bytes = memory
+                        .inner()
+                        .inspect_with_uninit_and_ptr_outside_interpreter(start..start + len_usize);
+                    Some(ty::ValTree::from_raw_bytes(tcx, bytes))
+                }
+                ty::Slice(_) if len == 0 => Some(ty::ValTree::zst(tcx)),
+                ty::Slice(item) => valtree_at(tcx, pointee(tcx, data)?, Ty::new_array(tcx, item, len)),
+                _ => None,
+            }
+        }
+        ty::Ref(_, inner, _) if inner.is_sized(tcx, typing_env) => {
+            let pointer = match value {
+                ConstValue::Scalar(scalar) => scalar,
+                _ => read(0, word, true)?,
+            };
+            valtree_at(tcx, pointee(tcx, pointer)?, *inner)
+        }
+        ty::Adt(adt, _) if adt.is_union() => None,
+        ty::Array(..) | ty::Tuple(_) | ty::Adt(..) => {
+            let parts = tcx.try_destructure_mir_constant_for_user_output(value, ty)?;
+            // An enum's starts with its variant's index, as rustc's own does.
+            // (The destructured value has one for a struct too.)
+            let variant = parts.variant.filter(|_| ty.is_enum()).map(|v| {
+                ty::Const::new_value(tcx, ty::ValTree::from_scalar_int(tcx, v.as_u32().into()), tcx.types.u32)
+            });
+            let fields = parts
+                .fields
+                .iter()
+                .map(|&(field, ty)| Some(ty::Const::new_value(tcx, valtree_of(tcx, field, ty)?, ty)))
+                .collect::<Option<Vec<_>>>()?;
+            Some(ty::ValTree::from_branches(tcx, variant.into_iter().chain(fields)))
+        }
+        _ => None,
+    }
+}
+
 /// A constant value as a JS literal, in the shapes of ADRs 0011, 0013, 0020
 /// and 0030: numbers, strings, `{ x: 0, y: 0 }`, `[a, b]`, `"High"`,
 /// `undefined` for `None`.
@@ -857,6 +980,25 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
                 ty::ValTreeKind::Leaf(_) => return None,
             };
             Some(Expr::object(vec![Prop::Field("value".into(), const_js(tcx, inner)?)]))
+        }
+        // An atomic is `{ value }` too (ADR 0096). What it holds is stored
+        // as an integer of its size, in a struct that aligns it.
+        ty::Adt(adt, args) if tcx.is_diagnostic_item(Symbol::intern("Atomic"), adt.did()) => {
+            let mut stored = value.valtree;
+            while let ty::ValTreeKind::Branch(items) = &**stored {
+                let [only] = &items[..] else {
+                    return None;
+                };
+                stored = only.try_to_value()?.valtree;
+            }
+            let inner = const_js(
+                tcx,
+                ty::Value {
+                    ty: args.type_at(0),
+                    valtree: stored,
+                },
+            )?;
+            Some(Expr::object(vec![Prop::Field("value".into(), inner)]))
         }
         ty::Adt(adt, _) if adt.is_struct() && !super::recognition::struct_is_its_fields(tcx, adt.did()) => None,
         ty::Adt(adt, _) if adt.is_struct() => {

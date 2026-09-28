@@ -2,10 +2,11 @@
 
 use super::analysis::{AnalyzedCrate, analyze_crate, is_thread_local};
 use super::bindings::Export;
-use super::{Body, CrateFacts, FnCx, const_js, eval_const, module_file, module_symbol};
-use crate::js::{self, Expr, StmtKind};
+use super::{Body, CrateFacts, FnCx, const_js, eval_const, module_file, module_symbol, static_value};
+use crate::js::{self, Expr, Prop, StmtKind};
 use crate::program::{ImportRequest, LoweredModule, Unlinked, UnlinkedModule};
 use crate::runtime::Helper;
+use rustc_hir::def::DefKind;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::def_id::{DefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
@@ -64,11 +65,27 @@ pub fn lower_crate<'tcx>(
         let span = tcx.def_span(def_id);
         let typing_env = ty::TypingEnv::fully_monomorphized();
         let args = ty::GenericArgs::identity_for_item(tcx, def_id);
-        let Some(value) = eval_const(tcx, typing_env, def_id.to_def_id(), args, span).and_then(|v| const_js(tcx, v))
-        else {
+        // A `static mut` is its value's `{ value }` (ADR 0096), which any
+        // module can write.
+        let (value, what) = match tcx.def_kind(def_id) {
+            DefKind::Static { mutability, .. } => (
+                static_value(tcx, def_id)
+                    .and_then(|v| const_js(tcx, v))
+                    .map(|v| match mutability.is_mut() {
+                        true => Expr::object(vec![Prop::Field("value".into(), v)]),
+                        false => v,
+                    }),
+                "statics",
+            ),
+            _ => (
+                eval_const(tcx, typing_env, def_id.to_def_id(), args, span).and_then(|v| const_js(tcx, v)),
+                "constants",
+            ),
+        };
+        let Some(value) = value else {
             let ty = tcx.type_of(def_id).instantiate_identity();
             tcx.dcx()
-                .span_err(span, format!("rust-js does not support constants of type `{ty}` yet"));
+                .span_err(span, format!("rust-js does not support {what} of type `{ty}` yet"));
             failed = true;
             continue;
         };

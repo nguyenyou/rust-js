@@ -7,7 +7,7 @@ use super::{Body, FnInfo, TestFn, camel_case, fresh_in, module_path, strip};
 use rustc_hir::def::DefKind;
 use rustc_hir::find_attr;
 use rustc_middle::mir::BorrowKind;
-use rustc_middle::thir::ExprKind;
+use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
@@ -112,7 +112,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     };
     let all_bodies: Vec<&Body<'tcx>> = all_bodies.iter().filter(|body| !is_harness(body.def_id)).collect();
 
-    if !reject_unsupported(tcx, &markers) {
+    if !reject_unsupported(tcx, &markers) || !reject_static_references(tcx, &all_bodies) {
         return None;
     }
 
@@ -161,15 +161,16 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         .filter_map(|body| Some((body.def_id, in_thread_local(tcx, body.def_id)?)))
         .collect();
 
-    // `const` items (ADR 0031), with the values rustc has computed. One in a
-    // function goes beside it, in its module.
+    // `const` items (ADR 0031) and statics (ADR 0096), with the values rustc
+    // has computed. One in a function goes beside it, in its module.
     let consts: Vec<LocalDefId> = tcx
         .hir_crate_items(())
         .definitions()
-        .filter(|&d| {
-            matches!(tcx.def_kind(d), DefKind::Const { .. })
-                && !markers.iter().any(|&(m, _)| m == d)
-                && !from_serde_derive(tcx, d)
+        .filter(|&d| match tcx.def_kind(d) {
+            DefKind::Const { .. } => !markers.iter().any(|&(m, _)| m == d) && !from_serde_derive(tcx, d),
+            // Not std's storage for a thread-local, which JS needs none of.
+            DefKind::Static { .. } => !tcx.is_foreign_item(d) && in_thread_local(tcx, d).is_none(),
+            _ => false,
         })
         .collect();
 
@@ -293,8 +294,7 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
             {
                 "user implementations of this standard or external trait"
             }
-            DefKind::Static { .. } if tcx.is_foreign_item(def_id) => continue,
-            DefKind::Static { .. } => "statics",
+            DefKind::Static { .. } if tcx.is_thread_local_static(def_id.to_def_id()) => "`#[thread_local]` statics",
             _ => continue,
         };
         tcx.dcx()
@@ -302,6 +302,45 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
         valid = false;
     }
     valid
+}
+
+/// Report each reference rust-js can't make to a static yet (ADR 0096): to
+/// a `static mut` or a part of one, and a raw address of any. False if there
+/// was one.
+fn reject_static_references(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
+    let mut valid = true;
+    for body in all_bodies {
+        let thir = &body.thir;
+        for expr in thir.exprs.iter() {
+            let (arg, raw) = match expr.kind {
+                ExprKind::Borrow { arg, .. } => (arg, false),
+                ExprKind::RawBorrow { arg, .. } => (arg, true),
+                _ => continue,
+            };
+            let what = match static_of(thir, arg) {
+                Some(d) if tcx.is_foreign_item(d) => continue,
+                Some(_) if raw => "raw addresses of statics",
+                Some(d) if tcx.is_mutable_static(d) => "references to a `static mut`",
+                _ => continue,
+            };
+            tcx.dcx()
+                .span_err(expr.span, format!("rust-js does not support {what} yet"));
+            valid = false;
+        }
+    }
+    valid
+}
+
+/// The static that place `e` is, or is a part of.
+fn static_of(thir: &Thir<'_>, e: ExprId) -> Option<DefId> {
+    match thir[strip(thir, e)].kind {
+        ExprKind::Field { lhs, .. } | ExprKind::Index { lhs, .. } => static_of(thir, lhs),
+        ExprKind::Deref { arg } => match thir[strip(thir, arg)].kind {
+            ExprKind::StaticRef { def_id, .. } => Some(def_id),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// What of JS the crate's bodies use (ADRs 0024, 0028).
@@ -470,9 +509,8 @@ fn exported_across_modules<'tcx>(
         let from = tcx.parent_module_from_def_id(body.def_id);
         for expr in body.thir.exprs.iter() {
             let def_id = match (&expr.kind, expr.ty.kind()) {
-                (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _)) | (ExprKind::NamedConst { def_id, .. }, _) => {
-                    def_id
-                }
+                (ExprKind::ZstLiteral { .. }, ty::FnDef(def_id, _))
+                | (ExprKind::NamedConst { def_id, .. } | ExprKind::StaticRef { def_id, .. }, _) => def_id,
                 _ => continue,
             };
             if let Some(target) = fns.get(def_id)

@@ -402,6 +402,88 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A `Ref` or `RefMut` guard is what it guards: the object itself.
             Std::Borrow => Expr::member(arg(), "value"),
+            // An atomic's operation (ADR 0096) is the plain one on its `{ value }`:
+            // JS runs a module on one thread, so every ordering holds. Each
+            // ordering is evaluated, and not used.
+            Std::AtomicLoad
+            | Std::AtomicStore
+            | Std::AtomicSwap
+            | Std::AtomicFetch(_)
+            | Std::AtomicFetchMax(_)
+            | Std::AtomicCompareExchange => {
+                let ty::Adt(_, atomic) = self.thir[args[0]].ty.peel_refs().kind() else {
+                    return Err(self.unsupported(span, "this atomic"));
+                };
+                let item = atomic.type_at(0);
+                let operands = match known {
+                    Std::AtomicLoad => 0,
+                    Std::AtomicCompareExchange => 2,
+                    _ => 1,
+                };
+                let cell = arg();
+                let cell = if operands > 0 && !cell.reads_same() {
+                    self.spill("atomic", cell, out)
+                } else {
+                    cell
+                };
+                let given: Vec<Expr> = (0..operands)
+                    .map(|_| arg())
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|v| {
+                        if v.reads_same() {
+                            v
+                        } else {
+                            self.spill("operand", v, out)
+                        }
+                    })
+                    .collect();
+                for ordering in values.by_ref() {
+                    if ordering.has_effects() {
+                        out.push(StmtKind::Expr(ordering).at(js_span));
+                    }
+                }
+                let slot = Expr::member(cell, "value");
+                if known == Std::AtomicLoad {
+                    return Ok(slot);
+                }
+                let [v, rest @ ..] = &given[..] else {
+                    unreachable!("an atomic's operand");
+                };
+                if known == Std::AtomicStore {
+                    out.push(StmtKind::Assign(slot, v.clone()).at(js_span));
+                    return Ok(Expr::undefined());
+                }
+                let previous = self.spill("previous", slot.clone(), out);
+                let next = match known {
+                    Std::AtomicSwap => v.clone(),
+                    Std::AtomicFetch(op) => self.binary(op, previous.clone(), v.clone(), None, item, span)?,
+                    Std::AtomicFetchMax(max) => {
+                        let op = if max { Op::Gt } else { Op::Lt };
+                        Expr::cond(Expr::bin(op, previous.clone(), v.clone()), previous.clone(), v.clone())
+                    }
+                    _ => {
+                        let done = self.spill("exchanged", Expr::bin(Op::Eq, previous.clone(), v.clone()), out);
+                        out.push(
+                            StmtKind::If(
+                                done.clone(),
+                                vec![StmtKind::Assign(slot, rest[0].clone()).at(js_span)],
+                                None,
+                            )
+                            .at(js_span),
+                        );
+                        let result = |tag: &str| {
+                            Expr::object(vec![
+                                Prop::Field("TAG".into(), Expr::str(tag)),
+                                Prop::Field("_0".into(), previous.clone()),
+                            ])
+                        };
+                        return Ok(Expr::cond(done, result("Ok"), result("Err")));
+                    }
+                };
+                out.push(StmtKind::Assign(slot, next).at(js_span));
+                previous
+            }
             Std::Concat => Expr::bin(Op::Add, arg(), arg()),
             Std::Method("pop") if boxed => {
                 self.runtime.insert(Helper::Pop);

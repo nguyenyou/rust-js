@@ -64,7 +64,7 @@ use bindings::{Export, JsForm, is_binding, js_form, js_name};
 pub use pipeline::lower_crate;
 use recognition::Std;
 use representation::{
-    Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, variant_field,
+    Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, static_value, variant_field,
 };
 pub use serde::{SerdeAttributes, attributes as serde_attributes};
 
@@ -3066,6 +3066,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A JS global (ADR 0021).
             ExprKind::StaticRef { def_id, .. } if self.tcx.is_foreign_item(def_id) => {
                 Some((self.js_ref(&js_name(self.tcx, def_id)), false))
+            }
+            // A static of the crate's (ADR 0096): its module's `const`, or
+            // the `{ value }` of a `static mut`.
+            ExprKind::StaticRef { def_id, .. } if self.krate.fns.contains_key(&def_id) => {
+                let item = self.fn_ref(def_id);
+                Some(match self.tcx.is_mutable_static(def_id) {
+                    true => (Expr::member(item, "value"), true),
+                    false => (item, false),
+                })
             }
             _ => None,
         }

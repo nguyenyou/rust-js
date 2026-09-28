@@ -87,5 +87,5 @@ export function bump() {
   `RefCell::new(Vec::new())` can't tell.
 - `with` and `with_borrow_mut` call their closure right there:
   `((log) => log.push(line))(LOG.value)`.
-- Plain `static`s are still an error, and so are `take` and `replace` on a
-  thread-local.
+- Plain `static`s were still an error, until ADR 0096, and so are `take`
+  and `replace` on a thread-local.
