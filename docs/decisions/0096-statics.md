@@ -74,7 +74,8 @@ export function bump() {
   reference is still used undefined behavior, so no program Rust defines
   can tell. `println!("{}", COUNT)` takes one, as does a method of
   `&self`. (Amended: the first version rejected every reference; 22 of
-  rustc's tests stopped there, most of them counting drops.)
+  rustc's tests stopped there, most of them counting drops; 8 more pass,
+  and most of the rest stop at a destructor, ADR 0098.)
 - **`&mut COUNT` and `&raw mut COUNT` are rejected** for now: a `&mut` of a
   number has no JS value yet.
 

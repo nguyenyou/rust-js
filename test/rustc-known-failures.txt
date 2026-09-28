@@ -18,7 +18,7 @@ array-slice-vec/fixed-length-vector-pattern-matching-7784.rs	error: rust-js does
 array-slice-vec/issue-18425.rs	error: rust-js does not support `[x; N]` of a value that isn't `Copy` yet
 array-slice-vec/mutability-inherits-through-fixed-length-vec.rs	error: rust-js does not support values of type `&mut i32` yet
 array-slice-vec/slice_binary_search.rs	error: rust-js does not support calling `core::slice::<impl [T]>::binary_search_by_key` yet
-array-slice-vec/slice.rs	error: rust-js does not support references to a `static mut` yet
+array-slice-vec/slice.rs	error: rust-js does not support `&mut` to a `Foo` yet
 array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support this pattern yet
 array-slice-vec/subslice-patterns-const-eval.rs	error: rust-js does not support this pattern yet
 array-slice-vec/vec-dst.rs	error: rust-js does not support calling `std::convert::Into::into` yet
@@ -142,9 +142,8 @@ binding/match-vec-alternatives.rs	error: rust-js does not support this pattern y
 binding/mut-in-ident-patterns.rs	error: rust-js does not support this literal yet
 binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
 binding/or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
-binding/order-drop-with-match.rs	error: rust-js does not support references to a `static mut` yet
+binding/order-drop-with-match.rs	error: rust-js does not support binding a value with a destructor here yet
 binding/range-inclusive-pattern-precedence.rs	error: rust-js does not support this pattern yet
-binding/ref-pattern-drop-behavior-8860.rs	error: rust-js does not support references to a `static mut` yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this pattern yet
 binop/augmented-assignment.rs	error: rust-js does not support user implementations of this standard or external trait yet
 binop/compound-assign-by-ref.rs	error: rust-js does not support values of type `f32` yet
@@ -157,7 +156,7 @@ borrowck/borrowck-field-sensitivity-rpass.rs	error: rust-js does not support val
 borrowck/borrowck-macro-interaction-issue-6304.rs	error: rust-js does not support this pattern yet
 borrowck/borrowck-mut-uniq.rs	error: rust-js does not support calling `std::mem::swap` yet
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support values of type `&mut A` yet
-borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support references to a `static mut` yet
+borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support `&mut` references to a `static mut` yet
 borrowck/borrowck-use-mut-borrow-rpass.rs	error: rust-js does not support values of type `&mut std::boxed::Box<isize>` yet
 borrowck/incorrect-loan-error-on-local-update-5550.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 borrowck/issue-29166.rs	error: rust-js does not support calling `std::slice::<impl [T]>::into_vec` yet
@@ -456,7 +455,7 @@ deriving/deriving-from.rs	error: rust-js does not support calling `std::convert:
 deriving/deriving-hash.rs	error: rust-js does not support user implementations of this standard or external trait yet
 deriving/deriving-show.rs	error: rust-js does not support values of type `*const (dyn std::marker::Send + 'static)` yet
 deriving/deriving-with-repr-packed.rs	error: rust-js does not support values of type `*const Aligned` yet
-destructuring-assignment/drop-order.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
+destructuring-assignment/drop-order.rs	error: rust-js does not support a temporary with a destructor yet
 destructuring-assignment/nested_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
 destructuring-assignment/slice_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
 destructuring-assignment/struct_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
@@ -464,30 +463,28 @@ destructuring-assignment/tuple_destructure.rs	error: rust-js does not support th
 destructuring-assignment/tuple_struct_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
 destructuring-assignment/warn-unused-duplication.rs	error: rust-js does not support assigning to this place yet
 drop/box-conditional-drop-allocator.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/conditional-drop-10734.rs	error: rust-js does not support references to a `static mut` yet
-drop/drop-count-assertion-16151.rs	error: rust-js does not support references to a `static mut` yet
+drop/drop-count-assertion-16151.rs	error: rust-js does not support calling `std::mem::replace` yet
 drop/drop-immediate-non-box-ty-9446.rs	error: rust-js does not support a temporary with a destructor yet
-drop/drop-once-on-move.rs	error: rust-js does not support binding a value with a destructor here yet
+drop/drop-once-on-move.rs	error: rust-js does not support moving part of a value with a destructor yet
 drop/drop-order-comparisons-let-chains.rs	error: rust-js does not support a temporary with a destructor yet
-drop/drop-struct-as-object.rs	error: rust-js does not support references to a `static mut` yet
+drop/drop-struct-as-object.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/dropck_legal_cycles.rs	error: rust-js does not support generic trait parameters yet
 drop/dropck-eyepatch-reorder.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
 drop/dropck-eyepatch.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
 drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support a temporary with a destructor yet
-drop/generic-drop-trait-bound-15858.rs	error: rust-js does not support references to a `static mut` yet
 drop/if-let-guards-2.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
 drop/issue-21486.rs	error: rust-js does not support a struct update from a value with a destructor yet
-drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support references to a `static mut` yet
-drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support references to a `static mut` yet
+drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support a temporary with a destructor yet
+drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support calling `std::mem::replace` yet
 drop/issue-30018-nopanic.rs	error: rust-js does not support a value with a destructor made before what may panic or leave early yet
-drop/issue-48962.rs	error: rust-js does not support references to a `static mut` yet
+drop/issue-48962.rs	error: rust-js does not support moving a value with a destructor here yet
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support moving part of a value with a destructor yet
 drop/issue-90752.rs	error: rust-js does not support moving part of a value with a destructor yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/nested-return-drop-order.rs	error: rust-js does not support a value with a destructor made before what may panic or leave early yet
 drop/nondrop-cycle.rs	error: rust-js does not support this `let` pattern without a value yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support calling `std::cell::RefCell::<T>::into_inner` yet
-drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support references to a `static mut` yet
+drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support calling `std::mem::replace` yet
 drop/static-issue-17302.rs	error: rust-js does not support a temporary with a destructor yet
 drop/struct-field-drop-order.rs	error: rust-js does not support a value with a destructor made before what may panic or leave early yet
 drop/trait-object-drop-10802.rs	error: rust-js: generated trait implementation name `boxMyTrait` collides; put the implementations in separate modules
@@ -541,7 +538,7 @@ extern/issue-13655.rs	error: rust-js does not support user implementations of th
 float/minmax.rs	error: rust-js does not support constants of type `f32` yet
 fn_traits/call-unit-struct-impl-fn-once.rs	error: rust-js does not support user implementations of this standard or external trait yet
 fn/dyn-fn-alignment.rs	error: rust-js does not support values of type `*const A` yet
-for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support references to a `static mut` yet
+for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support a temporary with a destructor yet
 for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 for-loop-while/for-loop-into-iterator.rs	error: rust-js does not support values of type `&mut i32` yet
 for-loop-while/for-loop-lifetime-of-unbound-values.rs	error: rust-js does not support a temporary with a destructor yet
@@ -691,7 +688,7 @@ issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_
 issues/issue-36936.rs	error: rust-js does not support this expression yet
 issues/issue-37109.rs	error: rust-js does not support associated types yet
 issues/issue-38437.rs	error: rust-js does not support moving part of a value with a destructor yet
-issues/issue-39367.rs	error: rust-js does not support references to a `static mut` yet
+issues/issue-39367.rs	error: rust-js does not support statics of type `*const ArenaSet<std::vec::Vec<u8>>` yet
 issues/issue-3979.rs	error: rust-js does not support values of type `&mut Self` yet
 issues/issue-39827.rs	error: rust-js does not support calling `std::intrinsics::volatile_copy_memory` yet
 issues/issue-41498.rs	error: rust-js does not support values of type `&mut T` yet
@@ -740,7 +737,6 @@ lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling
 lifetimes/rvalue-lifetime-drop-timing.rs	error: rust-js does not support a temporary with a destructor yet
 lifetimes/struct-with-lifetime-parameters-9259.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
 lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
-linkage-attr/link-section-placement.rs	error: rust-js does not support references to a `static mut` yet
 linking/executable-no-mangle-strip.rs	error: rust-js does not support statics of type `unsafe fn()` yet
 lint/dead-code/associated-type.rs	error: rust-js does not support associated types yet
 lint/issue-20343.rs	error: rust-js does not support generic trait parameters yet
@@ -782,8 +778,6 @@ methods/method-normalize-bounds-issue-20604.rs	error: rust-js does not support g
 methods/method-probe-no-guessing-dyn-trait.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
 methods/method-projection.rs	error: rust-js does not support associated types yet
 methods/method-recursive-blanket-impl.rs	error: rust-js does not support generic trait parameters yet
-methods/method-self-arg-trait.rs	error: rust-js does not support references to a `static mut` yet
-methods/method-self-arg.rs	error: rust-js does not support references to a `static mut` yet
 methods/method-two-trait-defer-resolution-1.rs	error: rust-js: generated trait implementation name `vecfoo` collides; put the implementations in separate modules
 methods/method-two-trait-defer-resolution-2.rs	error: rust-js: generated trait implementation name `vecFoo` collides; put the implementations in separate modules
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
@@ -797,7 +791,7 @@ mir/mir_call_with_associated_type.rs	error: rust-js does not support associated 
 mir/mir_codegen_calls.rs	error: rust-js does not support generic trait parameters yet
 mir/mir_codegen_critical_edge.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = u32>` yet
 mir/mir_coercions.rs	error: rust-js does not support user implementations of this standard or external trait yet
-mir/mir_early_return_scope.rs	error: rust-js does not support references to a `static mut` yet
+mir/mir_early_return_scope.rs	error: rust-js does not support a temporary with a destructor yet
 mir/mir_fat_ptr.rs	error: rust-js does not support values of type `&mut &[u8]` yet
 mir/mir_heavy_promoted.rs	error: rust-js does not support constants of type `[u8; 32 * 1024 * 1024]` yet
 mir/mir_misc_casts.rs	error: rust-js does not support values of type `*const ()` yet
@@ -988,7 +982,6 @@ self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support
 self/self-impl-2.rs	error: rust-js does not support generic trait parameters yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 self/string-self-append.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
-self/where-for-self.rs	error: rust-js does not support references to a `static mut` yet
 simd/array-type.rs	error: rust-js does not support calling `std::intrinsics::simd::simd_insert` yet
 simd/issue-32947.rs	error: rust-js does not support values of type `*mut u8` yet
 simd/libm_std_can_float.rs	error: rust-js does not support values of type `f32` yet
@@ -1016,7 +1009,7 @@ statics/static-impl.rs	error: rust-js does not support generic trait parameters 
 statics/static-method-in-trait-with-tps-intracrate.rs	error: rust-js does not support generic trait parameters yet
 statics/static-methods-in-traits2.rs	error: rust-js does not support generic trait methods yet
 statics/static-promotion.rs	error: rust-js does not support this literal yet
-statics/static-recursive.rs	error: rust-js does not support references to a `static mut` yet
+statics/static-recursive.rs	error: rust-js does not support statics of type `*const u8` yet
 std/issue-3563-3.rs	error: rust-js does not support values of type `&mut Self` yet
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/nul-char-equivalence.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
@@ -1043,7 +1036,6 @@ structs-enums/tag-align-dyn-u64.rs	error: rust-js does not support calling `std:
 structs-enums/tag-align-dyn-variants.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tuple-struct-constructor-pointer.rs	error: rust-js does not support this expression yet
-structs/destructuring-struct-with-dtor-6344.rs	error: rust-js does not support moving a value with a destructor here yet
 structs/mutable-unit-struct-borrow-11267.rs	error: rust-js does not support generic trait parameters yet
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
 thread-local/thread-local-static-reference-70673.rs	error: rust-js does not support `#[thread_local]` statics yet
@@ -1196,8 +1188,8 @@ union/union-align.rs	error: rust-js does not support values of type `U16` yet
 union/union-const-codegen.rs	error: rust-js does not support constants of type `U` yet
 union/union-const-eval-field.rs	error: rust-js does not support constants of type `DummyUnion` yet
 union/union-derive-rpass.rs	error: rust-js does not support values of type `U` yet
-union/union-drop-assign.rs	error: rust-js does not support references to a `static mut` yet
-union/union-drop.rs	error: rust-js does not support references to a `static mut` yet
+union/union-drop-assign.rs	error: rust-js does not support values of type `U` yet
+union/union-drop.rs	error: rust-js does not support values of type `U` yet
 union/union-generic-rpass.rs	error: rust-js does not support unions yet
 union/union-inherent-method.rs	error: rust-js does not support values of type `U` yet
 union/union-macro.rs	error: rust-js does not support values of type `m1::U` yet
