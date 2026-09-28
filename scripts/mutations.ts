@@ -13,7 +13,7 @@
 import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { runSync, stopped } from "../test/child";
+import { runSync, stopped, type Exit } from "../test/child";
 
 const root = join(import.meta.dir, "..");
 
@@ -192,12 +192,24 @@ function build(mutation?: Mutation): string | { problem: string } {
   return kept;
 }
 
-/** Whether `tests` pass with `compiler`, and how many ran. */
-function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string } {
+const count = (output: string, what: string) => Number(new RegExp(String.raw`^ (\d+) ` + what + "$", "m").exec(output)?.[1] ?? 0);
+
+/** What a run of a mutant's tests says of it: `caught` by a test that
+ * failed, the runner ending as it does when one does; `survived`, as its
+ * tests ran and passed; or `inconclusive`, as the runner ran out of time,
+ * was stopped, or failed before any test did, which says nothing of it. */
+export function judge(p: Exit, output: string): "caught" | "survived" | "inconclusive" {
+  if (stopped(p, testTimeout)) return "inconclusive";
+  if (p.code === 0) return count(output, "pass") > 0 && count(output, "fail") === 0 ? "survived" : "inconclusive";
+  const failed = [...output.matchAll(/^\(fail\) (.*)$/gm)].filter((m) => !m[1].startsWith("(unnamed)"));
+  return p.code === 1 && failed.length > 0 ? "caught" : "inconclusive";
+}
+
+/** How `tests` do with `compiler`, what they printed, and how many ran. */
+function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string; exit: Exit } {
   const p = runSync([process.execPath, "test", ...tests], root, testTimeout, { RUST_JS_COMPILER: compiler });
   const output = p.stdout + p.stderr;
-  const count = (what: string) => Number(new RegExp(String.raw`^ (\d+) ` + what + "$", "m").exec(output)?.[1] ?? 0);
-  return { passed: p.code === 0 && !stopped(p, testTimeout), ran: count("pass") + count("fail"), output };
+  return { passed: p.code === 0 && !stopped(p, testTimeout), ran: count(output, "pass") + count(output, "fail"), output, exit: p };
 }
 
 async function main() {
@@ -230,8 +242,16 @@ async function main() {
       rows.push([mutation, compiler.problem]);
       continue;
     }
-    const { passed, ran } = test(mutation.tests, compiler);
-    rows.push([mutation, passed ? `SURVIVED: its ${ran} tests passed with it` : "caught"]);
+    const { ran, output, exit } = test(mutation.tests, compiler);
+    // Its log, whatever it says, for what it caught or didn't.
+    const log = join(work, "logs", `${mutation.name}.log`);
+    mkdirSync(join(work, "logs"), { recursive: true });
+    writeFileSync(log, output);
+    const verdict = judge(exit, output);
+    rows.push([
+      mutation,
+      verdict === "caught" ? "caught" : verdict === "survived" ? `SURVIVED: its ${ran} tests passed with it` : `INCONCLUSIVE: no test failed, or the runner didn't end; see ${log}`,
+    ]);
   }
   for (const [mutation, result] of rows) console.log(`${mutation.name}\t${result}`);
   const summary = process.env.GITHUB_STEP_SUMMARY;

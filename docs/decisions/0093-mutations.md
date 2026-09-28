@@ -72,3 +72,9 @@ written, and what it breaks, as Rust would see it:
   that code makes it fail to apply, and it's updated with the code.
 - The set is a start: a fix worth keeping is worth a mutation, as its
   corpus case is.
+- **A mutation is caught only by a test that failed:** the runner ends as
+  it does when one does, and names at least one. One that ran out of
+  time, was stopped, or failed before any test did is inconclusive, which
+  fails the run as a survivor does, without saying it's caught; each
+  mutation's log is kept in `target/mutants/logs/`. Found in review: every
+  failed process had counted as caught.
