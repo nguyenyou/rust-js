@@ -50,10 +50,13 @@ pub struct Output {
 ///
 /// `source_path` is how the map names the Rust file (relative to the map),
 /// and `js_file_name` is the output's file name, for `sourceMappingURL`.
+/// `path_of` names a source the map points into, asked only for those it
+/// does; `primary` is the module's own, which the map names first.
 pub fn emit(
     module: &Module,
     sources: &crate::program::Sources,
-    source_paths: &[String],
+    path_of: &dyn Fn(usize) -> String,
+    primary: Option<usize>,
     source_path: &str,
     js_file_name: &str,
 ) -> Output {
@@ -217,7 +220,18 @@ pub fn emit(
         previous = Some(line);
     }
     let map = generated.map.expect("a source map, since source_map_path is set");
-    let map = restore_sources(&map, sources, source_paths, source_path);
+    // The sources the map points into, and only those, named from here.
+    let source_of = |line: u32| sources.files.partition_point(|file| file.line <= line).checked_sub(1);
+    let used: std::collections::BTreeSet<usize> = primary
+        .into_iter()
+        .chain(
+            map.get_tokens()
+                .filter(|t| t.get_source_id().is_some())
+                .filter_map(|t| source_of(t.get_src_line())),
+        )
+        .collect();
+    let paths: std::collections::HashMap<usize, String> = used.into_iter().map(|i| (i, path_of(i))).collect();
+    let map = restore_sources(&map, sources, &paths, primary);
     let mut map = shift_lines(&map, &places, js_file_name);
     // Laid out as oxfmt lays it out, the map moved to match.
     let shifted = SourceMap::from_json_string(&map).expect("the map just built");
@@ -1012,13 +1026,13 @@ fn template_raw(text: &str) -> String {
 fn restore_sources<'a>(
     map: &'a SourceMap<'a>,
     sources: &'a crate::program::Sources,
-    paths: &'a [String],
-    primary: &str,
+    paths: &'a std::collections::HashMap<usize, String>,
+    primary: Option<usize>,
 ) -> SourceMap<'a> {
     let mut out = SourceMapBuilder::default();
     let mut ids = std::collections::HashMap::new();
-    if let Some(i) = paths.iter().position(|path| path == primary) {
-        ids.insert(i, out.set_source_and_content(&paths[i], &sources.files[i].text));
+    if let Some(i) = primary {
+        ids.insert(i, out.set_source_and_content(&paths[&i], &sources.files[i].text));
     }
     let names: Vec<_> = map.get_names().map(|name| out.add_name(name)).collect();
     for token in map.get_tokens() {
@@ -1030,7 +1044,7 @@ fn restore_sources<'a>(
         let Some(i) = position.checked_sub(1) else { continue };
         let id = *ids
             .entry(i)
-            .or_insert_with(|| out.set_source_and_content(&paths[i], &sources.files[i].text));
+            .or_insert_with(|| out.set_source_and_content(&paths[&i], &sources.files[i].text));
         out.add_token(
             token.get_dst_line(),
             token.get_dst_col(),

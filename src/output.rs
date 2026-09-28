@@ -24,9 +24,9 @@ impl OutputPlan {
         sources: &program::Sources,
     ) -> Result<Vec<Artifact>, String> {
         let mut artifacts = Vec::new();
-        // Each source's path is resolved once: every module's source map
-        // names every source, from its own directory, which is resolved once
-        // too, and what's left is path arithmetic (found in review).
+        // Each source's path is resolved once, and each module's directory:
+        // a module's map asks for a path only to the sources it points into
+        // (found in review).
         let resolved: Vec<PathBuf> = sources
             .files
             .iter()
@@ -67,13 +67,15 @@ impl OutputPlan {
 
             crate::prepare::module(&mut js_module);
             let dir = resolve(parent_dir(&js_path));
-            let source_paths: Vec<_> = resolved.iter().map(|source| relative_resolved(&dir, source)).collect();
+            let own = resolve(&rust_path);
+            let path_of = |i: usize| relative_resolved(&dir, &resolved[i]);
             let js_file_name = js_path.file_name().unwrap_or_default().to_string_lossy();
             let output = to_oxc::emit(
                 &js_module,
                 sources,
-                &source_paths,
-                &relative_resolved(&dir, &resolve(&rust_path)),
+                &path_of,
+                resolved.iter().position(|source| *source == own),
+                &relative_resolved(&dir, &own),
                 &js_file_name,
             );
             let map_path = PathBuf::from(format!("{}.map", js_path.display()));
