@@ -117,6 +117,38 @@ export const mutations: Mutation[] = [
     replace: "                p.with_self_ty(self.tcx, self_ty).skip_binder()",
     tests: ["test/corpus.test.ts", "-t", "higher_ranked_dyn"],
   },
+  {
+    name: "begin-panic-payload",
+    breaks: "`panic!(5)` before edition 2021 throws a message Rust never shows",
+    file: "src/lower/calls.rs",
+    find: "                if !text {",
+    replace: "                if false && !text {",
+    tests: ["test/corpus.test.ts", "-t", "begin_panic_value"],
+  },
+  {
+    name: "lazy-rhs-statements",
+    breaks: "`a || f(&mut y)` runs the statements `f`'s call needs whether or not `a` decides",
+    file: "src/lower.rs",
+    find: "                    if rhs_out.is_empty() {\n                        return Ok(Expr::bin(js_op, l, r));",
+    replace: "                    if true {\n                        out.extend(rhs_out);\n                        return Ok(Expr::bin(js_op, l, r));",
+    tests: ["test/corpus.test.ts", "-t", "lazy_effects"],
+  },
+  {
+    name: "while-condition-statements",
+    breaks: "a `while` condition's statements are put in the loop, after its test",
+    file: "src/lower.rs",
+    find: "                if before.is_empty() {\n                    self.stmt(then, &Dest::Discard, &mut body_out)?;",
+    replace: "                if true {\n                    body_out.extend(before);\n                    self.stmt(then, &Dest::Discard, &mut body_out)?;",
+    tests: ["test/corpus.test.ts", "-t", "lazy_effects"],
+  },
+  {
+    name: "at-binding-copy",
+    breaks: "a binding after `@` reads its part of the value in place, which the binding before it changes",
+    file: "src/lower.rs",
+    find: "        let stable = stable && !(bindings.len() > 1 && bindings.iter().any(|b| b.whole));",
+    replace: "        let stable = stable || bindings.iter().any(|b| b.whole);",
+    tests: ["test/corpus.test.ts", "-t", "binding_after_at"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
