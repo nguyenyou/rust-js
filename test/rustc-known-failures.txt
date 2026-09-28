@@ -40,6 +40,7 @@ array-slice-vec/vec-tail-matching.rs	error: rust-js does not support this patter
 associated-consts/associated-const-const-eval.rs	error: rust-js does not support associated constants yet
 associated-consts/associated-const-in-global-const.rs	error: rust-js does not support constants of type `f32` yet
 associated-consts/associated-const-overwrite-default.rs	error: rust-js does not support associated constants yet
+associated-consts/associated-const-range-match-patterns.rs	error: rust-js does not support associated constants yet
 associated-consts/associated-const-resolution-order.rs	error: rust-js does not support associated constants yet
 associated-consts/associated-const-self-type.rs	error: rust-js does not support associated constants yet
 associated-consts/associated-const-type-parameters.rs	error: rust-js does not support associated constants yet
@@ -148,7 +149,7 @@ binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of
 binding/func-arg-ref-pattern.rs	error: rust-js does not support this pattern yet
 binding/if-let.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/irrefutable-slice-patterns.rs	error: rust-js does not support this pattern yet
-binding/match-beginning-vert.rs	error: rust-js does not support this guard yet
+binding/match-beginning-vert.rs	error: rust-js does not support this expression yet
 binding/match-bot-2.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-bot.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 binding/match-byte-array-patterns.rs	error: rust-js does not support this expression yet
@@ -236,7 +237,7 @@ cast/fat-ptr-cast-rpass.rs	error: rust-js does not support values of type `*cons
 cast/generic-trait-object-call.rs	error: rust-js does not support generic trait parameters yet
 cast/supported-cast.rs	error: rust-js does not support values of type `*const std::string::String` yet
 cast/trait-object-cast-segfault-4333.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
-closures/2229_closure_analysis/issue-88118-2.rs	error: rust-js does not support this guard yet
+closures/2229_closure_analysis/issue-88118-2.rs	error: rust-js does not support this expression yet
 closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does not support constants of type `*const i32` yet
 closures/2229_closure_analysis/migrations/insignificant_drop_attr_no_migrations.rs	error: rust-js does not support user implementations of this standard or external trait yet
 closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
@@ -879,6 +880,7 @@ iterators/generator_capture_fnonce.rs	error: rust-js does not support this expre
 iterators/generator_capture_no_lend.rs	error: rust-js does not support this expression yet
 iterators/generator_capture.rs	error: rust-js does not support this expression yet
 iterators/generator.rs	error: rust-js does not support this expression yet
+iterators/into-iter-on-arrays-lint.rs	error: rust-js does not support this expression yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
 iterators/into-iterator-type-inference-shift.rs	error: rust-js does not support associated types yet
 iterators/iter-map-fold-type-length.rs	error: rust-js does not support values of type `std::option::Option<<I as std::iter::Iterator>::Item>` yet
@@ -899,11 +901,12 @@ layout/null-pointer-optimization.rs	error: rust-js does not support calling `std
 let-else/let-else-bindings.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 let-else/let-else-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
 let-else/let-else-run-pass.rs	error: rust-js does not support bindings inside `|` patterns yet
-lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
+lifetimes/any-lifetime-escape-higher-rank.rs	thread 'rustc' panicked at /rustc-dev/362211dc29abc4e8f8cfc384740237f144929b03/compiler/rustc_trait_selection/src/traits/select/mod.rs:294:24:
 lifetimes/matcher-trait-equality-13323.rs	error: rust-js does not support generic trait parameters yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
 lifetimes/rvalue-lifetime-drop-timing.rs	error: rust-js does not support statics yet
 lifetimes/struct-with-lifetime-parameters-9259.rs	error: rust-js does not support calling `std::option::Option::<T>::as_ref` yet
+lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 linkage-attr/link-section-placement.rs	error: rust-js does not support statics yet
 linking/executable-no-mangle-strip.rs	error: rust-js does not support statics yet
 lint/dead-code/associated-type.rs	error: rust-js does not support associated types yet
@@ -1178,7 +1181,7 @@ rfcs/rfc-2175-or-if-while-let/basic.rs	error: rust-js does not support bindings 
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
 rfcs/rfc-2302-self-struct-ctor/rfc-2302-self-struct-ctor.rs	error: rust-js does not support this expression yet
 rfcs/rfc-2361-dbg-macro/dbg-macro-expected-behavior.rs	error: rust-js does not support `{:#?}` yet
-rfcs/rfc-2497-if-let-chains/if_let_guard_indirect_let_chains.rs	error: rust-js does not support this guard yet
+rfcs/rfc-2497-if-let-chains/if_let_guard_indirect_let_chains.rs	error: rust-js does not support this expression yet
 rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<std::option::Option<i32>>>` yet
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support this literal yet
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
@@ -1455,7 +1458,7 @@ uniform-paths/basic.rs	error: rust-js does not support calling `std::io::stdout`
 uniform-paths/macros-nested.rs	error: rust-js does not support calling `std::io::stdout` yet
 uniform-paths/macros.rs	error: rust-js does not support calling `std::io::stdout` yet
 union/union-align.rs	error: rust-js does not support calling `std::mem::align_of` yet
-union/union-const-codegen.rs	error: rust-js does not support constants of type `U` yet
+union/union-const-codegen.rs	thread 'rustc' panicked at src/lower/representation.rs:226:34:
 union/union-const-eval-field.rs	error: rust-js does not support constants of type `DummyUnion` yet
 union/union-derive-rpass.rs	error: rust-js does not support values of type `U` yet
 union/union-drop-assign.rs	error: rust-js does not support user implementations of this standard or external trait yet

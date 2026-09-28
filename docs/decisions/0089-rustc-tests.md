@@ -34,14 +34,15 @@ and stderr, and return, under Bun and Node.
 - **How a test fails is kept too:** `rejected`, rust-js's own clear error,
   `crashed`, another compile error such as rustc's panic, or `wrong`, JS
   that ran otherwise. A test listed as rejected that now crashes or answers
-  wrongly fails the run, as a failure that got worse. The list is 1,492
-  rejected and none crashed or wrong.
+  wrongly fails the run, as a failure that got worse. The list is 1,493
+  rejected, 2 crashed and none wrong.
 
 ## Why
 
-- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,193 of
-  the 2,685 tests in scope pass, each matching native Rust byte for byte;
-  1,083 are out of scope, each for a reason it prints.
+- **It measures what we didn't choose:** at `362211dc2`, on Linux, 1,196 of
+  the 2,691 tests in scope pass, each matching native Rust byte for byte;
+  1,008 are out of scope, each for a reason it prints, and native Rust
+  gives no answer here for 69.
 - **It found what no example had.** Its first run found, and this change
   fixes:
   - a shift of a narrower integer by an `i64` or a `u64` threw in JS;
@@ -63,9 +64,9 @@ and stderr, and return, under Bun and Node.
   - a `const` of a std struct was its private fields, `iter::empty()` an
     `[undefined]` and a `Cell` a `Cell` in a `Cell` (rejected, but a `Cell`
     or a `RefCell` is its `{ value }`, new at each use).
-- **Every failure has a reason a person can act on:** 1,483 of the 1,492
+- **Every failure has a reason a person can act on:** 1,484 of the 1,495
   are a feature rust-js says it doesn't support yet, and counted, they say
-  which to do first: std functions (263), types (207), std trait impls
+  which to do first: std functions (262), types (207), std trait impls
   (178), statics (156), expressions such as `[x; N]` (139), generic trait
   parameters (119), associated types (108).
 
@@ -142,3 +143,10 @@ and stderr, and return, under Bun and Node.
   that isn't listed, as a passing test that no longer builds natively, or
   one that's listed and native Rust now answers, fails the run until it's
   blessed. Found in review: a listed test that became a skip passed unseen.
+  Listing them found nine tests whose edition is a range, `2015..2021`,
+  which rustc was given as it is; compiletest reads one as half-open and
+  runs it at its lowest edition, and so does the runner.
+- Judged by how it ended (ADR 0088), a compile that crashes after its
+  rejection is a crash: two tests listed as rejected are crashes, a union
+  constant (`union-const-codegen.rs`) and a higher-ranked `downcast_ref`
+  (`any-lifetime-escape-higher-rank.rs`).
