@@ -11,6 +11,9 @@ test("a test is in scope unless a directive says it needs what a case can't have
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
   expect(scope("//@ run-pass\n//@ edition: 2021\nfn main() {}\n")).toEqual({ edition: "2021" });
   expect(scope("//@ run-pass\n//@ edition:2018\nfn main() {}\n")).toEqual({ edition: "2018" });
+  // A range, half-open, is its lowest edition, as compiletest runs it by default.
+  expect(scope("//@ run-pass\n//@ edition:2015..2021\nfn main() {}\n")).toEqual({ edition: "2015" });
+  expect(scope("//@ run-pass\n//@ edition: 2021..\nfn main() {}\n")).toEqual({ edition: "2021" });
   expect(scope("//@ run-pass\n//@ needs-unwind\nfn main() {}\n")).toEqual({ edition: "2015" });
   expect(scope("//@ run-pass\n//@ aux-build: helper.rs\nfn main() {}\n")).toEqual({ skip: "needs another crate" });
   expect(scope("//@ run-pass\n//@ revisions: a b\nfn main() {}\n")).toEqual({ skip: "has revisions" });

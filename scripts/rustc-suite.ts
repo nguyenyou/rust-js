@@ -59,7 +59,9 @@ export function scope(source: string): Scope {
     const [, name = "", value] = /^([A-Za-z0-9_.-]*)\s*(?::\s*(.*))?/.exec(line) ?? [];
     const out = outOfScope.find(([pattern]) => pattern.test(name));
     if (out) return { skip: out[1] };
-    if (name === "edition" && value) edition = value.trim();
+    // A range, `2015..2021` or `2021..`, is half-open, and compiletest
+    // runs it by default at its lowest edition.
+    if (name === "edition" && value) edition = value.split("..")[0].trim();
   }
   if (!/^\s*(pub\s+)?fn main\s*\(\s*\)\s*\{/m.test(source)) return { skip: "has no `fn main() {`" };
   if (/^\s*(pub\s+)?mod\s+\w+\s*;/m.test(source)) return { skip: "has modules in other files" };
