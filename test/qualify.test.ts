@@ -47,3 +47,11 @@ test("tests use the compiler they're given", () => {
   }
   expect(named).toEqual([]);
 });
+
+// Qualification can't be blessed: `BLESS=1` would rewrite what the
+// snapshots expect, and pass. Found in review.
+test("qualification refuses to run while blessing", () => {
+  const p = Bun.spawnSync([process.execPath, "scripts/qualify.ts", "nothing", "nowhere"], { cwd: root, env: { ...process.env, BLESS: "1" }, stderr: "pipe" });
+  expect(p.exitCode).not.toBe(0);
+  expect(p.stderr.toString()).toContain("BLESS is set");
+});

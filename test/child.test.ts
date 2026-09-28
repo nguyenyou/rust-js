@@ -86,3 +86,14 @@ test("a process gets the environment it's given", async () => {
   expect(runSync(["sh", "-c", "echo $CHILD_SETTING"], ".", 10_000, { CHILD_SETTING: "given" }).stdout).toBe("given\n");
   expect((await run(["sh", "-c", "echo $CHILD_SETTING"], ".", 10_000, { CHILD_SETTING: "given" })).stdout).toBe("given\n");
 });
+
+// A setting given as `undefined` is left out, as qualification leaves out
+// what would weaken its checks, such as `BLESS`.
+test("a setting given as undefined isn't passed on", () => {
+  process.env.CHILD_LEFT_OUT = "set";
+  try {
+    expect(runSync(["sh", "-c", "echo ${CHILD_LEFT_OUT:-none}"], ".", 10_000, { CHILD_LEFT_OUT: undefined }).stdout).toBe("none\n");
+  } finally {
+    delete process.env.CHILD_LEFT_OUT;
+  }
+});

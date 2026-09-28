@@ -80,3 +80,10 @@ artifacts, the report for 90 days.
   new machine hasn't cached, and the first qualification on GitHub failed to
   install. Installs here and in the package test use an empty cache of
   their own, as a new machine has, so a warm one can't hide it again.
+- **Qualification runs the suite as it is:** it refuses to run with `BLESS`
+  set, which would rewrite what snapshots expect, and leaves out of every
+  run the settings that choose tests or how long they have (`FUZZ_*`,
+  `RUST_JS_COMPILE_TIMEOUT`, `RUST_JS_REQUIRE_WASM`), recording what it left
+  out and the seeds that ran. The checkout must have no changes when it
+  starts, and the suite none when it ends, but the distribution and report.
+  Found in review: `BLESS=1` passed a snapshot that didn't match.

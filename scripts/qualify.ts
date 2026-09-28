@@ -15,6 +15,11 @@ import { join, relative, resolve } from "node:path";
 import { runSync, stopped } from "../test/child";
 
 const root = join(import.meta.dir, "..");
+// Settings that would change what the suite checks, left out of every run:
+// `BLESS` rewrites what snapshots expect, the others choose tests or how
+// long they have. The suite runs as it would with none of them.
+const unset = ["BLESS", "FUZZ_START", "FUZZ_SEEDS", "FUZZ_REDUCE_BUDGET", "FUZZ_REPORT", "RUST_JS_COMPILE_TIMEOUT", "RUST_JS_REQUIRE_WASM", "RUST_JS_DISTRIBUTION"];
+const cleared = Object.fromEntries(unset.map((name) => [name, undefined]));
 const installTimeout = 5 * 60_000;
 const suiteTimeout = 60 * 60_000;
 
@@ -101,7 +106,7 @@ export function viteApp(dist: string, logs: string): Suite {
     mkdirSync(join(app, "src"));
     writeFileSync(join(app, "src", "main.jsx"), 'import { createRoot } from "react-dom/client";\nimport { App } from "./App.jsx";\n\ncreateRoot(document.getElementById("root")).render(<App />);\n');
     writeFileSync(join(app, "src", "App.rs"), '#![allow(non_snake_case)]\nuse react::Element;\n\npub fn App() -> Element {\n    jsx! { <main><h1>{"Qualified"}</h1></main> }\n}\n');
-    const install = runSync([process.execPath, "install", "--ignore-scripts"], app, installTimeout, { BUN_INSTALL_CACHE_DIR: join(app, "bun-cache") });
+    const install = runSync([process.execPath, "install", "--ignore-scripts"], app, installTimeout, { ...cleared, BUN_INSTALL_CACHE_DIR: join(app, "bun-cache") });
     log.push(install.stdout, install.stderr);
     if (install.code !== 0) problems.push(`the app didn't install: ${stopped(install, installTimeout) ?? install.stderr.trim().split("\n").at(-1)}`);
     else {
@@ -149,7 +154,7 @@ export function viteApp(dist: string, logs: string): Suite {
 function suite(name: string, tests: string[], compiler: string, logs: string, env: Record<string, string> = {}): Suite {
   const command = [process.execPath, "test", ...tests];
   const started = Date.now();
-  const p = runSync(command, root, suiteTimeout, { ...env, RUST_JS_COMPILER: compiler });
+  const p = runSync(command, root, suiteTimeout, { ...cleared, ...env, RUST_JS_COMPILER: compiler });
   const output = `${p.stdout}${p.stderr}`;
   const log = join(logs, `${name}.log`);
   writeFileSync(log, output);
@@ -172,9 +177,17 @@ function suite(name: string, tests: string[], compiler: string, logs: string, en
 async function main() {
   const [distArg, reportArg, ...extra] = process.argv.slice(2);
   if (!distArg || !reportArg || extra.length > 0) throw new Error("Usage: bun scripts/qualify.ts <distribution-dir> <report-dir>");
+  if (process.env.BLESS) throw new Error("BLESS is set: qualification checks what the snapshots expect, and doesn't rewrite it");
   const dist = resolve(distArg);
   const reports = resolve(reportArg);
   mkdirSync(reports, { recursive: true });
+  // The tests run are the commit's, as they are: nothing changed in the
+  // checkout when it starts, and nothing changed by the suite when it ends,
+  // but the distribution and the report, if they're in it.
+  const changes = () => {
+    const outside = [dist, reports].filter((path) => !relative(root, path).startsWith("..")).map((path) => `:!${relative(root, path)}`);
+    return text(["git", "status", "--porcelain", "--", ".", ...outside]);
+  };
   const manifest = JSON.parse(readFileSync(join(dist, "distribution.json"), "utf8"));
   const problems = checksums(dist);
   // For this host, from this checkout's commit, unchanged: the tests run
@@ -185,6 +198,8 @@ async function main() {
   const commit = text(["git", "rev-parse", "HEAD"]);
   if (manifest.source?.commit !== commit) problems.push(`the distribution is from ${manifest.source?.commit}, and the tests from ${commit}`);
   if (manifest.source?.clean !== true) problems.push("the distribution was made from a checkout with changes of its own");
+  const before = changes();
+  if (before) problems.push(`the checkout has changes of its own: ${before.split("\n").slice(0, 3).join(", ")}`);
 
   // Installed as an app installs it: from the packages alone, offline.
   const project = mkdtempSync(join(tmpdir(), "rust-js-qualify-"));
@@ -235,6 +250,8 @@ async function main() {
     rmSync(project, { recursive: true, force: true });
   }
   for (const s of suites) if (!s.passed) problems.push(`${s.name}: ${s.fail} failed, ${s.pass} passed; see ${s.log}`);
+  const after = changes();
+  if (after && after !== before) problems.push(`the suite changed the checkout: ${after.split("\n").slice(0, 3).join(", ")}`);
 
   const report = {
     qualified: problems.length === 0,
@@ -244,6 +261,9 @@ async function main() {
     host: { platform: process.platform, arch: process.arch, release: release(), cpu: cpus()[0]?.model ?? "", memory: totalmem() },
     runtimes: { bun: Bun.version, node: text(["node", "--version"]), rustc: text(["rustc", "--version"]) },
     suites,
+    // What the suite was run with: the settings it leaves out, and so the
+    // generated programs it runs, the first 12 seeds.
+    settings: { unset, fuzz: { start: 1, seeds: 12 } },
     // What a distribution doesn't carry yet, so this can't say of it.
     notQualified: ["the WASM compiler, which isn't part of a distribution yet"],
   };
