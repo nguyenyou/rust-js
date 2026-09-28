@@ -176,6 +176,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0093 Known bugs put back into the compiler, which the tests must catch](decisions/0093-mutations.md)
 - [0094 A distribution is qualified by the suite, run through what it installs](decisions/0094-qualification.md)
 - [0095 The JS rust-js makes runs on Node; Bun runs the tests](decisions/0095-node-runtime.md)
+- [0096 A `static` is its module's value, and a `static mut` its `{ value }`](decisions/0096-statics.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
