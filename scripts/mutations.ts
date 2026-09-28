@@ -149,6 +149,22 @@ export const mutations: Mutation[] = [
     replace: "        let stable = stable || bindings.iter().any(|b| b.whole);",
     tests: ["test/corpus.test.ts", "-t", "binding_after_at"],
   },
+  {
+    name: "option-some-rest",
+    breaks: "`Some(..)`, whose `..` names no field, is taken as `None`",
+    file: "src/lower.rs",
+    find: "                    let op = if some { Op::LooseNe } else { Op::LooseEq };",
+    replace: "                    let op = if some && false { Op::LooseNe } else { Op::LooseEq };",
+    tests: ["test/corpus.test.ts", "-t", "option_rest_pattern"],
+  },
+  {
+    name: "size-align-swap",
+    breaks: "`align_of` is the type's size",
+    file: "src/lower/calls.rs",
+    find: "                let bytes = if matches!(known, Std::AlignOf) {\n                    layout.align.abi.bytes()",
+    replace: "                let bytes = if matches!(known, Std::AlignOf) {\n                    layout.size.bytes()",
+    tests: ["test/corpus.test.ts", "-t", "size_of\\.rs"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

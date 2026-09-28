@@ -34,6 +34,8 @@ written, and what it breaks, as Rust would see it:
 | `lazy-rhs-statements` | `a \|\| f(&mut y)` runs what `f`'s call needs whether or not `a` decides | `lazy_effects.rs` |
 | `while-condition-statements` | a `while` condition's statements run after its test | `lazy_effects.rs` |
 | `at-binding-copy` | a binding after `@` reads in place what the binding before it changes | `binding_after_at.rs` |
+| `option-some-rest` | `Some(..)` is taken as `None` | `option_rest_pattern.rs` |
+| `size-align-swap` | `align_of` is the type's size | `size_of.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a
