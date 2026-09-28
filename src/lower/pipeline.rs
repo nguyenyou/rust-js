@@ -58,6 +58,7 @@ pub fn lower_crate<'tcx>(
         paths,
         mutated,
         changed_vecs,
+        drop_params,
     } = analyze_crate(tcx, all_bodies, dependencies)?;
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
@@ -111,6 +112,7 @@ pub fn lower_crate<'tcx>(
         sources: &sources,
         mutated: &mutated,
         changed_vecs: &changed_vecs,
+        drop_params: &drop_params,
         closures: &closures,
         bodies: &function_bodies,
         fns: &fns,

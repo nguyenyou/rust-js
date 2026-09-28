@@ -131,6 +131,9 @@ pub(super) struct DropState<'tcx> {
     /// An operand temporary's flag, and whether its move was lowered.
     temp_flags: HashMap<(usize, ExprId), String>,
     temps_moved: HashSet<(usize, ExprId)>,
+    /// The function being lowered's drop functions, by the index of the
+    /// type parameter each drops.
+    param_drops: HashMap<u32, String>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -191,6 +194,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => Drops::Unsupported(ty, "a closure that holds a value with a destructor"),
             },
             ty::Adt(_, args) if ty.is_box() || self.is_vec_like(ty) => self.drops_in(args.type_at(0), walk),
+            // A type parameter a caller gives a drop function for.
+            ty::Param(param) if self.drop_state.param_drops.contains_key(&param.index) => Drops::Runs,
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {
@@ -321,6 +326,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() => self.drop_in(value, args.type_at(0), span, made, out)?,
             ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, made, out)?,
+            // `dropT?.(value)`: the caller's drop, if its `T` has one.
+            ty::Param(param) => {
+                let drop = Expr::var(&self.drop_state.param_drops[&param.index]);
+                let js_span = self.js_span(span);
+                out.push(
+                    StmtKind::Expr(Expr {
+                        kind: js::ExprKind::OptionalCall(Box::new(drop), vec![value]),
+                        span: js_span,
+                    })
+                    .at(js_span),
+                );
+            }
             ty::Array(item, _) | ty::Slice(item) => self.drop_items(value, *item, span, made, out)?,
             ty::Tuple(items) => {
                 for (i, item) in items.iter().enumerate() {
@@ -615,6 +632,53 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             out.push(StmtKind::Try(body, finally).at(js_span));
         }
         Ok(())
+    }
+
+    /// The function being lowered is given a drop for its type parameter
+    /// `index`, named `name` (ADR 0098).
+    pub(super) fn give_drop_param(&mut self, index: u32, name: String) {
+        self.drop_state.param_drops.insert(index, name);
+    }
+
+    /// The function that drops a `ty`, which a generic function is given for
+    /// its type parameter: its `drop` itself, when that's all its drop is,
+    /// `noisyDrop_drop`, or an arrow; a type parameter's is the one this
+    /// function was given. None for a type with nothing to drop.
+    pub(super) fn drop_function(&mut self, ty: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
+        if let ty::Param(param) = ty.kind() {
+            return Ok(self
+                .drop_state
+                .param_drops
+                .get(&param.index)
+                .map(|name| Expr::var(name)));
+        }
+        match self.drops(ty) {
+            Drops::Nothing => return Ok(None),
+            Drops::Unsupported(t, what) => return Err(self.unsupported(span, &describe(t, what))),
+            Drops::Runs => {}
+        }
+        let base = match ty.kind() {
+            ty::Adt(adt, _) => lower_first(self.tcx.item_name(adt.did()).as_str()),
+            _ => "value".to_string(),
+        };
+        let param = self.fresh(&base);
+        let mut body = Vec::new();
+        self.drop_value(Expr::var(&param), ty, span, &mut body)?;
+        // `(noisy) => noisyDrop_drop(noisy)` is `noisyDrop_drop`.
+        if let [
+            Stmt {
+                kind: StmtKind::Expr(call),
+                ..
+            },
+        ] = body.as_slice()
+            && let js::ExprKind::Call(callee, args) = &call.kind
+            && let [arg] = args.as_slice()
+            && matches!(&arg.kind, js::ExprKind::Var(name) if *name == param)
+            && matches!(&callee.kind, js::ExprKind::Var(_) | js::ExprKind::Symbol(_))
+        {
+            return Ok(Some((**callee).clone()));
+        }
+        Ok(Some(Expr::arrow(vec![param.into()], body)))
     }
 
     /// A value its scope drops that no variable names, as a `_` parameter.
@@ -1211,13 +1275,13 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
             }
             _ => {}
         }
-        // A generic function of the crate's own, given a value with a
-        // destructor for a type parameter, would need to be given its drop.
-        // A trait's `Self` is the impl's, which a call resolves to.
+        // A generic trait method of the crate's own, given a value with a
+        // destructor for a type parameter, would need to be given its drop,
+        // as a generic function is. A trait's `Self` is the impl's, which a
+        // call resolves to.
         if let ty::FnDef(def_id, args) = *expr.ty.kind()
             && matches!(expr.kind, ExprKind::ZstLiteral { .. })
-            && (self.cx.krate.fns.contains_key(&def_id)
-                || self.cx.tcx.trait_of_assoc(def_id).is_some_and(|t| t.is_local()))
+            && self.cx.tcx.trait_of_assoc(def_id).is_some_and(|t| t.is_local())
             && args
                 .types()
                 .skip(usize::from(self.cx.tcx.trait_of_assoc(def_id).is_some()))

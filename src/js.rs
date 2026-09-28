@@ -218,6 +218,9 @@ pub enum ExprKind {
     Binary(Op, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
+    /// `f?.(args)`: a call of what may be `undefined`, as a drop function
+    /// a caller with nothing to drop leaves out (ADR 0098).
+    OptionalCall(Box<Expr>, Vec<Expr>),
     /// `new Event(t)`: a JS constructor (ADR 0024).
     New(Box<Expr>, Vec<Expr>),
     /// `(a, b) => { .. }`: a closure (ADR 0022).
@@ -482,7 +485,9 @@ impl Expr {
             ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.contains_jsx(),
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
             ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
-            ExprKind::Call(f, args) | ExprKind::New(f, args) => f.contains_jsx() || args.iter().any(Expr::contains_jsx),
+            ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
+                f.contains_jsx() || args.iter().any(Expr::contains_jsx)
+            }
             ExprKind::Template(_, values) => values.iter().any(Expr::contains_jsx),
             ExprKind::Num(_)
             | ExprKind::BigInt(_)
@@ -568,6 +573,7 @@ impl Expr {
             ExprKind::Binary(op, a, b) => ExprKind::Binary(*op, one(a)?, one(b)?),
             ExprKind::Cond(a, b, c) => ExprKind::Cond(one(a)?, one(b)?, one(c)?),
             ExprKind::Call(f, args) => ExprKind::Call(one(f)?, all(args)?),
+            ExprKind::OptionalCall(f, args) => ExprKind::OptionalCall(one(f)?, all(args)?),
             ExprKind::New(f, args) => ExprKind::New(one(f)?, all(args)?),
             ExprKind::Await(a) => ExprKind::Await(one(a)?),
             ExprKind::Template(texts, values) => ExprKind::Template(texts.clone(), all(values)?),
@@ -651,7 +657,7 @@ impl Expr {
             ExprKind::Unary(_, a) => a.has_effects(),
             ExprKind::Binary(_, a, b) => a.has_effects() || b.has_effects(),
             ExprKind::Cond(a, b, c) => a.has_effects() || b.has_effects() || c.has_effects(),
-            ExprKind::Call(..) | ExprKind::New(..) => true,
+            ExprKind::Call(..) | ExprKind::OptionalCall(..) | ExprKind::New(..) => true,
             // Making an element runs nothing: a component runs when React renders it.
             ExprKind::Jsx(jsx) => {
                 matches!(&jsx.tag, JsxTag::Component(c) if c.has_effects())

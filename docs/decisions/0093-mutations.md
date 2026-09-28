@@ -62,6 +62,8 @@ written, and what it breaks, as Rust would see it:
 | `temporary-without-finally` | a statement's temporary isn't dropped as a panic unwinds | `drop_temporary_operands.rs` |
 | `temporary-not-extended` | a temporary a `let` keeps alive is dropped at the end of the `let` | `drop_temporaries.rs` |
 | `unsize-array-as-dyn` | an array unsized to a slice is taken for a `dyn`, and rejected | `drop_temporaries.rs` |
+| `generic-drop-not-given` | a generic function given a value with a destructor isn't given its drop | `drop_generic.rs` |
+| `generic-drop-not-passed-on` | a generic function doesn't pass its `dropT` on to another | `drop_generic.rs` |
 
 - **The tests must pass as the compiler is, and run at all,** so their
   failing against a mutation is the mutation's doing, **and fail with a

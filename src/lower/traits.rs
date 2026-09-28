@@ -177,7 +177,7 @@ fn js_word(text: &str) -> String {
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn evidence_params(&mut self, id: DefId) -> Vec<js::Pattern> {
-        bounds(self.tcx, id)
+        let mut params: Vec<js::Pattern> = bounds(self.tcx, id)
             .into_iter()
             .map(|tr| {
                 // `writeT` and `readT`, as a generic codec's (ADR 0081).
@@ -190,7 +190,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.evidence.push((tr, Expr::var(&name)));
                 name.into()
             })
-            .collect()
+            .collect();
+        // Then a drop function for each type parameter a caller gives a value
+        // with a destructor, `dropT` (ADR 0098).
+        for &index in self.krate.drop_params.get(&id).into_iter().flatten() {
+            let param = self.tcx.generics_of(id).param_at(index as usize, self.tcx);
+            let name = self.fresh(&format!("drop{}", param.name));
+            self.give_drop_param(index, name.clone());
+            params.push(name.into());
+        }
+        params
     }
 
     fn super_evidence(&self, from: ty::TraitRef<'tcx>, to: ty::TraitRef<'tcx>, value: Expr) -> Option<Expr> {
@@ -309,13 +318,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn evidence_args(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
-        bounds(self.tcx, id)
+        let mut values = bounds(self.tcx, id)
             .into_iter()
             .map(|bound| {
                 let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
                 self.dictionary(bound, span)
             })
-            .collect()
+            .collect::<R<Vec<_>>>()?;
+        // Each drop function it takes: a type's with nothing to drop is none,
+        // left out at the end (ADR 0098).
+        let mut drops = Vec::new();
+        for &index in self.krate.drop_params.get(&id).into_iter().flatten() {
+            drops.push(self.drop_function(args.type_at(index as usize), span)?);
+        }
+        while matches!(drops.last(), Some(None)) {
+            drops.pop();
+        }
+        values.extend(drops.into_iter().map(|drop| drop.unwrap_or_else(Expr::undefined)));
+        Ok(values)
     }
 
     /// Select user code before std intrinsics, so custom implementations win.

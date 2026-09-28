@@ -373,6 +373,22 @@ export const mutations: Mutation[] = [
     replace: "                matches!(pointee(expr.ty).kind(), ty::Dynamic(..) | ty::Slice(_))\n",
     tests: ["test/corpus.test.ts", "-t", "drop_temporaries"],
   },
+  {
+    name: "generic-drop-not-given",
+    breaks: "a generic function given a value with a destructor isn't given its drop, and never drops it",
+    file: "src/lower/traits.rs",
+    find: "            drops.push(self.drop_function(args.type_at(index as usize), span)?);\n",
+    replace: "            drops.push(None);\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_generic"],
+  },
+  {
+    name: "generic-drop-not-passed-on",
+    breaks: "a generic function that passes its `T` to another doesn't pass its drop on",
+    file: "src/lower/drops.rs",
+    find: "            return Ok(self\n                .drop_state\n                .param_drops\n                .get(&param.index)\n                .map(|name| Expr::var(name)));\n",
+    replace: "            return Ok(None);\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_generic"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

@@ -82,6 +82,9 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
     pub paths: HashMap<LocalModDefId, Vec<String>>,
     pub mutated: HashSet<Ty<'tcx>>,
     pub changed_vecs: HashSet<Ty<'tcx>>,
+    /// Each generic function's type parameters it's given a drop function
+    /// for (ADR 0098), by their indices.
+    pub drop_params: HashMap<DefId, Vec<u32>>,
 }
 
 pub(super) fn analyze_crate<'a, 'tcx>(
@@ -209,6 +212,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
 
     let mutated = mutated_types(all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
+    let drop_params = drop_params(tcx, all_bodies, &fns);
 
     Some(AnalyzedCrate {
         external,
@@ -230,6 +234,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         paths,
         mutated,
         changed_vecs,
+        drop_params,
     })
 }
 
@@ -302,6 +307,89 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
         valid = false;
     }
     valid
+}
+
+/// The type parameters of the crate's own generic functions that a caller
+/// gives a value with a destructor (ADR 0098), directly or through a
+/// generic function of its own: those functions drop a `T` through a drop
+/// function they're given. Only they are, so generic code nothing gives such
+/// a value to is what it was.
+fn drop_params<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    all_bodies: &[&Body<'tcx>],
+    fns: &HashMap<DefId, FnInfo>,
+) -> HashMap<DefId, Vec<u32>> {
+    let mut given: HashSet<(DefId, u32)> = HashSet::new();
+    // A caller's type parameter passed on as a callee's: `relay<U>` calling `consume::<U>`.
+    let mut passed: Vec<((DefId, u32), (DefId, u32))> = Vec::new();
+    for body in all_bodies {
+        let caller = tcx.typeck_root_def_id(body.def_id.to_def_id());
+        for expr in body.thir.exprs.iter() {
+            let (ExprKind::ZstLiteral { .. }, &ty::FnDef(callee, args)) = (&expr.kind, expr.ty.kind()) else {
+                continue;
+            };
+            if !fns.contains_key(&callee) || tcx.trait_of_assoc(callee).is_some() {
+                continue;
+            }
+            for (index, arg) in args.iter().enumerate() {
+                let Some(ty) = arg.as_type() else { continue };
+                let index = index as u32;
+                if holds_user_drop(tcx, ty, &mut Vec::new()) {
+                    given.insert((callee, index));
+                }
+                for part in ty.walk() {
+                    if let Some(part) = part.as_type()
+                        && let ty::Param(param) = part.kind()
+                    {
+                        passed.push(((caller, param.index), (callee, index)));
+                    }
+                }
+            }
+        }
+    }
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for &(from, to) in &passed {
+            if given.contains(&from) && given.insert(to) {
+                changed = true;
+            }
+        }
+    }
+    let mut params: HashMap<DefId, Vec<u32>> = HashMap::new();
+    for (def, index) in given {
+        params.entry(def).or_default().push(index);
+    }
+    for indices in params.values_mut() {
+        indices.sort();
+    }
+    params
+}
+
+/// Whether dropping a `ty` could run a `Drop` of the crate's own, through
+/// its fields, variants or what it holds.
+fn holds_user_drop<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+    if seen.contains(&ty) {
+        return false;
+    }
+    seen.push(ty);
+    let found = match ty.kind() {
+        ty::Adt(adt, args) => {
+            tcx.adt_destructor(adt.did()).is_some_and(|d| d.did.is_local())
+                || adt.all_fields().any(|f| holds_user_drop(tcx, f.ty(tcx, args), seen))
+                || args.types().any(|t| holds_user_drop(tcx, t, seen))
+        }
+        ty::Tuple(items) => items.iter().any(|t| holds_user_drop(tcx, t, seen)),
+        ty::Array(item, _) | ty::Slice(item) => holds_user_drop(tcx, *item, seen),
+        ty::Closure(_, args) => args
+            .as_closure()
+            .upvar_tys()
+            .iter()
+            .any(|t| holds_user_drop(tcx, t, seen)),
+        _ => false,
+    };
+    seen.pop();
+    found
 }
 
 /// Report each reference rust-js can't make to a static yet (ADR 0096): a

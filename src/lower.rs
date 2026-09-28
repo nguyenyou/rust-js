@@ -215,6 +215,8 @@ struct CrateFacts<'a, 'tcx> {
     sources: &'a sources::CapturedSources,
     mutated: &'a HashSet<Ty<'tcx>>,
     changed_vecs: &'a HashSet<Ty<'tcx>>,
+    /// Each generic function's type parameters it's given a drop for (ADR 0098).
+    drop_params: &'a HashMap<DefId, Vec<u32>>,
     closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
     bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,

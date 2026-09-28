@@ -24,12 +24,13 @@ use std::path::PathBuf;
 use oxc_allocator::{Allocator, ArenaBox, ArenaVec};
 use oxc_ast::ast::{
     Argument, ArrayExpressionElement, ArrowFunctionBody, AssignmentTarget, BindingIdentifier, BindingPattern,
-    BindingProperty, BlockStatement, Declaration, Expression, ForStatementInit, ForStatementLeft, FormalParameter,
-    FormalParameterKind, FormalParameters, FunctionBody, FunctionType, IdentifierName, JSXAttributeItem,
-    JSXAttributeName, JSXAttributeValue, JSXChild, JSXClosingElement, JSXClosingFragment, JSXElementName,
-    JSXExpression, JSXIdentifier, JSXMemberExpressionObject, JSXOpeningElement, JSXOpeningFragment, LabelIdentifier,
-    ObjectPropertyKind, Program, PropertyKey, PropertyKind, SimpleAssignmentTarget, Statement, TemplateElement,
-    TemplateElementValue, VariableDeclarationKind, VariableDeclarator,
+    BindingProperty, BlockStatement, CallExpression, ChainElement, Declaration, Expression, ForStatementInit,
+    ForStatementLeft, FormalParameter, FormalParameterKind, FormalParameters, FunctionBody, FunctionType,
+    IdentifierName, JSXAttributeItem, JSXAttributeName, JSXAttributeValue, JSXChild, JSXClosingElement,
+    JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier, JSXMemberExpressionObject, JSXOpeningElement,
+    JSXOpeningFragment, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey, PropertyKind,
+    SimpleAssignmentTarget, Statement, TemplateElement, TemplateElementValue, VariableDeclarationKind,
+    VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -726,6 +727,11 @@ impl<'a> Cx<'a> {
             ExprKind::Call(callee, args) => {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));
                 Expression::new_call_expression(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), false, b)
+            }
+            ExprKind::OptionalCall(callee, args) => {
+                let args = args.iter().map(|a| Argument::from(self.expr(a)));
+                let call = CallExpression::boxed(sp, self.expr(callee), None, ArenaVec::from_iter_in(args, b), true, b);
+                Expression::new_chain_expression(sp, ChainElement::CallExpression(call), b)
             }
             ExprKind::New(callee, args) => {
                 let args = args.iter().map(|a| Argument::from(self.expr(a)));

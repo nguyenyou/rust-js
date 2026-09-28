@@ -29,7 +29,9 @@ fn prints_on_lines(value: &Expr) -> bool {
         ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => prints_on_lines(a),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => prints_on_lines(a) || prints_on_lines(b),
         ExprKind::Cond(a, b, c) => prints_on_lines(a) || prints_on_lines(b) || prints_on_lines(c),
-        ExprKind::Call(f, args) | ExprKind::New(f, args) => prints_on_lines(f) || args.iter().any(prints_on_lines),
+        ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
+            prints_on_lines(f) || args.iter().any(prints_on_lines)
+        }
         ExprKind::Template(_, values) => values.iter().any(prints_on_lines),
         ExprKind::Jsx(jsx) => {
             jsx.props.iter().any(|p| match p {

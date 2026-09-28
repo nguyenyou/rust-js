@@ -206,7 +206,7 @@ fn expr(e: &mut Expr, visitor: &mut Visitor<'_>) {
             expr(b, visitor);
             expr(c, visitor);
         }
-        ExprKind::Call(f, args) | ExprKind::New(f, args) => {
+        ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
             expr(f, visitor);
             for a in args {
                 expr(a, visitor);

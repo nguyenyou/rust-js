@@ -142,10 +142,15 @@ function main() {
   Rust does.
 - **A generic function drops a `T` through a drop function it's given**,
   as JS hands generic code what depends on the type, the way `sort` takes a
-  comparator. Only a function that drops a value of a type parameter takes
-  one, after its other arguments and dictionaries, and a caller whose `T`
-  has nothing to run passes none. A generic type's drop function takes its
-  parameters' the same way: `dropWrapper(wrapper, dropT)`.
+  comparator: `dropT`, after its other arguments and dictionaries. Only a
+  function that something in the crate gives, for `T`, a value with a
+  destructor takes one, directly or through a generic function of its own
+  that passes its own `dropU` on, so generic code no such value reaches is
+  what a person would write, with no drop argument at all. A caller whose
+  `T` has nothing to run passes none; one whose drop is its `drop` passes
+  that, `noisyDrop_drop`, and another an arrow. (Amended as it was done:
+  read as first written, nearly every generic function that owns a `T`
+  would take one, since a panic before a move leaves it owned.)
 
   ```rust
   fn consume<T>(value: T) {}
@@ -227,6 +232,7 @@ value, and a `dyn Trait` of one.
   partial move, generic code given a value with a destructor, a `let x;`
   without its value, and `async` code that owns one are errors until
   they're done.
-- A generic function that drops a `T` has a JS parameter more than its
-  Rust one has. Nothing depends on the old signatures yet, and rejecting
-  generic drops would reject correct Rust for none of that.
+- A generic function given a value with a destructor has a JS parameter
+  more than its Rust one has, as its dictionaries are (ADR 0052). A JS
+  caller of an exported one passes none, and the drop doesn't run: a Rust
+  value JS holds is never dropped either.
