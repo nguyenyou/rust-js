@@ -23,6 +23,7 @@ import { basename, join } from "node:path";
 import { runInNewContext } from "node:vm";
 import { build } from "vite";
 
+import { printed } from "./child";
 import { expected, same, type Outcome } from "./oracle";
 import { agree, compileJs, node, runJs, runNative, runtimes, show, type Run } from "./programs";
 import { buildCompiler, compiler, fixture, root } from "./support";
@@ -113,8 +114,11 @@ async function check(file: string): Promise<string[]> {
   const snapshot = snapshotProblem(file, compiled.js);
   if (snapshot) problems.push(snapshot);
   for (const [name, run] of runs) {
-    if (run.stdout !== native.stdout) problems.push(`${name} stdout:\n${run.stdout}\nnative stdout:\n${native.stdout}`);
-    if (run.stderr !== native.stderr) problems.push(`${name} stderr:\n${run.stderr}\nnative stderr:\n${native.stderr}`);
+    for (const stream of ["stdout", "stderr"] as const) {
+      if (!run.bytes[stream].equals(native.bytes[stream])) {
+        problems.push(`${name} ${stream}:\n${printed(run, native, stream)}\nnative ${stream}:\n${printed(native, run, stream)}`);
+      }
+    }
     if (typeof run.outcome === "string" || !same(run.outcome, native.outcome as Outcome)) {
       problems.push(`${name} ended ${show(run.outcome)}, native Rust ${show(native.outcome)}`);
     }

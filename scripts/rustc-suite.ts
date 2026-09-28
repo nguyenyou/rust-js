@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { availableParallelism, homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
-import { compileFailure, run, stopped, type Exit } from "../test/child";
+import { compileFailure, printed, run, stopped, type Exit } from "../test/child";
 import { rustcCommit, rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
@@ -294,7 +294,9 @@ let listed: Set<string> | undefined;
 const changing = () =>
   (listed ??= new Set([...readKnown(nativeFile)].filter(([, reason]) => reason === "prints what changes from run to run").map(([test]) => test)));
 
-export async function runTest(ui: string, file: string, listedChanging: Set<string> = changing()): Promise<Result> {
+/** A test, natively and as JS, compiled by `rustJs`: the suite's, or
+ * another, as the harness's own tests give one. */
+export async function runTest(ui: string, file: string, listedChanging: Set<string> = changing(), rustJs = compiler): Promise<Result> {
   const test = relative(ui, file);
   const source = readFileSync(file, "utf8");
   const s = scope(source);
@@ -318,7 +320,7 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
     for (let i = 0; i < reruns; i++) {
       const again = await run([binary], dirname(file), 10_000);
       if (failed(again, 10_000)) return { test, status: "native", reason: "doesn't pass natively on every run" };
-      if (again.stdout !== native.stdout || again.stderr !== native.stderr) {
+      if (!again.bytes.stdout.equals(native.bytes.stdout) || !again.bytes.stderr.equals(native.bytes.stderr)) {
         return { test, status: "native", reason: "prints what changes from run to run" };
       }
     }
@@ -329,7 +331,7 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
     const lib = join(dir, basename(file));
     writeFileSync(lib, `${source}\n/// The test's main, for the JS to call.\npub fn entry() {\n    main()\n}\n`);
     const js = join(dir, "case.js");
-    const compiled = await run([compiler, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
+    const compiled = await run([rustJs, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
     if (failed(compiled, 120_000)) {
       // Its first error, if it's rust-js's rejection; what crashed, if not,
       // even after a rejection.
@@ -346,11 +348,10 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
       const written = existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : undefined;
       const outcome = written !== undefined && ran.code === 0 ? written : `exited ${ran.code}: ${written ?? firstError(ran.stderr)}`;
       if (outcome !== '{"value":null}') return { test, status: "fail", reason: `${name}: ended ${outcome.slice(0, 200)}` };
-      if (ran.stdout !== native.stdout) {
-        return { test, status: "fail", reason: `${name}: different stdout`, detail: difference(native.stdout, ran.stdout) };
-      }
-      if (ran.stderr !== native.stderr) {
-        return { test, status: "fail", reason: `${name}: different stderr`, detail: difference(native.stderr, ran.stderr) };
+      for (const stream of ["stdout", "stderr"] as const) {
+        if (!ran.bytes[stream].equals(native.bytes[stream])) {
+          return { test, status: "fail", reason: `${name}: different ${stream}`, detail: difference(printed(native, ran, stream), printed(ran, native, stream)) };
+        }
       }
     }
     return { test, status: "pass" };

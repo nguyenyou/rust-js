@@ -110,7 +110,10 @@ What it expects is in a `//@` directive:
   started closes its output, which `runSync` can only wait for, then says
   it ended; what the tests set up with as they load, before any test's
   deadline, has one too. What it printed is compared as bytes, a byte
-  that isn't UTF-8 not the U+FFFD it reads as. Found in review, each.
+  that isn't UTF-8 not the U+FFFD it reads as: by the corpus, rustc's
+  tests, the check that native Rust prints the same each run, and a
+  generated program's failure, shown as bytes where the text is the same.
+  Found in review, each, and then that only `agree` compared bytes.
 - **The harness's own failures are tested, made on purpose**
   (`test/harness.test.ts`): a compiler that crashes after the rejection a
   case expects, one that never ends, JS wrong as compiled only, a generated

@@ -15,6 +15,13 @@ export type Exit = {
   bytes: { stdout: Buffer; stderr: Buffer };
 };
 
+type Printed = Pick<Exit, "stdout" | "stderr" | "bytes">;
+
+/** What `a` printed to `stream`, to show beside what `b` did: its text, or
+ * its bytes, in hex, where they read as the same text as `b`'s. */
+export const printed = (a: Printed, b: Printed, stream: "stdout" | "stderr") =>
+  a[stream] === b[stream] ? `${a.bytes[stream].toString("hex")} (as bytes)\n` : a[stream];
+
 // What a process may print before it's stopped: far more than any test's.
 const maxBuffer = 16 * 1024 * 1024;
 // How long output is still read after a process is stopped, if something it

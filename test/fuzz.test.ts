@@ -82,8 +82,8 @@ function signature(verdict: Verdict): string {
   return JSON.stringify(
     verdict.js.map(([name, run]) => [
       name,
-      run.stdout === native.stdout,
-      run.stderr === native.stderr,
+      run.bytes.stdout.equals(native.bytes.stdout),
+      run.bytes.stderr.equals(native.bytes.stderr),
       typeof run.outcome !== "string" && typeof native.outcome !== "string" && same(run.outcome, native.outcome),
     ]),
   );

@@ -114,4 +114,5 @@ written, and what it breaks, as Rust would see it:
   failed before any test did is inconclusive, which
   fails the run as a survivor does, without saying it's caught; each
   mutation's log is kept in `target/mutants/logs/`. Found in review: every
-  failed process had counted as caught. Later, a test that timed out had.
+  failed process had counted as caught. Later, a test that timed out had,
+  then one whose `beforeEach` hook did.

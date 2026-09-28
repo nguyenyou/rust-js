@@ -45,4 +45,7 @@ test("a mutant is caught, survives, or the run says nothing of it", () => {
   const timedOut = "(fail) wrapping.rs [5001.00ms]\n  ^ this test timed out after 5000ms.\n";
   expect(judge(exit(1), `${timedOut}\n 0 pass\n 1 fail\n`)).toBe("inconclusive");
   expect(judge(exit(1), `${timedOut}${failed}`)).toBe("caught");
+  // A hook that ran out of time, as bun test prints it: the test never ran.
+  const hookTimedOut = "(fail) never reaches assertion [101.76ms]\n  ^ a beforeEach/afterEach hook timed out for this test.\n";
+  expect(judge(exit(1), `${hookTimedOut}\n 0 pass\n 1 fail\n`)).toBe("inconclusive");
 });

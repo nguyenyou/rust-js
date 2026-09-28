@@ -460,13 +460,13 @@ const count = (output: string, what: string) => Number(new RegExp(String.raw`^ (
 
 /** What a run of a mutant's tests says of it: `caught` by a test that
  * failed, the runner ending as it does when one does; `survived`, as its
- * tests ran and passed; or `inconclusive`, as the runner or its tests ran
- * out of time, it was stopped, or failed before any test did, which says
- * nothing of it. */
+ * tests ran and passed; or `inconclusive`, as the runner, its tests or
+ * their hooks ran out of time, it was stopped, or failed before any test
+ * did, which says nothing of it. */
 export function judge(p: Exit, output: string): "caught" | "survived" | "inconclusive" {
   if (stopped(p, testTimeout)) return "inconclusive";
   if (p.code === 0) return count(output, "pass") > 0 && count(output, "fail") === 0 ? "survived" : "inconclusive";
-  const failed = [...output.matchAll(/^\(fail\) (.*)$\n?(  \^ this test timed out)?/gm)].filter(
+  const failed = [...output.matchAll(/^\(fail\) (.*)$\n?(  \^ .* timed out\b)?/gm)].filter(
     (m) => !m[1].startsWith("(unnamed)") && m[2] === undefined,
   );
   return p.code === 1 && failed.length > 0 ? "caught" : "inconclusive";

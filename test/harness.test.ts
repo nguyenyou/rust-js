@@ -154,3 +154,35 @@ test("a test that prints what changes, listed so, is run until it does", async (
     expect(await runTest(ui, file, listed)).toEqual({ test: "coin.rs", status: "native", reason: "prints what changes from run to run" });
   }
 }, 120_000);
+
+/** The real compiler, with JS that prints the bytes FF 0A in its place,
+ * which read as UTF-8 are "\u{FFFD}\n", as it prints to stderr. */
+function notUtf8(): string {
+  const js = join(fixture("harness-not-utf8-js"), "case.js");
+  writeFileSync(js, `export function entry() {\n  process.stdout.write(new Uint8Array([0xff, 10]));\n  process.stderr.write("\\uFFFD\\n");\n}\n`);
+  return fake("not-utf8", `"${compiler}" "$@" || exit $?\ncp "${js}" "$3"`);
+}
+
+// What a case printed is compared as bytes, not as the text they read as.
+// Found in review: `agree` compared bytes, but the corpus's own checks,
+// rustc's tests', and whether native Rust prints what changes, text.
+test("JS that prints other bytes than native Rust, reading the same, fails the case", () => {
+  const run = bunTest(["test/corpus.test.ts", "-t", "replacement_character"], { RUST_JS_COMPILER: notUtf8(), RUST_JS_SNAPSHOTS: "ignore" });
+  expect(run.code).not.toBe(0);
+  expect(run.output).toContain("node stdout:");
+  expect(run.output).not.toContain("stderr:");
+}, 120_000);
+
+test("a rustc test whose JS prints other bytes, reading the same, fails, and one natively printing either changes", async () => {
+  const ui = fixture("harness-bytes");
+  const file = join(ui, "replacement.rs");
+  writeFileSync(file, `//@ run-pass\nfn main() {\n    println!("\\u{FFFD}");\n    eprintln!("\\u{FFFD}");\n}\n`);
+  mkdirSync(join(target, "rustc-suite"), { recursive: true });
+  expect(await runTest(ui, file, new Set(), notUtf8())).toMatchObject({ test: "replacement.rs", status: "fail", reason: "node: different stdout" });
+  const either = join(ui, "either.rs");
+  writeFileSync(
+    either,
+    "//@ run-pass\nuse std::collections::hash_map::RandomState;\nuse std::hash::{BuildHasher, Hasher};\nuse std::io::Write;\nfn main() {\n    if RandomState::new().build_hasher().finish() % 2 == 0 {\n        std::io::stdout().write_all(&[0xff, b'\\n']).unwrap();\n    } else {\n        println!(\"\\u{FFFD}\");\n    }\n}\n",
+  );
+  expect(await runTest(ui, either, new Set(["either.rs"]))).toEqual({ test: "either.rs", status: "native", reason: "prints what changes from run to run" });
+}, 120_000);
