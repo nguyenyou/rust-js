@@ -17,7 +17,7 @@ exclusion listed ([research](../research/compiler-testing.md)).
 pinned toolchain's commit, as corpus cases (ADR 0088):** each is built
 natively, with overflow checks off as rust-js takes Rust, and with
 rust-js, and the JS must print what the native binary prints, to stdout
-and stderr, and return, under Bun and Node.
+and stderr, and return, under Node (and Bun, until ADR 0095).
 
 - **The tests are fetched, not copied:** `scripts/rustc-tests.ts` checks
   out `tests/ui` alone, shallow and sparse, into `target/`.

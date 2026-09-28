@@ -10,10 +10,9 @@ import { same, type Outcome } from "./oracle";
 import { compiler, root } from "./support";
 
 export const node = Bun.which("node");
-export const runtimes: [string, string[]][] = [
-  ["bun", [process.execPath]],
-  ["node", [node ?? "node"]],
-];
+// The generated JS runs under Node, the runtime rust-js targets (ADR 0095);
+// Bun runs the tests, not the JS they check.
+export const runtimes: [string, string[]][] = [["node", [node ?? "node"]]];
 
 export type Run = { stdout: string; stderr: string; outcome: Outcome | string };
 

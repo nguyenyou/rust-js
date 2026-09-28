@@ -63,7 +63,7 @@ time, valid and deterministic by construction:
   panic, dividing by zero, as the oracle compares panics too.
 
 **`test/fuzz.test.ts` runs each seed's program as a corpus case is run**
-(`test/programs.ts`): natively, and as JS under Bun and Node, which must
+(`test/programs.ts`): natively, and as JS under Node (and Bun, until ADR 0095), which must
 print the same and end the same. A program rustc rejects is the
 generator's bug and fails the test; one rust-js says it doesn't support is
 skipped.

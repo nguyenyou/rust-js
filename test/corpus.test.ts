@@ -1,5 +1,5 @@
 // The corpus: Rust programs, each a `fn main()` as rustc's own tests are,
-// run natively and as JS under Bun and Node, which must print the same and
+// run natively and as JS under Node, as compiled and as shipped, which must print the same and
 // end the same (ADR 0088). What a case expects is in its `//@` directives:
 //
 //   //@ run-pass                   main returns (the default)

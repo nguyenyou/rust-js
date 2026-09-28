@@ -10,7 +10,8 @@ const node = Bun.which("node");
 const supplied = process.env.RUST_JS_DISTRIBUTION;
 if (!node) throw new Error("Node.js is required for distribution runtime compatibility tests");
 
-for (const runtime of [process.execPath, node]) {
+// Node, the runtime rust-js targets (ADR 0095), with Bun out of reach.
+for (const runtime of [node]) {
 test(`installed packages compile using ${runtime} without the other runtime`, () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js packages ")));

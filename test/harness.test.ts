@@ -45,26 +45,27 @@ test("a compiler that never ends is stopped, and fails the case", () => {
   expect(run.output).toContain("rust-js crashed: didn't finish in 1s");
 }, 120_000);
 
-// The real compiler's JS, with a line only Bun runs.
-const onlyInBun = () =>
-  fake("bun-only", `"${compiler}" "$@" || exit $?\necho 'if (typeof Bun !== "undefined") console.log("only in Bun");' >> "$3"`);
+// The real compiler's JS, with a line only the JS as compiled runs, not
+// the bundle Vite ships of it.
+const onlyUnbundled = () =>
+  fake("unbundled-only", `"${compiler}" "$@" || exit $?\necho 'if (import.meta.url.endsWith("/case.js")) console.log("only unbundled");' >> "$3"`);
 
-test("JS that's wrong under one runtime only fails the case", () => {
-  const run = bunTest(["test/corpus.test.ts", "-t", "index_out_of_bounds"], { RUST_JS_COMPILER: onlyInBun() });
+test("JS that's wrong in one way it's run only fails the case", () => {
+  const run = bunTest(["test/corpus.test.ts", "-t", "index_out_of_bounds"], { RUST_JS_COMPILER: onlyUnbundled() });
   expect(run.code).not.toBe(0);
-  expect(run.output).toMatch(/bun stdout:\n\+ only in Bun/);
-  expect(run.output).not.toContain("node stdout:");
+  expect(run.output).toMatch(/node stdout:\n\+ only unbundled/);
+  expect(run.output).not.toContain("node, minified stdout:");
 }, 120_000);
 
 test("a failing generated program is kept before it's reduced, and a reduction cut short says so", () => {
   const out = join(target, "fuzz");
-  const run = bunTest(["test/fuzz.test.ts"], { RUST_JS_COMPILER: onlyInBun(), FUZZ_START: "3", FUZZ_SEEDS: "1", FUZZ_REDUCE_BUDGET: "1" });
+  const run = bunTest(["test/fuzz.test.ts"], { RUST_JS_COMPILER: onlyUnbundled(), FUZZ_START: "3", FUZZ_SEEDS: "1", FUZZ_REDUCE_BUDGET: "1" });
   expect(run.code).not.toBe(0);
   expect(run.output).toContain("differs, reduced for 0.001s, not to the end,");
   const evidence = JSON.parse(readFileSync(join(out, "seed-3.json"), "utf8"));
   expect(evidence).toMatchObject({ seed: 3, kind: "differs", compiler: expect.stringContaining("rust-js") });
-  expect(evidence.signature).toBe(JSON.stringify([["bun", false, true, true], ["node", true, true, true]]));
-  expect(evidence.detail).toContain("only in Bun");
+  expect(evidence.signature).toBe(JSON.stringify([["node", false, true, true]]));
+  expect(evidence.detail).toContain("only unbundled");
   expect(existsSync(join(out, "seed-3.original.rs"))).toBe(true);
   expect(existsSync(join(out, "seed-3.rs"))).toBe(true);
 }, 300_000);

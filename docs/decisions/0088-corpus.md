@@ -36,7 +36,7 @@ one corpus on every backend.
   message, a `TypeError` with the right one, `0` for `-0`, and `1` for `1n`.
 
 **The corpus, `test/corpus/`, is Rust programs, each a `fn main()`** as
-rustc's own tests are, run natively and as JS under Bun and Node, and as a
+rustc's own tests are, run natively and as JS under Node (and Bun, until ADR 0095), and as a
 production build ships it: bundled and minified by Vite, with Rolldown and
 Oxc, whose names are mangled and whose `new Error(..)` is `Error(..)`, and
 run under Node. Each must print the same to stdout and stderr, byte for
@@ -109,7 +109,7 @@ What it expects is in a `//@` directive:
   3 seconds of a 100 ms deadline.
 - **The harness's own failures are tested, made on purpose**
   (`test/harness.test.ts`): a compiler that crashes after the rejection a
-  case expects, one that never ends, JS wrong under Bun only, a generated
+  case expects, one that never ends, JS wrong as compiled only, a generated
   program's reduction cut short, shards that aren't one run, and a test
   native Rust never ends. Each fails the run, or says it's incomplete,
   with what it saw.

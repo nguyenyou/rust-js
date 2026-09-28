@@ -171,8 +171,9 @@ pilot. No delivery dates are assigned yet.
   packages with a compiler/host manifest and SHA-256 checksums. Tests verify
   checksums with `shasum`, detect corruption, preserve existing bundles, and
   remove staged output after a packaging failure.
-  Distribution tests cover Node.js and Bun independently, including native
-  launching and React/Serde preparation; neither runtime requires the other.
+  Distribution tests cover Node.js, including native launching and
+  React/Serde preparation, with Bun out of reach; the JS and tooling target
+  Node ([ADR 0095](docs/decisions/0095-node-runtime.md)).
 - [ ] **M4.2 — Decouple Vite from the source checkout.** Ship the plugin and
   binding assets with explicit versions and configuration. The
   [private plugin](vite-plugin/package.json) now declares its versioned
@@ -252,7 +253,7 @@ tooling while preserving rust-js's own readable-output goals.
   as isolated examples: generics with options, mutation through traits,
   nested patterns, iterators with effects, and async error paths.
   Started: the [corpus](test/corpus/) of `fn main()` programs, run natively
-  and under Bun and Node, records support with `run-pass`/`run-fail`,
+  and under Node, records support with `run-pass`/`run-fail`,
   rejections with `compile-fail`, and gaps with `ignore-rust-js`, which fails
   once a gap closes ([ADR 0088](docs/decisions/0088-corpus.md)). Its first
   cases found and fixed two miscompilations (nested element writes, repeated

@@ -76,12 +76,12 @@ test("a failure is rejected, crashed or wrong, and one listed as rejected may no
     ["a.rs", "error: rust-js does not support statics yet"],
     ["b.rs", "error: rust-js does not support statics yet"],
     ["c.rs", "error: rust-js does not support statics yet"],
-    ["d.rs", "bun: different stdout"],
+    ["d.rs", "node: different stdout"],
   ]);
   const now: Result[] = [
     { test: "a.rs", status: "fail", reason: "error: rust-js does not support unions yet" },
     { test: "b.rs", status: "fail", reason: "thread 'rustc' panicked at x.rs:1:2:" },
-    { test: "c.rs", status: "fail", reason: "bun: different stdout" },
+    { test: "c.rs", status: "fail", reason: "node: different stdout" },
     { test: "d.rs", status: "fail", reason: "error: rust-js does not support statics yet" },
   ];
   // Another rejection is no worse; a crash or a wrong answer is; a wrong

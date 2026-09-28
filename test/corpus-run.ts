@@ -1,6 +1,6 @@
 // Runs a corpus case's JS as its native binary runs: what `main` prints is
 // this process's output, and how it ended, `{ value }` or `{ panic }`, goes
-// to the file named second. Bun and Node both run it (Node strips types).
+// to the file named second. Node runs it (it strips types); so can Bun.
 //
 //   bun test/corpus-run.ts case.js outcome.json
 //   node test/corpus-run.ts case.js outcome.json

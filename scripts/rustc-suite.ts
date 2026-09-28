@@ -1,6 +1,6 @@
 // Runs rustc's own `run-pass` UI tests, at the pinned toolchain's commit, as
 // corpus cases (ADR 0089): each is built natively and with rust-js, and the
-// JS must print what the native binary prints, under Bun and Node.
+// JS must print what the native binary prints, under Node (ADR 0095).
 //
 //   bun scripts/rustc-suite.ts            # check against the known failures
 //   bun scripts/rustc-suite.ts --bless    # rewrite the known failures
@@ -325,7 +325,7 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
       const failure = compileFailure(compiled, 120_000);
       return { test, status: "fail", reason: failure.kind === "rejected" ? firstError(compiled.stderr) : normalize(failure.reason) };
     }
-    for (const [name, runtime] of [["bun", process.execPath], ["node", "node"]]) {
+    for (const [name, runtime] of [["node", "node"]]) {
       const outcomeFile = join(dir, `${name}.json`);
       const ran = await run([runtime, join(root, "test", "corpus-run.ts"), js, outcomeFile], dir, 10_000);
       const why = stopped(ran, 10_000);
