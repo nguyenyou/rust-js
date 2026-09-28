@@ -179,6 +179,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0096 A `static` is its module's value, and a `static mut` its `{ value }`](decisions/0096-statics.md)
 - [0097 A user `Deref` or `IndexMut` is its method, and an auto trait's impl is nothing](decisions/0097-deref-and-marker-impls.md)
 - [0098 A destructor runs where rustc runs it, in a `finally`](decisions/0098-destructors.md)
+- [0099 A `&mut` held in a variable names its place; one kept elsewhere is a handle](decisions/0099-mut-references.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
