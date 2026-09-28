@@ -293,6 +293,22 @@ export const mutations: Mutation[] = [
     replace: "            match None::<&mut Option<Stmt>> {\n",
     tests: ["test/corpus.test.ts", "-t", "drop_operand_panic"],
   },
+  {
+    name: "drop-function-in-branch",
+    breaks: "a drop function is declared where it's first needed, a branch another call isn't in",
+    file: "src/lower/drops.rs",
+    find: "            made.defs\n                .push(StmtKind::Const(name.clone(), Expr::arrow(vec![param.into()], body)).at(js_span));\n",
+    replace: "            out.push(StmtKind::Const(name.clone(), Expr::arrow(vec![param.into()], body)).at(js_span));\n",
+    tests: ["test/corpus.test.ts", "-t", "drop_functions"],
+  },
+  {
+    name: "drops-walk-uncached",
+    breaks: "what a type drops is found again for each path to it, which takes exponential time",
+    file: "src/lower/drops.rs",
+    find: "            self.drop_state.cache.borrow_mut().insert(ty, found);\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "nested_generic_types"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

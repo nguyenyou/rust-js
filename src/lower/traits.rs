@@ -661,7 +661,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let vars = std::mem::take(&mut self.vars);
         let names = self.names.clone();
         let mut out = Vec::new();
+        // Checked for what it drops as a body of its own is (ADR 0098).
+        self.drop_facts()?;
         let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut out)?;
+        self.check_drops()?;
         self.evidence = evidence;
         self.self_args = self_args;
         self.thir = thir;

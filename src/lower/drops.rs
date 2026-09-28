@@ -21,7 +21,7 @@ use rustc_span::{Span, Symbol};
 
 use super::bindings::variant_name;
 use super::representation::variant_field;
-use super::{FnCx, R};
+use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 
 /// What dropping a type runs.
@@ -33,6 +33,21 @@ pub(super) enum Drops<'tcx> {
     Runs,
     /// One where rust-js can't run it yet, and what to say.
     Unsupported(Ty<'tcx>, &'static str),
+}
+
+/// The types a `drops` walk is inside, outermost first, and the outermost
+/// of them that a type inside it was found inside of.
+struct Walk<'tcx> {
+    seen: Vec<Ty<'tcx>>,
+    reached: usize,
+}
+
+/// The drop functions one drop makes, which come before its code: a call
+/// to one may be in a branch, as an `Option`'s, that another isn't in.
+#[derive(Default)]
+struct Made<'tcx> {
+    functions: Vec<(Ty<'tcx>, String)>,
+    defs: Vec<Stmt>,
 }
 
 /// A variable that owns a value with a destructor, dropped when its scope
@@ -66,6 +81,7 @@ impl Facts {
 #[derive(Default)]
 pub(super) struct DropState<'tcx> {
     cache: RefCell<HashMap<Ty<'tcx>, Drops<'tcx>>>,
+    sizes: RefCell<HashMap<Ty<'tcx>, (usize, bool)>>,
     /// Each body's facts, by the address of its THIR: a closure's is its own.
     facts: HashMap<usize, Rc<Facts>>,
     /// The owners in scope, innermost last.
@@ -83,31 +99,46 @@ pub(super) struct DropState<'tcx> {
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// What dropping a `ty` runs.
     pub(super) fn drops(&self, ty: Ty<'tcx>) -> Drops<'tcx> {
-        if let Some(&known) = self.drop_state.cache.borrow().get(&ty) {
-            return known;
-        }
-        let found = self.drops_in(ty, &mut Vec::new());
-        self.drop_state.cache.borrow_mut().insert(ty, found);
-        found
+        self.drops_in(
+            ty,
+            &mut Walk {
+                seen: Vec::new(),
+                reached: usize::MAX,
+            },
+        )
     }
 
     pub(super) fn has_drops(&self, ty: Ty<'tcx>) -> bool {
         self.drops(ty) == Drops::Runs
     }
 
-    fn drops_in(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> Drops<'tcx> {
+    /// Each type is walked once and cached, so a type whose parts double at
+    /// each level, `S2<S2<T>>` in `S3<T>`, isn't walked once for each path to
+    /// it. What's found while taking a type further out as running nothing,
+    /// being inside itself, is only as sure as that type's walk, so it's
+    /// cached only once that one's done.
+    fn drops_in(&self, ty: Ty<'tcx>, walk: &mut Walk<'tcx>) -> Drops<'tcx> {
         let ty = self.reveal(ty);
         // What drops nothing at all, a number or a `&T`, and what's being
         // walked further out: a type inside itself runs no more than it does.
-        if !ty.needs_drop(self.tcx, self.typing_env) || seen.contains(&ty) {
+        if !ty.needs_drop(self.tcx, self.typing_env) {
             return Drops::Nothing;
         }
-        seen.push(ty);
+        if let Some(at) = walk.seen.iter().position(|&t| t == ty) {
+            walk.reached = walk.reached.min(at);
+            return Drops::Nothing;
+        }
+        if let Some(&known) = self.drop_state.cache.borrow().get(&ty) {
+            return known;
+        }
+        let depth = walk.seen.len();
+        let outer = std::mem::replace(&mut walk.reached, usize::MAX);
+        walk.seen.push(ty);
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
-        let all = |cx: &Self, tys: &mut dyn Iterator<Item = Ty<'tcx>>, seen: &mut Vec<Ty<'tcx>>| {
+        let all = |cx: &Self, tys: &mut dyn Iterator<Item = Ty<'tcx>>, walk: &mut Walk<'tcx>| {
             let mut found = Drops::Nothing;
             for t in tys {
-                match cx.drops_in(t, seen) {
+                match cx.drops_in(t, walk) {
                     Drops::Nothing => {}
                     Drops::Runs => found = Drops::Runs,
                     unsupported => return unsupported,
@@ -116,56 +147,93 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             found
         };
         let found = match ty.kind() {
-            ty::Tuple(items) => all(self, &mut items.iter(), seen),
-            ty::Array(item, _) | ty::Slice(item) => self.drops_in(*item, seen),
-            ty::Closure(_, args) => match all(self, &mut args.as_closure().upvar_tys().iter(), seen) {
+            ty::Tuple(items) => all(self, &mut items.iter(), walk),
+            ty::Array(item, _) | ty::Slice(item) => self.drops_in(*item, walk),
+            ty::Closure(_, args) => match all(self, &mut args.as_closure().upvar_tys().iter(), walk) {
                 Drops::Nothing => Drops::Nothing,
                 _ => Drops::Unsupported(ty, "a closure that holds a value with a destructor"),
             },
-            ty::Adt(_, args) if ty.is_box() || self.is_vec_like(ty) => self.drops_in(args.type_at(0), seen),
+            ty::Adt(_, args) if ty.is_box() || self.is_vec_like(ty) => self.drops_in(args.type_at(0), walk),
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {
                 let own = self.tcx.adt_destructor(adt.did());
-                let parts = |seen: &mut Vec<Ty<'tcx>>| {
+                let parts = |walk: &mut Walk<'tcx>| {
                     let mut fields = adt.all_fields().map(|f| f.ty(self.tcx, args));
-                    all(self, &mut fields, seen)
+                    all(self, &mut fields, walk)
                 };
                 match own {
-                    Some(d) if d.did.is_local() => match parts(seen) {
+                    Some(d) if d.did.is_local() => match parts(walk) {
                         Drops::Unsupported(t, what) => Drops::Unsupported(t, what),
                         _ => Drops::Runs,
                     },
                     // A std type that drops what it holds its own way: an
                     // `Rc` when its last clone goes, a map its entries. A `Cell`
                     // drops the old value when it's set.
-                    _ if own.is_some() || std("Cell") || std("RefCell") => match all(self, &mut args.types(), seen) {
+                    _ if own.is_some() || std("Cell") || std("RefCell") => match all(self, &mut args.types(), walk) {
                         Drops::Nothing => Drops::Nothing,
                         _ => Drops::Unsupported(ty, "a std type holding a value with a destructor"),
                     },
-                    _ => parts(seen),
+                    _ => parts(walk),
                 }
             }
             _ => Drops::Nothing,
         };
-        seen.pop();
+        walk.seen.pop();
+        if walk.reached >= depth {
+            self.drop_state.cache.borrow_mut().insert(ty, found);
+        }
+        walk.reached = walk.reached.min(outer);
         found
     }
 
     /// Drop `value`, a `ty`: its own `drop`, then each part's, in Rust's
     /// order. `value` is read more than once, so it must read the same.
     pub(super) fn drop_value(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
-        self.drop_in(value, ty, span, &mut Vec::new(), out)
+        let mut made = Made::default();
+        let mut code = Vec::new();
+        self.drop_in(value, ty, span, &mut made, &mut code)?;
+        out.extend(made.defs);
+        out.extend(code);
+        Ok(())
     }
 
-    fn drop_in(
-        &mut self,
-        value: Expr,
-        ty: Ty<'tcx>,
-        span: Span,
-        seen: &mut Vec<Ty<'tcx>>,
-        out: &mut Vec<Stmt>,
-    ) -> R<()> {
+    /// How many drops writing a `ty`'s in place takes, and whether it's
+    /// inside itself, found once for each type.
+    fn drop_size(&self, ty: Ty<'tcx>, stack: &mut Vec<Ty<'tcx>>) -> (usize, bool) {
+        if !self.has_drops(ty) {
+            return (0, false);
+        }
+        // One inside a type that's inside it: both are inside themselves.
+        if stack.contains(&ty) {
+            return (0, true);
+        }
+        if let Some(&known) = self.drop_state.sizes.borrow().get(&ty) {
+            return known;
+        }
+        stack.push(ty);
+        let sum = |cx: &Self, tys: &mut dyn Iterator<Item = Ty<'tcx>>, stack: &mut Vec<Ty<'tcx>>| {
+            tys.map(|t| cx.drop_size(t, stack))
+                .fold((0, false), |(n, r), (m, q)| (n + m, r || q))
+        };
+        let (size, recursive) = match ty.kind() {
+            ty::Adt(_, args) if ty.is_box() => self.drop_size(args.type_at(0), stack),
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_size(args.type_at(0), stack),
+            ty::Array(item, _) | ty::Slice(item) => self.drop_size(*item, stack),
+            ty::Tuple(items) => sum(self, &mut items.iter(), stack),
+            ty::Adt(adt, args) => {
+                let own = usize::from(self.tcx.adt_destructor(adt.did()).is_some_and(|d| d.did.is_local()));
+                let (parts, recursive) = sum(self, &mut adt.all_fields().map(|f| f.ty(self.tcx, args)), stack);
+                (own + parts, recursive)
+            }
+            _ => (1, false),
+        };
+        stack.pop();
+        self.drop_state.sizes.borrow_mut().insert(ty, (size, recursive));
+        (size, recursive)
+    }
+
+    fn drop_in(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, made: &mut Made<'tcx>, out: &mut Vec<Stmt>) -> R<()> {
         let ty = self.reveal(ty);
         match self.drops(ty) {
             Drops::Nothing => return Ok(()),
@@ -174,19 +242,53 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // A type inside itself, as a list in a `Box` of itself, would need a
         // function of its own to drop.
-        if seen.contains(&ty) {
-            return Err(self.unsupported(span, &format!("dropping `{ty}`, which is inside itself,")));
+        // One whose drop is a function already, in this drop: that.
+        if let Some((_, name)) = made.functions.iter().find(|(t, _)| *t == ty) {
+            let js_span = self.js_span(span);
+            out.push(StmtKind::Expr(Expr::call(Expr::var(name), vec![value])).at(js_span));
+            return Ok(());
         }
-        seen.push(ty);
+        // A type of the crate's own whose drop is long, or inside itself, as
+        // a list is, gets a function of its own, which calls itself for the
+        // ones inside: its drop is written once, not once for each path to it.
+        if let ty::Adt(adt, _) = ty.kind()
+            && adt.did().is_local()
+            && let (size, recursive) = self.drop_size(ty, &mut Vec::new())
+            && (recursive || size > 8)
+        {
+            let type_name = self.tcx.item_name(adt.did()).to_string();
+            let name = self.fresh(&format!("drop{type_name}"));
+            let param = self.fresh(&lower_first(&type_name));
+            made.functions.push((ty, name.clone()));
+            let mut body = Vec::new();
+            self.drop_parts(Expr::var(&param), ty, span, made, &mut body)?;
+            let js_span = self.js_span(span);
+            made.defs
+                .push(StmtKind::Const(name.clone(), Expr::arrow(vec![param.into()], body)).at(js_span));
+            out.push(StmtKind::Expr(Expr::call(Expr::var(&name), vec![value])).at(js_span));
+            return Ok(());
+        }
+        self.drop_parts(value, ty, span, made, out)
+    }
+
+    /// A `ty`'s drop, written in place: its own `drop`, then its parts'.
+    fn drop_parts(
+        &mut self,
+        value: Expr,
+        ty: Ty<'tcx>,
+        span: Span,
+        made: &mut Made<'tcx>,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
         let js_span = self.js_span(span);
         match ty.kind() {
-            ty::Adt(_, args) if ty.is_box() => self.drop_in(value, args.type_at(0), span, seen, out)?,
-            ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, seen, out)?,
-            ty::Array(item, _) | ty::Slice(item) => self.drop_items(value, *item, span, seen, out)?,
+            ty::Adt(_, args) if ty.is_box() => self.drop_in(value, args.type_at(0), span, made, out)?,
+            ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, made, out)?,
+            ty::Array(item, _) | ty::Slice(item) => self.drop_items(value, *item, span, made, out)?,
             ty::Tuple(items) => {
                 for (i, item) in items.iter().enumerate() {
                     let part = self.project(value.clone(), ty, i);
-                    self.drop_in(part, item, span, seen, out)?;
+                    self.drop_in(part, item, span, made, out)?;
                 }
             }
             ty::Adt(adt, args) => {
@@ -215,19 +317,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         return Err(self.unsupported(span, &format!("dropping `{ty}`")));
                     }
                     let mut some = Vec::new();
-                    self.drop_in(value.clone(), inner, span, seen, &mut some)?;
+                    self.drop_in(value.clone(), inner, span, made, &mut some)?;
                     out.push(StmtKind::If(Expr::bin(Op::LooseNe, value, Expr::null()), some, None).at(js_span));
                 } else if adt.is_struct() {
                     for (i, field) in adt.non_enum_variant().fields.iter().enumerate() {
                         let part = self.project(value.clone(), ty, i);
-                        self.drop_in(part, field.ty(self.tcx, args), span, seen, out)?;
+                        self.drop_in(part, field.ty(self.tcx, args), span, made, out)?;
                     }
                 } else if adt.is_enum() {
                     for variant in adt.variants() {
                         let mut fields = Vec::new();
                         for (i, field) in variant.fields.iter().enumerate() {
                             let part = Expr::member(value.clone(), variant_field(self.tcx, variant, i));
-                            self.drop_in(part, field.ty(self.tcx, args), span, seen, &mut fields)?;
+                            self.drop_in(part, field.ty(self.tcx, args), span, made, &mut fields)?;
                         }
                         if fields.is_empty() {
                             continue;
@@ -245,7 +347,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Err(self.unsupported(span, &format!("dropping `{ty}`"))),
         }
-        seen.pop();
         Ok(())
     }
 
@@ -255,12 +356,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         items: Expr,
         item: Ty<'tcx>,
         span: Span,
-        seen: &mut Vec<Ty<'tcx>>,
+        made: &mut Made<'tcx>,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
         let name = self.fresh("item");
         let mut body = Vec::new();
-        self.drop_in(Expr::var(&name), item, span, seen, &mut body)?;
+        self.drop_in(Expr::var(&name), item, span, made, &mut body)?;
         let js_span = self.js_span(span);
         out.push(
             StmtKind::ForOf {
@@ -394,6 +495,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 !matches!(op, BinOp::Div | BinOp::Rem) && self.cannot_leave(*lhs) && self.cannot_leave(*rhs)
             }
             ExprKind::LogicalOp { lhs, rhs, .. } => self.cannot_leave(*lhs) && self.cannot_leave(*rhs),
+            // `Box::new(x)` only puts `x` in a box.
+            ExprKind::Call { fun, args, .. } => {
+                matches!(*self.thir[*fun].ty.kind(), ty::FnDef(id, _) if self.tcx.is_diagnostic_item(Symbol::intern("box_new"), id))
+                    && args.iter().all(|&a| self.cannot_leave(a))
+            }
             _ => false,
         }
     }
@@ -613,6 +719,26 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         (None, child)
     }
 
+    /// Whether a value made here has a destructor to run: `None` of an
+    /// `Option` that could hold one doesn't, nor does a variant of an enum
+    /// without a `Drop` of its own whose fields have none.
+    fn holds_drops(&self, expr: &ThirExpr<'tcx>) -> bool {
+        if !self.cx.has_drops(expr.ty) {
+            return false;
+        }
+        match &expr.kind {
+            ExprKind::Adt(adt) => {
+                self.cx
+                    .tcx
+                    .adt_destructor(adt.adt_def.did())
+                    .is_some_and(|d| d.did.is_local())
+                    || adt.fields.iter().any(|f| self.cx.has_drops(self.thir[f.expr].ty))
+                    || !matches!(adt.base, AdtExprBase::None)
+            }
+            _ => true,
+        }
+    }
+
     fn problem(&mut self, span: Span, what: &str) {
         self.facts.problems.push((span, what.to_string()));
     }
@@ -819,7 +945,7 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
         self.stack.push(id);
         match expr.kind {
             ExprKind::VarRef { id: var } if self.facts.owners.contains_key(&var) => self.owner_used(id, var),
-            _ if !is_place(&expr.kind) && self.cx.has_drops(expr.ty) => self.value_made(id),
+            _ if !is_place(&expr.kind) && self.holds_drops(expr) => self.value_made(id),
             ExprKind::PointerCoercion {
                 cast: PointerCoercion::Unsize,
                 source,

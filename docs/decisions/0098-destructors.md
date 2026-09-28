@@ -51,6 +51,11 @@ for (const item of list) {
 }
 ```
 
+A type of the crate's own whose drop is longer than eight drops, or that's
+inside itself, as a list is, gets a function of its own instead, which
+calls itself for the ones inside: `const dropList = (list) => { .. }`,
+declared before the drop that calls it, as `Clone`'s is (ADR 0052).
+
 **A scope that holds one is a `try`, and its drops the `finally`**, where
 rustc's scope tree ends it, in reverse order. A `finally` runs however the
 scope ends: at its end, by `return`, `break` or `?`, and as a panic
@@ -179,6 +184,12 @@ value, and a `dyn Trait` of one.
   moved after its other operands, and a value with a destructor made
   before an operand that can leave early, `f(Noisy(1), g())`, is an error
   for now: Rust drops it as `g` panics.
+- **Found by rustc's tests:** a type whose parts double at each level,
+  `S2<S2<T>>` in `S3<T>`, took exponential time to find what it drops,
+  once for each path to a type, and didn't finish compiling; and its drop,
+  written in place, would have been as long. What a type drops is found
+  once for each type now, and a long drop is a function. The blessed run
+  failed on it, as a new failure that crashed (ADR 0089).
 - **Done first, and not yet:** variables, parameters, moves, assignments,
   statements' values and `mem::drop`. A temporary that's borrowed or taken
   apart, a partial move, generic code given a value with a destructor, a
