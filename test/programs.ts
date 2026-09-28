@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { compileFailure, runSync, stopped } from "./child";
 import { same, type Outcome } from "./oracle";
 import { compiler, root } from "./support";
 
@@ -17,8 +18,11 @@ export const runtimes: [string, string[]][] = [
 export type Run = { stdout: string; stderr: string; outcome: Outcome | string };
 
 // A case runs for at most this long, so one that never ends fails instead
-// of stopping the suite.
+// of stopping the suite, and is compiled for at most the other, natively or
+// by rust-js: `RUST_JS_COMPILE_TIMEOUT` shortens it for a test of a
+// compiler that never ends.
 const timeout = 10_000;
+const compileTimeout = Number(process.env.RUST_JS_COMPILE_TIMEOUT ?? 120_000);
 
 /** Runs `cmd`, which writes how `main` ended to `outcomeFile`, and says
  * what it printed and how it ended. A run that fails after writing its
@@ -26,13 +30,13 @@ const timeout = 10_000;
  * a run counts only if it exits 0, and only by the outcome it wrote itself. */
 export function execute(cmd: string[], outcomeFile: string): Run {
   rmSync(outcomeFile, { force: true });
-  const p = Bun.spawnSync(cmd, { cwd: root, stdout: "pipe", stderr: "pipe", timeout });
-  const stdout = p.stdout.toString();
-  const stderr = p.stderr.toString();
-  if (p.signalCode) return { stdout, stderr, outcome: `killed by ${p.signalCode} (a ${timeout / 1000}s limit)` };
-  if (!existsSync(outcomeFile)) return { stdout, stderr, outcome: `exited ${p.exitCode} without an outcome` };
+  const p = runSync(cmd, root, timeout);
+  const { stdout, stderr } = p;
+  const why = stopped(p, timeout);
+  if (why) return { stdout, stderr, outcome: why };
+  if (!existsSync(outcomeFile)) return { stdout, stderr, outcome: `exited ${p.code} without an outcome` };
   const outcome = readFileSync(outcomeFile, "utf8");
-  if (p.exitCode !== 0) return { stdout, stderr, outcome: `exited ${p.exitCode} after it ended ${outcome}` };
+  if (p.code !== 0) return { stdout, stderr, outcome: `exited ${p.code} after it ended ${outcome}` };
   return { stdout, stderr, outcome: JSON.parse(outcome) };
 }
 
@@ -74,22 +78,26 @@ fn main() {
 }
 `);
   const binary = join(dir, "native");
-  const build = Bun.spawnSync(["rustc", "--edition=2024", "-Coverflow-checks=off", "-Awarnings", wrapper, "-o", binary], {
-    cwd: root,
-    stderr: "pipe",
-  });
-  if (build.exitCode !== 0) return `rustc can't compile it:\n${build.stderr.toString()}`;
+  const build = runSync(["rustc", "--edition=2024", "-Coverflow-checks=off", "-Awarnings", wrapper, "-o", binary], root, compileTimeout);
+  const why = stopped(build, compileTimeout);
+  if (why || build.code !== 0) return `rustc can't compile it${why ? `: it ${why}` : ""}:\n${build.stderr}`;
   const outcomeFile = join(dir, "native.json");
   return execute([binary, outcomeFile], outcomeFile);
 }
 
+/** A compile that failed: rust-js's clear rejection, or a crash, however
+ * it began (`compileFailure`), with everything it said. */
+export type CompileError = { kind: "rejected" | "crashed"; reason: string; error: string };
+
 // As JS, the case is the crate's root, with `entry` exported to call `main`.
-export function compileJs(file: string, dir: string): { js: string } | { error: string } {
+export function compileJs(file: string, dir: string): { js: string } | CompileError {
   const wrapper = join(dir, "lib.rs");
   writeFileSync(wrapper, `include!(${rustString(file)});\npub fn entry() {\n    main()\n}\n`);
   const js = join(dir, "case.js");
-  const p = Bun.spawnSync([compiler, wrapper, "-o", js, "--", "-Awarnings"], { cwd: root, stderr: "pipe" });
-  return p.exitCode === 0 ? { js } : { error: p.stderr.toString() };
+  const p = runSync([compiler, wrapper, "-o", js, "--", "-Awarnings"], root, compileTimeout);
+  if (p.code === 0 && !stopped(p, compileTimeout)) return { js };
+  const { kind, reason } = compileFailure(p, compileTimeout);
+  return { kind, reason, error: kind === "crashed" ? `rust-js crashed: ${reason}\n${p.stderr}` : p.stderr };
 }
 
 export function runJs(runtime: string[], js: string, dir: string, name: string): Run {

@@ -83,6 +83,8 @@ async function check(file: string): Promise<string[]> {
   const compiled = compileJs(file, dir);
   if (want.kind === "compile-fail") {
     if ("js" in compiled) return ["rust-js compiled it, but `compile-fail` says it can't"];
+    // A rejection, not a crash, which may begin with the rejection it expects.
+    if (compiled.kind === "crashed") return [`${compiled.error}\n\n\`compile-fail\` expects a rejection`];
     // The first error, so an error of rustc's own can't hide before rust-js's.
     const first = compiled.error.split("\n").find((line) => line.startsWith("error")) ?? "";
     return first.includes(want.text) ? [] : [`rust-js's first error doesn't say \`${want.text}\`:\n${compiled.error}`];

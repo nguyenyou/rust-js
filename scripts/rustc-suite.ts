@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { availableParallelism, homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
+import { compileFailure, run, stopped, type Exit } from "../test/child";
 import { rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
@@ -92,23 +93,21 @@ export function surprises(results: Result[], known: Map<string, string>): Set<st
   return new Set([...regressions, ...fixed, ...worse].map((r) => r.test));
 }
 
-async function spawn(cmd: string[], cwd: string, timeout: number) {
-  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", timeout });
-  const [stdout, stderr] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
-  await p.exited;
-  return { stdout, stderr, code: p.exitCode, killed: p.signalCode !== null };
-}
-
 /** A diagnostic's first line, as short as it can say it, with nothing of
  * this machine's or this run's: its paths, its toolchain's host, a
  * thread's number. The list is the same wherever it's written. */
 export const firstError = (stderr: string) =>
-  (stderr.split("\n").find((line) => line.startsWith("error")) ?? stderr.trim().split("\n")[0] ?? "no output")
+  normalize(stderr.split("\n").find((line) => line.startsWith("error")) ?? stderr.trim().split("\n")[0] ?? "no output");
+const normalize = (line: string) =>
+  line
     .replaceAll(/\/[^\s`:]*\/rustc-suite\/case-[^/\s`:]*/g, "<case>")
     .replaceAll(homedir(), "~")
     .replaceAll(/\.rustup\/toolchains\/[^/\s]+/g, ".rustup/toolchains/<toolchain>")
     .replaceAll(/thread '([^']*)' \(\d+\)/g, "thread '$1'")
     .slice(0, 200);
+
+/** Did a process end otherwise than by exiting 0? */
+const failed = (exit: Exit, timeout: number) => exit.code !== 0 || stopped(exit, timeout) !== undefined;
 
 async function runTest(ui: string, file: string): Promise<Result> {
   const test = relative(ui, file);
@@ -119,17 +118,18 @@ async function runTest(ui: string, file: string): Promise<Result> {
   try {
     // Natively, as rust-js takes Rust: the release profile, where arithmetic wraps.
     const binary = join(dir, "native");
-    const build = await spawn(
+    const build = await run(
       ["rustc", `--edition=${s.edition}`, "-Coverflow-checks=off", "-Awarnings", file, "-o", binary],
       dirname(file),
       120_000,
     );
-    if (build.code !== 0) return { test, status: "skip", reason: `rustc: ${firstError(build.stderr)}` };
-    const native = await spawn([binary], dirname(file), 10_000);
-    if (native.killed || native.code !== 0) return { test, status: "skip", reason: "doesn't pass natively with overflow checks off" };
+    if (failed(build, 120_000)) return { test, status: "skip", reason: `rustc: ${stopped(build, 120_000) ?? firstError(build.stderr)}` };
+    const native = await run([binary], dirname(file), 10_000);
+    if (failed(native, 10_000)) return { test, status: "skip", reason: "doesn't pass natively with overflow checks off" };
     // What a `HashMap` prints, say, changes from run to run: no answer to compare with.
     for (let i = 0; i < 2; i++) {
-      const again = await spawn([binary], dirname(file), 10_000);
+      const again = await run([binary], dirname(file), 10_000);
+      if (failed(again, 10_000)) return { test, status: "skip", reason: "doesn't pass natively on every run" };
       if (again.stdout !== native.stdout || again.stderr !== native.stderr) {
         return { test, status: "skip", reason: "prints what changes from run to run" };
       }
@@ -141,20 +141,25 @@ async function runTest(ui: string, file: string): Promise<Result> {
     const lib = join(dir, basename(file));
     writeFileSync(lib, `${source}\n/// The test's main, for the JS to call.\npub fn entry() {\n    main()\n}\n`);
     const js = join(dir, "case.js");
-    const compiled = await spawn([compiler, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
-    if (compiled.killed) return { test, status: "fail", reason: "rust-js didn't finish compiling it in 120s" };
-    if (compiled.code !== 0) return { test, status: "fail", reason: firstError(compiled.stderr) };
+    const compiled = await run([compiler, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
+    if (failed(compiled, 120_000)) {
+      // Its first error, if it's rust-js's rejection; what crashed, if not,
+      // even after a rejection.
+      const failure = compileFailure(compiled, 120_000);
+      return { test, status: "fail", reason: failure.kind === "rejected" ? firstError(compiled.stderr) : normalize(failure.reason) };
+    }
     for (const [name, runtime] of [["bun", process.execPath], ["node", "node"]]) {
       const outcomeFile = join(dir, `${name}.json`);
-      const run = await spawn([runtime, join(root, "test", "corpus-run.ts"), js, outcomeFile], dir, 10_000);
-      if (run.killed) return { test, status: "fail", reason: `${name}: didn't end in 10s` };
+      const ran = await run([runtime, join(root, "test", "corpus-run.ts"), js, outcomeFile], dir, 10_000);
+      const why = stopped(ran, 10_000);
+      if (why) return { test, status: "fail", reason: `${name}: ${why}` };
       // It counts only if it exits 0: one that fails after writing how `main`
       // ended, as an unhandled rejection makes it, failed.
       const written = existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : undefined;
-      const outcome = written !== undefined && run.code === 0 ? written : `exited ${run.code}: ${written ?? firstError(run.stderr)}`;
+      const outcome = written !== undefined && ran.code === 0 ? written : `exited ${ran.code}: ${written ?? firstError(ran.stderr)}`;
       if (outcome !== '{"value":null}') return { test, status: "fail", reason: `${name}: ended ${outcome.slice(0, 200)}` };
-      if (run.stdout !== native.stdout) return { test, status: "fail", reason: `${name}: different stdout` };
-      if (run.stderr !== native.stderr) return { test, status: "fail", reason: `${name}: different stderr` };
+      if (ran.stdout !== native.stdout) return { test, status: "fail", reason: `${name}: different stdout` };
+      if (ran.stderr !== native.stderr) return { test, status: "fail", reason: `${name}: different stderr` };
     }
     return { test, status: "pass" };
   } finally {

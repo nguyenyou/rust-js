@@ -39,10 +39,8 @@ function judge(program: Program, seed: number): Verdict {
   const compiled = compileJs(file, dir);
   if ("error" in compiled) {
     // A feature rust-js says it doesn't support is its answer; anything
-    // else, an error it can't explain or its own panic, isn't.
-    return compiled.error.includes("rust-js does not support")
-      ? { kind: "unsupported", error: compiled.error }
-      : { kind: "crash", error: compiled.error };
+    // else, an error it can't explain or its own panic, isn't, even after it.
+    return compiled.kind === "rejected" ? { kind: "unsupported", error: compiled.error } : { kind: "crash", error: compiled.error };
   }
   const js = runtimes.map(([name, cmd]): [string, Run] => [name, runJs(cmd, compiled.js, dir, name)]);
   return js.every(([, run]) => agree(run, native)) ? { kind: "same" } : { kind: "differs", native, js };

@@ -91,3 +91,13 @@ What it expects is in a `//@` directive:
 - Programs that read input, use threads, or need a crate beyond std don't
   fit a case yet.
 - A case's `main` returns `()`; `fn main() -> Result` is for later.
+- **Every program the tests build or run is judged by how it ended**
+  (`test/child.ts`): its exit code, the signal that stopped it, whether it
+  ran out of time, 10 seconds to run and 120 to compile, or printed more
+  than 16 MB, and what it printed. A compile that failed is rust-js's
+  rejection only if it exited 1 with errors of its own; a panic, an
+  internal compiler error, a signal, a deadline, another exit code, or an
+  error of rustc's is a crash, even after the rejection a `compile-fail`
+  case expects. The corpus, generated programs and rustc's tests all
+  judge a compile this way. Found in review: a compiler that printed the
+  expected rejection, then panicked, passed.
