@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, release, tmpdir, totalmem } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 import { runSync, stopped } from "../test/child";
 
@@ -61,10 +61,95 @@ export function checksums(dir: string): string[] {
 
 const text = (cmd: string[], cwd = root) => runSync(cmd, cwd, 60_000).stdout.trim();
 
-function suite(name: string, tests: string[], compiler: string, logs: string): Suite {
+// The distribution's packages, by the tarball each is installed from.
+const packages: [string, string][] = [
+  ["rust-js-build", "rust-js-build.tgz"],
+  ["vite-plugin-rust-js", "vite-plugin-rust-js.tgz"],
+  ["rust-js-resources", "resources.tgz"],
+  ["rust-js-native", "native.tgz"],
+];
+
+/** Every file under `dir`, by its path from there. */
+function files(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(dir, join(entry.parentPath, entry.name)))
+    .sort();
+}
+
+const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+
+/** A Vite app, outside the checkout, built with the distribution's plugin,
+ * tooling, resources and compiler, from its tarballs alone, each installed
+ * file the tarball's, and Vite and React from the registry, at the versions
+ * this checkout locks. */
+export function viteApp(dist: string, logs: string): Suite {
+  const started = Date.now();
+  const app = mkdtempSync(join(tmpdir(), "rust-js-qualify-app-"));
+  const problems: string[] = [];
+  const log: string[] = [];
+  try {
+    const locked = (name: string) => JSON.parse(readFileSync(join(root, "node_modules", name, "package.json"), "utf8")).version as string;
+    const dependencies: Record<string, string> = Object.fromEntries(packages.map(([name, file]) => [name, join(dist, file)]));
+    for (const name of ["vite", "@vitejs/plugin-react", "react", "react-dom"]) dependencies[name] = locked(name);
+    writeFileSync(join(app, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: { "rust-js-build": join(dist, "rust-js-build.tgz") } }));
+    writeFileSync(
+      join(app, "vite.config.js"),
+      'import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\nimport rustJs from "vite-plugin-rust-js";\n\nexport default defineConfig({ plugins: [rustJs({ crates: ["src/App.rs"], bindings: ["react"] }), react()] });\n',
+    );
+    writeFileSync(join(app, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>\n');
+    mkdirSync(join(app, "src"));
+    writeFileSync(join(app, "src", "main.jsx"), 'import { createRoot } from "react-dom/client";\nimport { App } from "./App.jsx";\n\ncreateRoot(document.getElementById("root")).render(<App />);\n');
+    writeFileSync(join(app, "src", "App.rs"), '#![allow(non_snake_case)]\nuse react::Element;\n\npub fn App() -> Element {\n    jsx! { <main><h1>{"Qualified"}</h1></main> }\n}\n');
+    const install = runSync([process.execPath, "install", "--ignore-scripts"], app, installTimeout, { BUN_INSTALL_CACHE_DIR: join(app, "bun-cache") });
+    log.push(install.stdout, install.stderr);
+    if (install.code !== 0) problems.push(`the app didn't install: ${stopped(install, installTimeout) ?? install.stderr.trim().split("\n").at(-1)}`);
+    else {
+      // Each rust-js package the app has is its tarball, file for file.
+      for (const [name, file] of packages) {
+        const unpacked = mkdtempSync(join(tmpdir(), "rust-js-qualify-package-"));
+        try {
+          runSync(["tar", "-xzf", join(dist, file), "-C", unpacked], app, 60_000);
+          const expected = join(unpacked, "package"), installed = join(app, "node_modules", name);
+          const want = files(expected);
+          const differ = want.filter((path) => !existsSync(join(installed, path)) || hash(join(installed, path)) !== hash(join(expected, path)));
+          if (want.length === 0 || differ.length > 0) problems.push(`the app's ${name} isn't ${file}: ${differ.slice(0, 3).join(", ") || "it's empty"}`);
+        } finally {
+          rmSync(unpacked, { recursive: true, force: true });
+        }
+      }
+      const build = runSync(["node", join(app, "node_modules", "vite", "bin", "vite.js"), "build"], app, suiteTimeout);
+      log.push(build.stdout, build.stderr);
+      const why = () => build.stderr.split("\n").find((line) => /error/i.test(line))?.trim() ?? build.stderr.trim().split("\n").at(-1);
+      if (build.code !== 0 || stopped(build, suiteTimeout)) problems.push(`the app didn't build: ${stopped(build, suiteTimeout) ?? why()}`);
+      else {
+        const assets = existsSync(join(app, "dist", "assets")) ? readdirSync(join(app, "dist", "assets")).filter((file) => file.endsWith(".js")) : [];
+        if (!assets.some((file) => readFileSync(join(app, "dist", "assets", file), "utf8").includes("Qualified"))) problems.push("the app's build has none of App.rs's JSX");
+      }
+    }
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
+  const path = join(logs, "vite-app.log");
+  writeFileSync(path, [...log, ...problems].join("\n"));
+  return {
+    name: "vite-app",
+    command: ["vite", "build"],
+    compiler: "node_modules/.bin/rust-js",
+    passed: problems.length === 0,
+    pass: problems.length === 0 ? 1 : 0,
+    fail: problems.length === 0 ? 0 : 1,
+    skip: 0,
+    skipped: [],
+    seconds: Math.round((Date.now() - started) / 1000),
+    log: path,
+  };
+}
+
+function suite(name: string, tests: string[], compiler: string, logs: string, env: Record<string, string> = {}): Suite {
   const command = [process.execPath, "test", ...tests];
   const started = Date.now();
-  const p = runSync(command, root, suiteTimeout, { RUST_JS_COMPILER: compiler });
+  const p = runSync(command, root, suiteTimeout, { ...env, RUST_JS_COMPILER: compiler });
   const output = `${p.stdout}${p.stderr}`;
   const log = join(logs, `${name}.log`);
   writeFileSync(log, output);
@@ -142,7 +227,8 @@ async function main() {
           .sort()
           .map((file) => `test/${file}`);
         suites.push(suite("installed-launcher", files, launcher, reports));
-        suites.push(suite("packaged-binary", ["test/packages.test.ts"], binary, reports));
+        suites.push(suite("packaged-binary", ["test/packages.test.ts"], binary, reports, { RUST_JS_DISTRIBUTION: dist }));
+        suites.push(viteApp(dist, reports));
       }
     }
   } finally {

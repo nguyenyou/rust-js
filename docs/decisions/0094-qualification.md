@@ -29,9 +29,17 @@ rust-js does (ROADMAP M6.1).
 4. **The suite runs through what's installed:** every test file, with
    `RUST_JS_COMPILER` the installed launcher, as an app runs it, so the
    launcher's finding its toolchain and the release build are what's
-   tested; and the package test, which packs a distribution of its own,
-   with the exact binary the installed one has.
-5. **What was run is written down:** `qualification.json`, with the
+   tested; and the package test on the distribution itself
+   (`RUST_JS_DISTRIBUTION`), a copy of it, as it damages one of its files.
+   The checkout's own tests also import its plugin and resources, so:
+5. **A Vite app is built from the distribution alone:** outside the
+   checkout, with the four packages from their tarballs, each installed
+   file checked to be the tarball's, and Vite and React from the registry at
+   the versions the checkout locks; its build must have `App.rs`'s JSX. A
+   plugin that throws fails it. Found in review: the plugin, tooling and
+   resources the checkout's tests used were the checkout's, not the
+   distribution's.
+6. **What was run is written down:** `qualification.json`, with the
    commit, the distribution's manifest, the host (platform, architecture,
    OS release, CPU, memory), Bun's, Node's and rustc's versions, and each
    suite's command, compiler, counts, time and log; and what isn't

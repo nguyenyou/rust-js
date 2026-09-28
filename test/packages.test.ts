@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, chmodSync, realpathSync, readFileSync, readdirSync, existsSync, writeFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, chmodSync, realpathSync, readFileSync, readdirSync, existsSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCompiler, compiler, root as repository } from "./support";
 
 const node = Bun.which("node");
+// A distribution to test as it is, as qualification gives one (ADR 0094);
+// else one is packed here.
+const supplied = process.env.RUST_JS_DISTRIBUTION;
 if (!node) throw new Error("Node.js is required for distribution runtime compatibility tests");
 
 for (const runtime of [process.execPath, node]) {
@@ -27,7 +30,9 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
   try {
     const bundle = join(root, "artifacts");
     const pack = [process.execPath, join(repository, "scripts/package-distribution.ts"), compiler, bundle];
-    run(pack);
+    // A copy of one supplied, as this damages one of its files.
+    if (supplied) cpSync(supplied, bundle, { recursive: true });
+    else run(pack);
     const distribution = JSON.parse(readFileSync(join(bundle, "distribution.json"), "utf8"));
     expect(distribution.compiler).toEqual(JSON.parse(run([compiler, "--version-json"])));
     expect(distribution.artifacts).toHaveLength(4);
