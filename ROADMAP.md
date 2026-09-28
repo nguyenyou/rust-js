@@ -245,8 +245,8 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,196 of 2,691 in scope pass at the pinned toolchain, the others are 1,493
-  clear rejections and 2 crashes, none a wrong answer, and the
+  1,196 of 2,691 in scope pass at the pinned toolchain, every other one is a
+  clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink.
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for

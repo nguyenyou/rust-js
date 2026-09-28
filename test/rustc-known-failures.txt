@@ -901,7 +901,7 @@ layout/null-pointer-optimization.rs	error: rust-js does not support calling `std
 let-else/let-else-bindings.rs	error: rust-js does not support calling `std::rt::begin_panic` yet
 let-else/let-else-drop-order.rs	error: rust-js does not support user implementations of this standard or external trait yet
 let-else/let-else-run-pass.rs	error: rust-js does not support bindings inside `|` patterns yet
-lifetimes/any-lifetime-escape-higher-rank.rs	thread 'rustc' panicked at /rustc-dev/362211dc29abc4e8f8cfc384740237f144929b03/compiler/rustc_trait_selection/src/traits/select/mod.rs:294:24:
+lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/matcher-trait-equality-13323.rs	error: rust-js does not support generic trait parameters yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
 lifetimes/rvalue-lifetime-drop-timing.rs	error: rust-js does not support statics yet
@@ -1458,7 +1458,7 @@ uniform-paths/basic.rs	error: rust-js does not support calling `std::io::stdout`
 uniform-paths/macros-nested.rs	error: rust-js does not support calling `std::io::stdout` yet
 uniform-paths/macros.rs	error: rust-js does not support calling `std::io::stdout` yet
 union/union-align.rs	error: rust-js does not support calling `std::mem::align_of` yet
-union/union-const-codegen.rs	thread 'rustc' panicked at src/lower/representation.rs:226:34:
+union/union-const-codegen.rs	error: rust-js does not support constants of type `U` yet
 union/union-const-eval-field.rs	error: rust-js does not support constants of type `DummyUnion` yet
 union/union-derive-rpass.rs	error: rust-js does not support values of type `U` yet
 union/union-drop-assign.rs	error: rust-js does not support user implementations of this standard or external trait yet
