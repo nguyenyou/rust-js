@@ -451,12 +451,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             None => name.as_str(),
                         };
                         let name = self.bind(*var, rust_name, mode.1 == Mutability::Mut);
-                        if mode.0 == ByRef::No && self.has_drops(pat.ty) {
-                            self.own(*var, Expr::var(&name), pat.ty, pat.span, out)?;
+                        // The function owns its parameter however it's bound:
+                        // `ref n` too (ADR 0098).
+                        if self.has_drops(param.ty) {
+                            self.own(*var, Expr::var(&name), param.ty, pat.span, out)?;
                         }
                         name
                     }
-                    PatKind::Wild => self.fresh("_"),
+                    PatKind::Wild => {
+                        let name = self.fresh("_");
+                        if self.has_drops(param.ty) {
+                            self.own_value(Expr::var(&name), param.ty);
+                        }
+                        name
+                    }
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
                     _ => {
                         let name = self.fresh("param");
@@ -964,7 +972,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.check_by_value(*mode, *ty, pat.span)?;
                 self.check_value_ty(*ty, pat.span)?;
                 let mutable = mode.1 == Mutability::Mut;
-                let owns = mode.0 == ByRef::No && self.has_drops(*ty);
+                // `let ref r = f();` owns what `f` made, as `let r = f();` does;
+                // `let ref r = x;` borrows `x` (ADR 0098).
+                let owned = match mode.0 {
+                    ByRef::No => Some(*ty),
+                    ByRef::Yes(..) => init
+                        .filter(|&i| !drops::is_place(&self.thir[self.strip(i)].kind))
+                        .map(|i| self.thir[i].ty),
+                }
+                .filter(|&t| self.has_drops(t));
+                let owns = owned.is_some();
                 if owns && init.is_none() {
                     return Err(self.unsupported(pat.span, "a `let` of a value with a destructor, without its value"));
                 }
@@ -995,8 +1012,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         name
                     }
                 };
-                if owns {
-                    self.own(*var, Expr::var(&name), *ty, pat.span, out)?;
+                if let Some(owned) = owned {
+                    self.own(*var, Expr::var(&name), owned, pat.span, out)?;
                 }
                 Ok(())
             }
@@ -2914,10 +2931,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let params = if block {
             Vec::new()
         } else {
-            // JS ignores extra arguments, so `|_| ..` is `() => ..`.
+            // JS ignores extra arguments, so `|_| ..` is `() => ..`, unless
+            // the closure drops what it's given.
             let mut params = &body.thir.params.raw[1..];
             while let [rest @ .., last] = params
                 && last.pat.as_deref().is_some_and(|p| matches!(p.kind, PatKind::Wild))
+                && !self.has_drops(last.ty)
             {
                 params = rest;
             }

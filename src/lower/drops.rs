@@ -414,6 +414,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// A value its scope drops that no variable names, as a `_` parameter.
+    pub(super) fn own_value(&mut self, value: Expr, ty: Ty<'tcx>) {
+        self.drop_state.owned.push(Owned { value, ty, flag: None });
+    }
+
     /// How many owners are in scope: where a new scope's start.
     pub(super) fn owned_mark(&self) -> usize {
         self.drop_state.owned.len()
@@ -708,6 +713,11 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
     fn context(&self) -> (Option<ExprId>, ExprId) {
         let mut child = *self.stack.last().expect("an expression being walked");
         for &parent in self.stack.iter().rev().skip(1) {
+            // A `let`'s value is its statement's, not the block's around it:
+            // its pattern says what it takes.
+            if self.lets.contains_key(&child) {
+                return (None, child);
+            }
             match self.thir[parent].kind {
                 ExprKind::Scope { .. }
                 | ExprKind::Use { .. }
@@ -875,7 +885,8 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                 | ExprKind::Let { expr: arg, .. }
                 | ExprKind::Match { scrutinee: arg, .. }
                 | ExprKind::Field { lhs: arg, .. }
-                | ExprKind::Index { lhs: arg, .. },
+                | ExprKind::Index { lhs: arg, .. }
+                | ExprKind::Deref { arg },
             ) => *arg == child,
             Some(ExprKind::Adt(adt)) => matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child),
             _ => false,
@@ -887,7 +898,7 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
 }
 
 /// A place: a variable, or a part of one, or what a reference points to.
-fn is_place(kind: &ExprKind<'_>) -> bool {
+pub(super) fn is_place(kind: &ExprKind<'_>) -> bool {
     matches!(
         kind,
         ExprKind::VarRef { .. }

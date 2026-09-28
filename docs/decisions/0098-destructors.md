@@ -194,6 +194,15 @@ value, and a `dyn Trait` of one.
   had stopped at a `Drop` impl. 40 stop at what destructors don't do yet,
   most often a borrowed temporary (13) and a value made before what may
   panic (7).
+- **Found when shared references to a `static mut` let more of rustc's
+  tests through (ADR 0096),** as each counts drops in one, three wrong
+  answers: a parameter bound by `ref` or `_` wasn't dropped, though its
+  function owns it however it's bound; a `let`'s value was taken as moved
+  whatever its pattern, so `let _ = x` moved `x`, and `let ref r = f()`
+  owned nothing; and a temporary dereferenced in place, a method call
+  through a `Box` a call returned, wasn't taken for a temporary, and was
+  never dropped. The safety net saw none of them: it knows only what's
+  bound by value. Each is fixed, or an error, now.
 - **Done first, and not yet:** variables, parameters, moves, assignments,
   statements' values and `mem::drop`. A temporary that's borrowed or taken
   apart, a partial move, generic code given a value with a destructor, a
