@@ -28,6 +28,8 @@ fn main() {
     *y = 5;
     *y += 2;
     println!("{}", *y);
+    // Formatted, a `&mut` shows what it points at.
+    println!("{y} {y:?}");
     bump(y);
     bump(&mut *y);
     println!("{x}");

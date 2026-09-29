@@ -872,6 +872,9 @@ impl<'a> Cx<'a> {
     fn handle(&self, sp: Span, place: &js::Expr) -> Expression<'a> {
         let b = &self.b;
         let mut param = "value".to_string();
+        if place.mentions_var(&param) {
+            param = "newValue".to_string();
+        }
         while place.mentions_var(&param) {
             param.push('_');
         }

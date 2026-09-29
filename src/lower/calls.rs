@@ -70,6 +70,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(callee) = self.boxed_callee(def_id, generic_args, args, span)? {
             return self.call_with_boxes(callee, args, discarded, span, out);
         }
+        // `x == &mut 1` or `p < q` of `&mut`s to values JS can't change in
+        // place: of what they point at, whatever each `&mut` is (ADR 0099).
+        if let Some(trait_id) = self.tcx.trait_of_assoc(def_id)
+            && (self.tcx.is_lang_item(trait_id, LangItem::PartialEq)
+                || self.tcx.is_lang_item(trait_id, LangItem::PartialOrd)
+                || self.tcx.is_diagnostic_item(rustc_span::sym::Ord, trait_id))
+            && generic_args.types().next().is_some_and(|t| self.is_cell(t))
+        {
+            let pointees = self
+                .tcx
+                .mk_args_from_iter(generic_args.iter().map(|arg| match arg.as_type() {
+                    Some(t) if self.is_cell(t) => t.builtin_deref(true).unwrap_or(t).into(),
+                    _ => arg,
+                }));
+            let values = args
+                .iter()
+                .map(|&a| self.pointee_value(a, span, out))
+                .collect::<R<Vec<_>>>()?;
+            if let Some(compared) = self.trait_call(def_id, pointees, values.clone(), span, out)? {
+                return Ok(compared);
+            }
+            // `p < q` of numbers: the operator, as of `&i32`s.
+            if let Some(Std::Operator(op)) = self.std_fn(fun)
+                && let [left, right] =
+                    <[Expr; 2]>::try_from(values).map_err(|_| self.unsupported(span, "comparing `&mut`s"))?
+            {
+                let ty = pointees.types().next().expect("a comparison has a type");
+                return self.binary(op, left, right, None, ty, span);
+            }
+            return Err(self.unsupported(span, "comparing `&mut`s"));
+        }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(written);
         }
@@ -261,6 +292,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .try_normalize_erasing_regions(self.typing_env, output)
             .unwrap_or(output);
+        // A `&mut` it made itself, to a value JS can't change in place, is the
+        // item, not a cell (ADR 0099): only a pattern takes it apart.
+        if let Some(cell) = self.makes_items(output, generic_args, args)
+            && !self.locals.item_calls.contains(&fun)
+        {
+            let path = self.tcx.def_path_str(def_id);
+            return Err(self.unsupported(span, &format!("a `{cell}` from `{path}` used as a value")));
+        }
         let boxed = self.option_of(output).is_some_and(|inner| self.boxed_payload(inner));
         // And one of a `()` or an `Option`, which would be `None` (ADR 0030).
         // `map` says so in its own words.
@@ -1086,6 +1125,76 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Some(place)
     }
 
+    /// What `a`, a `&` of a `&mut` to a value JS can't change in place, points
+    /// at, as a comparison reads it (ADR 0099): the place of `&mut x` or of a
+    /// `&mut` in a variable, a temporary of `&mut 1`, a cell's `value`.
+    fn pointee_value(&mut self, a: ExprId, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let ExprKind::Borrow {
+            borrow_kind: rustc_middle::mir::BorrowKind::Shared,
+            arg: e,
+        } = self.thir[self.strip(a)].kind
+        else {
+            return Err(self.unsupported(span, "comparing this `&mut`"));
+        };
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow {
+                borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
+                arg,
+            } => match self.place(arg) {
+                Some((place, _)) => Ok(place),
+                None if self.is_temporary(arg) => self.expr(arg, out),
+                None => self.referent(arg, out),
+            },
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.locals.boxes.contains(&id) => {
+                self.place(e)
+                    .map(|(place, _)| place)
+                    .ok_or_else(|| self.unsupported(span, "comparing this `&mut`"))
+            }
+            _ if self.is_cell_value(e) => Ok(Expr::member(self.expr(e, out)?, "value")),
+            _ => Err(self.unsupported(span, "comparing this `&mut`")),
+        }
+    }
+
+    /// A `&mut` to a value JS can't change in place that a std call's result,
+    /// or the items of the iterator it is, holds, that neither its arguments
+    /// nor its type's parameters did: one the call made, `get_mut`'s or
+    /// `iter_mut`'s, which is the item itself (ADR 0099).
+    fn makes_items(
+        &self,
+        output: Ty<'tcx>,
+        generic_args: ty::GenericArgsRef<'tcx>,
+        args: &[ExprId],
+    ) -> Option<Ty<'tcx>> {
+        let cells = |ty: Ty<'tcx>| ty.walk().filter_map(|part| part.as_type()).filter(|&t| self.is_cell(t));
+        let given: Vec<_> = args
+            .iter()
+            .map(|&a| self.thir[a].ty)
+            .chain(generic_args.types())
+            .flat_map(cells)
+            .collect();
+        let mut made = cells(output).chain(self.iterator_item(output).into_iter().flat_map(cells));
+        made.find(|t| !given.contains(t))
+    }
+
+    /// Is `e` a std call whose `&mut`s are the items (`makes_items`)? A
+    /// pattern matching it may take them apart, each binding the item.
+    pub(super) fn item_subject(&mut self, e: ExprId) -> bool {
+        let ExprKind::Call { fun, ref args, .. } = self.thir[self.strip(e)].kind else {
+            return false;
+        };
+        let ty::FnDef(def_id, generic_args) = *self.thir[self.strip(fun)].ty.kind() else {
+            return false;
+        };
+        let (def_id, generic_args) = self
+            .resolve_into(def_id, generic_args)
+            .unwrap_or((def_id, generic_args));
+        if self.is_rust_fn(def_id) || self.makes_items(self.thir[e].ty, generic_args, args).is_none() {
+            return false;
+        }
+        self.locals.item_calls.insert(fun);
+        true
+    }
+
     /// Can what `fn_id` returns hold the borrow its parameter `i` is given: does
     /// its return type name a lifetime that parameter's type does (ADR 0099)?
     fn result_borrows(&self, fn_id: DefId, i: usize) -> bool {
@@ -1211,6 +1320,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             match self.arg_form(def_id, i, arg) {
                 // What it returns can hold the borrow, `pick(&mut a, &mut b)`: a
                 // handle, since a box would be copied back before it's used.
+                // `bump(&mut 5)`: a box of it, and nothing to take back.
+                ArgForm::Boxed(place) if self.is_temporary(place) => {
+                    let value = self.expr(place, out)?;
+                    values.push(Expr::object(vec![Prop::Field("value".into(), value)]));
+                }
                 ArgForm::Boxed(place) if self.result_borrows(def_id, i) => {
                     let handle = Expr::handle(self.fixed_place(place, span, out)?);
                     values.push(handle);

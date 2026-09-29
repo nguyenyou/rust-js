@@ -168,7 +168,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => {
                 let name = self.fresh(if range { "i" } else { "item" });
-                self.destructure(f.pat, Expr::var(&name), true, &mut body)?;
+                self.destructure(f.pat, Expr::var(&name), true, false, &mut body)?;
                 js::Pattern::Name(name)
             }
         };

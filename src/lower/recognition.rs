@@ -8,6 +8,7 @@ use super::maps::{MapOp, Part};
 use super::numbers::NumOp;
 use super::representation::Num;
 use super::text::TextOp;
+use rustc_ast::Mutability;
 use rustc_hir::def::DefKind;
 use rustc_hir::{self as hir, LangItem, intravisit};
 use rustc_middle::mir::{BinOp, UnOp};
@@ -734,9 +735,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "last" if owner.is_slice() => Std::SliceLast,
             // `includes` compares strings and numbers by value, as `==` does,
             // but objects by identity: only for those.
+            // A `&mut` to one is a cell, an object (ADR 0099): not by identity.
             "contains"
                 if owner.is_slice()
-                    && self_ty.is_some_and(|t| self.is_string_like(t) || Num::of(t).is_some() || t.is_bool()) =>
+                    && self_ty.is_some_and(|t| {
+                        !t.walk().any(|part| {
+                            matches!(part.as_type().map(|p| *p.kind()), Some(ty::Ref(_, _, Mutability::Mut)))
+                        }) && (self.is_string_like(t) || Num::of(t).is_some() || t.is_bool())
+                    }) =>
             {
                 Std::Method("includes")
             }
@@ -1082,7 +1088,7 @@ pub(super) enum SkipPredicate {
 impl<'a, 'tcx> Recognition<'a, 'tcx> {
     /// `&mut Formatter<'_>`.
     fn is_formatter(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Ref(_, inner, rustc_ast::Mutability::Mut)
+        matches!(ty.kind(), ty::Ref(_, inner, Mutability::Mut)
             if self.is_std_adt(*inner, Symbol::intern("Formatter")))
     }
     pub(super) fn display_trait(&self) -> DefId {

@@ -202,6 +202,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         matches!(*ty.kind(), ty::Ref(_, inner, Mutability::Mut) if self.is_boxable(inner))
     }
 
+    /// A value of type `ty` seen through its references, as the code that
+    /// shows, compares or orders one reads it: a `&` is the value (ADR 0023),
+    /// a `&mut` to a value JS can't change in place a cell, whose `value` it
+    /// is (ADR 0099), or the place of a `Handle` on one.
+    pub(super) fn through_refs(&self, mut value: Expr, mut ty: Ty<'tcx>) -> (Expr, Ty<'tcx>) {
+        while let ty::Ref(_, inner, mutability) = *ty.kind() {
+            if mutability == Mutability::Mut && self.is_boxable(inner) {
+                value = match value.kind {
+                    js::ExprKind::Handle(place) => *place,
+                    _ => Expr::member(value, "value"),
+                };
+            }
+            ty = inner;
+        }
+        (value, ty)
+    }
+
+    /// Is one of the references `ty` is behind a `&mut` cell, so that its JS
+    /// value is an object, not what it points at (ADR 0099)?
+    pub(super) fn has_cell_layer(&self, mut ty: Ty<'tcx>) -> bool {
+        while let ty::Ref(_, inner, mutability) = *ty.kind() {
+            if mutability == Mutability::Mut && self.is_boxable(inner) {
+                return true;
+            }
+            ty = inner;
+        }
+        false
+    }
+
     /// Is `fn_id`'s parameter `i` a box: a `&mut` to a value JS can't change in
     /// place (ADR 0074), or to a type parameter (ADR 0099)?
     pub(super) fn param_is_box(&self, fn_id: DefId, i: usize) -> bool {

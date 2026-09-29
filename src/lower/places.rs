@@ -169,6 +169,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `e` as a place, a variable and some of its fields, without reading it.
     /// Also says whether that variable is mutable.
+    /// Is `e` a temporary, a value that isn't in a place: `1` of `&mut 1`, or
+    /// `Some(3)` of `&mut Some(3)`? Rust gives one a home as long as a
+    /// reference to it lives, and so does rust-js (ADR 0099).
+    pub(super) fn is_temporary(&self, e: ExprId) -> bool {
+        !matches!(
+            self.thir[self.strip(e)].kind,
+            ExprKind::VarRef { .. }
+                | ExprKind::UpvarRef { .. }
+                | ExprKind::Field { .. }
+                | ExprKind::Index { .. }
+                | ExprKind::Deref { .. }
+                | ExprKind::StaticRef { .. }
+        ) && self.place(e).is_none()
+            && self.element(e).is_none()
+    }
+
     /// Is `e`'s JS value a cell, a box or a handle (ADR 0099)? A `&mut` to a
     /// value JS can't change in place, as rust-js makes one: a variable
     /// holding one, a field or an item keeping one, what a reference to one
@@ -229,6 +245,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     && self.locals.boxes.contains(&id) =>
             {
                 let (cell, _) = self.place(arg)?;
+                // A handle on a place, as a binding of a matched `&mut x` is: `x`.
+                if let js::ExprKind::Handle(place) = cell.kind {
+                    return Some((*place, true));
+                }
                 Some((Expr::member(cell, "value"), true))
             }
             // `*self.0` of a cell kept in a field, an item or behind a reference
@@ -322,11 +342,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js::ExprKind::Var(name) = &place.kind else {
             return false;
         };
-        self.locals
-            .vars
-            .values()
-            .chain(self.captures.values())
-            .any(|v| v.mutable && matches!(&v.place.kind, js::ExprKind::Var(n) if n == name))
+        self.locals.temporaries.contains(name)
+            || self
+                .locals
+                .vars
+                .values()
+                .chain(self.captures.values())
+                .any(|v| v.mutable && matches!(&v.place.kind, js::ExprKind::Var(n) if n == name))
     }
 
     /// What a `&mut` in a variable names (ADR 0099), fixed where it's
@@ -641,10 +663,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A `&mut` in a variable is its place (ADR 0099). Read as a value,
         // `generic(y)`, it would be the place's value, not a `&mut`.
         if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } = self.thir[self.strip(e)].kind
-            && self.locals.aliases.contains(&id)
+            && (self.locals.aliases.contains(&id) || self.is_cell(ty))
+            && !self.locals.boxes.contains(&id)
             && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
         {
-            // A `&mut` to a number kept, `S { r: y }`: a handle on its place.
+            // A `&mut` to a number that a variable names the place of, a `let
+            // y = &mut x` or a `ref mut` binding, as a value: a handle on it.
+            // Not a std call's item, whose binding is a copy.
+            if self.locals.items.contains(&id) {
+                return Err(self.unsupported(self.thir[e].span, &format!("a `{ty}` from a std call used as a value")));
+            }
             if self.is_cell(ty) {
                 return Ok(Expr::handle(self.locals.vars[&id].place.clone()));
             }

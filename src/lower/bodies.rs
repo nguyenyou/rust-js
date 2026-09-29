@@ -187,7 +187,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
                     _ => {
                         let name = self.fresh("param");
-                        self.destructure(pat, Expr::var(&name), true, out)?;
+                        self.destructure(pat, Expr::var(&name), true, false, out)?;
                         name
                     }
                 },

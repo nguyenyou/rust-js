@@ -166,6 +166,16 @@ struct Locals {
     /// Variables bound once to a `&mut` of a value that isn't an object:
     /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
     aliases: HashSet<LocalVarId>,
+    /// The `let`s a temporary a `&mut` is to has as its home, `&mut Some(3)`
+    /// matched: places its `ref mut` bindings write (ADR 0099).
+    temporaries: HashSet<String>,
+    /// The std calls a pattern matches whose `&mut`s to values JS can't
+    /// change in place are the items, `m.get_mut(&k)`'s: bound, each is
+    /// the item, not a cell (ADR 0099).
+    item_calls: HashSet<ExprId>,
+    /// Their bindings: `*v` reads the item, but `v` has no place to give
+    /// as a `&mut`, which would write the binding's copy (ADR 0099).
+    items: HashSet<LocalVarId>,
 }
 
 /// A variable bound by a pattern, and the place in the subject it matched.
@@ -650,6 +660,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | ExprKind::StaticRef { .. } => self.read(e, out),
             // A shared reference is the value it points to (ADR 0023): JS
             // shares objects anyway, and nothing can change through it.
+            // `&y` of a `&mut` to a number that `y` names the place of: as `y`
+            // is, a handle on it (ADR 0099). Also `&*&y`, how `contains(&y)`
+            // is reborrowed.
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Shared,
+                arg,
+            } if self.is_cell(self.thir[arg].ty)
+                && self.thir[self.strip_refs(arg)].ty == self.thir[arg].ty
+                && matches!(self.thir[self.strip_refs(arg)].kind, ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.locals.boxes.contains(&id)) =>
+            {
+                self.read(self.strip_refs(arg), out)
+            }
             ExprKind::Borrow {
                 borrow_kind: BorrowKind::Shared,
                 arg,
@@ -701,6 +723,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             } if self.is_boxable(self.thir[arg].ty) => {
                 // `&mut *&mut v[0]`, a reborrow: of `v[0]`.
                 let place = self.mut_borrowed(e).unwrap_or(arg);
+                // `&mut 42`: a box of it, which nothing else sees.
+                if self.is_temporary(place) {
+                    let value = self.expr(place, out)?;
+                    return Ok(Expr::object(vec![Prop::Field("value".into(), value)]));
+                }
                 Ok(Expr::handle(self.fixed_place(place, self.thir[place].span, out)?))
             }
             ExprKind::Borrow { arg, .. } => {
@@ -890,7 +917,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let v = self.expr(source, out)?;
                 self.cast(v, self.thir[source].ty, ty, span)
             }
-            ExprKind::Call { fun, ref args, .. } => self.call(fun, args, false, span, out),
+            ExprKind::Call {
+                fun,
+                ref args,
+                from_hir_call,
+                ..
+            } => {
+                // An operator's, `v[i]`'s `*index_mut(&mut v, i)`: its `&mut` is the
+                // item, read or written where it is and never kept (ADR 0099).
+                if !from_hir_call {
+                    self.locals.item_calls.insert(fun);
+                }
+                self.call(fun, args, false, span, out)
+            }
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.body_query().as_await(e) => {
                 Ok(Expr::await_(self.expr(awaited, out)?))

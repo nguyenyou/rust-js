@@ -78,7 +78,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         (width, precision): (Option<Expr>, Option<Expr>),
         span: Span,
     ) -> R<Expr> {
-        let ty = ty.peel_refs();
+        let (value, ty) = self.through_refs(value, ty);
         let num = Num::of(ty);
         if spec.debug_hex {
             return Err(self.unsupported(span, "`{:x?}`"));

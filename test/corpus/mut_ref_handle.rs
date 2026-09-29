@@ -35,6 +35,8 @@ fn main() {
     let p = Pair { left: &mut n, right: &mut s };
     *p.left += 10;
     p.right.push('b');
+    // Formatted, a `&mut` kept shows what it points at.
+    println!("{} {:?}", p.left, p.right);
     println!("{n} {s}");
 
     let (mut a, mut b) = (1, 2);
@@ -49,6 +51,7 @@ fn main() {
     *cur += 1;
     cur = &mut y;
     *cur += 5;
+    println!("{cur}");
     println!("{x} {y}");
 
     let mut m = 3;

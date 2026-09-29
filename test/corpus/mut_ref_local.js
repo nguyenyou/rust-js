@@ -11,6 +11,15 @@ function main() {
   x = 5;
   x = (x + 2) | 0;
   console.log(`${x}`);
+  const arg = {
+    get value() {
+      return x;
+    },
+    set value(value) {
+      x = value;
+    },
+  };
+  console.log(`${arg.value} ${arg.value}`);
   const n = { value: x };
   bump(n);
   x = n.value;

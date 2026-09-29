@@ -230,9 +230,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .try_into()
                     .ok()
                     .expect("an iterator and a value");
-                let item = self.thir[args[1]].ty.peel_refs();
+                let item = self.thir[args[1]].ty;
                 if !self.eq_is_identity(item) {
-                    return Err(self.unsupported(span, &format!("`next_if_eq` of `{item}`s")));
+                    return Err(self.unsupported(span, &format!("`next_if_eq` of `{}`s", item.peel_refs())));
                 }
                 let x = if x.reads_same() {
                     x
@@ -578,8 +578,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let item = self
                     .slice_item(subject_ty)
                     .ok_or_else(|| self.unsupported(span, "`binary_search` of this"))?;
-                // What `<` orders as `Ord` does: integers, `char`s, strings.
-                let ordered = (Num::of(item).is_some_and(|n| n != Num::F64))
+                // What `<` orders as `Ord` does: integers, `char`s, strings. Not
+                // a `&mut` to one, a cell (ADR 0099).
+                let ordered = !self.has_cell_layer(item) && (Num::of(item).is_some_and(|n| n != Num::F64))
                     || item.is_char()
                     || item.is_bool()
                     || self.is_string_like(item);
@@ -648,6 +649,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// Is `==` on `ty` JS's `===`?
     fn eq_is_identity(&self, ty: Ty<'tcx>) -> bool {
+        // A `&mut` to one is a cell, an object (ADR 0099): not by identity.
+        if self.has_cell_layer(ty) {
+            return false;
+        }
         let ty = ty.peel_refs();
         self.is_string_like(ty)
             || Num::of(ty).is_some_and(|n| n != Num::F64)

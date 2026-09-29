@@ -2,7 +2,7 @@
 
 Status: Accepted in part: a `&mut` in a variable, the index loop, a
 generic `&mut T` given as a parameter, a `&mut` to a closure, and handles
-of a `&mut` to a value JS can't change in place. A generic `&mut T`
+of a `&mut` to a value JS can't change in place, and to a temporary. A generic `&mut T`
 returned or kept, and a handle to an object replaced whole, are to come. Extends
 [0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
@@ -90,6 +90,24 @@ returned. It reads and writes its place:
 - Of an object, a handle's `value` is the object, and changes through it
   are the object's; only a `&mut` to an object that's kept, and replaced
   whole through, needs one.
+- **A cell compared, matched or shown is what it points at:** `p == q`,
+  `p < q`, `{p}`, `{v:?}` of a `Vec<&mut i32>`, its `sort` and its
+  `contains` are of the numbers. JS's `===` and `<` of two cells would
+  compare the objects, and `${p}` show `[object Object]`.
+- **A std call's own `&mut` is the item itself, not a cell:**
+  `m.get_mut(&k)`'s, `iter_mut()`'s items'. std's JS gives the value,
+  not a place. A pattern matching the call takes it apart, `Some(v) => *v
+  + 1` reading the item; kept, passed on or given to a closure, it's an
+  error, and so is `v` as a value, which would be a handle on the
+  binding's copy. A `&mut` a std call only passes on, `refs.pop()` of a
+  `Vec<&mut i32>` or `o.unwrap()`, is still the crate's cell: one its
+  arguments or its type's parameters hold.
+
+**A `&mut` to a temporary is to a `let` of its own:** `&mut 3`, `&mut
+f()`, `let r = &mut 0;`. The temporary is `let tmp = 3;`, and the `&mut`
+names it, as rule 1's does, or is a handle on it where it's kept. Given
+to a function, it's a box, `{ value: 3 }`, not copied back: nothing else
+can see it.
 
 **A generic `&mut T` is a box or a handle whatever `T` is.** A generic
 function is compiled once, and its `T` might be a number, so `*r` is
@@ -197,6 +215,34 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   compiled and gave another answer, `issue-25515.rs`, had an `Rc<dyn Send>`
   of a value with a destructor that never ran, which is refused now, as
   `Box<dyn>` of one is.
+- **A cell is what it points at wherever it's compared or shown**
+  (`mut_ref_compare`): a variable's place, a box, a handle and a
+  temporary's box, alone and in a `Vec`, an `Option` and a struct.
+  Formatting, `==`, `Ord`, `sort`, `max` and `contains` look through
+  each `&mut` that's a cell, and the fast paths, JS's `===`, `<` and
+  `includes`, aren't taken with one. `&y` of a `let y = &mut x` is a
+  handle on `x`, as `y` is, and so is `contains(&y)`, which Rust
+  reborrows as `&*&y`. `match r { v => *v += 1 }` keeps the cell, and a
+  `&v` pattern looks through it. `dedup` and `binary_search` of cells are
+  errors for now. Found in review of the handles: each compared or showed
+  the cell itself, and gave another answer than Rust's, with no error.
+- **A std call's `&mut` is its item** (`mut_ref_std_items`, and the
+  diagnostics test): found by rustc's `nll/process_or_insert_default.rs`,
+  which passed before the handles and gave another answer after, its
+  `Some(value)` of `map.get_mut(&key)` read as `value.value`. The handles
+  had also let `get_mut` kept or passed on, `iter_mut().next()`,
+  `for_each`, `collect()` and `values_mut()` compile, each reading the
+  numbers as cells; these are errors again. An operator's call, `v[i]`'s
+  `*index_mut(&mut v, i)`, which THIR marks as not the source's, gives
+  its item where it's read or written, as before.
+- **A `&mut` to a temporary is a `let` of its own** (`mut_ref_temporary`):
+  `&mut 3` in a variable, a pattern's subject, kept, and given to a
+  function, which gets a box it doesn't give back. `f::<isize>(&mut
+  None)` of rustc's `regions-lifetime-static-items-enclosing-scopes.rs`
+  then compiled, and showed `assert_eq!(*o, None)` of a box comparing the
+  box: a tuple's parts, `assert_eq!`'s and `match (a, b)`'s, looked
+  through `&*o` to `o`. They look through the `&` only now
+  (`mut_ref_box_parts`).
 - **A `&mut` to a closure is the closure** (`closure_mut_ref`): of a type
   parameter bound by `FnMut`, an `impl FnMut`, a `dyn FnMut` and a function,
   `&mut square`. `f()` calls it, and `call(f)` passes it on. A `dyn FnMut`
@@ -206,10 +252,8 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
 - **A `&mut` to an object in a variable is still the object** (ADR 0025),
   and `*r = v` of one still an error: replacing an object whole through a
   `&mut` comes with handles.
-- **Anything else stays an error:** a `&mut` kept in a struct, a `Vec` or
-  an `Option`, chosen by a branch, passed to a generic function or
-  returned. The diagnostics test checks a struct's, a branch's and a
-  generic function's.
+- **Anything else stays an error:** a generic `&mut T` returned or kept,
+  a handle to an object replaced whole, and `&mut dyn Trait`.
 - Most of the 37 tests of `&mut` to a value that isn't an object need the
   first two rules only, and those come first; handles, generic `&mut T`
   and closures follow, each with its corpus cases and mutations.

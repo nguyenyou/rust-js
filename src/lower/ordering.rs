@@ -34,6 +34,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Does JS's `<` order `ty` as Rust does? Numbers, strings, `char`s,
     /// `bool`s (`false < true`), and `Ordering`s, which are numbers.
     pub(super) fn is_primitive_ord(&self, ty: Ty<'tcx>) -> bool {
+        // A `&mut` to a number is a cell, an object (ADR 0099).
+        if self.has_cell_layer(ty) {
+            return false;
+        }
         let ty = ty.peel_refs();
         Num::of(ty).is_some() || self.is_string_like(ty) || ty.is_bool() || self.is_lang_adt(ty, LangItem::OrderingEnum)
     }
@@ -58,7 +62,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        let ty = ty.peel_refs();
+        let (a, _) = self.through_refs(a, ty);
+        let (b, ty) = self.through_refs(b, ty);
         // `f64`'s `NaN` isn't ordered at all.
         if partial && Num::of(ty) == Some(Num::F64) {
             self.runtime.insert(Helper::PartialCmp);

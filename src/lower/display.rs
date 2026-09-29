@@ -204,7 +204,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `{}` of a `ty` value: the string itself, `String(x)`, `$displayF64(x)`,
     /// a hand-written `fmt`'s string, or `TDisplay.fmt(x)` in generic code.
     pub(super) fn display_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        let ty = ty.peel_refs();
+        let (value, ty) = self.through_refs(value, ty);
         // `Box`, `Rc` and a `RefCell`'s `borrow()` show what they hold, as
         // they are it in JS.
         let ty = match ty.kind() {
@@ -273,7 +273,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `(1, "a")`, `[1.0, 2.5]`, a call of a `Debug` impl of the crate's own,
     /// derived or not, or `TDebug.fmt(x)` in generic code.
     pub(super) fn debug_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        let ty = ty.peel_refs();
+        let (value, ty) = self.through_refs(value, ty);
         // serde_json's own, `Object {"a": Number(1)}` (ADR 0083).
         if let Some(shown) = self.json_value_debug(value.clone(), ty) {
             return Ok(shown);

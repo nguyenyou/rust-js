@@ -283,18 +283,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let in_order = self.in_order(&f, span);
         let shown = self.shown(&f, span).unwrap_or_default();
         let mut values = self.operands(&f.values, out)?;
-        // `{}` of a box parameter (ADR 0072): what's in it.
-        for (value, &e) in values.iter_mut().zip(&f.values) {
-            let e = match self.thir[self.strip(e)].kind {
-                ExprKind::Borrow { arg, .. } => self.strip(arg),
-                _ => self.strip(e),
-            };
-            if let ExprKind::VarRef { id } = self.thir[e].kind
-                && self.locals.boxes.contains(&id)
-            {
-                *value = Expr::member(std::mem::replace(value, Expr::undefined()), "value");
-            }
-        }
         let effects = values.iter().any(Expr::has_effects);
         let named: Vec<bool> = (0..values.len())
             .map(|i| {

@@ -445,6 +445,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Is `==` on `ty` JS's `===`: strings, numbers, `bool`s, `()` and
     /// fieldless enums, all JS primitives?
     fn is_primitive_eq(&self, ty: Ty<'tcx>) -> bool {
+        // A `&mut` to a number is a cell, an object (ADR 0099).
+        if self.has_cell_layer(ty) {
+            return false;
+        }
         let ty = ty.peel_refs();
         self.is_string_like(ty)
             || Num::of(ty).is_some()
@@ -485,7 +489,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `$eq(a, b)` for what compares field by field. A derived `==` of a
     /// type with a custom part compares its parts one by one.
     pub(super) fn eq_value(&mut self, a: Expr, b: Expr, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
-        let ty = ty.peel_refs();
+        let (a, _) = self.through_refs(a, ty);
+        let (b, ty) = self.through_refs(b, ty);
         if self.is_primitive_eq(ty) {
             return Ok(Expr::bin(Op::Eq, a, b));
         }

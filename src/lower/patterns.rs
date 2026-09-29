@@ -1,8 +1,8 @@
 //! Bindings, destructuring and match/let-chain evaluation regions.
 
 use super::{
-    Binding, Dest, Evaluation, FnCx, Num, R, Shape, Var, bindings, const_js, drops, fresh_in, ordering_value,
-    std_impls, variant_field, without_refs,
+    Binding, Dest, Evaluation, FnCx, Num, R, Shape, Var, bindings, camel_case, const_js, drops, fresh_in,
+    ordering_value, std_impls, variant_field, without_refs,
 };
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
@@ -26,6 +26,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let parts: Vec<_> = subpatterns
             .iter()
             .map(|field| match without_refs(&field.pattern).kind {
+                // A cell, a `&mut` to a number, is taken apart as a cell (ADR 0099).
+                _ if self.is_cell(field.pattern.ty) => None,
                 PatKind::Wild => Some((field.field.as_usize(), None)),
                 PatKind::Binding {
                     name,
@@ -197,6 +199,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `let y = &mut x;`: `y` names `x`, so `*y = 5` is `x = 5` (ADR 0099).
         // While `y` lives, Rust lets nothing else use `x`.
         if let PatKind::Binding {
+            name,
             var,
             mode: BindingMode(ByRef::No, Mutability::Not),
             subpattern: None,
@@ -214,6 +217,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             let place = match moved {
                 Some(id) => self.locals.vars[&id].place.clone(),
+                // `let x = &mut 1;`: `let x = 1;`, which `x` names.
+                None if self.is_temporary(borrowed) => {
+                    let value = self.expr(borrowed, out)?;
+                    let home = self.fresh(&camel_case(name.as_str()));
+                    out.push(StmtKind::Let(home.clone(), Some(value)).at(self.js_span(span)));
+                    Expr::var(&home)
+                }
                 None => self.fixed_place(borrowed, pat.span, out)?,
             };
             self.locals.aliases.insert(var);
@@ -333,23 +343,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         return Ok(());
                     }
                     let subject = self.spill("tmp", value, out);
-                    return self.destructure(pat, subject, true, out);
+                    return self.destructure(pat, subject, true, false, out);
                 }
+                let items = self.item_subject(init);
                 let (subject, stable) = self.subject(init, "tmp", out)?;
                 // What it binds by value is moved out of `init` (ADR 0098).
                 self.clear_parts(init, pat, out);
-                self.destructure(pat, subject, stable, out)
+                self.destructure(pat, subject, stable, items, out)
             }
         }
     }
 
     /// Bind the variables of an irrefutable pattern to the parts of `subject`.
-    pub(super) fn destructure(&mut self, pat: &Pat<'tcx>, subject: Expr, stable: bool, out: &mut Vec<Stmt>) -> R<()> {
+    pub(super) fn destructure(
+        &mut self,
+        pat: &Pat<'tcx>,
+        subject: Expr,
+        stable: bool,
+        items: bool,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
         let mut bindings = Vec::new();
         if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {
             return Err(self.unsupported(pat.span, "this refutable pattern"));
         }
-        self.bind_all(bindings, stable, self.js_span(pat.span), out)
+        self.bind_all(bindings, stable, items, self.js_span(pat.span), out)
     }
 
     /// Where a `match` or `let` finds the value it takes apart, and whether
@@ -360,8 +378,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// the array. Anything else is computed once into a `const` named `base`,
     /// which is stable: no Rust variable can move or change it.
     pub(super) fn subject(&mut self, e: ExprId, base: &str, out: &mut Vec<Stmt>) -> R<(Expr, bool)> {
+        // A `&mut` in a variable, which names its place (ADR 0099): a handle on
+        // it, as every `&mut` to a value JS can't change in place is matched.
+        if self.is_cell(self.thir[e].ty) && !self.is_cell_value(e) && self.place(e).is_some() {
+            return Ok((self.read(e, out)?, false));
+        }
         if let Some(place) = self.stable_place(e) {
             return Ok((place, true));
+        }
+        // `&mut x`: the place, which its `ref mut` bindings name, as a `&x`
+        // one is; of a temporary, `&mut Some(3)`, a `let` of it (ADR 0099).
+        // Of a value JS can't change in place, the `&mut` is a handle on the
+        // place, which a `&mut` pattern takes apart as the place itself and a
+        // binding of the `&mut` binds.
+        if let ExprKind::Borrow {
+            borrow_kind: BorrowKind::Mut { .. },
+            arg,
+        } = self.thir[self.strip(e)].kind
+        {
+            let cell = |place: Expr, this: &Self| {
+                if this.is_boxable(this.thir[arg].ty) {
+                    Expr::handle(place)
+                } else {
+                    place
+                }
+            };
+            if let Some((place, _)) = self.place(arg) {
+                return Ok((cell(place, self), false));
+            }
+            if self.is_temporary(arg) {
+                let value = self.expr(arg, out)?;
+                let name = self.fresh(base);
+                out.push(StmtKind::Let(name.clone(), Some(value)).at(self.js_span(self.thir[e].span)));
+                self.locals.temporaries.insert(name.clone());
+                return Ok((cell(Expr::var(&name), self), false));
+            }
         }
         // `&x`: a reference is the value (ADR 0023), and a borrowed `x` stays put.
         if let ExprKind::Borrow {
@@ -400,8 +451,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     ) -> R<Expr> {
         let mut parts = Vec::new();
         for &f in fields {
-            // `format_args!`'s parts are references: `&a` is `a`.
-            let part = match self.stable_place(self.strip_refs(f)) {
+            // `format_args!`'s parts are references: `&a` is `a`. Not `&*o` of a
+            // box, which is its `value` (ADR 0074).
+            let referent = match self.thir[self.strip(f)].kind {
+                ExprKind::Borrow { arg, .. } => arg,
+                _ => f,
+            };
+            let part = match self.stable_place(referent) {
                 Some(place) => place,
                 None => {
                     let value = self.expr(f, out)?;
@@ -425,11 +481,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Give a pattern's variables their JS meaning. Immutable ones bound into
     /// a stable subject just name the place they matched, as ReScript does:
     /// `P { x, y } => x + y` becomes `p.x + p.y`. The rest get a variable
-    /// holding their own value.
+    /// holding their own value. Of `items`, a std call's (`item_subject`),
+    /// a `&mut` is the item, not a cell (ADR 0099).
     pub(super) fn bind_all(
         &mut self,
         bindings: Vec<Binding<'tcx>>,
         stable: bool,
+        items: bool,
         span: js::Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
@@ -440,7 +498,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for b in bindings {
             // `Some(r)` of an `Option<&mut i32>`: `r` is a cell (ADR 0099).
             if !b.by_ref_mut && self.is_cell(b.ty) {
-                self.locals.boxes.insert(b.var);
+                if items {
+                    self.locals.items.insert(b.var);
+                } else {
+                    self.locals.boxes.insert(b.var);
+                }
             }
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
             // A `ref mut` one always does: `*r = x` writes the place it names.
@@ -489,6 +551,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // Evaluate the scrutinee once, unless it's a place that can be
         // tested where it is.
+        let items = self.item_subject(scrutinee);
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
 
         // Each arm: its test, a guard's statements and test when it needs
@@ -538,7 +601,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut body = Vec::new();
             let mark = self.owned_mark();
             self.clear_parts(scrutinee, &arm.pattern, &mut body);
-            self.bind_all(bindings, stable, pat_span, &mut body)?;
+            self.bind_all(bindings, stable, items, pat_span, &mut body)?;
             // Rust checked the match is exhaustive, so if we reach the last
             // unguarded arm, it matches. No need to test it.
             if i == arms.len() - 1 && arm.guard.is_none() {
@@ -722,10 +785,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             },
             _ => "value".to_string(),
         };
+        let items = self.item_subject(scrutinee);
         let (subject, stable) = self.subject(scrutinee, &base, out)?;
         let mut bindings = Vec::new();
         let test = self.pattern_test(pat, &subject, &mut bindings)?;
-        self.bind_all(bindings, stable, self.js_span(pat.span), then_out)?;
+        self.bind_all(bindings, stable, items, self.js_span(pat.span), then_out)?;
         Ok(test.unwrap_or_else(|| Expr::bool(true)))
     }
 
@@ -799,6 +863,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Ok(None);
         }
+        let items = self.item_subject(scrutinee);
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
         let mut bindings = Vec::new();
         let test = self.pattern_test(&self.thir[first].pattern, &subject, &mut bindings)?;
@@ -806,7 +871,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(self.thir[first].pattern.span, "this binding in `matches!`"));
         }
         let span = self.js_span(self.thir[first].span);
-        self.bind_all(bindings, stable, span, out)?;
+        self.bind_all(bindings, stable, items, span, out)?;
         let guard = match self.thir[first].guard {
             Some(guard) if self.is_simple(guard) => Some(self.evaluated(guard)?),
             Some(guard) => return Err(self.unsupported(self.thir[guard].span, "this guard")),
@@ -972,6 +1037,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
             }
             // Matching through a reference: the reference is the value (ADR 0023).
+            // `&mut 3` of a cell, a box or a handle: what it points at (ADR 0099).
+            PatKind::Deref { subpattern, .. } if self.is_cell(pat.ty) => {
+                let pointee = match &subject.kind {
+                    js::ExprKind::Handle(place) => (**place).clone(),
+                    _ => Expr::member(subject.clone(), "value"),
+                };
+                self.pattern_test(subpattern, &pointee, bindings)
+            }
             PatKind::Deref { subpattern, .. } => self.pattern_test(subpattern, subject, bindings),
             // A struct or tuple: every field must match.
             PatKind::Leaf { subpatterns } => {
