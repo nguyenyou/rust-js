@@ -8,7 +8,7 @@ import {
   PreopenDirectory,
   WASI,
 } from "@bjorn3/browser_wasi_shim";
-import { $rsplitOnce, $stripSuffix, $try } from "@rust-js/runtime";
+import { $extend, $rsplitOnce, $stripSuffix, $try } from "@rust-js/runtime";
 
 export function ms(t) {
   return `${t.toFixed(0)} ms`;
@@ -25,7 +25,7 @@ export async function load(stat) {
   const webapiCrate = loadBindingCrate("webapi", start, stat);
   const jsCrate = loadBindingCrate("js", start, stat);
   const reactCrate = loadBindingCrate("react", start, stat);
-  const runtime = loadRuntime(start, stat);
+  const modules = loadModules(start, stat);
   const examples = loadExamples();
   const loaded = {
     module: await module,
@@ -33,7 +33,7 @@ export async function load(stat) {
     webapiCrate: await webapiCrate,
     jsCrate: await jsCrate,
     reactCrate: await reactCrate,
-    runtime: await runtime,
+    modules: await modules,
     examples: await examples,
   };
   stat("ready after", ms(performance.now() - start));
@@ -72,10 +72,13 @@ async function loadSysrootFile(name) {
   return [name, new File(bytes, { readonly: true })];
 }
 
-async function loadRuntime(start, stat) {
-  const text = await (await window.fetch("./runtime.js")).text();
-  stat("download runtime", ms(performance.now() - start));
-  return text;
+async function loadModules(start, stat) {
+  const runtime = (await window.fetch("./runtime.js")).text();
+  const react = (await window.fetch("./react.json")).json();
+  let modules = [["@rust-js/runtime", await runtime]];
+  $extend(modules, Array.from(Object.entries(await react)));
+  stat("download runtime and React", ms(performance.now() - start));
+  return modules;
 }
 
 async function loadBindingCrate(name, start, stat) {

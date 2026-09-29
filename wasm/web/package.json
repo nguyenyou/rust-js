@@ -16,7 +16,8 @@
     "@rust-js/runtime": "workspace:*",
     "codemirror": "6.0.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "sucrase": "3"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

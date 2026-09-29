@@ -34,6 +34,26 @@ unsafe extern "Rust" {
     safe fn matches_of(matches: &JsObject) -> Vec<(String, String)>;
 }
 
+/// Sucrase's options: JSX as `react/jsx-runtime`'s calls, as a bundler writes it.
+pub struct TransformOptions {
+    pub transforms: Vec<&'static str>,
+    #[rust_js::name = "jsxRuntime"]
+    pub jsx_runtime: &'static str,
+    pub production: bool,
+}
+
+pub struct Transformed {
+    pub code: String,
+}
+
+/// [Sucrase](https://github.com/alangpierce/sucrase): the JSX rust-js writes,
+/// as the JS the frame can run, which has no bundler.
+#[rust_js::link_name = "sucrase#transform"]
+#[allow(unused_variables)]
+fn transform(code: &str, options: TransformOptions) -> Transformed {
+    unreachable!()
+}
+
 /// A program to run in the Result frame: its page, and which run it is, so a
 /// report from an older one is ignored.
 pub struct Program {
@@ -70,13 +90,8 @@ pub enum Prepared {
     Nothing,
     /// It imports JS the playground can't load: these specifiers.
     Blocked(Vec<String>),
-    /// The output needs a JSX transform and React runtime before it can run.
-    Jsx,
     Page(String),
 }
-
-/// What the programs import of the playground's own: `@rust-js/runtime`.
-const RUNTIME: &str = "@rust-js/runtime";
 
 /// `from`'s directory joined with a relative specifier like `../lib.js`. A
 /// package's, `@rust-js/runtime`, is itself.
@@ -100,7 +115,7 @@ pub fn resolve(from: &str, specifier: &str) -> String {
 /// embedding URLs recursively, so cycles work. The browser owns module
 /// evaluation, named imports and live bindings; no identifier rewriting.
 pub fn link(files: &[(String, String)]) -> String {
-    let imports = reg_exp::new(r#"^import ([^;]+?) from "([^"]+)";$"#, "gm");
+    let imports = reg_exp::new(r#"^import ([^;]+?) from "([^"]+)";"#, "gm");
     let source_map = reg_exp::new(r"^//# sourceMappingURL=.*$", "m");
     let mut entries = Vec::new();
     for (path, code) in files.iter().cloned() {
@@ -169,10 +184,25 @@ const FRAME_HEAD: &str = r#"<!doctype html>
 
 /// The page that runs the root module's `main()`, or with `test`, the
 /// crate's tests, and reports as run number `run`.
-pub fn prepare(files: &JsMap, runtime: &str, root_file: &str, test: bool, run: u32) -> Prepared {
-    // The program's modules, and the runtime they import, as one of them.
-    let mut sources = text_entries(files);
-    sources.push((RUNTIME.to_string(), runtime.to_string()));
+pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, test: bool, run: u32) -> Prepared {
+    // The program's modules, its JSX as JS (Sucrase's), and what they import
+    // of the page's: the runtime, and React's.
+    let mut sources: Vec<(String, String)> = text_entries(files)
+        .into_iter()
+        .map(|(path, code)| match path.ends_with(".jsx") {
+            true => {
+                let options = TransformOptions {
+                    transforms: vec!["jsx"],
+                    jsx_runtime: "automatic",
+                    production: true,
+                };
+                let code = transform(&code, options).code;
+                (path, code)
+            }
+            false => (path, code),
+        })
+        .collect();
+    sources.extend(modules.iter().cloned());
     let tests = match root_file.strip_suffix(".jsx").or_else(|| root_file.strip_suffix(".js")) {
         Some(stem) => format!("{stem}.test.js"),
         None => root_file.to_string(),
@@ -189,12 +219,9 @@ pub fn prepare(files: &JsMap, runtime: &str, root_file: &str, test: bool, run: u
     if !runnable {
         return Prepared::Nothing;
     }
-    if sources.iter().any(|(path, _)| path.ends_with(".jsx")) {
-        return Prepared::Jsx;
-    }
     // Imports from JS modules (ADR 0028) name packages or files the page
     // doesn't have. A bundler would bring them in; the playground has none.
-    let imports = reg_exp::new(r#"^import (?:[^;]+? from )?"([^"]+)";$"#, "gm");
+    let imports = reg_exp::new(r#"^import (?:[^;]+? from )?"([^"]+)";"#, "gm");
     let mut external: Vec<String> = Vec::new();
     for (path, code) in &sources {
         for (_, specifier) in matches_of(match_all(code, imports)) {

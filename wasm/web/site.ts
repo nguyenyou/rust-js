@@ -72,6 +72,7 @@ export function examples(): Example[] {
   return [
     { name: "todo", title: "Todo list (DOM, Vec, RefCell)", root: "todo.rs", files: ["todo.rs"], dir: examplesDir },
     { name: "counter", title: "Counter (DOM, closures)", root: "counter.rs", files: ["counter.rs"], dir: examplesDir },
+    { name: "react_counter", title: "Counter (React, JSX)", root: "react_counter.rs", files: ["react_counter.rs"], dir: examplesDir },
     { name: "countdown", title: "Countdown (async, await)", root: "countdown.rs", files: ["countdown.rs"], dir: examplesDir },
     { name: "fetch", title: "Fetch (async, the network)", root: "fetch.rs", files: ["fetch.rs"], dir: examplesDir },
     { name: "modules", title: "Modules (a crate across files)", root: "lib.rs", files: modulesFiles, dir: modulesDir },
@@ -94,6 +95,35 @@ export function examplesManifest() {
   return examples().map(({ name, title, root, files }) => ({ name, title, root, files }));
 }
 
+/** The specifiers of React's a program imports, each a module of the bundle's. */
+const REACT = { react: "react", "react/jsx-runtime": "jsxRuntime", "react-dom/client": "reactDomClient" };
+
+/**
+ * React, for the Result frame to run a React program (ADR 0044): the React
+ * this page has installed, as one module, so there's one React, and a
+ * module for each specifier a program imports, of its names. By specifier:
+ * the page links each into the frame's import map, beside the program's.
+ */
+export async function reactModules(): Promise<Record<string, string>> {
+  const dir = join(import.meta.dir, "../../target/playground-react");
+  mkdirSync(dir, { recursive: true });
+  const require = createRequire(import.meta.path);
+  const entry = join(dir, "entry.js");
+  const lines = Object.entries(REACT).map(([specifier, name]) => `export * as ${name} from ${JSON.stringify(require.resolve(specifier))};`);
+  await Bun.write(entry, lines.join("\n") + "\n");
+  const built = await Bun.build({
+    entrypoints: [entry], target: "browser", format: "esm", minify: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+  });
+  if (!built.success) throw new Error(`React for the Result frame: ${built.logs.join("\n")}`);
+  const modules: Record<string, string> = { "react-bundle": await built.outputs[0].text() };
+  for (const [specifier, name] of Object.entries(REACT)) {
+    const names = Object.keys(await import(require.resolve(specifier))).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && n !== "default");
+    modules[specifier] = `import { ${name} as all } from "react-bundle";\nexport const { ${names.join(", ")} } = all;\nexport default all;\n`;
+  }
+  return modules;
+}
+
 /**
  * What the page fetches beside itself (ADR 0045): the compiler, the sysroot's
  * metadata, the webapi, js and react crates', and the examples. Served by Vite's dev server,
@@ -102,6 +132,7 @@ export function examplesManifest() {
  */
 export function playgroundFiles(): Plugin {
   const webapiCrate = join(import.meta.dir, "../../target/crates/libwebapi.rmeta");
+  let react: Record<string, string> = {};
   // The file at a path the page asks for, or the JSON to send.
   function served(path: string): { file: string } | { json: unknown } | undefined {
     const sysroot = sysrootFiles();
@@ -114,6 +145,7 @@ export function playgroundFiles(): Plugin {
     if (path === "/crates/libjs.rmeta") return { file: join(dirname(webapiCrate), "libjs.rmeta") };
     // What the programs it compiles import (ADR 0103).
     if (path === "/runtime.js") return { file: join(import.meta.dir, "../../runtime/index.js") };
+    if (path === "/react.json") return { json: react };
     if (path === "/examples.json") return { json: examplesManifest() };
     // Only files an example lists: never an arbitrary path.
     const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
@@ -123,15 +155,16 @@ export function playgroundFiles(): Plugin {
   }
   // Every path the build needs, for `generateBundle`.
   function all(): string[] {
-    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/runtime.js", "/examples.json"];
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/runtime.js", "/react.json", "/examples.json"];
     paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
     for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
     return paths;
   }
   return {
     name: "playground-files",
-    buildStart() {
+    async buildStart() {
       buildReactCrate(dirname(webapiCrate));
+      react = await reactModules();
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

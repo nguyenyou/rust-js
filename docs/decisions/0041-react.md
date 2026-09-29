@@ -170,7 +170,12 @@ own guides do, with nothing specific to rust-js:
   file, so Vite doesn't run that module again, and the context survives. A
   `memo` component keeps its state in its own module.
 - The rest of React's and React DOM's API, and React versions before the
-  latest, came with [0043](0043-react-versions.md). The playground can't run
-  React, since its Result frame has no module loader.
+  latest, came with [0043](0043-react-versions.md). The playground runs a
+  React program too, `examples/react_counter.rs`: its Result frame has no
+  bundler, so the page turns its JSX into `react/jsx-runtime`'s calls with
+  [Sucrase](https://github.com/alangpierce/sucrase), and links React, one
+  bundle of the React the page has installed, made as the site is built,
+  into the frame's import map beside the program's modules, as
+  `@rust-js/runtime` is (ADR 0103). The Output shows the JSX rust-js wrote.
 - The plugin compiles with the rust-js binary in this repository
   (`bun run build`). Publishing rust-js and the crates is a later step.

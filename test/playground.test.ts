@@ -123,8 +123,17 @@ pub fn App() -> Element { jsx! { <Tile text="Hello JSX" /> } }
     await status.filter({ hasText: "Compiled: 1 JS file." }).waitFor({ timeout: 60_000 });
     await page.locator(".cm-content[aria-label='Generated JavaScript']", { hasText: "Hello JSX" }).waitFor();
     expect(await page.locator("#output-files li").textContent()).toContain(".jsx");
-    await page.locator("#test").click();
-    await status.filter({ hasText: "Preview React with the Vite example." }).waitFor({ timeout: 60_000 });
+    // A React app runs in the Result frame: its JSX transformed there, and
+    // React's modules linked beside the program's.
+    await page.locator("#example").selectOption("react_counter");
+    await page.locator("#compile").click();
+    await status.filter({ hasText: "Compiled: 1 JS file." }).waitFor({ timeout: 60_000 });
+    const app = page.frameLocator("#result");
+    await app.locator("output", { hasText: "0" }).waitFor({ timeout: 60_000 });
+    await app.getByRole("button", { name: "+" }).click();
+    await app.getByRole("button", { name: "+" }).click();
+    await app.getByRole("button", { name: "−" }).click();
+    await app.locator("output", { hasText: "1" }).waitFor();
     // An unsaved edit, compiled with ⌘/Ctrl-Enter: rustc's errors, as text.
     await page.locator(".cm-content[aria-label='Rust source']").click();
     await page.keyboard.press("ControlOrMeta+a");

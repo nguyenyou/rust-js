@@ -85,15 +85,12 @@ export function App() {
     const view = source.current;
     return view != null ? view.state : undefined;
   };
-  const run = (files, runtime, rootJs, test) => {
+  const run = (files, modules, rootJs, test) => {
     const n = (runs.current + 1) >>> 0;
     runs.current = n;
-    const match = prepare(files, runtime, rootJs, test, n);
+    const match = prepare(files, modules, rootJs, test, n);
     if (match === "Nothing") {
       setProgram(undefined);
-    } else if (match === "Jsx") {
-      setProgram(undefined);
-      setStatus((s) => say(`${s.text} Preview React with the Vite example.`, "Plain"));
     } else if (match.TAG === "Blocked") {
       setProgram(undefined);
       const names = match._0.map((s) => `"${s}"`);
@@ -139,7 +136,7 @@ export function App() {
           const shown$1 = files.some((param) => param[0] === shown) ? shown : rootJs$1;
           setOutput({ TAG: "Files", files, shown: shown$1 });
           setStatus(say(`Compiled: ${count} JS file${count === 1 ? "" : "s"}.`, "Good"));
-          run(r.files, loaded$1.runtime, rootJs$1, test);
+          run(r.files, loaded$1.modules, rootJs$1, test);
         } else {
           setOutput({ TAG: "Diagnostics", _0: r.stderr });
           setProgram(undefined);

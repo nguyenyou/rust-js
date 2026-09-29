@@ -45,6 +45,11 @@ unsafe extern "Rust" {
     safe fn names_json(this: &Response) -> Promise<Vec<String>>;
     #[link_name = "json"]
     safe fn examples_json(this: &Response) -> Promise<Vec<Example>>;
+    #[link_name = "json"]
+    safe fn object_json(this: &Response) -> Promise<&'static JsObject>;
+    /// An object's fields, as `(name, text)`: `react.json`'s modules.
+    #[link_name = "Object.entries"]
+    safe fn text_fields(object: &JsObject) -> Vec<(String, String)>;
 
     // The rest of the WASI shim (@bjorn3/browser_wasi_shim), for `compile`.
     /// A file or a directory: what a directory's `Map` holds.
@@ -140,8 +145,9 @@ pub struct Loaded {
     pub webapi_crate: &'static WasiFile,
     pub js_crate: &'static WasiFile,
     pub react_crate: &'static WasiFile,
-    /// `@rust-js/runtime`, what the programs it compiles import (ADR 0103).
-    pub runtime: String,
+    /// What the programs it compiles import of the page's, by specifier:
+    /// `@rust-js/runtime` (ADR 0103), and React's modules.
+    pub modules: Vec<(String, String)>,
     pub examples: Vec<Example>,
 }
 
@@ -173,7 +179,7 @@ pub async fn load(stat: Stat) -> Loaded {
     let webapi_crate = load_binding_crate("webapi", start, stat.clone());
     let js_crate = load_binding_crate("js", start, stat.clone());
     let react_crate = load_binding_crate("react", start, stat.clone());
-    let runtime = load_runtime(start, stat.clone());
+    let modules = load_modules(start, stat.clone());
     let examples = load_examples();
     let loaded = Loaded {
         module: module.await,
@@ -181,7 +187,7 @@ pub async fn load(stat: Stat) -> Loaded {
         webapi_crate: webapi_crate.await,
         js_crate: js_crate.await,
         react_crate: react_crate.await,
-        runtime: runtime.await,
+        modules: modules.await,
         examples: examples.await,
     };
     stat("ready after".to_string(), ms(now() - start));
@@ -221,10 +227,14 @@ async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
     (name, new_file(bytes, &FileOptions { readonly: true }))
 }
 
-async fn load_runtime(start: f64, stat: Stat) -> String {
-    let text = response::text(window::fetch(window, "./runtime.js").await).await;
-    stat("download runtime".to_string(), ms(now() - start));
-    text
+/// `@rust-js/runtime`, and React's modules, for a React program (ADR 0044).
+async fn load_modules(start: f64, stat: Stat) -> Vec<(String, String)> {
+    let runtime = response::text(window::fetch(window, "./runtime.js").await);
+    let react = object_json(window::fetch(window, "./react.json").await);
+    let mut modules = vec![("@rust-js/runtime".to_string(), runtime.await)];
+    modules.extend(text_fields(react.await));
+    stat("download runtime and React".to_string(), ms(now() - start));
+    modules
 }
 
 async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {

@@ -72,6 +72,10 @@ vite.config.ts
 
 ## Consequences
 
+- A React program runs in the Result frame (ADR 0041): `site.ts` bundles
+  React for it as `react.json`, a module of the bundle and one for each of
+  `react`, `react/jsx-runtime` and `react-dom/client`, served beside the
+  crates, and the page transforms the program's JSX with Sucrase first.
 - Saving a file in `rust/` recompiles with `rust-js.wasm`. Once the crates
   are built, that's a second or two, slower than the native binary.
 - In development the page loads through Vite's module graph, as in the
