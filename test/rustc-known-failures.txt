@@ -120,7 +120,6 @@ async-await/for-await.rs	error: rust-js does not support calling `std::async_ite
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support values of type `&mut impl std::future::Future<Output = ()>` yet
 async-await/interior-with-const-generic-expr.rs	error: rust-js does not support const generics yet
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
-async-await/issues/issue-55809.rs	error: rust-js does not support `&mut` to a `()` yet
 auto-traits/auto-traits.rs	error: rust-js does not support implementation evidence for `<i32 as Auto>` yet
 autoref-autoderef/auto-ref-sliceable.rs	error: rust-js does not support generic trait parameters yet
 autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<std::boxed::Box<{closure@<case>/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>` yet
@@ -197,7 +196,6 @@ closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does n
 closures/2229_closure_analysis/migrations/insignificant_drop_attr_no_migrations.rs	error: rust-js does not support a closure that holds a value with a destructor yet
 closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 closures/2229_closure_analysis/migrations/precise_no_migrations.rs	error: rust-js does not support a closure that holds a value with a destructor yet
-closures/2229_closure_analysis/migrations/unpin_no_migration.rs	error: rust-js does not support values of type `&mut impl FnMut() -> bool` yet
 closures/2229_closure_analysis/run_pass/by_value.rs	error: rust-js does not support `Default` of `[SomeLargeType; 32]` yet
 closures/2229_closure_analysis/run_pass/issue-88372.rs	error: rust-js does not support this pattern yet
 closures/2229_closure_analysis/run_pass/mut_ref.rs	error: rust-js does not support values of type `&mut std::string::String` yet
@@ -825,9 +823,6 @@ overloaded/overloaded_deref_with_ref_pattern_issue15609.rs	error: rust-js does n
 overloaded/overloaded_deref_with_ref_pattern.rs	error: rust-js does not support `ref mut` bindings to this type yet
 overloaded/overloaded-autoderef-count.rs	error: rust-js does not support `&mut` to a `isize` yet
 overloaded/overloaded-autoderef-vtable.rs	error: rust-js does not support generic trait parameters yet
-overloaded/overloaded-calls-object-one-arg.rs	error: rust-js does not support `&mut` to a `{closure@<case>/overloaded-calls-object-one-arg.rs:11:22: 11:25}` yet
-overloaded/overloaded-calls-object-two-args.rs	error: rust-js does not support `&mut` to a `{closure@<case>/overloaded-calls-object-two-args.rs:11:22: 11:28}` yet
-overloaded/overloaded-calls-object-zero-args.rs	error: rust-js does not support `&mut` to a `{closure@<case>/overloaded-calls-object-zero-args.rs:11:22: 11:24}` yet
 overloaded/overloaded-calls-param-vtables.rs	error: rust-js does not support user implementations of this standard or external trait yet
 overloaded/overloaded-calls-simple.rs	error: rust-js does not support user implementations of this standard or external trait yet
 overloaded/overloaded-calls-zero-args.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -1133,11 +1128,7 @@ typeck/ufcs-type-params.rs	error: rust-js does not support generic trait paramet
 typeck/unify-return-ty.rs	error: rust-js does not support values of type `*const T` yet
 unboxed-closures/fn-traits-overloading-arity-18952.rs	error: rust-js does not support user implementations of this standard or external trait yet
 unboxed-closures/type-id-higher-rank.rs	error: rust-js does not support values of type `*const ()` yet
-unboxed-closures/unboxed-closures-blanket-fn-mut.rs	error: rust-js does not support values of type `&mut F` yet
-unboxed-closures/unboxed-closures-call-sugar-autoderef.rs	error: rust-js does not support values of type `&mut F` yet
 unboxed-closures/unboxed-closures-drop.rs	error: rust-js does not support a closure that holds a value with a destructor yet
-unboxed-closures/unboxed-closures-extern-fn-hr.rs	error: rust-js does not support values of type `&mut F` yet
-unboxed-closures/unboxed-closures-extern-fn.rs	error: rust-js does not support values of type `&mut F` yet
 unboxed-closures/unboxed-closures-fn-as-fnmut-and-fnonce.rs	error: rust-js does not support user implementations of this standard or external trait yet
 unboxed-closures/unboxed-closures-fnmut-as-fnonce.rs	error: rust-js does not support user implementations of this standard or external trait yet
 unboxed-closures/unboxed-closures-infer-fnonce-move.rs	error: rust-js does not support a closure that holds a value with a destructor yet
