@@ -9,7 +9,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { cfgFlags } from "../react/cfg.js";
 import { checkCargo } from "../tooling/cargo.js";
@@ -263,6 +263,55 @@ test("a Cargo build that can't record what it made leaves the previous build's J
   writeFileSync(lib, readFileSync(lib, "utf8").replace("    1\n", "    3\n"));
   await expect(check(manifest, { packageName: "app" })).rejects.toThrow();
   expect(readFileSync(js, "utf8")).toBe(before);
+}, 600_000);
+
+// An inline module's JS is where its file would be, `mod inner { .. }` of
+// `src/lib.rs` beside it as `src/inner.js`, and one in `src/api.rs` in
+// `src/api/`: in the parent's file, one would overwrite the other.
+test("a Cargo build's JS in source has each inline module where its file would be", async () => {
+  const dir = fixture("cargo-in-source-inline");
+  const src = join(dir, "src");
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(dir, "Cargo.toml"), '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2024"\n');
+  writeFileSync(join(src, "lib.rs"), "mod api;\n\npub mod inner {\n    pub fn value() -> u32 {\n        42\n    }\n}\n\npub fn answer() -> u32 {\n    inner::value() + api::nested::one()\n}\n");
+  writeFileSync(join(src, "api.rs"), "pub mod nested {\n    pub fn one() -> u32 {\n        1\n    }\n}\n");
+  const { js, files } = await checkCargo({ manifestPath: join(dir, "Cargo.toml"), toolchain: pin, compiler, offline: true, packageName: "app", inSource: true });
+  expect(js).toBe(join(src, "lib.js"));
+  // `api` has nothing of its own, so no JS: `nested` is still in `src/api/`.
+  expect([...files].sort()).toEqual([join(src, "api", "nested.js"), join(src, "inner.js"), join(src, "lib.js")]);
+  expect(run([node ?? "node", "--input-type=module", "--eval", `console.log((await import(${JSON.stringify(js)})).answer());`]).trim()).toBe("43");
+  for (const file of files) expect(readFileSync(file, "utf8")).toContain(`//# sourceMappingURL=${basename(file)}.map`);
+}, 600_000);
+
+// A module where its file would be can be where the crate's root is:
+// `mod root { .. }` of a `[lib] path = "src/root.rs"`. Neither is written
+// over the other: it's an error, as rust-js's own `mod lib` of `lib.rs` is.
+test("a Cargo build's JS in source refuses two modules for one file", async () => {
+  const dir = fixture("cargo-in-source-collision");
+  const src = join(dir, "src");
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(dir, "Cargo.toml"), '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2024"\n\n[lib]\npath = "src/root.rs"\n');
+  writeFileSync(join(src, "root.rs"), "pub mod root {\n    pub fn value() -> u32 {\n        42\n    }\n}\n\npub fn answer() -> u32 {\n    root::value()\n}\n");
+  const inSource = () => checkCargo({ manifestPath: join(dir, "Cargo.toml"), toolchain: pin, compiler, offline: true, packageName: "app", inSource: true });
+  await expect(inSource()).rejects.toThrow(/the crate root and module `root` would both be .*src\/root\.js/);
+  expect(existsSync(join(src, "root.js"))).toBe(false);
+}, 600_000);
+
+// Two crates' modules can be where one file would be too: an inline
+// `mod helper` of `sources/alpha.rs`'s and of `sources/beta.rs`'s.
+test("a Cargo build's JS in source refuses two crates' modules for one file", async () => {
+  const dir = fixture("cargo-in-source-crates-collision");
+  mkdirSync(join(dir, "sources"), { recursive: true });
+  writeFileSync(join(dir, "Cargo.toml"), '[workspace]\nmembers = ["alpha", "beta"]\nresolver = "2"\n');
+  for (const [name, dependency] of [["alpha", 'beta = { path = "../beta" }\n'], ["beta", ""]]) {
+    mkdirSync(join(dir, name));
+    writeFileSync(join(dir, name, "Cargo.toml"), `[package]\nname = "${name}"\nversion = "0.1.0"\nedition = "2024"\n\n[lib]\npath = "../sources/${name}.rs"\n\n[dependencies]\n${dependency}`);
+    const answer = name === "alpha" ? "helper::n() + beta::answer()" : "helper::n()";
+    writeFileSync(join(dir, "sources", `${name}.rs`), `mod helper {\n    pub fn n() -> u32 {\n        1\n    }\n}\n\npub fn answer() -> u32 {\n    ${answer}\n}\n`);
+  }
+  const inSource = () => checkCargo({ manifestPath: join(dir, "Cargo.toml"), toolchain: pin, compiler, offline: true, packageName: "alpha", inSource: true });
+  await expect(inSource()).rejects.toThrow(/crate `(alpha|beta)`'s module `helper` and crate `(alpha|beta)`'s module `helper` would both be .*sources\/helper\.js/);
+  expect(readdirSync(join(dir, "sources")).sort()).toEqual(["alpha.rs", "beta.rs"]);
 }, 600_000);
 
 // The JS beside the Rust it's from, as ReScript writes it and a project

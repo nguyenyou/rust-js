@@ -111,7 +111,13 @@ target directory's.
 **The JS is beside the Rust too, as a project commits it** (ADR 0041, and
 ReScript's in-source output): after each check, `checkCargo`'s `inSource`
 writes each module's JS beside its source, `frontend/src/api.rs`'s as
-`frontend/src/api.js`, from the build Cargo has now, and an import of
+`frontend/src/api.js`, from the build Cargo has now. A module that isn't
+a file of its own, an inline `mod inner { .. }`, is where its file would
+be, `src/inner.js` of `src/lib.rs`'s, not in its parent's, which it
+would overwrite. If that's another module's, `mod root` of a `[lib] path
+= "src/root.rs"`, or another crate's, two crates' `mod helper` of
+`sources/alpha.rs` and `sources/beta.rs`, it's an error, before anything's
+written, as rust-js's own output refuses `mod lib` of `lib.rs`. An import of
 another crate's module is of its copy, `../../models/src/lib.js`. A copy is
 written only if it changed, and one of a module that's gone goes, if
 rust-js wrote it: its first line says so. Vite serves the copies, and
