@@ -2,12 +2,12 @@
 # Rewritten by `bun scripts/rustc-suite.ts --bless`.
 abi/c-stack-returning-int64.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 abi/nullable-pointer-ffi-compat.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-abi/numbers-arithmetic/float-struct.rs	error: rust-js does not support values of type `&mut T` yet
+abi/numbers-arithmetic/float-struct.rs	error: rust-js does not support this literal yet
 allocator/alloc-shrink-oob-read.rs	error: rust-js does not support values of type `*mut u8` yet
 allocator/dyn-compatible.rs	error: rust-js does not support values of type `dyn std::alloc::Allocator` yet
 allocator/empty-alloc-nonnull-guarantee.rs	error: rust-js does not support values of type `std::option::Option<std::boxed::Box<()>>` yet
 allocator/weak-uninhabited-type.rs	error: rust-js does not support calling `std::rc::Weak::<T>::new` yet
-any/try_as_dyn_mut.rs	error: rust-js does not support values of type `&mut T` yet
+any/try_as_dyn_mut.rs	error: rust-js does not support calling `std::any::try_as_dyn_mut` yet
 any/try_as_dyn_soundness_test1.rs	error: rust-js does not support calling `std::any::try_as_dyn` yet
 any/try_as_dyn_soundness_test2.rs	error: rust-js does not support generic trait parameters yet
 any/try_as_dyn.rs	error: rust-js does not support calling `std::any::try_as_dyn` yet
@@ -120,6 +120,7 @@ async-await/for-await.rs	error: rust-js does not support calling `std::async_ite
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support values of type `&mut impl std::future::Future<Output = ()>` yet
 async-await/interior-with-const-generic-expr.rs	error: rust-js does not support const generics yet
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
+async-await/issues/issue-55809.rs	error: rust-js does not support `&mut` to a `()` yet
 auto-traits/auto-traits.rs	error: rust-js does not support implementation evidence for `<i32 as Auto>` yet
 autoref-autoderef/auto-ref-sliceable.rs	error: rust-js does not support generic trait parameters yet
 autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<std::boxed::Box<{closure@<case>/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>` yet
@@ -178,7 +179,7 @@ builtin-superkinds/builtin-superkinds-capabilities-transitive.rs	error: rust-js 
 builtin-superkinds/builtin-superkinds-capabilities.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 c-variadic/copy.rs	error: rust-js does not support values of type `*const std::ffi::c_void` yet
 c-variadic/inherent-method.rs	error: rust-js does not support values of type `*const std::ffi::c_void` yet
-c-variadic/trait-method.rs	error: rust-js does not support values of type `*const std::ffi::c_void` yet
+c-variadic/trait-method.rs	error: rust-js does not support assigning to this place yet
 c-variadic/valid.rs	error: rust-js does not support values of type `*const std::ffi::c_void` yet
 cast/cast-does-fallback.rs	error: rust-js does not support calling `std::ops::Shr::shr` yet
 cast/cast-rfc0401-vtable-kinds.rs	error: rust-js does not support values of type `*const FooS<T>` yet
@@ -424,7 +425,6 @@ delegation/generics/mapping/inherent-impl-to-trait-pass.rs	error: rust-js does n
 delegation/generics/mapping/trait-to-free-pass.rs	error: rust-js does not support const generics yet
 delegation/generics/mapping/trait-to-trait-pass.rs	error: rust-js does not support generic trait parameters yet
 delegation/generics/trait-method-to-other-pass.rs	error: rust-js does not support generic trait parameters yet
-delegation/self-coercion.rs	error: rust-js does not support `&mut` to a `F` yet
 deref/deref-in-for-loop.rs	error: rust-js does not support iterating over `std::option::Iter<'_, &usize>` yet
 derives/derive-Debug-use-ufcs-struct.rs	error: rust-js does not support generic trait methods yet
 derives/derive-Debug-use-ufcs-tuple.rs	error: rust-js does not support generic trait methods yet
@@ -663,7 +663,6 @@ issues/issue-36936.rs	error: rust-js does not support this expression yet
 issues/issue-37109.rs	error: rust-js does not support associated types yet
 issues/issue-38437.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
 issues/issue-39367.rs	error: rust-js does not support statics of type `*const ArenaSet<std::vec::Vec<u8>>` yet
-issues/issue-3979.rs	error: rust-js does not support values of type `&mut Self` yet
 issues/issue-39827.rs	error: rust-js does not support calling `std::intrinsics::volatile_copy_memory` yet
 issues/issue-41498.rs	error: rust-js does not support values of type `&mut T` yet
 issues/issue-41677.rs	error: rust-js does not support associated types yet
@@ -980,14 +979,12 @@ statics/static-method-in-trait-with-tps-intracrate.rs	error: rust-js does not su
 statics/static-methods-in-traits2.rs	error: rust-js does not support generic trait methods yet
 statics/static-promotion.rs	error: rust-js does not support this literal yet
 statics/static-recursive.rs	error: rust-js does not support statics of type `*const u8` yet
-std/issue-3563-3.rs	error: rust-js does not support values of type `&mut Self` yet
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/nul-char-equivalence.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 structs-enums/align-struct.rs	error: rust-js does not support this expression yet
 structs-enums/class-cast-to-trait-multiple-types.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
 structs-enums/class-cast-to-trait.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
 structs-enums/class-impl-very-parameterized-trait.rs	error: rust-js does not support values of type `&mut T` yet
-structs-enums/class-implement-traits.rs	error: rust-js does not support `&mut` to a `C` yet
 structs-enums/class-separate-impl.rs	error: rust-js does not support values of type `dyn std::string::ToString` yet
 structs-enums/enum-alignment.rs	error: rust-js does not support this expression yet
 structs-enums/enum-clike-ffi-as-int.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
