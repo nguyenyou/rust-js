@@ -16,11 +16,12 @@ import { parseManifest } from "rust-js-build/manifest";
  *   Compile a crate some other way, like the playground's with rust-js.wasm:
  *   write its JS beside it and a manifest (ADR 0042) to `manifest`, all paths
  *   absolute, or throw rustc's errors. It builds the crates it needs itself.
- * @param {{ package: string, manifestPath?: string, features?: string[], noDefaultFeatures?: boolean, offline?: boolean }} [options.cargo]
+ * @param {{ package: string, manifestPath?: string, features?: string[], noDefaultFeatures?: boolean, offline?: boolean, inSource?: boolean }} [options.cargo]
  *   Build a Cargo workspace instead (ADR 0101): Cargo checks each crate, with
- *   rust-js as its workspace wrapper, and the app imports `package`'s JS,
- *   where Cargo's build of it has it, as `rust-js:<package>`. `manifestPath`
- *   is relative to Vite's root, `Cargo.toml` by default.
+ *   rust-js as its workspace wrapper, and the app imports `package`'s JS as
+ *   `rust-js:<package>`. It's beside the Rust, as a project commits it
+ *   (ADR 0041), unless `inSource` is `false`: then where Cargo's build of it
+ *   has it. `manifestPath` is relative to Vite's root, `Cargo.toml` by default.
  */
 export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custom, resources, rustcFlags = [], cacheDir, bindings, externs, cargo } = {}) {
   // Cargo's checks are the native compiler's (ADR 0101), not another's.
@@ -52,6 +53,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
     const built = await builder.checkCargo({
       manifestPath: workspaceManifest, packageName: cargo.package,
       features: cargo.features, noDefaultFeatures: cargo.noDefaultFeatures, offline: cargo.offline,
+      inSource: cargo.inSource ?? true,
     });
     manifests.clear();
     for (const [name, { manifest }] of built.crates) manifests.set(name, parseManifest(await readFile(manifest, "utf8")));
@@ -60,12 +62,12 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
     // Its imports name each module's file, `.jsx` or `.js`: no aliases.
     maps.clear();
     generated.clear();
-    for (const current of manifests.values()) {
-      server?.watcher.add([...current.sources, ...current.modules.map(module => module.file)]);
-      for (const module of current.modules) {
-        generated.add(module.file);
-        if (module.map) maps.add(module.map);
-      }
+    for (const current of manifests.values()) server?.watcher.add(current.sources);
+    // Each module's JS where it's served from: beside its Rust, or Cargo's.
+    server?.watcher.add(built.files);
+    for (const file of built.files) {
+      generated.add(file);
+      maps.add(`${file}.map`);
     }
     // Another build of a crate, of other features say, is another module ID.
     const now = JSON.stringify([...manifests.values()].flatMap(m => m.artifacts.map(a => a.file)).sort());
@@ -176,6 +178,19 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
       // The generated JS is committed, as ReScript recommends (ADR 0041), so
       // a checkout without rust-js still builds from it. With rust-js, the
       // Rust is always compiled, and an error is never hidden by an old file.
+      // A Cargo workspace's is beside each crate's Rust (ADR 0041).
+      if (cargo && !existsSync(rustJs)) {
+        const { packages } = await builder.cargoWorkspace({ manifestPath: workspaceManifest, offline: cargo.offline });
+        const dir = packages.get(cargo.package);
+        const file = dir && [".jsx", ".js"].map(ext => join(dir, "src", `lib${ext}`)).find(existsSync);
+        if (file) {
+          entry = file;
+          committed.add(file);
+          generated.add(file);
+          this.warn(`no rust-js at ${rustJs}: using the committed ${file}. Install rust-js or build it with cargo build to compile the Rust.`);
+          return;
+        }
+      }
       if (!custom && !cargo && !existsSync(rustJs)) {
         const files = crates.map(crate => [".jsx", ".js"].map(ext => crate.replace(/\.rs$/, ext)).find(file => existsSync(resolve(root, file))));
         if (files.every(Boolean)) {
@@ -205,6 +220,15 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
       // has it installed: resolved as from Vite's root, not the target's.
       if (importer && generated.has(importer.split("?")[0]) && !source.startsWith(".") && !source.startsWith("/")) {
         return this.resolve(source, join(root, "index.html"), { ...options, skipSelf: true });
+      }
+      // What a committed module imports of the crates' is theirs too: found
+      // from the entry, when there's no rust-js to say what they are.
+      if (cargo && importer && committed.has(importer.split("?")[0]) && source.startsWith(".")) {
+        const file = resolve(dirname(importer.split("?")[0]), source);
+        if (/\.jsx?$/.test(file) && existsSync(file)) {
+          committed.add(file);
+          generated.add(file);
+        }
       }
       if (!importer || !source.startsWith(".")) return;
       return aliases.get(resolve(dirname(importer.split("?")[0]), source));

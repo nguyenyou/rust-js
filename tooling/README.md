@@ -263,7 +263,10 @@ import { App } from "rust-js:frontend";
 ```
 
 An edit to any crate of the workspace is one `cargo check`, and the JS it
-changes is a Fast Refresh. Cargo's target directory must be one Vite serves
+changes is a Fast Refresh. Each module's JS is written beside its Rust, to be
+committed (ADR 0041): `frontend/src/api.rs` is `frontend/src/api.js`. Without
+rust-js, Vite builds from those. `cargo: { inSource: false }` leaves the JS in
+Cargo's target directory only. Cargo's target directory must be one Vite serves
 from: its workspace root, or another of `server.fs.allow`.
 
 ## Experimental Cargo planning

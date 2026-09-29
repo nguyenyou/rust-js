@@ -108,6 +108,15 @@ build's, is a reload. A package a module Cargo built imports is resolved
 as from Vite's root: it's the app's, in its `node_modules`, not the
 target directory's.
 
+**The JS is beside the Rust too, as a project commits it** (ADR 0041, and
+ReScript's in-source output): after each check, `checkCargo`'s `inSource`
+writes each module's JS beside its source, `frontend/src/api.rs`'s as
+`frontend/src/api.js`, from the build Cargo has now, and an import of
+another crate's module is of its copy, `../../models/src/lib.js`. A copy is
+written only if it changed, and one of a module that's gone goes, if
+rust-js wrote it: its first line says so. Vite serves the copies, and
+without rust-js, builds from them, as it does a committed `App.jsx`.
+
 ## Why
 
 - **Cargo's flags are Cargo's:** features, `cfg`s, editions, renamed

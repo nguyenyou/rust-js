@@ -1,3 +1,6 @@
 /target
 /web/dist
 /web/node_modules
+# The JS rust-js writes beside the Rust is committed (ADR 0041); its maps aren't.
+*.js.map
+*.jsx.map

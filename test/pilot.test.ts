@@ -4,7 +4,7 @@
 // real browser, the server running: every flow the roadmap names.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
@@ -12,6 +12,17 @@ import { buildCompiler, buildSerde, root, run } from "./support";
 
 const pilot = join(root, "examples", "pilot");
 const pin = readFileSync(join(root, "rust-toolchain.toml"), "utf8").match(/channel = "([^"]+)"/)![1];
+
+/** The JS rust-js wrote beside the pilot's Rust, as committed (ADR 0041): by path. */
+function committedJs(): Map<string, string> {
+  const found = new Map<string, string>();
+  for (const crate of ["frontend", "models"]) {
+    const src = join(pilot, crate, "src");
+    for (const name of readdirSync(src).filter((n) => /\.jsx?$/.test(n))) found.set(join(crate, "src", name), readFileSync(join(src, name), "utf8"));
+  }
+  return found;
+}
+const before = committedJs();
 
 let api: ReturnType<typeof Bun.spawn> | undefined;
 let address = "";
@@ -68,6 +79,13 @@ async function open(hash = "#/"): Promise<Page> {
   await page.goto(vite!.resolvedUrls!.local[0] + hash);
   return page;
 }
+
+// What's committed is what rust-js writes now: a change to the Rust is
+// committed with its JS, as ReScript's projects do.
+test("the pilot's committed JS is what rust-js writes from its Rust", () => {
+  expect(before.size).toBeGreaterThan(0);
+  expect(committedJs()).toEqual(before);
+});
 
 test("the list loads from the server, and a search shows only what matches", async () => {
   const page = await open();

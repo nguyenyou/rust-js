@@ -265,6 +265,40 @@ test("a Cargo build that can't record what it made leaves the previous build's J
   expect(readFileSync(js, "utf8")).toBe(before);
 }, 600_000);
 
+// The JS beside the Rust it's from, as ReScript writes it and a project
+// commits it (ADR 0041): `src/api.rs` is `src/api.js`, importing the other
+// crates' where they are too. What a module was, the module gone, goes.
+test("a Cargo build's JS in source is beside each module's Rust, and follows the modules", async () => {
+  const dir = fixture("cargo-in-source");
+  writeFileSync(join(dir, "Cargo.toml"), '[workspace]\nmembers = ["app", "shared"]\nresolver = "2"\n');
+  for (const name of ["app", "shared"]) mkdirSync(join(dir, name, "src"), { recursive: true });
+  writeFileSync(join(dir, "shared", "Cargo.toml"), '[package]\nname = "shared"\nversion = "0.1.0"\nedition = "2024"\n');
+  writeFileSync(join(dir, "shared", "src", "lib.rs"), "pub fn seven() -> u32 {\n    7\n}\n");
+  writeFileSync(join(dir, "app", "Cargo.toml"), '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2024"\n\n[dependencies]\nshared = { path = "../shared" }\n');
+  const app = join(dir, "app", "src");
+  writeFileSync(join(app, "lib.rs"), "mod extra;\n\npub fn value() -> u32 {\n    extra::more(shared::seven())\n}\n");
+  writeFileSync(join(app, "extra.rs"), "pub fn more(n: u32) -> u32 {\n    n + 1\n}\n");
+  const manifest = join(dir, "Cargo.toml");
+  const inSource = () => checkCargo({ manifestPath: manifest, toolchain: pin, compiler, offline: true, packageName: "app", inSource: true });
+  const { js } = await inSource();
+  expect(js).toBe(join(app, "lib.js"));
+  expect(readFileSync(js, "utf8")).toContain('from "../../shared/src/lib.js"');
+  expect(existsSync(join(app, "extra.js"))).toBe(true);
+  expect(run([node ?? "node", "--input-type=module", "--eval", `console.log((await import(${JSON.stringify(js)})).value());`]).trim()).toBe("8");
+  // The module gone, its JS goes; and the root, with JSX now, is `lib.jsx`.
+  rmSync(join(app, "extra.rs"));
+  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\n\npub fn value() -> u32 {\n    shared::seven()\n}\n\npub fn View() -> react::Element {\n    jsx! { <b /> }\n}\n");
+  writeFileSync(join(dir, "app", "Cargo.toml"), readFileSync(join(dir, "app", "Cargo.toml"), "utf8") + `react = { package = "rust-js-react", path = ${JSON.stringify(join(root, "react"))} }\n`);
+  const again = await inSource();
+  expect(again.js).toBe(join(app, "lib.jsx"));
+  expect(existsSync(join(app, "extra.js"))).toBe(false);
+  expect(existsSync(join(app, "lib.js"))).toBe(false);
+  // A file of the project's own, not rust-js's, stays.
+  writeFileSync(join(app, "notes.js"), "export const notes = 1;\n");
+  await inSource();
+  expect(existsSync(join(app, "notes.js"))).toBe(true);
+}, 600_000);
+
 // The bindings as Cargo dependencies: `react` and `web` are crates rustc
 // checks, as `react/build.sh` does, with the `cfg`s of a React release
 // (ADR 0043) from its build script.

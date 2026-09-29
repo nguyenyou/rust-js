@@ -340,8 +340,10 @@ pub fn App() -> Element {
   const plugins = () => [rustJs({ rustJs: compiler, cargo: { package: "ui", manifestPath: "../ui/Cargo.toml", offline: true } }), react()];
   await build({ root: web, configFile: false, plugins: plugins(), logLevel: "silent" });
   expect(readFileSync(join(web, "dist/index.html"), "utf8")).toContain("/assets/");
-  // The JS is Cargo's, not beside the sources.
-  expect(existsSync(join(dir, "ui/src/lib.jsx"))).toBe(false);
+  // The JS is beside the Rust too, as a project commits it (ADR 0041), each
+  // crate's importing the others' there.
+  expect(readFileSync(join(dir, "ui/src/lib.jsx"), "utf8")).toContain('from "../../models/src/lib.js"');
+  expect(existsSync(join(dir, "models/src/lib.js"))).toBe(true);
   const server = await createServer({ root: web, configFile: false, plugins: plugins(), logLevel: "silent", server: { port: 0 } });
   let browser;
   try {
@@ -382,6 +384,14 @@ pub fn App() -> Element {
     await server.close();
   }
   expect(() => rustJs({ cargo: { package: "ui" }, compile: async () => {} })).toThrow("give `cargo` or `compile`, not both");
+  // Without rust-js, a build is of the JS committed beside the Rust.
+  const logger = createLogger("warn", { allowClearScreen: false });
+  const warnings: string[] = [];
+  logger.warn = (message) => { warnings.push(message); };
+  const missing = [rustJs({ rustJs: join(dir, "no-rust-js"), cargo: { package: "ui", manifestPath: "../ui/Cargo.toml", offline: true } }), react()];
+  await build({ root: web, configFile: false, plugins: missing, customLogger: logger, logLevel: "warn" });
+  expect(warnings.join("\n")).toContain("using the committed");
+  expect(readFileSync(join(web, "dist/index.html"), "utf8")).toContain("/assets/");
   writeFileSync(ui, source + "pub fn broken(");
   await expect(build({ root: web, configFile: false, plugins: plugins(), logLevel: "silent" })).rejects.toThrow("pub fn broken(");
 }, 180_000);

@@ -10,6 +10,11 @@ examples/pilot/
 └── web         Vite: imports `rust-js:frontend`, proxies /api to the server
 ```
 
+The JS rust-js writes is committed beside the Rust it's from, as ReScript's
+projects do (ADR 0041): [`frontend/src/api.js`](frontend/src/api.js) is
+[`api.rs`](frontend/src/api.rs)'s, and `models/src/lib.js` the models'. A
+change to the Rust is committed with its JS, which the test checks.
+
 The client and the server share `models`: the JSON each sends is its
 serde derives, and `validate` is the rule both hold a contact to. The form
 checks before it sends; the server checks again, for requests that aren't
