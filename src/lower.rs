@@ -667,11 +667,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 Ok(self.locals.vars[&id].place.clone())
             }
-            // `&mut` to a JS object is the object (ADR 0025).
+            // `&mut` to a JS object is the object (ADR 0025), and to a closure
+            // the closure (ADR 0099).
             ExprKind::Borrow {
                 borrow_kind: BorrowKind::Mut { .. },
                 arg,
-            } if self.is_object(self.thir[arg].ty) => match self.place(arg) {
+            } if self.is_object(self.thir[arg].ty) || self.is_callable(self.thir[arg].ty) => match self.place(arg) {
                 Some((place, _)) => Ok(place),
                 None => self.referent(arg, out),
             },

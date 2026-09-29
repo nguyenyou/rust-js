@@ -151,7 +151,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A value that a `&mut` to must be a box to change (ADR 0072): one that
     /// isn't a JS object, as a `String`, a number or a fieldless enum is.
     pub(super) fn is_boxable(&self, ty: Ty<'tcx>) -> bool {
-        !ty.is_ref() && !matches!(ty.kind(), ty::Param(_)) && !self.is_object(ty) && self.unsupported_part(ty).is_none()
+        !ty.is_ref()
+            && !matches!(ty.kind(), ty::Param(_))
+            && !self.is_object(ty)
+            // A `&mut dyn FnMut()` is the function (ADR 0099).
+            && !self.is_callable(ty)
+            && self.unsupported_part(ty).is_none()
     }
 
     /// A type parameter a `&mut` is to, `&mut T` or `&mut Self`, where `param_env`
@@ -161,14 +166,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// closure, or an iterator (ADR 0061).
     pub(super) fn is_generic_boxed(&self, ty: Ty<'tcx>, param_env: ty::ParamEnv<'tcx>) -> bool {
         matches!(ty.kind(), ty::Param(_))
-            && !param_env.caller_bounds().iter().any(|clause| {
-                clause.as_trait_clause().is_some_and(|tr| {
-                    tr.self_ty().skip_binder() == ty
-                        && (self.tcx.fn_trait_kind_from_def_id(tr.def_id()).is_some()
-                            || self.tcx.is_diagnostic_item(sym::Iterator, tr.def_id())
-                            || self.tcx.is_diagnostic_item(sym::IntoIterator, tr.def_id()))
-                })
+            && !self.bound_by(ty, param_env, |id| {
+                self.tcx.fn_trait_kind_from_def_id(id).is_some()
+                    || self.tcx.is_diagnostic_item(sym::Iterator, id)
+                    || self.tcx.is_diagnostic_item(sym::IntoIterator, id)
             })
+    }
+
+    /// Is `ty`, a type parameter, bound by a trait `which` says, in `param_env`?
+    fn bound_by(&self, ty: Ty<'tcx>, param_env: ty::ParamEnv<'tcx>, which: impl Fn(DefId) -> bool) -> bool {
+        param_env.caller_bounds().iter().any(|clause| {
+            clause
+                .as_trait_clause()
+                .is_some_and(|tr| tr.self_ty().skip_binder() == ty && which(tr.def_id()))
+        })
+    }
+
+    /// A JS function: a closure, a function, a `dyn Fn` and the like, or a
+    /// type parameter bound by one of them, an `impl FnMut` too. A `&mut` to
+    /// one is the function (ADR 0099): calling it changes what it captured,
+    /// as calling it through the `&mut` does.
+    pub(super) fn is_callable(&self, ty: Ty<'tcx>) -> bool {
+        let fn_trait = |id: DefId| self.tcx.fn_trait_kind_from_def_id(id).is_some();
+        match ty.kind() {
+            ty::Closure(..) | ty::FnDef(..) | ty::FnPtr(..) => true,
+            ty::Dynamic(predicates, ..) => predicates.principal_def_id().is_some_and(fn_trait),
+            ty::Param(_) => self.bound_by(ty, self.typing_env.param_env, fn_trait),
+            _ => false,
+        }
     }
 
     /// Is `fn_id`'s parameter `i` a box: a `&mut` to a value JS can't change in
@@ -594,7 +619,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Not) => return self.unsupported_in(*inner, seen),
             // `&mut` to a JS object is the object; to anything else, it would
             // need a place to point at.
-            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) => return self.unsupported_in(*inner, seen),
+            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) || self.is_callable(*inner) => {
+                return self.unsupported_in(*inner, seen);
+            }
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_in(*elem, seen),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
             // An `Option` is its value or `undefined` (ADR 0030), so the value

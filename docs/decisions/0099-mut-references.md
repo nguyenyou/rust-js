@@ -1,8 +1,8 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
-Status: Accepted in part: a `&mut` in a variable, the index loop, and a
-generic `&mut T` given as a parameter. Handles, a generic `&mut T`
-returned or kept, and closures are to come. Extends
+Status: Accepted in part: a `&mut` in a variable, the index loop, a
+generic `&mut T` given as a parameter, and a `&mut` to a closure.
+Handles, and a generic `&mut T` returned or kept, are to come. Extends
 [0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
 ## Context
@@ -175,6 +175,16 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   and a default copied into two impls takes a box in each. Of rustc's 15
   tests stopping at a `&mut T` or a `&mut Self`, the two with a default
   `&mut self` pass; the rest return or keep one, which is a handle's.
+- **A `&mut` to a number given where a `T` goes is a box too** (ADR 0074,
+  `mut_ref_as_generic`), and one already in a box is the box: an impl for
+  `&mut i32`, taking it by value, changes the number. Found by rustc's
+  `issue-55809.rs`, which stopped when only a declared `&mut T` was boxed.
+- **A `&mut` to a closure is the closure** (`closure_mut_ref`): of a type
+  parameter bound by `FnMut`, an `impl FnMut`, a `dyn FnMut` and a function,
+  `&mut square`. `f()` calls it, and `call(f)` passes it on. A `dyn FnMut`
+  isn't a box (ADR 0072): it's a function, not a value JS can't change.
+  Assigning a new closure through one is an error. The 8 of rustc's tests
+  stopping at one pass.
 - **A `&mut` to an object in a variable is still the object** (ADR 0025),
   and `*r = v` of one still an error: replacing an object whole through a
   `&mut` comes with handles.

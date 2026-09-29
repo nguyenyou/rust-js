@@ -1093,19 +1093,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return ArgForm::Value;
         };
         let param_box = self.param_is_box(fn_id, i);
+        // A `&mut` to a number given where a `T` goes is a box too, as a `&mut`
+        // to one is anywhere (ADR 0074).
+        let generic = self
+            .tcx
+            .fn_sig(fn_id)
+            .instantiate_identity()
+            .skip_binder()
+            .inputs()
+            .get(i)
+            .is_some_and(|input| matches!(input.kind(), ty::Param(_)));
         // `&mut *out` of a box: the box itself, or, to a parameter that's
         // the value, as an object impl's `&mut self` is, what's in it.
         if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
             && self.locals.boxes.contains(&id)
         {
-            return if param_box {
+            return if param_box || generic {
                 ArgForm::Value
             } else {
                 ArgForm::Unboxed(id)
             };
         }
-        if param_box {
+        if param_box || (generic && self.is_boxable(self.thir[place].ty)) {
             ArgForm::Boxed(place)
         } else {
             ArgForm::Value
