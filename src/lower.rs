@@ -194,8 +194,10 @@ enum Nested<'tcx> {
         self_args: ty::GenericArgsRef<'tcx>,
         typing_env: ty::TypingEnv<'tcx>,
         /// The drop, by name, for each of its trait's type parameters the
-        /// impl's argument for has one (ADR 0098).
+        /// impl's argument for has one (ADR 0098), and those rust-js can't
+        /// make one for, and why.
         drops: HashMap<u32, String>,
+        unsupported: HashMap<u32, (Ty<'tcx>, &'static str)>,
     },
 }
 
@@ -3091,8 +3093,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self_args,
                 typing_env,
                 drops,
+                unsupported,
             } => {
-                enclosing.drops = Some(self.swap_drops(drops));
+                enclosing.drops = Some(self.swap_drops(drops, unsupported));
                 enclosing.names = Some(self.names.clone());
                 enclosing.vars = Some(std::mem::take(&mut self.vars));
                 enclosing.evidence = Some(std::mem::replace(&mut self.evidence, evidence));

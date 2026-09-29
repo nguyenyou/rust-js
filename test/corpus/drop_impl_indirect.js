@@ -13,7 +13,7 @@ function $traitImpl(cache, keys, make) {
   return cache.get(key);
 }
 
-var $wrapPeek, $wrapTake, $pairTake, $loudTake;
+var $wrapPeek, $wrapPass, $rcValue, $wrapTake, $pairTake, $loudTake;
 
 function helper(u, UClone, dropU) {
   const _copy = UClone.clone(u);
@@ -22,6 +22,14 @@ function helper(u, UClone, dropU) {
 
 function peeked(p, PPeek, dropP) {
   return PPeek.peek(p);
+}
+
+function helper_taking(_u, dropU) {
+  dropU?.(_u);
+}
+
+function valued(v, VValue) {
+  return VValue.value(v);
 }
 
 function take(value, TTake, dropT) {
@@ -56,6 +64,8 @@ function main() {
       },
     );
     take(["taken itself"], loudTake(), loudDrop_drop);
+    wrapPass(loudDrop_drop).pass([["passed to a helper"]]);
+    console.log(`${valued(1, rcValue())}`);
     console.log("end");
   } finally {
     loudDrop_drop(lent[0]);
@@ -82,6 +92,35 @@ function wrapPeek(TClone, dropT) {
   return $traitImpl($wrapPeek, [TClone, dropT], () => ({
     peek: (arg0) => wrapPeek_peek(arg0, TClone, dropT),
   }));
+}
+
+function wrapPass(dropT) {
+  if ($wrapPass === undefined) {
+    $wrapPass = new WeakMap();
+  }
+  return $traitImpl($wrapPass, [dropT], () => ({
+    pass: (self) => {
+      const dropSelf = (wrap) => {
+        dropT?.(wrap[0]);
+      };
+      let self$live = true;
+      try {
+        self$live = false;
+        helper_taking(self, dropSelf);
+      } finally {
+        if (self$live) {
+          dropSelf?.(self);
+        }
+      }
+    },
+  }));
+}
+
+function rcValue(dropT) {
+  if ($rcValue === undefined) {
+    $rcValue = new WeakMap();
+  }
+  return $traitImpl($rcValue, [dropT], () => ({ value: (self) => 7 }));
 }
 
 function wrapTake(dropT) {

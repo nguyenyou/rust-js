@@ -125,6 +125,7 @@ pub(super) struct Statement<'tcx> {
 pub(super) struct SwappedDrops<'tcx> {
     params: HashMap<u32, String>,
     used: HashSet<u32>,
+    unsupported: HashMap<u32, (Ty<'tcx>, &'static str)>,
     cache: HashMap<Ty<'tcx>, Drops<'tcx>>,
     sizes: HashMap<Ty<'tcx>, (usize, bool)>,
 }
@@ -155,6 +156,9 @@ pub(super) struct DropState<'tcx> {
     param_drops: HashMap<u32, String>,
     /// The type parameters whose drops the body has used.
     used_drops: HashSet<u32>,
+    /// A copied default's type parameters whose drops rust-js can't make,
+    /// and why: an error only where the body drops one.
+    unsupported_params: HashMap<u32, (Ty<'tcx>, &'static str)>,
     part_flags: HashMap<(LocalVarId, Path), String>,
 }
 
@@ -224,6 +228,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if ty.is_box() || self.is_vec_like(ty) => self.drops_in(args.type_at(0), walk),
             // A type parameter a caller gives a drop function for.
             ty::Param(param) if self.drop_state.param_drops.contains_key(&param.index) => Drops::Runs,
+            ty::Param(param) if let Some(&(t, what)) = self.drop_state.unsupported_params.get(&param.index) => {
+                Drops::Unsupported(t, what)
+            }
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {
@@ -903,12 +910,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// trait's type parameters, `Self` among them (ADR 0049): each is what the
     /// impl's argument for it drops, with the impl's own drops. What was
     /// there, and what was found with it, is given back by `restore_drops`.
-    pub(super) fn swap_drops(&mut self, drops: HashMap<u32, String>) -> SwappedDrops<'tcx> {
+    pub(super) fn swap_drops(
+        &mut self,
+        drops: HashMap<u32, String>,
+        unsupported: HashMap<u32, (Ty<'tcx>, &'static str)>,
+    ) -> SwappedDrops<'tcx> {
         let cache = std::mem::take(&mut *self.drop_state.cache.borrow_mut());
         let sizes = std::mem::take(&mut *self.drop_state.sizes.borrow_mut());
         SwappedDrops {
             params: std::mem::replace(&mut self.drop_state.param_drops, drops),
             used: std::mem::take(&mut self.drop_state.used_drops),
+            unsupported: std::mem::replace(&mut self.drop_state.unsupported_params, unsupported),
             cache,
             sizes,
         }
@@ -922,6 +934,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn restore_drops(&mut self, swapped: SwappedDrops<'tcx>) {
         self.drop_state.param_drops = swapped.params;
         self.drop_state.used_drops = swapped.used;
+        self.drop_state.unsupported_params = swapped.unsupported;
         *self.drop_state.cache.borrow_mut() = swapped.cache;
         *self.drop_state.sizes.borrow_mut() = swapped.sizes;
     }

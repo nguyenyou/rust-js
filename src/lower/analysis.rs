@@ -367,6 +367,25 @@ fn drop_params<'tcx>(
             }
         }
     }
+    // A trait's default body is copied into each impl that keeps it (ADR 0049),
+    // and dropped there as the impl's type drops: what it gives a generic
+    // function of the crate's, as `discard(self)`, that function must be able
+    // to drop. So its `Self`, and each type parameter of its trait that isn't
+    // `Copy`, count as given a drop, here to be passed on.
+    for body in all_bodies {
+        let method = tcx.typeck_root_def_id(body.def_id.to_def_id());
+        let Some(trait_id) = tcx.trait_of_assoc(method) else {
+            continue;
+        };
+        let typing_env = ty::TypingEnv::non_body_analysis(tcx, method);
+        for param in &tcx.generics_of(trait_id).own_params {
+            if let ty::GenericParamDefKind::Type { .. } = param.kind
+                && !tcx.type_is_copy_modulo_regions(typing_env, Ty::new_param(tcx, param.index, param.name))
+            {
+                given.insert((method, param.index));
+            }
+        }
+    }
     // A library's consumers are callers it never sees (ADR 0100): a function
     // of it they can reach is given a drop for each type parameter they could
     // give a value with a destructor, one that isn't `Copy`.

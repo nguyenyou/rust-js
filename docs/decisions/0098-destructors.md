@@ -181,7 +181,11 @@ function main() {
   dropT)`. A default copied into it drops its trait's `Self` as the impl's
   type does: that drop is made from the impl's, `const dropSelf = (wrap) =>
   { dropT?.(wrap[0]); }`, and it's the body's drop for `Self`, which, as a
-  type parameter of the trait, isn't the impl's `T`. Found in review, across
+  type parameter of the trait, isn't the impl's `T`. A generic function the
+  default gives its value to, `discard(self)`, is given a drop as a caller
+  that has one gives it, so a default's `Self` counts as given one in the
+  walk. One rust-js can't make, an `Rc<T>`'s, is an error only where the
+  body drops a `Self`: a default that borrows it needs none. Found in review, across
   crates, but true within one: the impl's `T` had never been dropped, and
   then a default had dropped its `Self` with `T`'s drop. (Amended as it was done: decided first from
   the signatures, then from each method's body, each of which missed a

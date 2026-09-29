@@ -28,6 +28,32 @@ trait Take: Sized {
     fn take(self) {}
 }
 
+// A default that gives its value to a generic function of the crate's,
+// which drops it: that function is given the drop the default has.
+trait Pass: Sized {
+    fn pass(self) {
+        helper_taking(self);
+    }
+}
+
+fn helper_taking<U>(_u: U) {}
+
+impl<T> Pass for Wrap<T> {}
+
+// A default that only borrows: an impl for an `Rc<T>`, whose drop rust-js
+// can't make yet, needs none.
+trait Value {
+    fn value(&self) -> u32 {
+        7
+    }
+}
+
+impl<T> Value for std::rc::Rc<T> {}
+
+fn valued<V: Value>(v: &V) -> u32 {
+    v.value()
+}
+
 impl<T> Take for Wrap<T> {}
 
 struct Pair<A, B>(A, B);
@@ -55,5 +81,7 @@ fn main() {
     take(Wrap(Loud("taken by a default")));
     take(Pair(Loud("first of a pair"), Loud("second of a pair")));
     take(Loud("taken itself"));
+    Wrap(Loud("passed to a helper")).pass();
+    println!("{}", valued(&std::rc::Rc::new(1u8)));
     println!("end");
 }

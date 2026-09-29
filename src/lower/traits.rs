@@ -2,6 +2,7 @@
 //! lazy dictionaries for impls, and `{ value, impl }` for trait objects.
 
 use super::bindings;
+use super::drops::Drops;
 use super::recognition::TraitCall;
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
@@ -710,11 +711,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // made here, and the body is given it by name.
         let mut made = Vec::new();
         let mut drops = HashMap::new();
+        // One rust-js can't make is an error only if the body drops one.
+        let mut unsupported = HashMap::new();
         let generics = self.tcx.generics_of(id);
         for (index, arg) in args.iter().enumerate() {
             let Some(ty) = arg.as_type() else {
                 continue;
             };
+            match self.drops(ty) {
+                Drops::Nothing => continue,
+                Drops::Unsupported(t, what) => {
+                    unsupported.insert(index as u32, (t, what));
+                    continue;
+                }
+                Drops::Runs => {}
+            }
             let Some(drop) = self.drop_function(ty, span)? else {
                 continue;
             };
@@ -734,6 +745,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self_args: args,
             typing_env: ty::TypingEnv::post_analysis(self.tcx, id),
             drops,
+            unsupported,
         };
         let enclosing = self.enter_body(&body.thir, id, nested)?;
         let mut rest = Vec::new();
