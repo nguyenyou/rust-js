@@ -4,25 +4,33 @@
 // real browser, the server running: every flow the roadmap names.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
+import { join, relative } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
-import { buildCompiler, buildSerde, root, run } from "./support";
+import { checkCargo } from "../tooling/cargo.js";
+import { buildCompiler, buildSerde, compiler, fixture, root, run } from "./support";
 
-const pilot = join(root, "examples", "pilot");
+const checkout = join(root, "examples", "pilot");
 const pin = readFileSync(join(root, "rust-toolchain.toml"), "utf8").match(/channel = "([^"]+)"/)![1];
 
-/** The JS rust-js wrote beside the pilot's Rust, as committed (ADR 0041): by path. */
-function committedJs(): Map<string, string> {
+// The pilot, copied under `target/`, where its build writes its JS beside
+// its Rust (ADR 0041): never into the checkout, whatever compiler a test is
+// given. As deep as the checkout's, so its path to the bindings is theirs,
+// and its app's packages are the checkout's.
+const pilot = fixture("pilot");
+cpSync(checkout, pilot, { recursive: true, filter: (from) => !/(^|[/\\])(target|node_modules|dist)([/\\]|$)/.test(relative(checkout, from)) });
+symlinkSync(join(checkout, "web", "node_modules"), join(pilot, "web", "node_modules"));
+
+/** The JS beside a pilot's Rust, by path. */
+function writtenJs(dir: string): Map<string, string> {
   const found = new Map<string, string>();
   for (const crate of ["frontend", "models"]) {
-    const src = join(pilot, crate, "src");
+    const src = join(dir, crate, "src");
     for (const name of readdirSync(src).filter((n) => /\.jsx?$/.test(n))) found.set(join(crate, "src", name), readFileSync(join(src, name), "utf8"));
   }
   return found;
 }
-const before = committedJs();
 
 let api: ReturnType<typeof Bun.spawn> | undefined;
 let address = "";
@@ -82,10 +90,14 @@ async function open(hash = "#/"): Promise<Page> {
 
 // What's committed is what rust-js writes now: a change to the Rust is
 // committed with its JS, as ReScript's projects do.
-test("the pilot's committed JS is what rust-js writes from its Rust", () => {
-  expect(before.size).toBeGreaterThan(0);
-  expect(committedJs()).toEqual(before);
-});
+test("the pilot's committed JS is what rust-js writes from its Rust", async () => {
+  const committed = writtenJs(checkout);
+  expect(committed.size).toBeGreaterThan(0);
+  // Built here, as Vite's plugin builds it, so a build that fails fails this.
+  const react = JSON.parse(readFileSync(join(pilot, "web", "node_modules", "react", "package.json"), "utf8")).version;
+  await checkCargo({ manifestPath: join(pilot, "Cargo.toml"), toolchain: pin, compiler, packageName: "frontend", offline: true, react, inSource: true });
+  expect(writtenJs(pilot)).toEqual(committed);
+}, 600_000);
 
 test("the list loads from the server, and a search shows only what matches", async () => {
   const page = await open();

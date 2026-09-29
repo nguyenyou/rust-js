@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rust-js/runtime": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sonner": "^2.0.8"

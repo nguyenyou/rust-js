@@ -9,6 +9,7 @@
     "wasm/web",
     "vite-plugin",
     "tooling",
+    "runtime",
     "examples/vite-react",
     "examples/pilot/web"
   ],
@@ -40,13 +41,15 @@
     "test:snapshots": "bun test test/snapshots.test.ts test/jsx.test.ts",
     "bless": "BLESS=1 bun test test/snapshots.test.ts test/jsx.test.ts test/corpus.test.ts",
     "bench:lowering": "cargo build --locked && bun bench/lowering.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "runtime": "cargo build && ./target/debug/rust-js --runtime-module > runtime/index.js"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@happy-dom/global-registrator": "20.14.5",
     "@playwright/test": "1.63.0",
     "@rolldown/plugin-babel": "0.2.4",
+    "@rust-js/runtime": "workspace:*",
     "@tailwindcss/vite": "4.3.3",
     "@types/bun": "1.4.2",
     "@types/react": "19.3.0",

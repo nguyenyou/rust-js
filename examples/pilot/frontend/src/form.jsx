@@ -3,48 +3,10 @@
 import { validate } from "../../models/src/lib.js";
 import { useState } from "react";
 import { toast } from "sonner";
+import { $debugStr, $parseInt, $retain } from "@rust-js/runtime";
 
 import { Failure, create } from "./api.js";
 import { go } from "./route.js";
-
-function $retain(v, keep) {
-  let n = 0;
-  for (const x of v) {
-    if (keep(x)) {
-      v[n++] = x;
-    }
-  }
-  v.length = n;
-}
-
-function $parseInt(s, min, max) {
-  const error = (message) => ({ TAG: "Err", _0: message });
-  if (s === "") return error("cannot parse integer from empty string");
-  if (!(min < 0 ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s))
-    return error("invalid digit found in string");
-  const n = Number(s);
-  if (n > max) return error("number too large to fit in target type");
-  if (n < min) return error("number too small to fit in target type");
-  return { TAG: "Ok", _0: n };
-}
-
-function $debugStr(s, quote = '"') {
-  let out = quote;
-  for (const c of s) {
-    if (c === quote || c === "\\") out += "\\" + c;
-    else if (c === "\n") out += "\\n";
-    else if (c === "\r") out += "\\r";
-    else if (c === "\t") out += "\\t";
-    else if (c === "\0") out += "\\0";
-    else if (
-      /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) ||
-      (c !== " " && /\p{Zs}/u.test(c))
-    )
-      out += "\\u{" + c.codePointAt(0).toString(16) + "}";
-    else out += c;
-  }
-  return out + quote;
-}
 
 function message(errors, field) {
   const error = errors.find((error) => error.field === field);

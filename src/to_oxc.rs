@@ -127,6 +127,22 @@ pub fn emit(
             }
         }
     }
+    // The helpers its code names, from the package (ADR 0103), with the
+    // other packages' imports.
+    let helpers = match module.runtime_package {
+        true => crate::runtime::imported_helpers(&generated.code),
+        false => Vec::new(),
+    };
+    if !helpers.is_empty() {
+        if module.packages.is_empty() {
+            code.push('\n');
+        }
+        code.push_str(&format!(
+            "import {{ {} }} from {:?};\n",
+            helpers.join(", "),
+            crate::runtime::PACKAGE
+        ));
+    }
     if !module.imports.is_empty() {
         code.push('\n');
         for import in &module.imports {

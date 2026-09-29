@@ -125,6 +125,11 @@ fn main() -> ExitCode {
         cargo::Invocation::RustJs(args) => args,
         cargo::Invocation::Rustc(exit) => return exit,
     };
+    // `@rust-js/runtime`'s module (ADR 0103), for `runtime/index.js`.
+    if args.as_slice() == ["--runtime-module"] {
+        print!("{}", runtime::package_module());
+        return ExitCode::SUCCESS;
+    }
     if args.as_slice() == ["--version-json"] {
         println!(
             "{}",
@@ -171,6 +176,13 @@ fn main() -> ExitCode {
     // Cargo's build (ADR 0101): its record of the sources is one of rustc's
     // outputs rust-js lets rustc write, where Cargo asks.
     let cargo = if let Some(i) = ours.iter().position(|arg| arg == "--cargo") {
+        ours.remove(i);
+        true
+    } else {
+        false
+    };
+    // The helpers imported from `@rust-js/runtime` (ADR 0103).
+    let runtime_package = if let Some(i) = ours.iter().position(|arg| arg == "--runtime-package") {
         ours.remove(i);
         true
     } else {
@@ -321,6 +333,7 @@ fn main() -> ExitCode {
     }
     let recorded = cargo.then(|| (manifest.clone(), metadata.clone()));
     let mut plan = output::OutputPlan::new(input, output, test, manifest);
+    plan.runtime_package = runtime_package;
     plan.metadata = metadata.clone();
     let mut callbacks = RustJs {
         dependencies,

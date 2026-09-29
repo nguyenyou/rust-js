@@ -32,6 +32,8 @@ pub struct Module {
     pub imports: Vec<Import>,
     /// Runtime helpers this module uses, as JS source.
     pub runtime: Vec<&'static str>,
+    /// Its helpers imported from `@rust-js/runtime` instead (ADR 0103).
+    pub runtime_package: bool,
     /// Types' methods, before the `const`s, whose values may call them.
     pub namespaces: Vec<Namespace>,
     /// `const` items, with the values rustc computed (ADR 0031).
