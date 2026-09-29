@@ -64,7 +64,10 @@ function inBrowsers(runner: "playwright" | "vitest", files: string[]): { exit: n
     runner === "playwright"
       ? ["bunx", "--bun", "playwright", "test", "-c", "browser/playwright.config.ts", "--reporter=line"]
       : ["bunx", "--bun", "vitest", "run", "-c", "browser/vitest.config.ts"];
-  const p = Bun.spawnSync(command, { cwd: root, env: { ...process.env, RUST_JS_TESTS: files.join(" ") }, stderr: "pipe" });
+  // A `bun test --parallel` worker says it's Jest's, which Playwright
+  // refuses to run inside: the runners here are the browsers' own.
+  const { JEST_WORKER_ID: _, ...env } = process.env;
+  const p = Bun.spawnSync(command, { cwd: root, env: { ...env, RUST_JS_TESTS: files.join(" ") }, stderr: "pipe" });
   // CI reporters may color individual words and numbers in their summaries.
   return { exit: p.exitCode ?? -1, output: stripVTControlCharacters(p.stdout.toString() + p.stderr.toString()) };
 }

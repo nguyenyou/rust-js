@@ -51,7 +51,7 @@ Track production-readiness work in [ROADMAP.md](ROADMAP.md). Update relevant
 items with evidence when their acceptance criteria are met.
 
 Use the pinned Rust toolchain and Bun for JavaScript tooling. See
-[package.json](package.json) for commands: `bun run build`, `bun test`, and
+[package.json](package.json) for commands: `bun run build`, `bun run test`, and
 `bun run fmt:check`. Rebuild with `bun run wasm` when validating compiler
 changes through the browser playground.
 
@@ -79,6 +79,8 @@ instead of running them locally:
   catch ([ADR 0093](docs/decisions/0093-mutations.md)): `-f mutations=true`,
   or `bun scripts/mutations.ts copy-on-read` for one or two locally.
 
-A handful of tests, such as the corpus in `bun test` or a few named rustc
-tests, is fine locally. Start the workflow, share the run's link, and read
+A handful of tests, such as the corpus in `bun run test` or a few named rustc
+tests, is fine locally: the suite keeps each native program it builds in
+`target/native-cache/`, so a second run builds and scans none of them
+([ADR 0104](docs/decisions/0104-parallel-tests.md)). Start the workflow, share the run's link, and read
 its results when it has finished.

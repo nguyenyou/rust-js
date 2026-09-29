@@ -1,14 +1,28 @@
 // Differential regressions: native serde_json is the oracle, using exactly
 // the same Rust source and dependency versions as the generated JavaScript.
 import { beforeAll, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCompiler, buildSerde, compiler, fixture, run } from "./support";
+import { buildCompiler, buildSerde, compiler, contentDirectory, fixture, nativeBinary, run, writeWhole } from "./support";
 
 beforeAll(() => {
   buildCompiler();
   buildSerde("rlib");
 }, 600_000);
+
+/** `dir/cases.rs` with serde_json natively, the oracle: printing its
+ * `report()`. Built beside a copy named by what it says, so the same cases
+ * are one kept binary (`nativeBinary`). */
+function native(dir: string): string {
+  const cases = readFileSync(join(dir, "cases.rs"), "utf8");
+  const beside = contentDirectory(cases);
+  writeWhole(join(beside, "cases.rs"), cases);
+  const built = nativeBinary(`include!("cases.rs");
+fn main() { println!("{}", serde_json::to_string(&report()).unwrap()); }
+`, beside, ["--edition=2024", "-Awarnings", ...buildSerde("rlib")]);
+  if ("error" in built) throw new Error(built.error);
+  return built.binary;
+}
 
 const cases = [
   {
@@ -169,11 +183,7 @@ pub fn report() -> String {
     format!("{}\\n{}", serde_json::to_string(&value).unwrap(), serde_json::to_string_pretty(&value).unwrap())
 }
 `);
-    writeFileSync(join(dir, "native.rs"), `include!("cases.rs");
-fn main() { println!("{}", serde_json::to_string(&report()).unwrap()); }
-`);
-    run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native"), ...buildSerde("rlib")]);
-    const expected = JSON.parse(run([join(dir, "native")]));
+    const expected = JSON.parse(run([native(dir)]));
     run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js"), "--", ...buildSerde()]);
     const generated = await import(join(dir, "cases.js"));
     expect(generated.report()).toBe(expected);
@@ -227,11 +237,7 @@ test("serde: numbers are written and read as serde_json does", async () => {
     out
 }
 `);
-  writeFileSync(join(dir, "native.rs"), `include!("cases.rs");
-fn main() { println!("{}", serde_json::to_string(&report()).unwrap()); }
-`);
-  run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native"), ...buildSerde("rlib")]);
-  const expected = JSON.parse(run([join(dir, "native")]));
+  const expected = JSON.parse(run([native(dir)]));
   run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js"), "--", ...buildSerde()]);
   const generated = await import(join(dir, "cases.js"));
   expect(generated.report()).toBe(expected);

@@ -2,3 +2,4 @@
 # target/ are run by test/browser.test.ts, with a DOM (ADR 0026).
 [test]
 root = "test"
+preload = ["./test/setup.ts"]

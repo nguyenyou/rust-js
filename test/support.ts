@@ -1,5 +1,6 @@
 import { expect } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { runSync, stopped } from "./child";
@@ -22,11 +23,185 @@ export function run(cmd: string[], timeout = 600_000, env: Record<string, string
   return p.stdout;
 }
 
+let rustcVersion: string | undefined;
+
+/** What a kept native program was built from, beyond its key: each file
+ * rustc read, and each variable an `env!` did, with what it was. */
+type Inputs = { files: [string, string][]; env: [string, string | null][] };
+
+const sha256 = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+
+/** `text` as `path`, a new file moved into place: another process reading it,
+ * as rustc reads a source two test files share, reads the file before or
+ * this one, never one half written. */
+export function writeWhole(path: string, text: string) {
+  const writing = `${path}.${process.pid}`;
+  writeFileSync(writing, text);
+  renameSync(writing, path);
+}
+
+/** A directory of `target/` named by `contents`: the same contents, the
+ * same directory, in any run. Where a native program's wrapper goes, so
+ * the same program is the same kept binary (`nativeBinary`). */
+export function contentDirectory(...contents: string[]): string {
+  const hash = createHash("sha256");
+  for (const content of contents) hash.update(`${content.length}:${content}`);
+  const dir = join(target, "native-sources", hash.digest("hex").slice(0, 32));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * A native program, `source` written to `dir/native.rs` and built by rustc
+ * with `flags`: its binary, kept in `target/native-cache/` and used again
+ * while nothing it was built from has changed. That's rustc's version, the
+ * flags, the source and where it is, since `include!("cases.rs")` is of the
+ * file beside it, and the libraries a flag names, as `--extern
+ * serde=libserde.rlib` does, which name where it's kept; and what rustc
+ * says the build read, each file an `include!`, a `mod` or an
+ * `include_str!` reached, however deep, and each variable an `env!` read,
+ * which are checked each time it's used. A new build of it is kept beside
+ * the ones before, which stay: another test file may be running one.
+ * A binary is built once, then, and so run once for the first time: macOS
+ * checks each new one as it first runs, which takes longer than building
+ * it, and one check at a time, however many test files run side by side.
+ * `built` says it's new, so its first run may wait its turn for that.
+ */
+export function nativeBinary(source: string, dir: string, flags: string[], timeout = 120_000): { binary: string; built: boolean } | { error: string } {
+  rustcVersion ??= run(["rustc", "-vV"]);
+  const wrapper = resolve(dir, "native.rs");
+  const hash = createHash("sha256").update(rustcVersion).update(JSON.stringify(flags)).update(wrapper).update(source);
+  for (const flag of flags) {
+    const path = flag.slice(flag.indexOf("=") + 1);
+    if (path.startsWith("/") && existsSync(path) && statSync(path).isFile()) hash.update(`${path} ${statSync(path).mtimeMs} ${statSync(path).size}`);
+  }
+  writeWhole(wrapper, source);
+  const program = join(target, "native-cache", hash.digest("hex").slice(0, 32));
+  mkdirSync(program, { recursive: true });
+  for (const kept of readdirSync(program).filter((name) => !name.startsWith("."))) {
+    if (unchanged(join(program, kept, "inputs.json"))) return { binary: join(program, kept, "native"), built: false };
+  }
+  // Built beside the others, then moved in whole, as the build of what it
+  // read: a test file running beside this one never runs half of one.
+  const building = join(program, `.building-${process.pid}-${Date.now()}`);
+  mkdirSync(building);
+  const depInfo = join(building, "native.d");
+  const p = runSync(["rustc", ...flags, wrapper, "-o", join(building, "native"), `--emit=link,dep-info=${depInfo}`], root, timeout);
+  const why = stopped(p, timeout);
+  if (why || p.code !== 0) {
+    rmSync(building, { recursive: true, force: true });
+    return { error: `rustc can't compile it${why ? `: it ${why}` : ""}:\n${p.stderr}` };
+  }
+  const read = JSON.stringify(inputs(readFileSync(depInfo, "utf8")));
+  writeFileSync(join(building, "inputs.json"), read);
+  const kept = join(program, createHash("sha256").update(read).digest("hex").slice(0, 32));
+  try {
+    renameSync(building, kept);
+  } catch {
+    // Another file built it at the same time, from the same sources.
+    rmSync(building, { recursive: true, force: true });
+  }
+  return { binary: join(kept, "native"), built: true };
+}
+
+/** What a build read, from rustc's dep-info: a line `<file>:` for each file,
+ * spaces escaped, and `# env-dep:<NAME>=<value>` for each variable. */
+function inputs(depInfo: string): Inputs {
+  const files: [string, string][] = [];
+  const env: [string, string | null][] = [];
+  for (const line of depInfo.split("\n")) {
+    const variable = line.match(/^# env-dep:([^=]+)/);
+    if (variable) env.push([variable[1], process.env[variable[1]] ?? null]);
+    else if (/[^\\]:$/.test(line) && !line.includes(": ")) {
+      const file = line.slice(0, -1).replaceAll("\\ ", " ");
+      files.push([file, sha256(file)]);
+    }
+  }
+  return { files, env };
+}
+
+/** Is what a kept build read, recorded in `record`, still what it was? */
+function unchanged(record: string): boolean {
+  if (!existsSync(record)) return false;
+  const { files, env }: Inputs = JSON.parse(readFileSync(record, "utf8"));
+  return files.every(([file, hash]) => existsSync(file) && sha256(file) === hash) && env.every(([name, value]) => (process.env[name] ?? null) === value);
+}
+
+/**
+ * `work`, done once for `claim`, a directory no one has claimed: the first
+ * process to ask does it, and one asking at the same time waits for it to
+ * finish. The claim is made whole, with its process's pid in it, and moved
+ * into place, which only one can do; it's never taken over. Work that
+ * failed, or whose process ended before it finished, is an error for the
+ * others, and so is waiting ten minutes.
+ */
+export function once(claim: string, work: () => unknown, limit = 600_000): void {
+  mkdirSync(dirname(claim), { recursive: true });
+  const mine = `${claim}.${process.pid}`;
+  rmSync(mine, { recursive: true, force: true });
+  mkdirSync(mine);
+  writeFileSync(join(mine, "pid"), String(process.pid));
+  let claimed = false;
+  try {
+    renameSync(mine, claim);
+    claimed = true;
+  } catch {
+    rmSync(mine, { recursive: true, force: true });
+  }
+  if (claimed) {
+    try {
+      work();
+    } catch (error) {
+      writeFileSync(join(claim, "failed"), String(error instanceof Error ? error.message : error));
+      throw error;
+    }
+    writeFileSync(join(claim, "done"), "");
+    return;
+  }
+  const until = Date.now() + limit;
+  for (;;) {
+    if (existsSync(join(claim, "done"))) return;
+    const failed = readIfThere(join(claim, "failed"));
+    if (failed !== undefined) throw new Error(`${claim} failed: ${failed}`);
+    const holder = Number(readIfThere(join(claim, "pid")));
+    // Looked at again: it may have finished, and ended, since.
+    if (!alive(holder) && !existsSync(join(claim, "done"))) throw new Error(`process ${holder}, doing ${claim}, ended before it finished`);
+    if (Date.now() > until) throw new Error(`waited ${limit / 60_000} minutes for process ${holder}, doing ${claim}`);
+    Bun.sleepSync(50);
+  }
+}
+
 let built = false;
+/**
+ * This checkout's compiler, built once for the run, whichever file asks
+ * first, however many run side by side (`bun test --parallel`): a build
+ * in each would take `target/debug/rust-js` away from the others while
+ * Cargo links it again, though nothing's changed. One file builds it, the
+ * others wait for it and then don't, and what they run is given it, as
+ * `RUST_JS_COMPILER`, so a script doesn't build it again either. A run is
+ * its workers' parent, or this process if there are none, by pid and when
+ * it started, so no other run, before or after, is the same one.
+ */
 export function buildCompiler() {
-  if (!built && !given) {
-    run(["cargo", "build", "--quiet"]);
-    built = true;
+  if (built || given) return;
+  const runner = String(process.env.BUN_TEST_WORKER_ID ? process.ppid : process.pid);
+  const started = run(["ps", "-o", "lstart=", "-p", runner]).trim();
+  const thisRun = createHash("sha256").update(`${runner} ${started}`).digest("hex").slice(0, 16);
+  once(join(target, "tests-build", thisRun), () => run(["cargo", "build", "--quiet"]));
+  process.env.RUST_JS_COMPILER = compiler;
+  built = true;
+}
+
+function readIfThere(file: string): string | undefined {
+  return existsSync(file) ? readFileSync(file, "utf8") : undefined;
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 let web = false;

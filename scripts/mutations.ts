@@ -443,7 +443,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/representation.rs",
     find: "                self.krate.foreign.in_library(adt.did())\n                    || (self.krate.library",
     replace: "                false\n                    || (self.krate.library",
-    tests: ["test/crates.test.ts", "-t", "prints what native"],
+    tests: ["test/crates.test.ts", "test/cargo-workspace.test.ts", "-t", "prints what native"],
   },
   {
     name: "library-vec-shared",
@@ -451,7 +451,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/representation.rs",
     find: "        (self.krate.library || self.krate.foreign.any())\n",
     replace: "        (self.krate.library && self.krate.foreign.any())\n",
-    tests: ["test/crates.test.ts", "-t", "prints what native"],
+    tests: ["test/crates.test.ts", "test/cargo-workspace.test.ts", "-t", "prints what native"],
   },
   {
     name: "library-generic-drops-nothing",
@@ -459,7 +459,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/analysis.rs",
     find: "    if library {\n        for &id in fns.keys() {\n",
     replace: "    if false {\n        for &id in fns.keys() {\n",
-    tests: ["test/crates.test.ts", "-t", "prints what native"],
+    tests: ["test/crates.test.ts", "test/cargo-workspace.test.ts", "-t", "prints what native"],
   },
   {
     name: "library-codec-unused",
@@ -467,7 +467,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/pipeline.rs",
     find: "                    (used.contains(&id) || (export_library && super::library::reachable(tcx, id))) && queued.insert(id)\n",
     replace: "                    used.contains(&id) && queued.insert(id)\n",
-    tests: ["test/crates.test.ts", "-t", "prints what native"],
+    tests: ["test/crates.test.ts", "test/cargo-workspace.test.ts", "-t", "prints what native"],
   },
   {
     name: "library-derive-pruned",
@@ -475,7 +475,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/pipeline.rs",
     find: "                .filter(|&id| export_library && super::library::reachable(tcx, id)),\n",
     replace: "                .filter(|_| false),\n",
-    tests: ["test/crates.test.ts", "-t", "prints what native"],
+    tests: ["test/crates.test.ts", "test/cargo-workspace.test.ts", "-t", "prints what native"],
   },
   {
     name: "library-crate-hash-unchecked",
@@ -643,7 +643,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: '    if emitted.iter().any(|kind| kind == "link") {\n',
     replace: '    if emitted.iter().any(|kind| kind == "link") && false {\n',
-    tests: ["test/crates.test.ts", "-t", "done when their JS is"],
+    tests: ["test/cargo-workspace.test.ts", "-t", "done when their JS is"],
   },
   {
     name: "cargo-probe-compiled",
@@ -651,7 +651,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: '        .any(|flag| flag == "-" || flag == "-vV" || flag.starts_with("--print"));\n',
     replace: '        .any(|flag| flag == "-vV");\n',
-    tests: ["test/crates.test.ts", "-t", "Cargo workspace"],
+    tests: ["test/cargo-workspace.test.ts", "test/cargo-react.test.ts", "-t", "Cargo workspace"],
   },
   {
     name: "cargo-app-not-library",
@@ -659,7 +659,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: '        "--library".into(),\n    ];\n',
     replace: '    ];\n    if std::env::var_os("CARGO_PRIMARY_PACKAGE").is_none() {\n        ours.push("--library".into());\n    }\n',
-    tests: ["test/crates.test.ts", "-t", "Cargo workspace"],
+    tests: ["test/cargo-workspace.test.ts", "test/cargo-react.test.ts", "-t", "Cargo workspace"],
   },
   {
     name: "cargo-transitive-untold",
@@ -667,7 +667,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: "        .flat_map(|recorded| recorded.lines().map(PathBuf::from).collect::<Vec<_>>())\n",
     replace: "        .flat_map(|recorded| recorded.lines().take(1).map(PathBuf::from).collect::<Vec<_>>())\n",
-    tests: ["test/crates.test.ts", "-t", "Cargo workspace"],
+    tests: ["test/cargo-workspace.test.ts", "test/cargo-react.test.ts", "-t", "Cargo workspace"],
   },
   {
     name: "cargo-rust-js-untracked",
@@ -675,7 +675,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: "    first.push(' ');\n",
     replace: "    first.push(' ');\n    let exe = PathBuf::new();\n",
-    tests: ["test/crates.test.ts", "-t", "done when their JS is"],
+    tests: ["test/cargo-workspace.test.ts", "-t", "done when their JS is"],
   },
   {
     name: "cargo-missing-manifest-ignored",
@@ -683,7 +683,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: "    if let Some(gone) = found.iter().find(|manifest| !manifest.is_file()) {\n",
     replace: "    found.retain(|manifest| manifest.is_file());\n    if let Some(gone) = found.iter().find(|manifest| !manifest.is_file()) {\n",
-    tests: ["test/crates.test.ts", "-t", "done when their JS is"],
+    tests: ["test/cargo-workspace.test.ts", "-t", "done when their JS is"],
   },
   {
     name: "cargo-shared-output",
@@ -691,7 +691,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: '    let dir = out_dir.join("rust-js").join(format!("{name}{extra}"));\n',
     replace: '    let dir = out_dir.join("rust-js").join(&name);\n',
-    tests: ["test/crates.test.ts", "-t", "another feature set"],
+    tests: ["test/cargo-workspace.test.ts", "-t", "another feature set"],
   },
   {
     name: "cargo-record-outside-plan",
@@ -699,7 +699,7 @@ export const mutations: Mutation[] = [
     file: "src/main.rs",
     find: "                    callbacks.output.extra = extra;\n",
     replace: "                    for (path, bytes) in &extra {\n                        let _ = std::fs::write(path, bytes);\n                    }\n",
-    tests: ["test/crates.test.ts", "-t", "can't record what it made"],
+    tests: ["test/cargo-workspace.test.ts", "-t", "can't record what it made"],
   },
   {
     name: "cargo-bindings-compiled",
@@ -707,7 +707,7 @@ export const mutations: Mutation[] = [
     file: "src/cargo.rs",
     find: "BINDINGS.contains(&name.as_str())",
     replace: "BINDINGS.contains(&name.as_str()) && false",
-    tests: ["test/crates.test.ts", "-t", "installed inside a Cargo workspace"],
+    tests: ["test/cargo-react.test.ts", "-t", "installed inside a Cargo workspace"],
   },
   {
     name: "binding-value-bare",

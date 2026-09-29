@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 import { compileFailure, runSync, stopped, type Exit } from "./child";
 import { decode, encode, same, type Outcome } from "./oracle";
-import { compiler, root, run } from "./support";
+import { compiler, contentDirectory, nativeBinary, root, run } from "./support";
 
 export const node = Bun.which("node");
 // The generated JS runs under Node, the runtime rust-js targets (ADR 0095);
@@ -36,17 +36,20 @@ export type Run = { stdout: string; stderr: string; bytes: Exit["bytes"]; outcom
 // by rust-js: `RUST_JS_COMPILE_TIMEOUT` shortens it for a test of a
 // compiler that never ends.
 const timeout = 10_000;
+// A native binary's first run waits for macOS to check it, behind the
+// other new ones when the test files run side by side (`nativeBinary`).
+const firstRunTimeout = 60_000;
 const compileTimeout = Number(process.env.RUST_JS_COMPILE_TIMEOUT ?? 120_000);
 
 /** Runs `cmd`, which writes how `main` ended to `outcomeFile`, and says
  * what it printed and how it ended. A run that fails after writing its
  * outcome, as an unhandled rejection after `main` returns makes it, failed:
  * a run counts only if it exits 0, and only by the outcome it wrote itself. */
-export function execute(cmd: string[], outcomeFile: string): Run {
+export function execute(cmd: string[], outcomeFile: string, limit = timeout): Run {
   rmSync(outcomeFile, { force: true });
-  const p = runSync(cmd, root, timeout);
+  const p = runSync(cmd, root, limit);
   const { stdout, stderr, bytes } = p;
-  const why = stopped(p, timeout);
+  const why = stopped(p, limit);
   if (why) return { stdout, stderr, bytes, outcome: why };
   if (!existsSync(outcomeFile)) return { stdout, stderr, bytes, outcome: `exited ${p.code} without an outcome` };
   const outcome = readFileSync(outcomeFile, "utf8");
@@ -59,10 +62,11 @@ const rustString = (s: string) => JSON.stringify(s);
 
 // Natively, the case is a module whose `main` the wrapper calls, catching a
 // panic as the JS runner does. The panic hook is silenced, so stderr is only
-// what the program writes.
+// what the program writes. The case is included where it is, so what it
+// reads beside it, an `include_str!`, is found as the JS's compile finds it;
+// the wrapper is where its text says, so a case is one kept binary.
 export function runNative(file: string, dir: string, edition = "2024"): Run | string {
-  const wrapper = join(dir, "native.rs");
-  writeFileSync(wrapper, `mod case {
+  const source = `mod case {
     include!(${rustString(file)});
     pub fn entry() { main() }
 }
@@ -90,13 +94,11 @@ fn main() {
     };
     std::fs::write(std::env::args().nth(1).expect("an outcome file"), outcome).expect("the outcome is written");
 }
-`);
-  const binary = join(dir, "native");
-  const build = runSync(["rustc", `--edition=${edition}`, "-Coverflow-checks=off", "-Awarnings", wrapper, "-o", binary], root, compileTimeout);
-  const why = stopped(build, compileTimeout);
-  if (why || build.code !== 0) return `rustc can't compile it${why ? `: it ${why}` : ""}:\n${build.stderr}`;
+`;
+  const built = nativeBinary(source, contentDirectory(source), [`--edition=${edition}`, "-Coverflow-checks=off", "-Awarnings"], compileTimeout);
+  if ("error" in built) return built.error;
   const outcomeFile = join(dir, "native.json");
-  return execute([binary, outcomeFile], outcomeFile);
+  return execute([built.binary, outcomeFile], outcomeFile, built.built ? firstRunTimeout : timeout);
 }
 
 /** A compile that failed: rust-js's clear rejection, or a crash, however

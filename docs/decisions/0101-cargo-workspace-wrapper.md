@@ -155,7 +155,9 @@ without rust-js, builds from them, as it does a committed `App.jsx`.
 
 ## Consequences
 
-- **The proof** (`test/crates.test.ts`): ADR 0100's `validation`, `models`
+- **The proof** (`test/cargo-workspace.test.ts`, and
+  `test/cargo-in-source.test.ts` and `test/cargo-react.test.ts` of the JS
+  in source and the bindings): ADR 0100's `validation`, `models`
   and `frontend` as a workspace, with serde from crates.io, and a native
   `check` binary calling `frontend::main`. Built with `cargo check`, the
   JS prints what `cargo run -p check` does, and after an edit to

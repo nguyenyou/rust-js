@@ -187,8 +187,10 @@ Bun runs TypeScript directly but does not type-check it. The manual Check workfl
 also runs this command. JavaScript dependencies and generated JavaScript are not
 subject to strict source checking.
 
-Run `bun test` for native Rust comparisons, output snapshots, compiler
-diagnostics, source maps, React, browser, and Vite integration tests.
+Run `bun run test` for native Rust comparisons, output snapshots, compiler
+diagnostics, source maps, React, browser, and Vite integration tests, the
+files side by side ([ADR 0104](docs/decisions/0104-parallel-tests.md)), or
+`bun run test:serial` one after another.
 Run `bun run fmt` to format Rust and playground JSX, or `bun run fmt:check` to check.
 Run `bun run` to list all tasks.
 

@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { generate, print, reduce, size, type Program } from "./generate";
 import { same } from "./oracle";
 import { agree, compileJs, runJs, runNative, runtimes, show, type Run } from "./programs";
-import { buildCompiler, compiler, fixture, root, target } from "./support";
+import { buildCompiler, compiler, contentDirectory, fixture, root, target, writeWhole } from "./support";
 
 /** A setting that's a whole number, at least `least`, or none, and then
  * `otherwise`: anything else fails the run before a seed does, not as a
@@ -56,8 +56,11 @@ type Verdict =
 /** What happens to a program, natively and as JS. */
 function judge(program: Program, seed: number): Verdict {
   const dir = fixture(`fuzz-${seed}`);
-  const file = join(dir, "program.rs");
-  writeFileSync(file, print(program, seed));
+  // Where its text says, so the same program is one kept native binary
+  // from run to run (`nativeBinary`); the JS is compiled each time.
+  const text = print(program, seed);
+  const file = join(contentDirectory(text), "program.rs");
+  writeWhole(file, text);
   const native = runNative(file, dir);
   if (typeof native === "string") return { kind: "invalid", error: native };
   const compiled = compileJs(file, dir);
