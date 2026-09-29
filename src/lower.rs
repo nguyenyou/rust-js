@@ -135,6 +135,29 @@ struct Var {
     depth: usize,
 }
 
+/// What a body knows of its variables: what each is in JS, and what its
+/// lowering found of some. A closure's body and a coroutine's share their
+/// enclosing body's, since they name its variables; a trait's default body,
+/// copied into an impl, has its own (`enter_body`). Something known of a
+/// variable, by its `LocalVarId`, goes here, and so goes with it.
+#[derive(Default)]
+struct Locals {
+    vars: HashMap<LocalVarId, Var>,
+    /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
+    /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
+    /// in (ADR 0059). While it lives, nothing else can change that entry.
+    slots: HashMap<LocalVarId, (Expr, Expr)>,
+    /// Locals `next()` is called on that are bound as a `$iter`, which
+    /// `next()` can step (ADR 0071).
+    iterators: HashSet<LocalVarId>,
+    /// Parameters that are a `&mut` to a value JS can't change in place, a
+    /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
+    boxes: HashSet<LocalVarId>,
+    /// Variables bound once to a `&mut` of a value that isn't an object:
+    /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
+    aliases: HashSet<LocalVarId>,
+}
+
 /// A variable bound by a pattern, and the place in the subject it matched.
 struct Binding<'tcx> {
     var: LocalVarId,
@@ -180,15 +203,18 @@ struct Loop {
 }
 
 /// A body lowered inside the one being lowered, and what it starts from
-/// (`enter_body`). What isn't said here, it shares with the enclosing body.
+/// (`enter_body`). Each has its own THIR, owner and stepped locals; what
+/// else isn't said here, it shares with the enclosing body.
 enum Nested<'tcx> {
-    /// A closure's, an arrow: the enclosing variables and captures, loops
+    /// A closure's, an arrow: the enclosing `Locals` and captures, loops
     /// of its own, and these names to start from.
     Closure { names: HashSet<String> },
-    /// An `async fn`'s coroutine, which in JS is its function's own body.
+    /// An `async fn`'s coroutine, which in JS is its function's own body:
+    /// everything else is the function's.
     Coroutine,
-    /// A trait's default body, copied into an impl (ADR 0049): variables of
-    /// its own, and the impl's evidence, arguments and typing environment.
+    /// A trait's default body, copied into an impl (ADR 0049): `Locals` of
+    /// its own, a copy of the names, and the impl's evidence, arguments,
+    /// typing environment and drops.
     Default {
         evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
         self_args: ty::GenericArgsRef<'tcx>,
@@ -202,18 +228,32 @@ enum Nested<'tcx> {
 }
 
 /// What a nested body took of the enclosing one's state, given back when
-/// it's left (`leave_body`).
+/// it's left (`leave_body`): what every body has of its own, and what its
+/// kind has too, as `Nested` says.
 struct Enclosing<'a, 'tcx> {
     thir: &'a Thir<'tcx>,
     body_owner: DefId,
     stepped: HashSet<LocalVarId>,
-    loops: Option<Vec<Loop>>,
-    names: Option<HashSet<String>>,
-    vars: Option<HashMap<LocalVarId, Var>>,
-    evidence: Option<Vec<(ty::TraitRef<'tcx>, Expr)>>,
-    self_args: Option<Option<ty::GenericArgsRef<'tcx>>>,
-    typing_env: Option<ty::TypingEnv<'tcx>>,
-    drops: Option<drops::SwappedDrops<'tcx>>,
+    kind: EnclosingKind<'tcx>,
+}
+
+/// What each kind of nested body took, by `Nested`'s kinds.
+enum EnclosingKind<'tcx> {
+    Closure { loops: Vec<Loop>, names: HashSet<String> },
+    Coroutine,
+    Default(Box<ItemScope<'tcx>>),
+}
+
+/// What a trait's default body, copied into an impl, has of its own that
+/// another body lowers with: the item's names, `Locals`, evidence, arguments,
+/// typing environment and drops.
+struct ItemScope<'tcx> {
+    names: HashSet<String>,
+    locals: Locals,
+    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+    self_args: Option<ty::GenericArgsRef<'tcx>>,
+    typing_env: ty::TypingEnv<'tcx>,
+    drops: drops::SwappedDrops<'tcx>,
 }
 
 /// Immutable analysis inputs shared by function lowering.
@@ -259,7 +299,8 @@ struct FnCx<'a, 'tcx> {
     thir: &'a Thir<'tcx>,
     /// The module receiving this function and its recorded dependencies.
     module: LocalModDefId,
-    vars: HashMap<LocalVarId, Var>,
+    /// What this body knows of its variables.
+    locals: Locals,
     /// JS names already taken in this function.
     names: HashSet<String>,
     /// Those taken by the module: its functions, imports and globals.
@@ -275,21 +316,9 @@ struct FnCx<'a, 'tcx> {
     /// In a generic type's derived `serialize` or `deserialize` (ADR
     /// 0080): each type parameter, and the parameter that writes or reads it.
     codec_params: Vec<(Ty<'tcx>, String)>,
-    /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
-    /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
-    /// in (ADR 0059). While it lives, nothing else can change that entry.
-    slots: HashMap<LocalVarId, (Expr, Expr)>,
     /// Locals that `next()` is called on (ADR 0071): an iterator over an
     /// array that's stepped through, a `$iter` object that knows where it is.
     stepped: HashSet<LocalVarId>,
-    /// Those of them bound as a `$iter`, which `next()` can step.
-    iterators: HashSet<LocalVarId>,
-    /// Parameters that are a `&mut` to a value JS can't change in place, a
-    /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
-    boxes: HashSet<LocalVarId>,
-    /// Variables bound once to a `&mut` of a value that isn't an object:
-    /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
-    aliases: HashSet<LocalVarId>,
     /// The recursive types being cloned, and the function each one's clone
     /// is (`clone_value`), which a clone inside it calls.
     cloning: Vec<(Ty<'tcx>, String)>,
@@ -401,7 +430,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }) = param.pat.as_deref()
             {
                 let name = self.bind(*var, name.as_str(), false);
-                self.boxes.insert(*var);
+                self.locals.boxes.insert(*var);
                 names.push(js::Pattern::Name(name));
                 continue;
             }
@@ -898,7 +927,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::Iter);
             let value = Expr::call(Expr::var("$iter"), vec![items]);
             let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
-            self.iterators.insert(var);
+            self.locals.iterators.insert(var);
             let kind = if mutability == Mutability::Mut {
                 StmtKind::Let(name, Some(value))
             } else {
@@ -944,7 +973,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ExprKind::Tuple { ref fields } => self.tuple_parts(fields, "arg", true, out)?,
                 _ => self.expr(init, out)?,
             };
-            self.vars.insert(
+            self.locals.vars.insert(
                 var,
                 Var {
                     place: parts,
@@ -969,7 +998,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && !self.has_drops(self.thir[init].ty)
         {
             let value = self.question(init, tried, Some(name.as_str()), out)?;
-            self.vars.insert(
+            self.locals.vars.insert(
                 var,
                 Var {
                     place: value,
@@ -988,14 +1017,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             } = pat.kind
             && let Some(init) = init
             && let ExprKind::UpvarRef { var_hir_id, .. } = self.thir[self.strip(init)].kind
-            && let Some(outer) = self.vars.get(&var_hir_id)
+            && let Some(outer) = self.locals.vars.get(&var_hir_id)
         {
             let alias = Var {
                 place: outer.place.clone(),
                 mutable: mutability == Mutability::Mut,
                 depth: outer.depth,
             };
-            self.vars.insert(var, alias);
+            self.locals.vars.insert(var, alias);
             return Ok(());
         }
         // `let y = &mut x;`: `y` names `x`, so `*y = 5` is `x = 5` (ADR 0099).
@@ -1011,17 +1040,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && !self.is_object(inner)
             && let Some(init) = init
             && let moved = match self.thir[self.strip(init)].kind {
-                ExprKind::VarRef { id } => self.aliases.contains(&id).then_some(id),
+                ExprKind::VarRef { id } => self.locals.aliases.contains(&id).then_some(id),
                 _ => None,
             }
             && let Some(borrowed) = self.mut_borrowed(init).or(moved.map(|_| init))
         {
             let place = match moved {
-                Some(id) => self.vars[&id].place.clone(),
+                Some(id) => self.locals.vars[&id].place.clone(),
                 None => self.fixed_place(borrowed, pat.span, out)?,
             };
-            self.aliases.insert(var);
-            self.vars.insert(
+            self.locals.aliases.insert(var);
+            self.locals.vars.insert(
                 var,
                 Var {
                     place,
@@ -1239,9 +1268,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     && matches!(*b.ty.kind(), ty::Ref(_, inner, _) if !self.is_object(inner))
                     && self.is_let(&b.place)
                 {
-                    self.aliases.insert(b.var);
+                    self.locals.aliases.insert(b.var);
                 }
-                self.vars.insert(
+                self.locals.vars.insert(
                     b.var,
                     Var {
                         place: b.place,
@@ -1710,8 +1739,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         };
         let name = self.fresh("i");
-        self.aliases.insert(var);
-        self.vars.insert(
+        self.locals.aliases.insert(var);
+        self.locals.vars.insert(
             var,
             Var {
                 place: Expr::index(place, Expr::var(&name)),
@@ -1810,12 +1839,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         mutable: false,
                         depth: self.loops.len(),
                     };
-                    self.vars.insert(b.var, place);
+                    self.locals.vars.insert(b.var, place);
                 }
                 let mut before = Vec::new();
                 let guard = self.expr(guard, &mut before);
                 for b in &bindings {
-                    self.vars.remove(&b.var);
+                    self.locals.vars.remove(&b.var);
                 }
                 let guard = guard?;
                 if before.is_empty() {
@@ -2063,14 +2092,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let name = self.bind(*var, name.as_str(), true);
         let there = Expr::call(Expr::member(map.clone(), "get"), vec![key.clone()]);
         out.push(StmtKind::Let(name.clone(), Some(there)).at(self.js_span(pat.span)));
-        self.slots.insert(*var, (map, key));
+        self.locals.slots.insert(*var, (map, key));
         Ok(Some(Expr::bin(Op::LooseNe, Expr::var(&name), Expr::null())))
     }
 
     /// Is `lhs` `*n`, with `n` a `&mut` from `slot_binding`?
     fn slots_write(&self, lhs: ExprId) -> bool {
         matches!(self.thir[self.strip(lhs)].kind, ExprKind::Deref { arg }
-            if matches!(self.thir[self.strip(arg)].kind, ExprKind::VarRef { id } if self.slots.contains_key(&id)))
+            if matches!(self.thir[self.strip(arg)].kind, ExprKind::VarRef { id } if self.locals.slots.contains_key(&id)))
     }
 
     /// `*n = v` or `*n += v` through a `&mut` from `slot_binding`: the copy,
@@ -2088,10 +2117,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind else {
             return Ok(None);
         };
-        let Some((map, key)) = self.slots.get(&id).cloned() else {
+        let Some((map, key)) = self.locals.slots.get(&id).cloned() else {
             return Ok(None);
         };
-        let place = self.vars[&id].place.clone();
+        let place = self.locals.vars[&id].place.clone();
         let written = value(self, place.clone())?;
         let js_span = self.js_span(span);
         out.push(StmtKind::Assign(place.clone(), written).at(js_span));
@@ -2373,9 +2402,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 arg,
             } if let ExprKind::Deref { arg: inner } = self.thir[self.strip(arg)].kind
                 && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
-                && self.boxes.contains(&id) =>
+                && self.locals.boxes.contains(&id) =>
             {
-                Ok(self.vars[&id].place.clone())
+                Ok(self.locals.vars[&id].place.clone())
             }
             // `&mut` to a JS object is the object (ADR 0025).
             ExprKind::Borrow {
@@ -3284,25 +3313,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// fails leaves the state as it is: its whole item fails with it.
     fn enter_body(&mut self, thir: &'a Thir<'tcx>, owner: DefId, nested: Nested<'tcx>) -> R<Enclosing<'a, 'tcx>> {
         let own = stepped_locals(self.tcx, thir);
-        let mut enclosing = Enclosing {
-            thir: std::mem::replace(&mut self.thir, thir),
-            body_owner: std::mem::replace(&mut self.body_owner, owner),
-            stepped: self.stepped.clone(),
-            loops: None,
-            names: None,
-            vars: None,
-            evidence: None,
-            self_args: None,
-            typing_env: None,
-            drops: None,
-        };
-        match nested {
+        let thir = std::mem::replace(&mut self.thir, thir);
+        let body_owner = std::mem::replace(&mut self.body_owner, owner);
+        let stepped = self.stepped.clone();
+        let kind = match nested {
             Nested::Closure { names } => {
-                enclosing.loops = Some(std::mem::take(&mut self.loops));
-                enclosing.names = Some(std::mem::replace(&mut self.names, names));
                 self.stepped.extend(own);
+                EnclosingKind::Closure {
+                    loops: std::mem::take(&mut self.loops),
+                    names: std::mem::replace(&mut self.names, names),
+                }
             }
-            Nested::Coroutine => self.stepped.extend(own),
+            Nested::Coroutine => {
+                self.stepped.extend(own);
+                EnclosingKind::Coroutine
+            }
             Nested::Default {
                 evidence,
                 self_args,
@@ -3310,17 +3335,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 drops,
                 unsupported,
             } => {
-                enclosing.drops = Some(self.swap_drops(drops, unsupported));
-                enclosing.names = Some(self.names.clone());
-                enclosing.vars = Some(std::mem::take(&mut self.vars));
-                enclosing.evidence = Some(std::mem::replace(&mut self.evidence, evidence));
-                enclosing.self_args = Some(self.self_args.replace(self_args));
-                enclosing.typing_env = Some(std::mem::replace(&mut self.typing_env, typing_env));
                 self.stepped = own;
+                EnclosingKind::Default(Box::new(ItemScope {
+                    drops: self.swap_drops(drops, unsupported),
+                    names: self.names.clone(),
+                    locals: std::mem::take(&mut self.locals),
+                    evidence: std::mem::replace(&mut self.evidence, evidence),
+                    self_args: self.self_args.replace(self_args),
+                    typing_env: std::mem::replace(&mut self.typing_env, typing_env),
+                }))
             }
-        }
+        };
         self.drop_facts()?;
-        Ok(enclosing)
+        Ok(Enclosing {
+            thir,
+            body_owner,
+            stepped,
+            kind,
+        })
     }
 
     /// Finish the body `enter_body` started, and go back to the enclosing one.
@@ -3329,26 +3361,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.thir = enclosing.thir;
         self.body_owner = enclosing.body_owner;
         self.stepped = enclosing.stepped;
-        if let Some(loops) = enclosing.loops {
-            self.loops = loops;
-        }
-        if let Some(names) = enclosing.names {
-            self.names = names;
-        }
-        if let Some(vars) = enclosing.vars {
-            self.vars = vars;
-        }
-        if let Some(evidence) = enclosing.evidence {
-            self.evidence = evidence;
-        }
-        if let Some(self_args) = enclosing.self_args {
-            self.self_args = self_args;
-        }
-        if let Some(typing_env) = enclosing.typing_env {
-            self.typing_env = typing_env;
-        }
-        if let Some(drops) = enclosing.drops {
-            self.restore_drops(drops);
+        match enclosing.kind {
+            EnclosingKind::Closure { loops, names } => {
+                self.loops = loops;
+                self.names = names;
+            }
+            EnclosingKind::Coroutine => {}
+            EnclosingKind::Default(scope) => {
+                let ItemScope {
+                    names,
+                    locals,
+                    evidence,
+                    self_args,
+                    typing_env,
+                    drops,
+                } = *scope;
+                self.names = names;
+                self.locals = locals;
+                self.evidence = evidence;
+                self.self_args = self_args;
+                self.typing_env = typing_env;
+                self.restore_drops(drops);
+            }
         }
         Ok(())
     }
@@ -3374,7 +3408,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if matches!(self.thir[u].kind, ExprKind::Borrow { .. }) {
             return false;
         }
-        let Some(var) = self.root_var(u).and_then(|id| self.vars.get(&id)) else {
+        let Some(var) = self.root_var(u).and_then(|id| self.locals.vars.get(&id)) else {
             return false;
         };
         if !var.mutable {
@@ -3546,7 +3580,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         match self.thir[self.strip(e)].kind {
             ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => {
-                let var = &self.vars[&id];
+                let var = &self.locals.vars[&id];
                 Some((var.place.clone(), var.mutable))
             }
             // A union's field is no place: it has no representation yet.
@@ -3557,9 +3591,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // `*out` of a box (ADR 0072): what's in it.
             ExprKind::Deref { arg }
                 if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
-                    && self.boxes.contains(&id) =>
+                    && self.locals.boxes.contains(&id) =>
             {
-                Some((Expr::member(self.vars[&id].place.clone(), "value"), true))
+                Some((Expr::member(self.locals.vars[&id].place.clone(), "value"), true))
             }
             // A reference is the value it points to, so `*r` is where `r` is.
             // (A static is reached through a pointer to it.)
@@ -3639,7 +3673,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js::ExprKind::Var(name) = &place.kind else {
             return false;
         };
-        self.vars
+        self.locals
+            .vars
             .values()
             .chain(self.captures.values())
             .any(|v| v.mutable && matches!(&v.place.kind, js::ExprKind::Var(n) if n == name))
@@ -3679,7 +3714,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             matches!(self.thir[r].ty.kind(), ty::Ref(..))
                 && match self.thir[self.strip(r)].kind {
                     ExprKind::VarRef { id } => {
-                        self.vars.get(&id).is_some_and(|v| v.mutable) && !self.aliases.contains(&id)
+                        self.locals.vars.get(&id).is_some_and(|v| v.mutable) && !self.locals.aliases.contains(&id)
                     }
                     _ => true,
                 }
@@ -3924,9 +3959,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // One that names a place, as a `ref mut` binding does, writes it.
         let names_place = |arg: ExprId| match self.thir[self.strip(arg)].kind {
             ExprKind::VarRef { id } => {
-                self.boxes.contains(&id)
-                    || self.aliases.contains(&id)
+                self.locals.boxes.contains(&id)
+                    || self.locals.aliases.contains(&id)
                     || self
+                        .locals
                         .vars
                         .get(&id)
                         .is_some_and(|v| matches!(v.place.kind, js::ExprKind::Member(..) | js::ExprKind::Index(..)))
@@ -3954,7 +3990,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A `&mut` in a variable is its place (ADR 0099). Read as a value,
         // `generic(y)`, it would be the place's value, not a `&mut`.
         if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } = self.thir[self.strip(e)].kind
-            && self.aliases.contains(&id)
+            && self.locals.aliases.contains(&id)
             && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
         {
             return Err(self.unsupported(self.thir[e].span, "a `&mut` in a variable used as a value"));
@@ -4038,7 +4074,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     fn bind(&mut self, var: LocalVarId, name: &str, mutable: bool) -> String {
         let name = self.fresh(&camel_case(name));
-        self.vars.insert(
+        self.locals.vars.insert(
             var,
             Var {
                 place: Expr::var(&name),

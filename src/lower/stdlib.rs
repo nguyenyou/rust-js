@@ -290,7 +290,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => self.strip(e),
             };
             if let ExprKind::VarRef { id } = self.thir[e].kind
-                && self.boxes.contains(&id)
+                && self.locals.boxes.contains(&id)
             {
                 *value = Expr::member(std::mem::replace(value, Expr::undefined()), "value");
             }

@@ -76,7 +76,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let stable = match &value.kind {
             js::ExprKind::Symbol(_) | js::ExprKind::Arrow(..) | js::ExprKind::AsyncArrow(..) => true,
             js::ExprKind::Var(name) => {
-                self.vars
+                self.locals
+                    .vars
                     .values()
                     .any(|var| !var.mutable && matches!(&var.place.kind, js::ExprKind::Var(n) if n == name))
                     || out

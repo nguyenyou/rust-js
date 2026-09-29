@@ -2,7 +2,7 @@
 
 use super::analysis::{AnalyzedCrate, analyze_crate, is_thread_local};
 use super::bindings::Export;
-use super::{Body, CrateFacts, FnCx, const_js, eval_const, module_file, module_symbol, static_value};
+use super::{Body, CrateFacts, FnCx, Locals, const_js, eval_const, module_file, module_symbol, static_value};
 use crate::js::{self, Expr, Prop, StmtKind};
 use crate::program::{ImportRequest, LoweredModule, Unlinked, UnlinkedModule};
 use crate::runtime::Helper;
@@ -165,7 +165,7 @@ pub fn lower_crate<'tcx>(
             captures: HashMap::new(),
             thir: body.map_or(&no_body, |body| &body.thir),
             module,
-            vars: HashMap::new(),
+            locals: Locals::default(),
             // Locals must never shadow a function or an import of this file.
             names: taken[&module].clone(),
             module_names: &taken[&module],
@@ -175,11 +175,7 @@ pub fn lower_crate<'tcx>(
             jsx: false,
             writer: None,
             codec_params: Vec::new(),
-            slots: HashMap::new(),
             stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
-            iterators: HashSet::new(),
-            boxes: HashSet::new(),
-            aliases: HashSet::new(),
             cloning: Vec::new(),
             item: def_id,
             representable: RefCell::new(HashMap::new()),

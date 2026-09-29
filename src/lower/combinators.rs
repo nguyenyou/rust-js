@@ -110,7 +110,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => self.strip(e),
         };
         let ty = self.thir[e].ty;
-        self.is_peekable(ty) || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.iterators.contains(&id))
+        self.is_peekable(ty)
+            || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.locals.iterators.contains(&id))
     }
 
     /// Is `e` a place, not an iterator just made?

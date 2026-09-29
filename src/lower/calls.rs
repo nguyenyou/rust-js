@@ -1026,7 +1026,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return self.assignee(place);
             }
         } else if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
-            && self.boxes.contains(&id)
+            && self.locals.boxes.contains(&id)
             && let Some((boxed, _)) = self.place(arg)
         {
             return Ok(Expr::member(boxed, "value"));
@@ -1060,7 +1060,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `&mut *out` of a box is the box itself.
         if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
-            && self.boxes.contains(&id)
+            && self.locals.boxes.contains(&id)
         {
             return None;
         }

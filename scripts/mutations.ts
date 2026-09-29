@@ -313,8 +313,8 @@ export const mutations: Mutation[] = [
     name: "closure-stepped-iterators",
     breaks: "a closure's body doesn't find its own stepped iterators, and `it.next()` in one is rejected",
     file: "src/lower.rs",
-    find: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n                self.stepped.extend(own);\n",
-    replace: "                enclosing.names = Some(std::mem::replace(&mut self.names, names));\n",
+    find: "            Nested::Closure { names } => {\n                self.stepped.extend(own);\n",
+    replace: "            Nested::Closure { names } => {\n",
     tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
   },
   {
@@ -608,9 +608,9 @@ export const mutations: Mutation[] = [
   {
     name: "default-drops-impl-indices",
     breaks: "a default copied into an impl takes the impl's drops by their indices, so `Self` drops as the impl's `T` does",
-    file: "src/lower.rs",
-    find: "                enclosing.drops = Some(self.swap_drops(drops, unsupported));\n",
-    replace: "                drop((drops, unsupported));\n",
+    file: "src/lower/drops.rs",
+    find: "            params: std::mem::replace(&mut self.drop_state.param_drops, drops),\n",
+    replace: "            params: { drop(drops); self.drop_state.param_drops.clone() },\n",
     tests: ["test/corpus.test.ts", "-t", "drop_impl_indirect"],
   },
   {
@@ -801,8 +801,8 @@ export const mutations: Mutation[] = [
     name: "mut-ref-as-value",
     breaks: "`go(y)` of a `&mut` in a variable, a generic `T`, passes its place's value, which `*self += 1` can't write",
     file: "src/lower.rs",
-    find: "            && self.aliases.contains(&id)\n            && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))",
-    replace: "            && self.aliases.contains(&id)\n            && false",
+    find: "            && self.locals.aliases.contains(&id)\n            && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))",
+    replace: "            && self.locals.aliases.contains(&id)\n            && false",
     tests: ["test/diagnostics.test.ts", "-t", "passed as a generic value"],
   },
   {

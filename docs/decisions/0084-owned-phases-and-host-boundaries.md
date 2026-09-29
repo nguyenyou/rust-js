@@ -80,6 +80,13 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   what it drops (ADR 0098). Found in review: each path swapped its own set
   of fields, and a closure's and a copied default's stepped iterators (ADR
   0071) weren't their own, so `it.next()` in one was rejected.
+  What a body knows of its variables, each one's JS meaning and what was
+  found of some (boxes, aliases, slots, iterators), is one `Locals`: a
+  closure and a coroutine share their enclosing body's, a copied default
+  has its own, and what's added to it goes with it. What a nested body
+  took is one `EnclosingKind` for each kind, which `leave_body` gives
+  back as `enter_body` took it. Found in review: `aliases` (ADR 0099) was
+  added, and nothing said whether a copied default had its own.
 - Struct-update scratch values are invocation-local. A discarded call receives
   that destination explicitly; its argument calls still produce their values.
 - `runtime.rs` owns helper dependency closure and stable emission order. Feature
