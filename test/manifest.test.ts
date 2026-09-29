@@ -137,6 +137,12 @@ pub fn roundtrip(text: &str) -> String {
     const builder = createNativeBuilder(options);
     const prepared = await builder.prepare();
     expect(prepared.flags.some(flag => flag.startsWith("serde="))).toBe(true);
+    // Where serde's libraries are, in an order of their own: Cargo reports
+    // what it builds as each finishes, and the flags compare equal to the
+    // next build's, of nothing, in its order. Found flaky in review.
+    const directories = prepared.flags.filter((flag) => flag.startsWith("dependency="));
+    expect(directories.length).toBeGreaterThan(1);
+    expect(directories).toEqual([...directories].sort());
     expect(builder.watchFiles.some(file => file.endsWith("serde/Cargo.lock"))).toBe(true);
     await builder.compile({ crate: source, output, manifest: manifestPath });
     expect((await import(output)).roundtrip('{"count":41}')).toBe('{"count":42}');

@@ -147,7 +147,9 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
         if (!file || !existsSync(file)) throw new Error(`Cargo produced no ${name} metadata`);
         flags.push("--extern", `${name}=${file}`);
       }
-      for (const directory of directories) flags.push("-L", `dependency=${directory}`);
+      // Sorted: Cargo reports what it builds as each finishes, and one build's
+      // flags must be the next's.
+      for (const directory of [...directories].sort()) flags.push("-L", `dependency=${directory}`);
     }
     return { flags, react };
   }
