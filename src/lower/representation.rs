@@ -154,6 +154,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         !ty.is_ref() && !matches!(ty.kind(), ty::Param(_)) && !self.is_object(ty) && self.unsupported_part(ty).is_none()
     }
 
+    /// A type parameter a `&mut` is to, `&mut T` or `&mut Self`, where `param_env`
+    /// says what it's bound by: a box, whatever it is (ADR 0099), since generic
+    /// code is compiled once and `T` may be a number. Not one that's a JS
+    /// function or a JS iterator already: a closure, whose `&mut` is the
+    /// closure, or an iterator (ADR 0061).
+    pub(super) fn is_generic_boxed(&self, ty: Ty<'tcx>, param_env: ty::ParamEnv<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Param(_))
+            && !param_env.caller_bounds().iter().any(|clause| {
+                clause.as_trait_clause().is_some_and(|tr| {
+                    tr.self_ty().skip_binder() == ty
+                        && (self.tcx.fn_trait_kind_from_def_id(tr.def_id()).is_some()
+                            || self.tcx.is_diagnostic_item(sym::Iterator, tr.def_id())
+                            || self.tcx.is_diagnostic_item(sym::IntoIterator, tr.def_id()))
+                })
+            })
+    }
+
+    /// Is `fn_id`'s parameter `i` a box: a `&mut` to a value JS can't change in
+    /// place (ADR 0074), or to a type parameter (ADR 0099)?
+    pub(super) fn param_is_box(&self, fn_id: DefId, i: usize) -> bool {
+        let inputs = self.tcx.fn_sig(fn_id).instantiate_identity().skip_binder().inputs();
+        match inputs.get(i).map(|input| *input.kind()) {
+            Some(ty::Ref(_, inner, Mutability::Mut)) => {
+                self.is_boxable(inner) || self.is_generic_boxed(inner, self.tcx.param_env(fn_id))
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn is_object(&self, ty: Ty<'tcx>) -> bool {
         matches!(self.shape(ty), Shape::Object(_) | Shape::Array(_))
             || self.is_js_object(ty)

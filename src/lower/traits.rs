@@ -627,11 +627,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 - usize::from(self.formatter_param(method).is_some());
             let args: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = args.iter().map(|name| Expr::var(name)).collect();
+            // A `&mut self` its caller through the dictionary gives in a box,
+            // as a generic `&mut Self` is (ADR 0099), to a method that takes the
+            // object itself: what's in it.
+            let mut unboxed = false;
+            for (i, value) in values.iter_mut().enumerate() {
+                if self.param_is_box(item.def_id, i) && !self.param_is_box(method, i) {
+                    *value = Expr::member(std::mem::replace(value, Expr::undefined()), "value");
+                    unboxed = true;
+                }
+            }
             // Everything the method takes that its caller through the dictionary
             // doesn't give: its dictionaries, then its drops (ADR 0098), which
             // are this impl's own.
             let evidence = self.evidence_args(method, instance.args, span)?;
-            let value = if evidence.is_empty() {
+            let value = if evidence.is_empty() && !unboxed {
                 callee
             } else {
                 values.extend(evidence);

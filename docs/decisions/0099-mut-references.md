@@ -1,7 +1,9 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
-Status: Accepted in part: its first two rules, a `&mut` in a variable and
-the index loop. Handles, generic `&mut T` and closures are to come. Extends [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
+Status: Accepted in part: a `&mut` in a variable, the index loop, and a
+generic `&mut T` given as a parameter. Handles, a generic `&mut T`
+returned or kept, and closures are to come. Extends
+[0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
 ## Context
 
@@ -95,6 +97,19 @@ takes the value back after. A `&mut T` that generic code returns or keeps,
 for a caller whose `T` is an object, is an error for now: the caller's own
 `&mut` to one is the object, not a handle.
 
+- **A trait's `&mut self` method, through its dictionary, takes a box** (ADR
+  0049), since generic code calls it with its `&mut T`: an object's impl's
+  entry takes what's in it, `bump: (self) => cBump_bump(self.value)`. A call
+  that knows the impl calls its method as it is, given the object.
+- **A trait's default, copied into an impl, takes its `&mut self` as a
+  box too:** it's in the dictionary. Calling the impl's own methods, it
+  gives an object's what's in the box.
+- **A `&mut dyn Trait`, when it's supported, gives its `&mut self` methods a
+  box:** a trait object's methods are its impl's dictionary's.
+- **Not a type parameter that's a JS function or a JS iterator already:**
+  one bound by `Fn`, `FnMut` or `FnOnce`, whose `&mut` is the closure, or
+  by `Iterator` (ADR 0061).
+
 **A `&mut` to a closure is the closure,** a type parameter bound by `Fn`,
 `FnMut` or `FnOnce` too: calling a JS function changes what it captured,
 as calling it through the `&mut` does in Rust. `f()`, not `f.value()`.
@@ -154,6 +169,12 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   function taking one is:** its impl's method takes a box (ADR 0074), so
   `n.bump()`, which resolves to it, boxes `n` and takes it back after
   (`trait_mut_self_value`).
+- **A generic `&mut T` given as a parameter is a box** (`generic_mut_ref`):
+  `twice(&mut c)` of an object boxes `c` and takes it back, `set(x, v)` is
+  `x.value = v`, `t.bump()` of a generic `t` boxes it for the dictionary,
+  and a default copied into two impls takes a box in each. Of rustc's 15
+  tests stopping at a `&mut T` or a `&mut Self`, the two with a default
+  `&mut self` pass; the rest return or keep one, which is a handle's.
 - **A `&mut` to an object in a variable is still the object** (ADR 0025),
   and `*r = v` of one still an error: replacing an object whole through a
   `&mut` comes with handles.

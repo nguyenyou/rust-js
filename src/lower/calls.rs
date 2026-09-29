@@ -1,6 +1,6 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
-use super::bindings::{JsForm, is_binding, is_method, js_form, js_import};
+use super::bindings::{self, JsForm, is_binding, is_method, js_form, js_import};
 use super::combinators::StepOp;
 use super::drops::Drops;
 use super::numbers::NumOp;
@@ -13,10 +13,27 @@ use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 use crate::runtime::Helper;
 use rustc_ast::LitKind;
 use rustc_hir::{LangItem, find_attr};
-use rustc_middle::thir::{ExprId, ExprKind};
+use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
+
+/// How an argument is given to a function that takes boxes (`call_with_boxes`).
+enum ArgForm {
+    /// As any argument is.
+    Value,
+    /// Its place, in a box, taken back out after the call.
+    Boxed(ExprId),
+    /// What's in a box, the variable's, given to a parameter that isn't one.
+    Unboxed(LocalVarId),
+}
+
+/// What a call with boxes calls (`boxed_callee`).
+enum Callee<'tcx> {
+    Fn(DefId, ty::GenericArgsRef<'tcx>),
+    /// A trait's method, in this dictionary of its impl's (ADR 0049).
+    Dictionary(DefId, ty::GenericArgsRef<'tcx>, Expr),
+}
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A call to one of our functions (local or imported by name),
@@ -50,19 +67,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (def_id, generic_args) = self
             .resolve_into(def_id, generic_args)
             .unwrap_or((def_id, generic_args));
-        if self.is_rust_fn(def_id)
-            && self.tcx.trait_of_assoc(def_id).is_none()
-            && args.iter().any(|&a| self.boxed_arg(a).is_some())
-        {
-            return self.call_with_boxes(def_id, generic_args, args, discarded, span, out);
-        }
-        // `n.bump()` of a trait's `&mut self` method on a number: the impl's
-        // method, which takes a box as any `&mut` to one does (ADR 0099).
-        if self.tcx.trait_of_assoc(def_id).is_some()
-            && args.iter().any(|&a| self.boxed_arg(a).is_some())
-            && let Some((method, method_args)) = self.impl_method(def_id, generic_args)?
-        {
-            return self.call_with_boxes(method, method_args, args, discarded, span, out);
+        if let Some(callee) = self.boxed_callee(def_id, generic_args, args, span)? {
+            return self.call_with_boxes(callee, args, discarded, span, out);
         }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(written);
@@ -1080,17 +1086,74 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Some(place)
     }
 
-    /// `&mut p` of a value that must be boxed (ADR 0072): `p`, the place.
-    fn boxed_arg(&self, arg: ExprId) -> Option<ExprId> {
-        let place = self.mut_borrowed(arg)?;
-        // `&mut *out` of a box is the box itself.
+    /// How `arg` is given as parameter `i` of `fn_id`: in a box, if that's a
+    /// box (`param_is_box`), and its place isn't one already.
+    fn arg_form(&self, fn_id: DefId, i: usize, arg: ExprId) -> ArgForm {
+        let Some(place) = self.mut_borrowed(arg) else {
+            return ArgForm::Value;
+        };
+        let param_box = self.param_is_box(fn_id, i);
+        // `&mut *out` of a box: the box itself, or, to a parameter that's
+        // the value, as an object impl's `&mut self` is, what's in it.
         if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
             && self.locals.boxes.contains(&id)
         {
-            return None;
+            return if param_box {
+                ArgForm::Value
+            } else {
+                ArgForm::Unboxed(id)
+            };
         }
-        self.is_boxable(self.thir[place].ty).then_some(place)
+        if param_box {
+            ArgForm::Boxed(place)
+        } else {
+            ArgForm::Value
+        }
+    }
+
+    /// What `f(args)` calls, when an argument must be boxed or taken out of
+    /// its box: the function, the impl's method a trait's resolves to, or
+    /// the trait's method in its dictionary, for a `Self` that isn't known or
+    /// a default (ADR 0099).
+    fn boxed_callee(
+        &mut self,
+        def_id: DefId,
+        generic_args: ty::GenericArgsRef<'tcx>,
+        args: &[ExprId],
+        span: Span,
+    ) -> R<Option<Callee<'tcx>>> {
+        let (fn_id, fn_args, dictionary) = match self.tcx.trait_of_assoc(def_id) {
+            None if self.is_rust_fn(def_id) => (def_id, generic_args, None),
+            None => return Ok(None),
+            Some(trait_id) => match self.impl_method(def_id, generic_args)? {
+                Some((method, method_args)) => (method, method_args, None),
+                None if self.is_rust_trait(trait_id) => {
+                    let generic_args = match self.self_args {
+                        Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+                        None => generic_args,
+                    };
+                    let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
+                    if matches!(tr.self_ty().kind(), ty::Dynamic(..)) {
+                        return Ok(None);
+                    }
+                    (def_id, generic_args, Some(tr))
+                }
+                None => return Ok(None),
+            },
+        };
+        let forms: Vec<ArgForm> = args
+            .iter()
+            .enumerate()
+            .map(|(i, &a)| self.arg_form(fn_id, i, a))
+            .collect();
+        if forms.iter().all(|form| matches!(form, ArgForm::Value)) {
+            return Ok(None);
+        }
+        Ok(Some(match dictionary {
+            None => Callee::Fn(fn_id, fn_args),
+            Some(tr) => Callee::Dictionary(fn_id, fn_args, self.dictionary(tr, span)?),
+        }))
     }
 
     /// `f(&mut p)` with `p` a `String` or a number: `p` goes in a box named as
@@ -1098,14 +1161,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// has the `&mut`, nothing else can read or write `p`.
     fn call_with_boxes(
         &mut self,
-        def_id: DefId,
-        generic_args: ty::GenericArgsRef<'tcx>,
+        callee: Callee<'tcx>,
         args: &[ExprId],
         discarded: bool,
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        let callee = self.fn_ref(def_id);
+        let (def_id, generic_args) = match callee {
+            Callee::Fn(def_id, generic_args) | Callee::Dictionary(def_id, generic_args, _) => (def_id, generic_args),
+        };
+        let inputs = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate_identity()
+            .skip_binder()
+            .inputs()
+            .to_vec();
         let names: Vec<String> = self
             .tcx
             .fn_arg_idents(def_id)
@@ -1115,8 +1186,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js_span = self.js_span(span);
         let (mut values, mut backs) = (Vec::new(), Vec::new());
         for (i, &arg) in args.iter().enumerate() {
-            match self.boxed_arg(arg) {
-                Some(place) => {
+            match self.arg_form(def_id, i, arg) {
+                ArgForm::Boxed(place) => {
                     let current = self.expr(place, out)?;
                     let target = match self.element(place) {
                         Some(_) => self.element_target(place, out)?,
@@ -1128,8 +1199,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     backs.push((target, name.clone()));
                     values.push(Expr::var(&name));
                 }
-                None => {
-                    let value = self.expr(arg, out)?;
+                ArgForm::Unboxed(id) => values.push(Expr::member(self.locals.vars[&id].place.clone(), "value")),
+                ArgForm::Value => {
+                    let mut value = self.expr(arg, out)?;
+                    // An iterator of the crate's own, given where a generic one
+                    // goes, is a JS iterator (ADR 0061).
+                    if inputs.get(i).is_some_and(|input| matches!(input.kind(), ty::Param(_)))
+                        && self.is_user_iterator(self.reveal(self.thir[arg].ty))
+                    {
+                        value = self.iter_source(value, self.thir[arg].ty, span)?;
+                    }
                     let value = if value.reads_same() {
                         value
                     } else {
@@ -1139,8 +1218,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
         }
-        values.extend(self.evidence_args(def_id, generic_args, span)?);
-        let call = Expr::call(callee, values);
+        let call = match callee {
+            Callee::Fn(..) => {
+                values.extend(self.evidence_args(def_id, generic_args, span)?);
+                Expr::call(self.fn_ref(def_id), values)
+            }
+            Callee::Dictionary(_, _, dictionary) => {
+                Expr::call(Expr::member(dictionary, bindings::fn_name(self.tcx, def_id)), values)
+            }
+        };
         let output = self
             .tcx
             .fn_sig(def_id)

@@ -112,7 +112,7 @@ function wrapReset(TDefault, dropT) {
     $wrapReset = new WeakMap();
   }
   return $traitImpl($wrapReset, [TDefault, dropT], () => ({
-    reset: (arg0) => wrapReset_reset(arg0, TDefault, dropT),
+    reset: (arg0) => wrapReset_reset(arg0.value, TDefault, dropT),
   }));
 }
 

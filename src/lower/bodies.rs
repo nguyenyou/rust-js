@@ -86,9 +86,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut names = Vec::new();
         for param in params {
             let span = param.ty_span.unwrap_or(span);
-            // `out: &mut String`: a box, `out.value` (ADR 0072).
+            // `out: &mut String`: a box, `out.value` (ADR 0072), and `x: &mut T`
+            // whatever `T` is (ADR 0099).
             if let ty::Ref(_, inner, Mutability::Mut) = *param.ty.kind()
-                && self.is_boxable(inner)
+                && (self.is_boxable(inner) || self.is_generic_boxed(inner, self.typing_env.param_env))
                 && let Some(Pat {
                     kind:
                         PatKind::Binding {

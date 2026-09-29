@@ -37,6 +37,8 @@ for (const [name, source, message, crate] of [
   ["a &mut to a number returned", 'pub fn pick(a: &mut u32) -> &mut u32 { a }', "does not support"],
   ["a &mut in a variable, kept in a struct", 'pub struct H<\'a> { pub r: &\'a mut u32 }\npub fn f() -> u32 { let mut a = 1; let x = &mut a; let h = H { r: x }; *h.r }', "does not support values of type `&mut u32`"],
   ["a &mut in a variable passed as a generic value", 'pub trait Bump { fn bump(self); }\nimpl Bump for &mut i32 { fn bump(self) { *self += 1; } }\nfn go<T: Bump>(t: T) { t.bump() }\npub fn f() -> i32 { let mut x = 1; let y = &mut x; go(y); x }', "a `&mut` in a variable used as a value"],
+  ["a &mut to a closure of a type parameter", 'pub fn call<F: FnMut()>(f: &mut F) { f() }', "does not support values of type `&mut F`"],
+  ["a &mut to an iterator of a type parameter", 'pub fn first<I: Iterator<Item = i32>>(it: &mut I) -> Option<i32> { it.next() }', "does not support values of type `&mut I`"],
   ["a &mut chosen by a branch", 'pub fn f(c: bool) -> u32 { let (mut a, mut b) = (1, 2); let x = if c { &mut a } else { &mut b }; *x = 0; a + b }', "does not support values of type `&mut u32`"],
   ["ref mut through a reference variable, replaced whole", 'pub struct P { pub x: u32 }\n#[allow(unused_mut)] pub fn f() -> u32 { let mut a = P { x: 1 }; let mut cur = &mut a; match *cur { ref mut n => *n = P { x: 2 } } a.x }', "assigning a whole value through a `&mut`"],
   ["{:.2e}", 'pub fn f(x: f64) -> String { format!("{:.2e}", x) }', "`{:.2e}` and the like"],
