@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use js::JsObject;
 use react::{Element, use_effect, use_ref};
-use webapi::{Event, HtmlIFrameElement, abort_controller, abort_signal, window};
+use webapi::{Event, HtmlIFrameElement, abort_controller, abort_signal, element, window};
 
 use crate::listen::listen;
 use crate::programs::{Outcome, Program, Report, outcome};
@@ -60,6 +60,12 @@ pub fn ResultFrame(ResultFrameProps { program, on_outcome }: ResultFrameProps) -
                             Some(report) if from_frame && report.run == Some(run) => report,
                             _ => return,
                         };
+                        // As tall as its page, from the height it starts with.
+                        if let (Some(height), Some(frame)) = (report.height, frame.current()) {
+                            let style = format!("height: {}px", height.max(280.0).min(4000.0));
+                            element::set_attribute(frame, "style", &style);
+                            return;
+                        }
                         if let Some(outcome) = outcome(report) {
                             heard.set(true);
                             told(outcome);

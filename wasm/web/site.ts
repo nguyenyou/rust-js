@@ -73,6 +73,7 @@ export function examples(): Example[] {
     { name: "todo", title: "Todo list (DOM, Vec, RefCell)", root: "todo.rs", files: ["todo.rs"], dir: examplesDir },
     { name: "counter", title: "Counter (DOM, closures)", root: "counter.rs", files: ["counter.rs"], dir: examplesDir },
     { name: "react_counter", title: "Counter (React, JSX)", root: "react_counter.rs", files: ["react_counter.rs"], dir: examplesDir },
+    { name: "todomvc", title: "TodoMVC (React, routes, localStorage)", root: "lib.rs", files: ["lib.rs", "item.rs", "model.rs"], dir: join(examplesDir, "todomvc") },
     { name: "countdown", title: "Countdown (async, await)", root: "countdown.rs", files: ["countdown.rs"], dir: examplesDir },
     { name: "fetch", title: "Fetch (async, the network)", root: "fetch.rs", files: ["fetch.rs"], dir: examplesDir },
     { name: "modules", title: "Modules (a crate across files)", root: "lib.rs", files: modulesFiles, dir: modulesDir },
@@ -93,6 +94,16 @@ export function examples(): Example[] {
 /** What the page's `examples.json` holds: everything but local paths. */
 export function examplesManifest() {
   return examples().map(({ name, title, root, files }) => ({ name, title, root, files }));
+}
+
+/** The stylesheets a program may import (ADR 0028): TodoMVC's look. */
+const STYLES = ["todomvc-common/base.css", "todomvc-app-css/index.css"];
+
+/** What a program may import of the page's: React's modules, and stylesheets. */
+export async function framePackages(): Promise<{ modules: Record<string, string>; styles: Record<string, string> }> {
+  const require = createRequire(import.meta.path);
+  const styles = Object.fromEntries(STYLES.map((specifier) => [specifier, readFileSync(require.resolve(specifier), "utf8")]));
+  return { modules: await reactModules(), styles };
 }
 
 /** The specifiers of React's a program imports, each a module of the bundle's. */
@@ -132,7 +143,7 @@ export async function reactModules(): Promise<Record<string, string>> {
  */
 export function playgroundFiles(): Plugin {
   const webapiCrate = join(import.meta.dir, "../../target/crates/libwebapi.rmeta");
-  let react: Record<string, string> = {};
+  let packages: { modules: Record<string, string>; styles: Record<string, string> } = { modules: {}, styles: {} };
   // The file at a path the page asks for, or the JSON to send.
   function served(path: string): { file: string } | { json: unknown } | undefined {
     const sysroot = sysrootFiles();
@@ -145,7 +156,7 @@ export function playgroundFiles(): Plugin {
     if (path === "/crates/libjs.rmeta") return { file: join(dirname(webapiCrate), "libjs.rmeta") };
     // What the programs it compiles import (ADR 0103).
     if (path === "/runtime.js") return { file: join(import.meta.dir, "../../runtime/index.js") };
-    if (path === "/react.json") return { json: react };
+    if (path === "/packages.json") return { json: packages };
     if (path === "/examples.json") return { json: examplesManifest() };
     // Only files an example lists: never an arbitrary path.
     const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
@@ -155,7 +166,7 @@ export function playgroundFiles(): Plugin {
   }
   // Every path the build needs, for `generateBundle`.
   function all(): string[] {
-    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/runtime.js", "/react.json", "/examples.json"];
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/runtime.js", "/packages.json", "/examples.json"];
     paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
     for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
     return paths;
@@ -164,7 +175,7 @@ export function playgroundFiles(): Plugin {
     name: "playground-files",
     async buildStart() {
       buildReactCrate(dirname(webapiCrate));
-      react = await reactModules();
+      packages = await framePackages();
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

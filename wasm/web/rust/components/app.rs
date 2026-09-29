@@ -124,10 +124,10 @@ pub fn App() -> Element {
     let live = move || source.current().map(|view| editor_state(view));
 
     // Run what a compile wrote, in the Result frame.
-    let run = move |files: &JsMap, modules: &[(String, String)], root_js: &str, test: bool| {
+    let run = move |files: &JsMap, loaded: &Loaded, root_js: &str, test: bool| {
         let n = runs.current() + 1;
         runs.set_current(n);
-        match prepare(files, modules, root_js, test, n) {
+        match prepare(files, &loaded.modules, &loaded.styles, root_js, test, n) {
             Prepared::Nothing => set_program.set(None),
             Prepared::Blocked(imports) => {
                 set_program.set(None);
@@ -190,7 +190,7 @@ pub fn App() -> Element {
                     format!("Compiled: {count} JS file{}.", if count == 1 { "" } else { "s" }),
                     Tone::Good,
                 ));
-                run(r.files, &loaded.modules, &root_js, test);
+                run(r.files, loaded, &root_js, test);
             } else {
                 set_output.set(Output::Diagnostics(r.stderr.clone()));
                 set_program.set(None);

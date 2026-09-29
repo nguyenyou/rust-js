@@ -46,8 +46,8 @@ unsafe extern "Rust" {
     #[link_name = "json"]
     safe fn examples_json(this: &Response) -> Promise<Vec<Example>>;
     #[link_name = "json"]
-    safe fn object_json(this: &Response) -> Promise<&'static JsObject>;
-    /// An object's fields, as `(name, text)`: `react.json`'s modules.
+    safe fn packages_json(this: &Response) -> Promise<Packages>;
+    /// An object's fields, as `(name, text)`: `packages.json`'s modules.
     #[link_name = "Object.entries"]
     safe fn text_fields(object: &JsObject) -> Vec<(String, String)>;
 
@@ -138,6 +138,12 @@ pub struct Example {
     pub files: Vec<String>,
 }
 
+/// `packages.json`: what a program may import of the page's, by specifier.
+struct Packages {
+    modules: &'static JsObject,
+    styles: &'static JsObject,
+}
+
 /// What the page needs before it can compile anything.
 pub struct Loaded {
     pub module: &'static WebAssemblyModule,
@@ -148,6 +154,8 @@ pub struct Loaded {
     /// What the programs it compiles import of the page's, by specifier:
     /// `@rust-js/runtime` (ADR 0103), and React's modules.
     pub modules: Vec<(String, String)>,
+    /// The stylesheets a program may import, TodoMVC's, by specifier.
+    pub styles: Vec<(String, String)>,
     pub examples: Vec<Example>,
 }
 
@@ -179,15 +187,17 @@ pub async fn load(stat: Stat) -> Loaded {
     let webapi_crate = load_binding_crate("webapi", start, stat.clone());
     let js_crate = load_binding_crate("js", start, stat.clone());
     let react_crate = load_binding_crate("react", start, stat.clone());
-    let modules = load_modules(start, stat.clone());
+    let packages = load_packages(start, stat.clone());
     let examples = load_examples();
+    let (modules, styles) = packages.await;
     let loaded = Loaded {
         module: module.await,
         sysroot: sysroot.await,
         webapi_crate: webapi_crate.await,
         js_crate: js_crate.await,
         react_crate: react_crate.await,
-        modules: modules.await,
+        modules,
+        styles,
         examples: examples.await,
     };
     stat("ready after".to_string(), ms(now() - start));
@@ -227,14 +237,16 @@ async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
     (name, new_file(bytes, &FileOptions { readonly: true }))
 }
 
-/// `@rust-js/runtime`, and React's modules, for a React program (ADR 0044).
-async fn load_modules(start: f64, stat: Stat) -> Vec<(String, String)> {
+/// `@rust-js/runtime` and React's modules, and the stylesheets, for a
+/// program to import (ADR 0044).
+async fn load_packages(start: f64, stat: Stat) -> (Vec<(String, String)>, Vec<(String, String)>) {
     let runtime = response::text(window::fetch(window, "./runtime.js").await);
-    let react = object_json(window::fetch(window, "./react.json").await);
+    let packages = packages_json(window::fetch(window, "./packages.json").await);
     let mut modules = vec![("@rust-js/runtime".to_string(), runtime.await)];
-    modules.extend(text_fields(react.await));
-    stat("download runtime and React".to_string(), ms(now() - start));
-    modules
+    let packages = packages.await;
+    modules.extend(text_fields(packages.modules));
+    stat("download runtime and packages".to_string(), ms(now() - start));
+    (modules, text_fields(packages.styles))
 }
 
 async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {

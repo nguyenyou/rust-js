@@ -67,6 +67,8 @@ pub struct Report {
     pub error: Option<String>,
     pub ran: Option<bool>,
     pub tested: Option<Tested>,
+    /// How tall the page is, as it grows: the frame is as tall.
+    pub height: Option<f64>,
 }
 
 pub struct Tested {
@@ -169,9 +171,15 @@ const TEST_RUNNER: &str = r#"
     const count = (outcome) => results.filter((r) => r.outcome === outcome).length;"#;
 
 /// The frame's style, before its scripts.
+// A link to `#/active` is this page's, as a program's routes need: a
+// sandboxed `srcdoc` page's links resolve against its parent's URL
+// otherwise, and navigate the frame away.
 const FRAME_HEAD: &str = r#"<!doctype html>
 <meta charset="utf-8">
-<style>
+<base href="about:srcdoc">"#;
+
+/// The frame's own look, for a program that brings none.
+const FRAME_STYLE: &str = r#"<style>
   :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
   body { margin: 12px; }
   button { font: inherit; min-width: 2.5em; padding: 2px 10px; }
@@ -179,12 +187,18 @@ const FRAME_HEAD: &str = r#"<!doctype html>
   .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }
   @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }
   pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }
-</style>
-<div id="app"></div>"#;
+</style>"#;
 
 /// The page that runs the root module's `main()`, or with `test`, the
 /// crate's tests, and reports as run number `run`.
-pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, test: bool, run: u32) -> Prepared {
+pub fn prepare(
+    files: &JsMap,
+    modules: &[(String, String)],
+    styles: &[(String, String)],
+    root_file: &str,
+    test: bool,
+    run: u32,
+) -> Prepared {
     // The program's modules, its JSX as JS (Sucrase's), and what they import
     // of the page's: the runtime, and React's.
     let mut sources: Vec<(String, String)> = text_entries(files)
@@ -219,6 +233,36 @@ pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, tes
     if !runnable {
         return Prepared::Nothing;
     }
+    // A stylesheet a module imports, `import "todomvc-app-css/index.css";`
+    // (ADR 0028), is the page's, as a bundler makes it: in a `<style>`, in
+    // the order imported, and the program's look, not the frame's.
+    let css_imports = reg_exp::new(r#"^import "([^"]+\.css)"(;)"#, "gm");
+    let mut css: Vec<String> = Vec::new();
+    for (_, code) in sources.iter_mut() {
+        for (_, specifier) in matches_of(match_all(code, css_imports)) {
+            if let Some((_, text)) = styles.iter().find(|(name, _)| *name == specifier)
+                && !css.contains(text)
+            {
+                css.push(text.clone());
+            }
+        }
+        let known: Vec<String> = styles.iter().map(|(name, _)| name.clone()).collect();
+        *code = replace_matches(
+            code,
+            css_imports,
+            Box::new(move |whole, specifier, _| {
+                if known.contains(&specifier) {
+                    String::new()
+                } else {
+                    whole
+                }
+            }),
+        );
+    }
+    let look = match css.is_empty() {
+        true => FRAME_STYLE.to_string(),
+        false => format!("<style>\n{}</style>", css.concat()),
+    };
     // Imports from JS modules (ADR 0028) name packages or files the page
     // doesn't have. A bundler would bring them in; the playground has none.
     let imports = reg_exp::new(r#"^import (?:[^;]+? from )?"([^"]+)";"#, "gm");
@@ -249,6 +293,8 @@ pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, tes
     };
     Prepared::Page(format!(
         r#"{FRAME_HEAD}
+{look}
+<div id="app"></div>
 {linked}
 <script>
   // Errors later on, in an event handler say.
@@ -259,6 +305,8 @@ pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, tes
   const registered = [];
   globalThis.test = (name, f) => registered.push({{ name, f }});
   test.skip = (name) => registered.push({{ name }});
+  // How tall the page is, each time it changes, for the frame to show it whole.
+  new ResizeObserver(() => {}).observe(document.documentElement);
 </script>
 <script type="module">
   try {{
@@ -270,6 +318,7 @@ pub fn prepare(files: &JsMap, modules: &[(String, String)], root_file: &str, tes
 </script>"#,
         report("error: String(e.message)"),
         report("error: String(e.reason)"),
+        report("height: document.documentElement.scrollHeight"),
         report("error: String(e)"),
     ))
 }

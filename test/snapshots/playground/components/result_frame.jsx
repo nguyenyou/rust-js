@@ -2,6 +2,7 @@
 
 import { readReport } from "../../frame-report.js";
 import { useEffect, useRef } from "react";
+import { $displayF64, $f64Max, $f64Min } from "@rust-js/runtime";
 
 import { listen } from "../listen.js";
 import { outcome as outcome$1 } from "../programs.js";
@@ -38,6 +39,12 @@ export function ResultFrame({ program, onOutcome }) {
           if (match$1 != null && fromFrame && match$1.run == tmp$1[0]) {
             report = match$1;
           } else {
+            return;
+          }
+          const value = frame.current;
+          if (report.height != null && value != null) {
+            const style = `height: ${$displayF64($f64Min($f64Max(report.height, 280), 4000))}px`;
+            value.setAttribute("style", style);
             return;
           }
           const outcome = outcome$1(report);

@@ -3,9 +3,11 @@ export function readReport(event) {
   const report = event.data;
   const count = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
   if (!report || typeof report !== "object" || !count(report.run)) return undefined;
-  const kinds = [report.error !== undefined, report.ran !== undefined, report.tested !== undefined];
+  const kinds = [report.error !== undefined, report.ran !== undefined, report.tested !== undefined, report.height !== undefined];
   if (kinds.filter(Boolean).length !== 1) return undefined;
   if (typeof report.error === "string") return { run: report.run, error: report.error };
+  // How tall its page is, to be shown whole.
+  if (Number.isFinite(report.height) && report.height >= 0) return { run: report.run, height: report.height };
   if (report.ran === true) return { run: report.run, ran: true };
   const tested = report.tested;
   if (tested && count(tested.passed) && count(tested.failed) && count(tested.ignored)) {

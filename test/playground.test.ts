@@ -134,6 +134,73 @@ pub fn App() -> Element { jsx! { <Tile text="Hello JSX" /> } }
     await app.getByRole("button", { name: "+" }).click();
     await app.getByRole("button", { name: "−" }).click();
     await app.locator("output", { hasText: "1" }).waitFor();
+    // TodoMVC: its stylesheets, imported as a Vite app imports them, are the
+    // frame's, and every feature of its spec works.
+    await page.locator("#example").selectOption("todomvc");
+    await page.locator("#source-files li", { hasText: "model.rs" }).waitFor();
+    await page.locator("#compile").click();
+    await status.filter({ hasText: "Compiled: 3 JS files." }).waitFor({ timeout: 60_000 });
+    const todo = page.frameLocator("#result");
+    const input = todo.locator(".new-todo");
+    await input.waitFor({ timeout: 60_000 });
+    expect(await todo.locator(".todoapp h1").evaluate((h) => [getComputedStyle(h).fontSize, getComputedStyle(h).color])).toEqual(["80px", "rgb(184, 63, 69)"]);
+    expect(await todo.locator("body").evaluate((b) => getComputedStyle(b).backgroundColor)).toBe("rgb(245, 245, 245)");
+    // No todos: no list, no footer.
+    expect(await todo.locator(".main").count()).toBe(0);
+    expect(await todo.locator(".footer").count()).toBe(0);
+    for (const title of ["  Buy milk  ", "Walk the dog", "   "]) {
+      await input.fill(title);
+      await input.press("Enter");
+    }
+    const items = todo.locator(".todo-list li");
+    await todo.locator(".todo-count", { hasText: "2 items left" }).waitFor();
+    expect(await items.locator("label").allTextContents()).toEqual(["Buy milk", "Walk the dog"]);
+    // The frame is as tall as its page, which grew past the 280px it starts at.
+    await page.waitForFunction(() => document.getElementById("result")!.getBoundingClientRect().height > 400);
+    // A title of spaces adds nothing, and stays, as TodoMVC's React has it.
+    expect(await input.inputValue()).toBe("   ");
+    // Completed: its class, the count, and the button to clear them.
+    await items.nth(0).locator(".toggle").check();
+    await todo.locator(".todo-count", { hasText: "1 item left" }).waitFor();
+    expect(await items.nth(0).getAttribute("class")).toBe("completed");
+    await todo.locator(".clear-completed").waitFor();
+    // Routes: each filter, and the link of the one shown.
+    await todo.getByRole("link", { name: "Active" }).click();
+    await todo.locator(".filters a.selected", { hasText: "Active" }).waitFor();
+    expect(await items.locator("label").allTextContents()).toEqual(["Walk the dog"]);
+    await todo.getByRole("link", { name: "Completed" }).click();
+    await todo.locator(".filters a.selected", { hasText: "Completed" }).waitFor();
+    expect(await items.locator("label").allTextContents()).toEqual(["Buy milk"]);
+    await todo.getByRole("link", { name: "All" }).click();
+    await todo.locator(".filters a.selected", { hasText: "All" }).waitFor();
+    // Editing: Enter saves, Escape cancels, blur saves, and empty deletes.
+    const dog = items.nth(1);
+    await dog.locator("label").dblclick();
+    await dog.locator(".edit").fill("Walk the cat");
+    await dog.locator(".edit").press("Enter");
+    await dog.locator("label", { hasText: "Walk the cat" }).waitFor();
+    await dog.locator("label").dblclick();
+    await dog.locator(".edit").fill("nope");
+    await dog.locator(".edit").press("Escape");
+    await dog.locator("label", { hasText: "Walk the cat" }).waitFor();
+    expect(await dog.getAttribute("class")).toBe("");
+    await dog.locator("label").dblclick();
+    await dog.locator(".edit").fill("Walk the bird");
+    await todo.locator(".todoapp h1").click();
+    await dog.locator("label", { hasText: "Walk the bird" }).waitFor();
+    await input.fill("Water the plants");
+    await input.press("Enter");
+    await items.nth(2).locator("label").dblclick();
+    await items.nth(2).locator(".edit").fill("  ");
+    await items.nth(2).locator(".edit").press("Enter");
+    await todo.locator(".todo-count", { hasText: "1 item left" }).waitFor();
+    expect(await items.count()).toBe(2);
+    // All at once, then cleared: the list and the footer go.
+    await todo.locator("label[for=toggle-all]").click();
+    await todo.locator(".todo-count", { hasText: "0 items left" }).waitFor();
+    await todo.locator(".clear-completed").click();
+    await todo.locator(".footer").waitFor({ state: "detached" });
+    expect(await todo.locator(".main").count()).toBe(0);
     // An unsaved edit, compiled with ⌘/Ctrl-Enter: rustc's errors, as text.
     await page.locator(".cm-content[aria-label='Rust source']").click();
     await page.keyboard.press("ControlOrMeta+a");

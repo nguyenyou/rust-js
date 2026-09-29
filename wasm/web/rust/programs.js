@@ -5,8 +5,9 @@ import { $extend, $stripSuffix } from "@rust-js/runtime";
 
 const TEST_RUNNER =
   '\n    const results = registered.map(({ name, f }) => {\n      if (!f) return { name, outcome: "skip" };\n      try {\n        f();\n        return { name, outcome: "pass" };\n      } catch (e) {\n        return { name, outcome: "fail", message: e instanceof Error ? e.message : String(e) };\n      }\n    });\n    document.body.replaceChildren(...results.map(({ name, outcome, message }) => {\n      const line = document.createElement("div");\n      line.className = outcome;\n      line.textContent = { pass: "✓ ", fail: "✗ ", skip: "– " }[outcome] + name + (outcome === "skip" ? " (ignored)" : "");\n      if (message) {\n        const why = document.createElement("pre");\n        why.textContent = message;\n        line.append(why);\n      }\n      return line;\n    }));\n    const count = (outcome) => results.filter((r) => r.outcome === outcome).length;';
-const FRAME_HEAD =
-  '<!doctype html>\n<meta charset="utf-8">\n<style>\n  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }\n  body { margin: 12px; }\n  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }\n  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }\n  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }\n  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }\n  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }\n</style>\n<div id="app"></div>';
+const FRAME_HEAD = '<!doctype html>\n<meta charset="utf-8">\n<base href="about:srcdoc">';
+const FRAME_STYLE =
+  "<style>\n  :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }\n  body { margin: 12px; }\n  button { font: inherit; min-width: 2.5em; padding: 2px 10px; }\n  output { display: inline-block; min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }\n  .pass { color: #2f6b3a; } .fail { color: #a3321f; } .skip { color: #6b6b66; }\n  @media (prefers-color-scheme: dark) { .pass { color: #8fcf98; } .fail { color: #ef8a78; } }\n  pre { margin: 2px 0 8px 1.5em; white-space: pre-wrap; font-size: 13px; }\n</style>";
 
 export function resolve(from, specifier) {
   if (!specifier.startsWith(".")) {
@@ -45,7 +46,7 @@ export function link(files) {
   return `<script type="importmap">{"imports":{${entries$1}}}<\/script>`;
 }
 
-export function prepare(files, modules, rootFile, test, run) {
+export function prepare(files, modules, styles, rootFile, test, run) {
   let sources = Array.from(files).map(([path, code]) => {
     const match = path.endsWith(".jsx");
     if (match === true) {
@@ -72,13 +73,38 @@ export function prepare(files, modules, rootFile, test, run) {
   if (!runnable) {
     return "Nothing";
   }
+  const cssImports = new RegExp('^import "([^"]+\\.css)"(;)', "gm");
+  let css = [];
+  for (const item of sources) {
+    for (const [, specifier] of Array.from(item[1].matchAll(cssImports))) {
+      const value = styles.find((param) => param[0] === specifier);
+      if (value != null && !css.includes(value[1])) {
+        css.push(value[1]);
+      }
+    }
+    const known = styles.map((param) => param[0]);
+    item[1] = item[1].replace(cssImports, (whole, specifier) => {
+      if (known.includes(specifier)) {
+        return "";
+      } else {
+        return whole;
+      }
+    });
+  }
+  let look;
+  const match$1 = css.length === 0;
+  if (match$1 === true) {
+    look = FRAME_STYLE;
+  } else {
+    look = `<style>\n${css.join("")}</style>`;
+  }
   const imports = new RegExp('^import (?:[^;]+? from )?"([^"]+)";', "gm");
   let external = [];
-  for (const item of sources) {
-    for (const [, specifier] of Array.from(item[1].matchAll(imports))) {
-      const target = resolve(item[0], specifier);
-      if (!sources.some((param) => param[0] === target) && !external.includes(specifier)) {
-        external.push(specifier);
+  for (const item$1 of sources) {
+    for (const [, specifier$1] of Array.from(item$1[1].matchAll(imports))) {
+      const target = resolve(item$1[0], specifier$1);
+      if (!sources.some((param) => param[0] === target) && !external.includes(specifier$1)) {
+        external.push(specifier$1);
       }
     }
   }
@@ -96,10 +122,11 @@ export function prepare(files, modules, rootFile, test, run) {
     : report("ran: true");
   const arg = report("error: String(e.message)");
   const arg$1 = report("error: String(e.reason)");
-  const arg$2 = report("error: String(e)");
+  const arg$2 = report("height: document.documentElement.scrollHeight");
+  const arg$3 = report("error: String(e)");
   return {
     TAG: "Page",
-    _0: `${FRAME_HEAD}\n${linked}\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener("error", (e) => ${arg});\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener("unhandledrejection", (e) => ${arg$1});\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n<\/script>\n<script type="module">\n  try {\n${start}\n    ${finished};\n  } catch (e) {\n    ${arg$2};\n  }\n<\/script>`,
+    _0: `${FRAME_HEAD}\n${look}\n<div id="app"></div>\n${linked}\n<script>\n  // Errors later on, in an event handler say.\n  addEventListener("error", (e) => ${arg});\n  // And in async code, which rejects its promise instead (ADR 0029).\n  addEventListener("unhandledrejection", (e) => ${arg$1});\n  // What a test file calls, as bun test provides it (ADR 0026).\n  const registered = [];\n  globalThis.test = (name, f) => registered.push({ name, f });\n  test.skip = (name) => registered.push({ name });\n  // How tall the page is, each time it changes, for the frame to show it whole.\n  new ResizeObserver(() => ${arg$2}).observe(document.documentElement);\n<\/script>\n<script type="module">\n  try {\n${start}\n    ${finished};\n  } catch (e) {\n    ${arg$3};\n  }\n<\/script>`,
   };
 }
 

@@ -25,15 +25,17 @@ export async function load(stat) {
   const webapiCrate = loadBindingCrate("webapi", start, stat);
   const jsCrate = loadBindingCrate("js", start, stat);
   const reactCrate = loadBindingCrate("react", start, stat);
-  const modules = loadModules(start, stat);
+  const packages = loadPackages(start, stat);
   const examples = loadExamples();
+  const [modules, styles] = await packages;
   const loaded = {
     module: await module,
     sysroot: await sysroot,
     webapiCrate: await webapiCrate,
     jsCrate: await jsCrate,
     reactCrate: await reactCrate,
-    modules: await modules,
+    modules,
+    styles,
     examples: await examples,
   };
   stat("ready after", ms(performance.now() - start));
@@ -72,13 +74,14 @@ async function loadSysrootFile(name) {
   return [name, new File(bytes, { readonly: true })];
 }
 
-async function loadModules(start, stat) {
+async function loadPackages(start, stat) {
   const runtime = (await window.fetch("./runtime.js")).text();
-  const react = (await window.fetch("./react.json")).json();
+  const packages = (await window.fetch("./packages.json")).json();
   let modules = [["@rust-js/runtime", await runtime]];
-  $extend(modules, Array.from(Object.entries(await react)));
-  stat("download runtime and React", ms(performance.now() - start));
-  return modules;
+  const packages$1 = await packages;
+  $extend(modules, Array.from(Object.entries(packages$1.modules)));
+  stat("download runtime and packages", ms(performance.now() - start));
+  return [modules, Object.entries(packages$1.styles)];
 }
 
 async function loadBindingCrate(name, start, stat) {

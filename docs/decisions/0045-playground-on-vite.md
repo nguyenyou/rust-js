@@ -73,9 +73,18 @@ vite.config.ts
 ## Consequences
 
 - A React program runs in the Result frame (ADR 0041): `site.ts` bundles
-  React for it as `react.json`, a module of the bundle and one for each of
-  `react`, `react/jsx-runtime` and `react-dom/client`, served beside the
+  React for it into `packages.json`, a module of the bundle and one for each
+  of `react`, `react/jsx-runtime` and `react-dom/client`, served beside the
   crates, and the page transforms the program's JSX with Sucrase first.
+- **TodoMVC** (`examples/todomvc/`) runs there, with its own look: a
+  stylesheet a program imports, `#![rust_js::import =
+  "todomvc-app-css/index.css"]` (ADR 0028), is one of `packages.json`'s,
+  TodoMVC's two, put in a `<style>` of the frame's page, as a bundler puts
+  it; a program with its own gets none of the frame's. The page has
+  `<base href="about:srcdoc">`, so a link to `#/active` is its own route,
+  not the parent's URL, and it reports its height as it grows, so the frame
+  is as tall. `localStorage` throws in the frame, whose origin is opaque:
+  the todos are the page's only there.
 - Saving a file in `rust/` recompiles with `rust-js.wasm`. Once the crates
   are built, that's a second or two, slower than the native binary.
 - In development the page loads through Vite's module graph, as in the
