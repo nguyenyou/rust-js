@@ -106,7 +106,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.jsx = true;
         let (tag, props, children) = match (tag, args) {
             ("*", &[component, props]) => {
-                let tag = self.expr(component, out)?;
+                // A JS module's component is its import, as a tag must be.
+                let tag = match self.binding_component(component) {
+                    Some(tag) => tag,
+                    None => self.expr(component, out)?,
+                };
                 if !matches!(
                     tag.kind,
                     js::ExprKind::Var(_) | js::ExprKind::Symbol(_) | js::ExprKind::Member(..)

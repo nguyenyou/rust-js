@@ -2,13 +2,14 @@
 // web crate, `.await`ed in turn. The URL is a `data:` URL, so the example
 // needs no server; any URL the page may fetch works the same way.
 
-use web::{Element, document, element, event_target, node, response, spawn, window};
+use js::spawn;
+use webapi::{Element, document, element, event_target, node, response, window};
 
 const URL: &str = "data:text/plain,Hello from a fetch!";
 
 async fn load(url: &str, output: &'static Element) {
     node::set_text_content(output, "Loading…");
-    let response = window::fetch_with_str(window, url).await;
+    let response = window::fetch(window, url).await;
     let text = response::text(response).await;
     let status = response::status(response).to_string();
     node::set_text_content(output, &(status + " " + &text));

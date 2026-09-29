@@ -6,7 +6,7 @@
 import { beforeAll, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
-import { buildCompiler, buildReact, buildSerde, buildWeb, compiler, expectSnapshot, root, run, target } from "./support";
+import { buildCompiler, buildReact, buildSerde, buildWebapi, compiler, expectSnapshot, root, run, target } from "./support";
 
 type Crate = "web" | "react" | "serde";
 
@@ -60,7 +60,7 @@ const cases: [string, string, Crate[]][] = [
 
 beforeAll(() => {
   buildCompiler();
-  buildWeb();
+  buildWebapi();
   buildReact();
 }, 600_000);
 
@@ -69,7 +69,7 @@ for (const [name, input, crates] of cases) {
     const out = join(target, "snapshots", name);
     rmSync(out, { recursive: true, force: true });
     const flags: string[] = [];
-    if (crates.includes("web")) flags.push("--extern", `web=${join(target, "libweb.rmeta")}`);
+    if (crates.includes("web")) flags.push("--extern", `webapi=${join(target, "libwebapi.rmeta")}`, "--extern", `js=${join(target, "libjs.rmeta")}`, "-L", target);
     if (crates.includes("react")) flags.push("--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target);
     if (crates.includes("serde")) flags.push(...buildSerde());
     // From the repository's root, so each file's header names its source the

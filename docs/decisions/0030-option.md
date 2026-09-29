@@ -7,7 +7,7 @@ Status: Accepted. Changes [0024](0024-web-crate.md): results that may be
 
 The web platform answers "nothing here" with `null`:
 `document.getElementById("app")` when there's no `#app`, `textContent` of a
-document. The web crate typed those results as if they were never null (ADR
+document. The webapi crate typed those results as if they were never null (ADR
 0024), which isn't honest. Rust says "maybe nothing" with `Option`, and rust-js
 couldn't compile it. How the others do it (checked in local clones):
 
@@ -60,7 +60,7 @@ conversion:
   When its value isn't already in a variable, it goes into a `const` named
   like the pattern's variable, which that variable then just is.
 
-**The web crate's results that may be `null` are `Option`s**, 78 of them:
+**The webapi crate's results that may be `null` are `Option`s**, 78 of them:
 `document::get_element_by_id(..) -> Option<&Element>`,
 `node::text_content(..) -> Option<String>`. Programs say what happens when
 there's nothing:
@@ -91,7 +91,7 @@ const app = $unwrap(document.getElementById("app"), "the page has an #app");
 - **`{ tag: "Some", value }` objects, like any enum with fields**: faithful to
   Rust in every case, but an allocation per `Some`, and nothing a JS caller
   would expect.
-- **A separate `Nullable<T>` type for the web crate**, as ReScript has:
+- **A separate `Nullable<T>` type for the webapi crate**, as ReScript has:
   another type and a conversion at every call, to tell apart two things
   rust-js doesn't need to tell apart.
 

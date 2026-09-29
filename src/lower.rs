@@ -2306,6 +2306,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
                 Ok(Expr::var(if max { "$f64Max" } else { "$f64Min" }))
             }
+            ExprKind::ZstLiteral { .. }
+                if let &ty::FnDef(def_id, args) = ty.kind()
+                    && is_binding(self.tcx, def_id) =>
+            {
+                self.binding_value(def_id, args, span)
+            }
             ExprKind::Closure(ref closure) => self.closure(closure, out),
             ExprKind::Tuple { ref fields } if fields.is_empty() => Ok(Expr::undefined()),
             ExprKind::Tuple { ref fields } => Ok(Expr::array(self.operands(fields, out)?)),

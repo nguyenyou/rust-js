@@ -1,6 +1,6 @@
 // Listening to the DOM from an effect, whose cleanup stops it.
 
-use web::{AbortController, AbortSignal, Event, EventTarget, abort_controller};
+use webapi::{AbortController, AbortSignal, Event, EventTarget, abort_controller};
 
 unsafe extern "Rust" {
     #[link_name = "addEventListener"]

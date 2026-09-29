@@ -1,4 +1,4 @@
-// A counter, written against the DOM through the `web` crate: bindings
+// A counter, written against the DOM through the `webapi` crate: bindings
 // generated from W3C's WebIDL (ADR 0024). Also closures (ADR 0022), and
 // strings, references and shared state (ADR 0023).
 
@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 // Each DOM interface is a type and a module of its members:
 // `document::create_element(document, "p")` is `document.createElement("p")`.
-use web::{Element, document, element, event_target, node};
+use webapi::{Element, document, element, event_target, node};
 
 fn button(label: &str) -> &'static Element {
     let b = document::create_element(document, "button");
@@ -44,7 +44,7 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use web::{HtmlElement, dom_rect_read_only, html_element, node_list};
+    use webapi::{HtmlElement, dom_rect_read_only, html_element, node_list};
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {

@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { decode, expected, same, type Outcome } from "./oracle";
 import { callInNode, type Call } from "./programs";
-import { root, target, run, buildCompiler, buildReact, buildSerde, buildWeb, compiler, fixture } from "./support";
+import { root, target, run, buildCompiler, buildReact, buildSerde, buildWebapi, compiler, fixture } from "./support";
 
 // Values are JSON: numbers, and objects and arrays for structs and tuples.
 type Case = { fn: string; args: unknown[]; value?: unknown; panic?: string };
@@ -117,9 +117,9 @@ beforeAll(async () => {
   run([compiler, "examples/iterators.rs", "-o", join(target, "iterators.js")]);
   iterators = await import(join(target, "iterators.js"));
   run([compiler, "examples/thread_locals.rs", "-o", join(target, "thread_locals.js")]);
-  // The web crate is used from its metadata (ADR 0024).
-  buildWeb();
-  const withWeb = ["--", "--extern", `web=${join(target, "libweb.rmeta")}`];
+  // The webapi crate is used from its metadata (ADR 0024).
+  buildWebapi();
+  const withWeb = ["--", "--extern", `webapi=${join(target, "libwebapi.rmeta")}`, "--extern", `js=${join(target, "libjs.rmeta")}`, "-L", target];
   run([compiler, "examples/counter.rs", "-o", join(target, "counter.js"), ...withWeb]);
   run([compiler, "test/web_forms.rs", "-o", join(target, "web_forms.js"), ...withWeb]);
   run([compiler, "examples/todo.rs", "-o", join(target, "todo.js"), ...withWeb]);
@@ -264,19 +264,26 @@ test("async code becomes async functions and await", async () => {
   expect(await asyncs.swap([1, 2])).toEqual([2, 1]);
   expect(await asyncs.blocks(5)).toBe(26);
   expect(await asyncs.held()).toBe(5);
+  // The listener heard the first ping, and was gone for the second.
+  expect(asyncs.listen_until_aborted()).toBe(1);
   // A spawned task runs up to its first `.await` at once, the rest later.
   const log = asyncs.spawned();
   expect(log.value).toEqual([1, 2]);
   await Bun.sleep(20);
   expect(log.value).toEqual([1, 2, 3]);
-  // `window::fetch_with_str`, from the web crate, and the response's promises.
-  // Bun has `fetch`; the web crate reaches it through `window`.
-  const server = Bun.serve({ port: 0, fetch: () => new Response("hello", { status: 201 }) });
+  // `window::fetch`, from the webapi crate, and the response's promises.
+  // Bun has `fetch`; the webapi crate reaches it through `window`. A POST's
+  // answer is its method and body, as the server was sent them.
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (request) => request.method === "POST" ? new Response(`${request.method} ${await request.text()}`) : new Response("hello", { status: 201 }),
+  });
   (globalThis as any).window = globalThis;
   try {
     expect(await asyncs.load(server.url.href)).toEqual([201, true, "hello"]);
     // Binary data: `bytes()` and `arrayBuffer()`, five bytes of "hello".
     expect(await asyncs.load_bytes(server.url.href)).toEqual([5, 5, 5]);
+    expect(await asyncs.post(server.url.href, "saved")).toBe("POST saved");
   } finally {
     delete (globalThis as any).window;
     server.stop();
@@ -437,6 +444,12 @@ test("a throwing JS call is a Result, and ? returns early", async () => {
   // A rejected promise is an `Err` at its `.await`.
   expect(await throws.settled(false)).toBe("7");
   expect(await throws.settled(true)).toBe("rejected: no");
+  // Any promise, settled: its rejection an `Err`, not a throw.
+  expect(await throws.settle_either(false)).toBe("8");
+  expect(await throws.settle_either(true)).toBe("rejected: no");
+  const [encoded, decoded] = throws.uri("a b&ü");
+  expect(encoded).toStartWith("a%20b%26%C3%BC URIError");
+  expect(decoded).toEqual({ TAG: "Ok", _0: "a b&ü" });
 
   const js = await Bun.file(join(target, "throws.js")).text();
   expect(js).toContain("  const match = $try(() => JSON.parse(json));");
@@ -553,7 +566,7 @@ test("structs and tuples are plain objects and arrays", async () => {
 });
 
 // The counter's JS reads like the Rust: methods, properties, globals, and one
-// shared `{ value }`. No wrappers from the web crate.
+// shared `{ value }`. No wrappers from the webapi crate.
 test("the counter's JS is plain DOM code", async () => {
   const js = await Bun.file(join(target, "counter.js")).text();
   expect(js).toContain('const b = document.createElement("button");');
@@ -565,8 +578,8 @@ test("the counter's JS is plain DOM code", async () => {
   expect(js).toContain("app.append(output);");
 });
 
-// Each `#[link_name]` form the web crate uses (ADR 0024), in test/web_forms.rs.
-test("the web crate's bindings become plain JS", async () => {
+// Each `#[link_name]` form the webapi crate uses (ADR 0024), in test/web_forms.rs.
+test("the webapi crate's bindings become plain JS", async () => {
   const js = await Bun.file(join(target, "web_forms.js")).text();
   // A cast is the value itself; a setter, an assignment; a getter, a read.
   expect(js).toContain('const input = document.createElement("input");');

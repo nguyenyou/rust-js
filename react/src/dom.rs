@@ -8,13 +8,13 @@ use super::*;
 /// `children`, rendered into `container`, somewhere else in the DOM. Events
 /// still bubble through the React tree.
 #[rust_js::link_name = "react-dom#createPortal"]
-pub fn create_portal(children: impl Node, container: &web::Element) -> Element {
+pub fn create_portal(children: impl Node, container: &webapi::Element) -> Element {
     unreachable!()
 }
 
 /// `createPortal(children, container, key)`.
 #[rust_js::link_name = "react-dom#createPortal"]
-pub fn create_portal_with_key(children: impl Node, container: &web::Element, key: impl Key) -> Element {
+pub fn create_portal_with_key(children: impl Node, container: &webapi::Element, key: impl Key) -> Element {
     unreachable!()
 }
 
@@ -213,7 +213,7 @@ impl FormStatus {
 
     /// What it's submitting, while it is.
     #[rust_js::link_name = "get data"]
-    pub fn data(&self) -> Option<&'static web::FormData> {
+    pub fn data(&self) -> Option<&'static webapi::FormData> {
         unreachable!()
     }
 
@@ -228,7 +228,7 @@ impl FormStatus {
 /// reset `form` once the current Transition is done.
 #[cfg(react = "19.0")]
 #[rust_js::link_name = "react-dom#requestFormReset"]
-pub fn request_form_reset(form: &web::HtmlFormElement) {
+pub fn request_form_reset(form: &webapi::HtmlFormElement) {
     unreachable!()
 }
 
@@ -289,26 +289,26 @@ pub mod client {
 
     /// [`createRoot`](https://react.dev/reference/react-dom/client/createRoot).
     #[rust_js::link_name = "react-dom/client#createRoot"]
-    pub fn create_root(container: &web::Element) -> &'static Root {
+    pub fn create_root(container: &webapi::Element) -> &'static Root {
         unreachable!()
     }
 
     /// `createRoot(container, options)`.
     #[rust_js::link_name = "react-dom/client#createRoot"]
-    pub fn create_root_with(container: &web::Element, options: RootOptions) -> &'static Root {
+    pub fn create_root_with(container: &webapi::Element, options: RootOptions) -> &'static Root {
         unreachable!()
     }
 
     /// [`hydrateRoot`](https://react.dev/reference/react-dom/client/hydrateRoot):
     /// attach React to HTML the server rendered from `children`.
     #[rust_js::link_name = "react-dom/client#hydrateRoot"]
-    pub fn hydrate_root(container: &web::Element, children: impl Node) -> &'static Root {
+    pub fn hydrate_root(container: &webapi::Element, children: impl Node) -> &'static Root {
         unreachable!()
     }
 
     /// `hydrateRoot(container, children, options)`.
     #[rust_js::link_name = "react-dom/client#hydrateRoot"]
-    pub fn hydrate_root_with(container: &web::Element, children: impl Node, options: RootOptions) -> &'static Root {
+    pub fn hydrate_root_with(container: &webapi::Element, children: impl Node, options: RootOptions) -> &'static Root {
         unreachable!()
     }
 }
@@ -367,12 +367,12 @@ pub mod server {
             on_error: impl Fn(&Error) + 'static = "onError";
             progressive_chunk_size: u32 = "progressiveChunkSize";
             /// Stop rendering, and leave the rest to the client.
-            signal: &'static web::AbortSignal = "signal";
+            signal: &'static webapi::AbortSignal = "signal";
             #[cfg(react = "19.0")]
             max_headers_length: u32 = "maxHeadersLength";
             /// Called with the `Link` headers for the page's preloads.
             #[cfg(react = "19.0")]
-            on_headers: impl Fn(&web::Headers) + 'static = "onHeaders";
+            on_headers: impl Fn(&webapi::Headers) + 'static = "onHeaders";
             /// Called when [`browser`] stops a component rendering here.
             #[cfg(react = "19.3")]
             on_browser_bailout: impl Fn(&Error, &ErrorInfo) + 'static = "onBrowserBailout";
@@ -383,11 +383,11 @@ pub mod server {
     pub struct RenderStream(PhantomData<JsObject>);
 
     impl Deref for RenderStream {
-        type Target = web::ReadableStream;
+        type Target = webapi::ReadableStream;
 
-        fn deref(&self) -> &web::ReadableStream {
+        fn deref(&self) -> &webapi::ReadableStream {
             // Never runs: rust-js compiles this `Deref` to the object itself.
-            unsafe { &*(self as *const Self as *const web::ReadableStream) }
+            unsafe { &*(self as *const Self as *const webapi::ReadableStream) }
         }
     }
 
@@ -494,7 +494,7 @@ pub mod prerender {
         /// The HTML: a Web stream, or, from the `*_to_node_stream`
         /// functions, a Node `Readable`.
         #[rust_js::link_name = "get prelude"]
-        pub fn prelude(&self) -> &'static web::ReadableStream {
+        pub fn prelude(&self) -> &'static webapi::ReadableStream {
             unreachable!()
         }
 

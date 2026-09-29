@@ -5,7 +5,7 @@
 use core::marker::PhantomData;
 use core::ops::Deref;
 
-use web::JsObject;
+use js::JsObject;
 
 /// A [React event](https://react.dev/reference/react-dom/components/common#react-event-object):
 /// what every handler gets.
@@ -54,15 +54,15 @@ fields!(Event {
     bubbles: bool = "bubbles";
     cancelable: bool = "cancelable";
     /// The element whose handler this is.
-    current_target: &'static web::Element = "currentTarget";
+    current_target: &'static webapi::Element = "currentTarget";
     default_prevented: bool = "defaultPrevented";
     event_phase: u32 = "eventPhase";
     is_trusted: bool = "isTrusted";
     /// Where it happened.
-    target: &'static web::Element = "target";
+    target: &'static webapi::Element = "target";
     time_stamp: f64 = "timeStamp";
     /// The DOM's event that this wraps.
-    native_event: &'static web::Event = "nativeEvent";
+    native_event: &'static webapi::Event = "nativeEvent";
     /// Its name, like `"click"`.
     type_: String = "type";
 });
@@ -92,7 +92,7 @@ events! {
     /// A [UI event](https://developer.mozilla.org/docs/Web/API/UIEvent), like a scroll.
     Ui: Event {
         detail: i32 = "detail";
-        view: &'static web::Window = "view";
+        view: &'static webapi::Window = "view";
     }
 
     /// A click, or another [mouse event](https://developer.mozilla.org/docs/Web/API/MouseEvent).
@@ -109,7 +109,7 @@ events! {
         movement_y: f64 = "movementY";
         page_x: f64 = "pageX";
         page_y: f64 = "pageY";
-        related_target: Option<&'static web::Element> = "relatedTarget";
+        related_target: Option<&'static webapi::Element> = "relatedTarget";
         screen_x: f64 = "screenX";
         screen_y: f64 = "screenY";
         shift_key: bool = "shiftKey";
@@ -134,7 +134,7 @@ events! {
     /// A [drag event](https://developer.mozilla.org/docs/Web/API/DragEvent).
     /// Call `prevent_default` in `on_drag_over` to allow a drop.
     Drag: Mouse {
-        data_transfer: &'static web::DataTransfer = "dataTransfer";
+        data_transfer: &'static webapi::DataTransfer = "dataTransfer";
     }
 
     /// A [wheel event](https://developer.mozilla.org/docs/Web/API/WheelEvent).
@@ -148,7 +148,7 @@ events! {
     /// Focus coming or going: `on_focus` and `on_blur`, which bubble in React.
     Focus: Ui {
         /// Where focus went, or came from.
-        related_target: Option<&'static web::Element> = "relatedTarget";
+        related_target: Option<&'static webapi::Element> = "relatedTarget";
     }
 
     /// A key pressed or let go.
@@ -169,12 +169,12 @@ events! {
     /// A [touch event](https://developer.mozilla.org/docs/Web/API/TouchEvent).
     Touch: Ui {
         alt_key: bool = "altKey";
-        changed_touches: &'static web::TouchList = "changedTouches";
+        changed_touches: &'static webapi::TouchList = "changedTouches";
         ctrl_key: bool = "ctrlKey";
         meta_key: bool = "metaKey";
         shift_key: bool = "shiftKey";
-        target_touches: &'static web::TouchList = "targetTouches";
-        touches: &'static web::TouchList = "touches";
+        target_touches: &'static webapi::TouchList = "targetTouches";
+        touches: &'static webapi::TouchList = "touches";
     }
 
     /// A CSS [animation event](https://developer.mozilla.org/docs/Web/API/AnimationEvent).
@@ -193,7 +193,7 @@ events! {
 
     /// Copying, cutting or pasting.
     Clipboard: Event {
-        clipboard_data: &'static web::DataTransfer = "clipboardData";
+        clipboard_data: &'static webapi::DataTransfer = "clipboardData";
     }
 
     /// Text being composed with an input method.

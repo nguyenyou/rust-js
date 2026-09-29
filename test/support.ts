@@ -30,10 +30,10 @@ export function buildCompiler() {
   }
 }
 let web = false;
-export function buildWeb() {
+export function buildWebapi() {
   if (!web) {
     buildCompiler();
-    run(["web/build.sh", "-o", join(target, "libweb.rmeta")]);
+    run(["webapi/build.sh", "-o", join(target, "libwebapi.rmeta")]);
     web = true;
   }
 }

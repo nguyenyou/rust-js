@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Compile the react crate's metadata (ADRs 0041, 0043), and the web crate's
-# beside it, which it uses:
+# Compile the react crate's metadata (ADRs 0041, 0043), and the webapi and js
+# crates' beside it, which it uses:
 #
 #   react/build.sh -o target/libreact.rmeta                  # the latest React's API
 #   react/build.sh -o target/react-18.2/libreact.rmeta --react 18.2.0
@@ -26,7 +26,7 @@ cd "$(dirname "$0")"
 cfg=()
 cfg_output=$("${RUST_JS_JS_RUNTIME:-node}" cfg.js ${version:+"$version"})
 while IFS= read -r flag; do cfg+=("$flag"); done <<< "$cfg_output"
-../web/build.sh -o "$dir/libweb.rmeta" "$@"
+../webapi/build.sh -o "$dir/libwebapi.rmeta" "$@"
 # For rust-js's target (ADR 0090), unless another is given.
 target=(--target=wasm32-unknown-unknown)
 for arg in "$@"; do
@@ -35,4 +35,4 @@ done
 # The absolute path lets a program's errors quote this crate's source: a gated
 # item's `#[cfg(react = "..")]`.
 exec rustc --edition=2024 --crate-type=lib --crate-name=react --emit=metadata ${target[@]+"${target[@]}"} "$PWD/src/lib.rs" \
-  --extern web="$dir/libweb.rmeta" "${cfg[@]}" -o "$dir/$(basename "$out")" "$@"
+  --extern webapi="$dir/libwebapi.rmeta" --extern js="$dir/libjs.rmeta" "${cfg[@]}" -o "$dir/$(basename "$out")" "$@"

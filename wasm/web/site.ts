@@ -35,20 +35,21 @@ export function sysrootFiles(): string[] {
 }
 
 /**
- * Build the web crate's metadata for the playground's target (ADR 0024), with
- * the pinned rustc: every program is compiled with `--extern web=` this file.
+ * Build the webapi crate's metadata for the playground's target (ADR 0024), and
+ * the js crate's beside it (ADR 0102), with the pinned rustc: every program is
+ * compiled with `--extern webapi=` this file.
  */
-export function buildWebCrate(out: string) {
+export function buildWebapiCrate(out: string) {
   mkdirSync(dirname(out), { recursive: true });
-  const script = join(import.meta.dir, "../../web/build.sh");
-  const p = Bun.spawnSync([script, "--target", "wasm32-unknown-unknown", "-o", out], { stderr: "pipe" });
-  if (p.exitCode !== 0) throw new Error(`web/build.sh failed:\n${p.stderr.toString()}`);
+  const script = join(import.meta.dir, "../../webapi/build.sh");
+  const p = Bun.spawnSync([script, "-o", out, "--target", "wasm32-unknown-unknown"], { stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`webapi/build.sh failed:\n${p.stderr.toString()}`);
 }
 
 /**
  * Build the react crate's metadata for the page's own Rust (ADR 0044), for
- * the React the page has installed, with the web crate's beside it:
- * `<dir>/libreact.rmeta` and `<dir>/libweb.rmeta`.
+ * the React the page has installed, with the webapi and js crates' beside it:
+ * `<dir>/libreact.rmeta`, `<dir>/libwebapi.rmeta` and `<dir>/libjs.rmeta`.
  */
 export function buildReactCrate(dir: string) {
   mkdirSync(dir, { recursive: true });
@@ -95,12 +96,12 @@ export function examplesManifest() {
 
 /**
  * What the page fetches beside itself (ADR 0045): the compiler, the sysroot's
- * metadata, the web crate's, and the examples. Served by Vite's dev server,
+ * metadata, the webapi, js and react crates', and the examples. Served by Vite's dev server,
  * and put in the build as they are, unhashed, since the page asks for them
  * by name.
  */
 export function playgroundFiles(): Plugin {
-  const webCrate = join(import.meta.dir, "../../target/web/libweb.rmeta");
+  const webapiCrate = join(import.meta.dir, "../../target/crates/libwebapi.rmeta");
   // The file at a path the page asks for, or the JSON to send.
   function served(path: string): { file: string } | { json: unknown } | undefined {
     const sysroot = sysrootFiles();
@@ -108,8 +109,9 @@ export function playgroundFiles(): Plugin {
     if (path === "/sysroot.json") return { json: sysroot };
     const name = path.match(/^\/sysroot\/([^/]+)$/)?.[1];
     if (name && sysroot.includes(name)) return { file: join(sysrootDir, name) };
-    if (path === "/web/libweb.rmeta") return { file: webCrate };
-    if (path === "/web/libreact.rmeta") return { file: join(dirname(webCrate), "libreact.rmeta") };
+    if (path === "/crates/libwebapi.rmeta") return { file: webapiCrate };
+    if (path === "/crates/libreact.rmeta") return { file: join(dirname(webapiCrate), "libreact.rmeta") };
+    if (path === "/crates/libjs.rmeta") return { file: join(dirname(webapiCrate), "libjs.rmeta") };
     if (path === "/examples.json") return { json: examplesManifest() };
     // Only files an example lists: never an arbitrary path.
     const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
@@ -119,7 +121,7 @@ export function playgroundFiles(): Plugin {
   }
   // Every path the build needs, for `generateBundle`.
   function all(): string[] {
-    const paths = ["/rust-js.wasm", "/sysroot.json", "/web/libweb.rmeta", "/web/libreact.rmeta", "/examples.json"];
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/examples.json"];
     paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
     for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
     return paths;
@@ -127,7 +129,7 @@ export function playgroundFiles(): Plugin {
   return {
     name: "playground-files",
     buildStart() {
-      buildReactCrate(dirname(webCrate));
+      buildReactCrate(dirname(webapiCrate));
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

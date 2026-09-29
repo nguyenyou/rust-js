@@ -92,12 +92,14 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
     if (bindings.includes("react")) {
       const metadata = join(cacheDir, "react", react ?? "latest", key);
       const stamp = join(metadata, "complete");
-      if (!existsSync(stamp) || !existsSync(join(metadata, "libreact.rmeta")) || !existsSync(join(metadata, "libweb.rmeta"))) {
+      if (!existsSync(stamp) || ["libreact.rmeta", "libwebapi.rmeta", "libjs.rmeta"].some(file => !existsSync(join(metadata, file)))) {
         await mkdir(metadata, { recursive: true });
         await run(join(repo, "react/build.sh"), ["-o", join(metadata, "libreact.rmeta"), ...(react ? ["--react", react] : [])], repo);
         await writeFile(stamp, key);
       }
-      flags.push("--extern", `react=${join(metadata, "libreact.rmeta")}`, "-L", metadata);
+      // React's crates, each a program's to name (ADR 0102): `use js::spawn`.
+      for (const name of ["react", "webapi", "js"]) flags.push("--extern", `${name}=${join(metadata, `lib${name}.rmeta`)}`);
+      flags.push("-L", metadata);
     }
     if (bindings.includes("serde")) {
       const toolchain = readFileSync(join(repo, "rust-toolchain.toml"), "utf8").match(/^channel\s*=\s*"([^"]+)"/m)?.[1];

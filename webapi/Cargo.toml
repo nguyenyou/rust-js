@@ -1,0 +1,14 @@
+# The webapi crate as a Cargo dependency (ADR 0101): rustc checks it, as
+# webapi/build.sh does, and rust-js reads its metadata (ADR 0024).
+[package]
+name = "rust-js-webapi"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "webapi"
+path = "src/lib.rs"
+
+[dependencies]
+js = { package = "rust-js-js", path = "../js" }

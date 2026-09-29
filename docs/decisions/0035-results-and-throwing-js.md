@@ -33,7 +33,7 @@ const match = $try(() => JSON.parse(json));   // { TAG: "Ok", _0: .. } or { TAG:
 
 - **One returning `Promise<Result<T, E>>` settles either way**:
   `$settle(p)` turns a rejection into an `Err`, so its `.await` doesn't throw.
-- **`web::JsError` is what was thrown**, usually an `Error`.
+- **`webapi::JsError` is what was thrown**, usually an `Error`.
   `js_error::to_string(e)` is `String(e)`: `"SyntaxError: JSON Parse error: .."`.
 - **`?` returns the `Err` or `None` as it is:**
 

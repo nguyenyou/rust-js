@@ -1,6 +1,6 @@
-# 0024. The `web` crate: DOM bindings generated from WebIDL
+# 0024. The `webapi` crate: DOM bindings generated from WebIDL
 
-Status: Accepted. Extends [0021](0021-js-interop.md).
+Status: Accepted. Extends [0021](0021-js-interop.md). Named `webapi`, and its JS-language types moved to the `js` crate, by [0102](0102-js-and-webapi.md), which also names its forms as ReScript's.
 
 ## Context
 
@@ -32,13 +32,13 @@ Three things were missing in rust-js:
 
 ## Decision
 
-A crate named **`web`**, in `web/`, **generated** by `web/generate.ts` from
-W3C's WebIDL (a pinned `@webref/idl`) into `web/src/lib.rs`. It holds
+A crate named **`web`**, in `web/`, **generated** by `webapi/generate.ts` from
+W3C's WebIDL (a pinned `@webref/idl`) into `webapi/src/lib.rs`. It holds
 **declarations only**. rust-js never compiles it to JS: a program calls what
-it declares, and rustc reads it as ordinary crate metadata (`libweb.rmeta`).
+it declares, and rustc reads it as ordinary crate metadata (`libwebapi.rmeta`).
 
 ```rust
-use web::{document, element, event_target, node};
+use webapi::{document, element, event_target, node};
 
 let b = document::create_element(document, "button");   // document.createElement("button")
 node::set_text_content(b, "+");                          // b.textContent = "+"
@@ -150,9 +150,9 @@ Web API (`compile_streaming`), and tables (`HTMLTableElement` and its rows
 and cells) for the playground (ADR 0032). It isn't
 the whole platform (334 specs).
 
-**Building:** `rustc --emit=metadata` produces `libweb.rmeta`, once per
+**Building:** `rustc --emit=metadata` produces `libwebapi.rmeta`, once per
 target: the host for the tests, `wasm32-unknown-unknown` for the playground,
-which always passes `--extern web=..`.
+which always passes `--extern webapi=..`.
 
 ## Why
 

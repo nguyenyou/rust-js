@@ -1228,6 +1228,74 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// A binding as a value, `.map(encode)` (ADR 0039): an arrow of its own
+    /// parameters, calling it as a call would, so JS gives it no more than
+    /// Rust does. `[..].map(parseInt)` would give `parseInt` each index too.
+    pub(super) fn binding_value(&mut self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Expr> {
+        let inputs = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate(self.tcx, args)
+            .skip_binder()
+            .inputs()
+            .to_vec();
+        let idents = self.tcx.fn_arg_idents(def_id);
+        // Named as the binding names them, and `this` after its type:
+        // `(signal) => signal.aborted`.
+        let params: Vec<String> = inputs
+            .iter()
+            .enumerate()
+            .map(|(i, input)| {
+                let name = match idents.get(i).copied().flatten().map(|ident| ident.name.to_string()) {
+                    Some(name) if name != "this" && !name.starts_with('_') => camel_case(&name),
+                    _ => match input.peel_refs().kind() {
+                        ty::Adt(adt, _) => super::lower_first(self.tcx.item_name(adt.did()).as_str()),
+                        _ => format!("arg{i}"),
+                    },
+                };
+                self.fresh(&name)
+            })
+            .collect();
+        let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
+        let this = is_method(self.tcx, def_id).then(|| values.remove(0));
+        let value = match (js_form(self.tcx, def_id), this) {
+            (JsForm::Call(name), Some(this)) if !name.contains('#') => Expr::call(Expr::member(this, name), values),
+            (JsForm::Call(name), None) => Expr::call(self.js_ref(&name), values),
+            (JsForm::New(name), None) => Expr::new_(self.js_ref(&name), values),
+            (JsForm::Get(name), Some(this)) if values.is_empty() && !name.contains('#') => Expr::member(this, name),
+            (JsForm::This, Some(this)) if values.is_empty() => this,
+            (JsForm::CallThis, Some(this)) => Expr::call(this, values),
+            _ => {
+                let what = format!("`{}` as a value", self.tcx.def_path_str(def_id));
+                return Err(self.unsupported(span, &what));
+            }
+        };
+        let body = self.catching(def_id, value);
+        Ok(Expr::arrow(
+            params.into_iter().map(Into::into).collect(),
+            vec![StmtKind::Return(Some(body)).at(self.js_span(span))],
+        ))
+    }
+
+    /// A binding that's a JSX component, `<Toaster />` of `sonner#Toaster`:
+    /// what it's imported as, or `None` for a Rust function's.
+    pub(super) fn binding_component(&self, component: ExprId) -> Option<Expr> {
+        let mut at = self.strip(component);
+        while let ExprKind::Borrow { arg, .. } = self.thir[at].kind {
+            at = self.strip(arg);
+        }
+        let (ExprKind::ZstLiteral { .. }, &ty::FnDef(def_id, _)) = (&self.thir[at].kind, self.thir[at].ty.kind())
+        else {
+            return None;
+        };
+        match js_form(self.tcx, def_id) {
+            JsForm::Call(name) if is_binding(self.tcx, def_id) && !is_method(self.tcx, def_id) => {
+                Some(self.js_ref(&name))
+            }
+            _ => None,
+        }
+    }
+
     /// A JS global (`console.log`) or an explicit package import
     /// (`node:path#posix.join` is `posix.join`, ADR 0028).
     pub(super) fn js_ref(&self, path: &str) -> Expr {

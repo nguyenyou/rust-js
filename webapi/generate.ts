@@ -1,4 +1,4 @@
-// Generate src/lib.rs, the `web` crate, from W3C's WebIDL (ADR 0024).
+// Generate src/lib.rs, the `webapi` crate, from W3C's WebIDL (ADR 0024).
 //
 //   cd web && bun install && bun generate.ts
 //
@@ -71,6 +71,22 @@ const NAMESPACES = ["WebAssembly"];
 
 // JS's own types that WebIDL uses, declared by hand at the crate root.
 const BUILTINS = new Set(["ArrayBuffer", "Uint8Array"]);
+
+// ReScript's webapi, where WebIDL has several forms of one function (ADR
+// 0102): the one most programs call gets the plain name, and the others
+// say what sets them apart. By interface and member, the form's type:
+// `fetch(url)`, and `fetch_with_request(request)`.
+const PRIMARY: Record<string, string> = { "Window.fetch": "str", "Request.constructor": "str" };
+
+// Names a type can't give, as ReScript's: `Request.fromURL`.
+const RENAMES: Record<string, string> = {
+  "request::from_str": "from_url",
+  "request::from_str_with_init": "from_url_with_init",
+};
+
+// A dictionary field's type, where WebIDL's is one Rust can't take: a
+// `HeadersInit` is a sequence or a record, and `fetch` takes a `Headers` too.
+const FIELD_TYPES: Record<string, string> = { "RequestInit.headers": "&'a Headers" };
 
 // The globals at the crate root: `document`, `window`.
 const GLOBALS: [string, string][] = [["document", "Document"], ["window", "Window"]];
@@ -199,7 +215,7 @@ type Position = "param" | "result";
 function rustType(t: IdlType, at: Position): string | { skip: string } {
   if (t.union) return { skip: "union" };
   // A promise a function returns is `.await`ed in Rust (ADR 0029). One it
-  // takes is passed as it is: `compile_streaming(window::fetch_with_str(..))`.
+  // takes is passed as it is: `compile_streaming(window::fetch(..))`.
   if (t.generic === "Promise") {
     const inner = rustType((t.idlType as IdlType[])[0], "result");
     return typeof inner === "string" ? `Promise<${inner}>` : inner;
@@ -217,6 +233,7 @@ function rustType(t: IdlType, at: Position): string | { skip: string } {
   if (name === "object") return at === "param" ? "&dyn core::any::Any" : "&'static JsObject";
   const dictionary = dictionaries.get(name);
   if (dictionary && at === "result") return dictionaryType(dictionary);
+  if (dictionary && at === "param") return paramDictionary(dictionary);
   if (known.has(name) || BUILTINS.has(name)) return at === "param" ? `&${typeName(name)}` : `&'static ${typeName(name)}`;
   return { skip: name };
 }
@@ -239,6 +256,50 @@ function dictionaryType(d: Def): string | { skip: string } {
   usedDictionaries.set(d.name, fields);
   return typeName(d.name);
 }
+
+/** A field of a dictionary a function takes: its Rust and JS names, and type. */
+type Field = { rust: string; js: string; type: string; optional: boolean };
+
+/** The fields of each dictionary a function takes, and whether they borrow. */
+const paramDictionaries = new Map<string, { fields: Field[]; borrows: boolean }>();
+
+/** A dictionary's members, its parents' first: `AddEventListenerOptions` has `capture`. */
+function dictionaryMembers(d: Def): Member[] {
+  const parent = d.inheritance ? dictionaries.get(d.inheritance) : undefined;
+  return [...(parent ? dictionaryMembers(parent) : []), ...((d.members ?? []) as Member[])];
+}
+
+/**
+ * A dictionary a function takes is a Rust struct, as ReScript's is a record
+ * of optional fields (ADR 0102): an optional member is an `Option`, `None`
+ * unless given, which JS reads as not given, and with none required it has
+ * `Default`: `RequestInit { method: Some("POST"), ..Default::default() }`.
+ * What it borrows lives for `'a`. A member of a type Rust can't take is
+ * left out; one of a union is its string, if it can be one.
+ */
+function paramDictionary(d: Def): string | { skip: string } {
+  if (usedDictionaries.has(d.name)) return { skip: `${d.name} as a result too` };
+  let known = paramDictionaries.get(d.name);
+  if (!known) {
+    const fields: Field[] = [];
+    for (const m of dictionaryMembers(d)) {
+      const alts = alternatives(m.idlType!);
+      const given = FIELD_TYPES[`${d.name}.${m.name}`];
+      const chosen = given ?? (isUnion(m.idlType!) ? alts.find((a) => a === "&str") ?? alts[0] : alts[0]);
+      if (!chosen || chosen.includes("dyn core::any::Any")) continue;
+      // A borrow in a field lives as long as the struct's: `&'a str`.
+      const type = chosen.replace(/^&(?!')/, "&'a ").replace(/^([A-Z]\w*)<'_>$/, "$1<'a>");
+      fields.push({ rust: snake(m.name!), js: m.name!, type, optional: !m.required });
+    }
+    if (fields.length === 0) return { skip: d.name };
+    known = { fields, borrows: fields.some((f) => f.type.includes("'a")) };
+    paramDictionaries.set(d.name, known);
+  }
+  return `${typeName(d.name)}${known.borrows ? "<'_>" : ""}`;
+}
+
+/** A parameter type that's a dictionary: `RequestInit<'_>`. */
+const isDictionary = (rust: string) => paramDictionaries.has([...paramDictionaries.keys()].find((n) => rust.replace(/<'_>$/, "") === typeName(n)) ?? "");
 
 /** The Rust types a parameter can take: one per supported member of a union. */
 function alternatives(t: IdlType): string[] {
@@ -320,7 +381,10 @@ function functionsOf(i: Interface): Fn[] {
       const alts = alternatives(a.idlType);
       if (alts.length === 0) break;
       const union = isUnion(a.idlType);
-      const word = (alt: string) => (union ? suffix(alt) : snakeWords(a.name));
+      // A union's dictionary is named after the argument, as ReScript's
+      // `~options=?` is: `add_event_listener_with_options`, then `_with_bool`.
+      const word = (alt: string) => (union && !isDictionary(alt) ? suffix(alt) : snakeWords(a.name));
+      if (union) alts.sort((x, y) => Number(isDictionary(y)) - Number(isDictionary(x)));
       for (const alt of union ? alts : alts.slice(0, 1)) {
         forms.push({ name: `${base}_with_${[...lead, ...words, word(alt)].join("_and_")}`, params: [...params, `${snake(a.name)}: ${alt}`] });
       }
@@ -330,12 +394,24 @@ function functionsOf(i: Interface): Fn[] {
     return forms;
   };
 
-  const variants = (base: string, sig: { names: string[]; options: string[][] }) => {
+  // The form ReScript gives the plain name, first: `fetch(url)`.
+  const primary = (key: string, sig: { names: string[]; options: string[][] }) => {
+    const wanted = PRIMARY[key];
+    if (!wanted) return sig;
+    const options = sig.options.map((o) => {
+      const k = o.findIndex((alt) => suffix(alt) === wanted);
+      return k > 0 ? [o[k], ...o.filter((_, j) => j !== k)] : o;
+    });
+    return { names: sig.names, options };
+  };
+
+  const variants = (base: string, sig: { names: string[]; options: string[][] }, named = false) => {
     const varying = sig.options.findIndex((o) => o.length > 1);
     const pick = (k: number) => sig.options.map((o, j) => (j === varying ? o[k] : o[0]));
     const count = varying < 0 ? 1 : sig.options[varying].length;
     return Array.from({ length: count }, (_, k) => ({
-      name: k === 0 ? base : `${base}_with_${suffix(sig.options[varying][k])}`,
+      // `named`: each after its type, the first too, as ReScript's `from*`.
+      name: named ? `${base}_${suffix(sig.options[varying][k])}` : k === 0 ? base : `${base}_with_${suffix(sig.options[varying][k])}`,
       params: pick(k).map((ty, j) => `${sig.names[j]}: ${ty}`),
     }));
   };
@@ -343,12 +419,20 @@ function functionsOf(i: Interface): Fn[] {
   for (const [index, { member: m }] of i.members.entries()) {
     if (m.type === "constructor") {
       if (!i.constructible) continue;
-      const sig = signatures(m.arguments ?? []);
-      if ("skip" in sig) {
-        skip(sig.skip);
+      const found = signatures(m.arguments ?? []);
+      if ("skip" in found) {
+        skip(found.skip);
         continue;
       }
-      for (const v of [...variants("new", sig), ...optionalForms("new", [], sig, m.arguments ?? [])]) {
+      const sig = primary(`${i.name}.constructor`, found);
+      // As ReScript names them: one signature is `new`, its optional
+      // arguments `new_with_<name>`; a family of sources is `from_<type>`,
+      // `request::from_url`, and the optional arguments of its first follow.
+      const family = sig.options.some((o) => o.length > 1);
+      const forms = family
+        ? [...variants("from", sig, true), ...optionalForms(`from_${suffix(sig.options[sig.options.findIndex((o) => o.length > 1)][0])}`, [], sig, m.arguments ?? [])]
+        : [...variants("new", sig), ...optionalForms("new", [], sig, m.arguments ?? [])];
+      for (const v of forms) {
         fns.push({ name: v.name, jsName: `new ${jsName(i)}`, params: v.params, result: `&'static ${typeName(i.name)}`, doc: [`[MDN](${mdn(i.name, i.name)})`] });
       }
     } else if (m.type === "attribute") {
@@ -376,11 +460,12 @@ function functionsOf(i: Interface): Fn[] {
         continue;
       }
       const result = rustType(m.idlType!, "result");
-      const sig = signatures(m.arguments ?? []);
-      if (typeof result !== "string" || "skip" in sig) {
-        skip(typeof result !== "string" ? result.skip : (sig as { skip: string }).skip);
+      const found = signatures(m.arguments ?? []);
+      if (typeof result !== "string" || "skip" in found) {
+        skip(typeof result !== "string" ? result.skip : (found as { skip: string }).skip);
         continue;
       }
+      const sig = primary(`${i.name}.${m.name}`, found);
       const doc = [`[MDN](${mdn(i.name, m.name)})`];
       // A later overload is named, as web-sys does, after the required
       // arguments that set it apart from the first: by name where the first
@@ -428,122 +513,33 @@ function functionsOf(i: Interface): Fn[] {
 const out: string[] = [];
 const line = (s = "") => out.push(s);
 
-line(`//! The web platform for rust-js: DOM bindings generated by \`web/generate.ts\``);
+line(`//! The web platform for rust-js: DOM bindings generated by \`webapi/generate.ts\``);
 line(`//! from W3C's WebIDL (\`@webref/idl\` ${webref.version}; specs: ${SPECS.join(", ")}). Do not edit.`);
 line(`//!`);
 line(`//! Each interface is a type (\`Element\`) and a module of its members`);
 line(`//! (\`element::append\`). Inheritance is \`Deref\`, so an \`&HtmlButtonElement\``);
 line(`//! goes wherever an \`&Element\` or \`&Node\` is expected. See ADR 0024.`);
+line(`//! The JS language's own types, \`Promise\` and \`ArrayBuffer\` say, are the js crate's (ADR 0102).`);
 line();
-line(`#![feature(extern_types)]`);
 line(`// Many Rust functions call the same JS name: an overload per union member
 // (\`before\`, \`before_with_str\`), and methods of the same name on different
 // interfaces. rustc warns because in native code they would be one symbol.`);
 line(`#![allow(clashing_extern_declarations)]`);
+line(`// \`#[rust_js::name]\` on a dictionary's field that JS names otherwise.`);
+line(`#![feature(register_tool)]`);
+line(`#![register_tool(rust_js)]`);
 line();
 line(`use core::marker::PhantomData;`);
 line(`use core::ops::Deref;`);
+line(`use js::{ArrayBuffer, JsObject, Promise, Uint8Array};`);
 line();
 line(`unsafe extern "Rust" {`);
-line(`    /// Any JS object. Every type below holds a \`PhantomData\` of it, which is`);
-line(`    /// how rust-js knows it's a JS object.`);
-line(`    pub type JsObject;`);
-for (const [name, type] of GLOBALS) {
-  line();
+GLOBALS.forEach(([name, type], k) => {
+  if (k > 0) line();
   line(`    /// The \`${name}\` global.`);
   line(`    pub safe static ${name}: &'static ${type};`);
-}
+});
 line(`}`);
-line();
-line(`/// A JS [\`Promise\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)
-/// of a \`T\`. \`.await\` on one is JS's \`await\`; a rejected one throws, like a
-/// panic. See ADR 0029.
-pub struct Promise<T>(PhantomData<JsObject>, PhantomData<T>);
-
-impl<T> core::future::Future for Promise<T> {
-    type Output = T;
-
-    fn poll(self: core::pin::Pin<&mut Self>, _: &mut core::task::Context<'_>) -> core::task::Poll<T> {
-        unreachable!("rust-js compiles \`.await\` to JS's \`await\`")
-    }
-}
-
-unsafe extern "Rust" {
-    /// Run a future without waiting for it, as from an event handler:
-    /// \`spawn(Box::new(async move { .. }))\`. A JS promise is already
-    /// running, so in JS this is the promise itself, left unawaited.
-    #[link_name = "this"]
-    pub safe fn spawn(this: Box<dyn core::future::Future<Output = ()>>);
-}
-
-/// A JS [\`RegExp\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/RegExp),
-/// for what Rust would use the \`regex\` crate for. String methods that take one
-/// (\`replace\` with a closure, \`matchAll\`) are bindings a program declares,
-/// typed for what it does with them.
-pub struct RegExp(PhantomData<JsObject>);
-
-pub mod reg_exp {
-    use super::*;
-
-    unsafe extern "Rust" {
-        /// \`new RegExp(pattern, flags)\`: flags like \`"gm"\`.
-        #[link_name = "new RegExp"]
-        pub safe fn new(pattern: &str, flags: &str) -> &'static RegExp;
-
-        #[link_name = "test"]
-        pub safe fn test(this: &RegExp, text: &str) -> bool;
-    }
-}
-
-/// Whatever a JS function threw, or a promise rejected with: usually an
-/// [\`Error\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Error).
-/// An \`extern\` function that returns \`Result<T, &JsError>\` catches it (ADR 0035).
-pub struct JsError(PhantomData<JsObject>);
-
-pub mod js_error {
-    use super::*;
-
-    unsafe extern "Rust" {
-        /// \`String(e)\`: an \`Error\`'s name and message, or any value as text.
-        #[link_name = "String"]
-        pub safe fn to_string(error: &JsError) -> String;
-    }
-}
-
-/// A JS [\`ArrayBuffer\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer):
-/// raw bytes, as \`response::array_buffer\` gives them.
-pub struct ArrayBuffer(PhantomData<JsObject>);
-
-pub mod array_buffer {
-    use super::*;
-
-    unsafe extern "Rust" {
-        #[link_name = "get byteLength"]
-        pub safe fn byte_length(this: &ArrayBuffer) -> u32;
-    }
-}
-
-/// A JS [\`Uint8Array\`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array):
-/// a view of the bytes in an \`ArrayBuffer\`, as \`response::bytes\` gives them.
-pub struct Uint8Array(PhantomData<JsObject>);
-
-pub mod uint8_array {
-    use super::*;
-
-    unsafe extern "Rust" {
-        /// A view of all of \`buffer\`.
-        #[link_name = "new Uint8Array"]
-        pub safe fn new(buffer: &ArrayBuffer) -> &'static Uint8Array;
-
-        /// How many bytes it views.
-        #[link_name = "get length"]
-        pub safe fn length(this: &Uint8Array) -> u32;
-
-        /// The buffer it views.
-        #[link_name = "get buffer"]
-        pub safe fn buffer(this: &Uint8Array) -> &'static ArrayBuffer;
-    }
-}`);
 
 let count = 0;
 
@@ -561,7 +557,7 @@ function module(name: string, fns: Fn[]) {
     for (const d of f.doc) line(`        /// ${d}`);
     if (f.jsName !== f.name) line(`        #[link_name = ${JSON.stringify(f.jsName)}]`);
     const result = f.result === "()" ? "" : ` -> ${f.result}`;
-    line(`        pub safe fn ${f.name}(${f.params.join(", ")})${result};`);
+    line(`        pub safe fn ${RENAMES[`${name}::${f.name}`] ?? f.name}(${f.params.join(", ")})${result};`);
   });
   line(`    }`);
   line(`}`);
@@ -600,6 +596,19 @@ for (const [name, fields] of usedDictionaries) {
   line(`/// The \`${name}\` dictionary: a JS object with these fields.`);
   line(`pub struct ${typeName(name)} {`);
   for (const [field, type] of fields) line(`    pub ${field}: ${type},`);
+  line(`}`);
+}
+
+// The dictionaries functions take (ADR 0102): records of optional fields.
+for (const [name, { fields, borrows }] of [...paramDictionaries].sort(([a], [b]) => a.localeCompare(b))) {
+  line();
+  line(`/// The [\`${name}\`](https://developer.mozilla.org/docs/Web/API/${name}) dictionary: a JS object of these fields, a \`None\` one not given.`);
+  if (fields.every((f) => f.optional)) line(`#[derive(Default)]`);
+  line(`pub struct ${typeName(name)}${borrows ? "<'a>" : ""} {`);
+  for (const f of fields) {
+    if (f.rust !== f.js) line(`    #[rust_js::name = ${JSON.stringify(f.js)}]`);
+    line(`    pub ${f.rust}: ${f.optional ? `Option<${f.type}>` : f.type},`);
+  }
   line(`}`);
 }
 

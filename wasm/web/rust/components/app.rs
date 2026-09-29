@@ -9,8 +9,9 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use js::{Promise, reg_exp, spawn};
 use react::{Element, use_effect, use_memo, use_ref, use_state, use_transition};
-use web::{Promise, reg_exp, spawn, window};
+use webapi::window;
 
 use super::editor::Editor;
 use super::file_tree::FileTree;

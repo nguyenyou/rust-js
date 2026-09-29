@@ -19,7 +19,7 @@ pub struct EditorProps {
 }
 
 pub fn Editor(EditorProps { state, view, on_submit }: EditorProps) -> Element {
-    let parent = use_ref(None::<&'static web::Element>);
+    let parent = use_ref(None::<&'static webapi::Element>);
     let made = use_ref(None::<&'static EditorView>);
     let dark = use_dark_mode();
     use_effect(

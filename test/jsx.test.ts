@@ -78,6 +78,55 @@ pub(crate) fn Card(p: Props) -> Element {
   expect(manifest.sources.some((s: string) => s.includes("jsx expansion"))).toBe(false);
 });
 
+// A package's component (an npm one: the pilot's toasts) is a binding used
+// as a JSX tag, and any binding, a function, a method or a getter, can be
+// a value, called with just its arguments. Found by the pilot.
+test("a component a JS module exports is a JSX tag, and a binding is a value", async () => {
+  const source = `#![allow(non_snake_case)]
+use react::Element;
+use react::webapi::{abort_controller, abort_signal};
+
+pub struct BadgeProps {
+    pub label: &'static str,
+}
+
+#[rust_js::link_name = "./badge.js#Badge"]
+pub fn Badge(props: BadgeProps) -> Element {
+    unreachable!()
+}
+
+unsafe extern "Rust" {
+    #[link_name = "encodeURIComponent"]
+    safe fn encode(text: &str) -> String;
+    #[link_name = "parseInt"]
+    safe fn parse_int(text: &str) -> f64;
+}
+
+pub fn App() -> Element {
+    jsx! { <Badge label="new" /> }
+}
+
+pub fn values() -> (Vec<String>, Vec<f64>, Vec<bool>) {
+    let encoded = vec!["a b", "c&d"].into_iter().map(encode).collect();
+    // As \`.map\`'s own argument, \`parseInt\` would be given each index too.
+    let numbers = vec!["10", "10", "10"].into_iter().map(parse_int).collect();
+    let controller = abort_controller::new();
+    abort_controller::abort(controller);
+    let signals = vec![abort_controller::signal(controller), abort_controller::signal(abort_controller::new())];
+    let aborted = signals.into_iter().map(abort_signal::aborted).collect();
+    (encoded, numbers, aborted)
+}
+`;
+  const { dir, args } = compile(source, { "badge.js": 'import { createElement } from "react"; export function Badge({ label }) { return createElement("b", null, label); }\n' });
+  run(args);
+  const code = readFileSync(join(dir, "lib.jsx"), "utf8");
+  expect(code).toContain('import { Badge } from "./badge.js";');
+  expect(code).toContain('<Badge label="new" />');
+  const result = await import(join(dir, "lib.jsx"));
+  expect(renderToStaticMarkup(result.App())).toBe("<b>new</b>");
+  expect(result.values()).toEqual([["a%20b", "c%26d"], [10, 10, 10], [true, false]]);
+});
+
 test("named component imports avoid local functions, nested parameters and duplicate exports", async () => {
   const source = `#![allow(non_snake_case)]
 use react::Element;
@@ -423,15 +472,15 @@ thread_local! {
 
 test("JSX built-ins finish as elements and use one spelling for ref and form actions", () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::{Element, Style, use_ref, web};
+use react::{Element, Style, use_ref, webapi};
 pub fn App() -> Element {
-    let object = use_ref(None::<&'static web::Element>);
+    let object = use_ref(None::<&'static webapi::Element>);
     jsx! {
         <Profiler id="test" onRender={|_, _, _, _, _, _| ()}>
             <ViewTransition name="page">
-                <form action={|_: &'static web::FormData| ()}>
+                <form action={|_: &'static webapi::FormData| ()}>
                     <input ref={object} />
-                    <input ref={|_: Option<&'static web::Element>| ()} />
+                    <input ref={|_: Option<&'static webapi::Element>| ()} />
                     <button formAction="/save" style={Style::new().color("red")}>{"Save"}</button>
                 </form>
             </ViewTransition>
@@ -484,13 +533,13 @@ fn unused() -> Element { ${body} }
 test("JSX context providers and refs work on React 18 while newer APIs stay gated", () => {
   const { dir, args } = compile(`#![deny(warnings)]
 #![allow(non_snake_case)]
-use react::{Context, Element, create_context, web};
+use react::{Context, Element, create_context, webapi};
 thread_local! { static THEME: Context<&'static str> = create_context("light"); }
 pub fn App() -> Element {
     jsx! {
         <THEME.Provider value="dark">
             <Suspense key="body" fallback="loading">
-                <form action="/save"><input ref={|_: Option<&'static web::Element>| ()} /></form>
+                <form action="/save"><input ref={|_: Option<&'static webapi::Element>| ()} /></form>
             </Suspense>
         </THEME.Provider>
     }
@@ -507,7 +556,7 @@ pub fn App() -> Element {
   expect(code).toContain('<Suspense key="body" fallback="loading">');
   for (const unsupported of [
     source.replaceAll("THEME.Provider", "THEME"),
-    source.replace('action="/save"', "action={|_: &'static web::FormData| ()}"),
+    source.replace('action="/save"', "action={|_: &'static webapi::FormData| ()}"),
     source.replace('key="body" fallback="loading"', '').replaceAll('Suspense', 'Activity'),
   ]) {
     writeFileSync(join(dir, "lib.rs"), unsupported);
@@ -518,22 +567,22 @@ pub fn App() -> Element {
 
 test("forwarded refs keep their handle type, evaluation order and handwritten JSX", async () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::{Element, ForwardRef, Ref, forward_ref, web};
+use react::{Element, ForwardRef, Ref, forward_ref, webapi};
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32; }
 pub struct Props { pub label: i32 }
-pub fn Input(p: Props, reference: Ref<Option<&'static web::Element>>) -> Element {
+pub fn Input(p: Props, reference: Ref<Option<&'static webapi::Element>>) -> Element {
     jsx! { <input ref={reference} title={p.label} /> }
 }
-thread_local! { static INPUT: ForwardRef<Props, &'static web::Element> = forward_ref(Input); }
-pub fn Plain(reference: Ref<Option<&'static web::Element>>) -> Element {
+thread_local! { static INPUT: ForwardRef<Props, &'static webapi::Element> = forward_ref(Input); }
+pub fn Plain(reference: Ref<Option<&'static webapi::Element>>) -> Element {
     jsx! { <INPUT ref={reference} label={1} /> }
 }
-pub fn App(reference: Ref<Option<&'static web::Element>>) -> Element {
+pub fn App(reference: Ref<Option<&'static webapi::Element>>) -> Element {
     jsx! { <INPUT ref={record(1); reference} label={record(2)} /> }
 }
-pub struct NormalProps { pub r#ref: Ref<Option<&'static web::Element>>, pub title: i32 }
+pub struct NormalProps { pub r#ref: Ref<Option<&'static webapi::Element>>, pub title: i32 }
 pub fn Normal(p: NormalProps) -> Element { jsx! { <input ref={p.r#ref} title={p.title} /> } }
-pub fn Ordinary(reference: Ref<Option<&'static web::Element>>) -> Element {
+pub fn Ordinary(reference: Ref<Option<&'static webapi::Element>>) -> Element {
     jsx! { <Normal title={record(3)} ref={record(4); reference} /> }
 }
 `);
@@ -558,7 +607,7 @@ pub fn Ordinary(reference: Ref<Option<&'static web::Element>>) -> Element {
   } finally { globalThis.record = previous; }
   const file = join(dir, "lib.rs");
   const source = readFileSync(file, "utf8");
-  writeFileSync(file, source.replace('pub fn App(reference: Ref<Option<&\'static web::Element>>)', 'pub fn App(reference: Ref<Option<i32>>)'));
+  writeFileSync(file, source.replace('pub fn App(reference: Ref<Option<&\'static webapi::Element>>)', 'pub fn App(reference: Ref<Option<i32>>)'));
   const invalid = Bun.spawnSync(args, { cwd: dir });
   expect(invalid.exitCode).not.toBe(0);
   expect(invalid.stderr.toString()).toContain('RefValue');

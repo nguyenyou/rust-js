@@ -2,7 +2,8 @@
 // the `Editor` component does to its view. Both editors follow the system's
 // light or dark setting.
 
-use web::{Element, JsObject};
+use js::JsObject;
+use webapi::Element;
 
 #[allow(clashing_extern_declarations)]
 unsafe extern "Rust" {

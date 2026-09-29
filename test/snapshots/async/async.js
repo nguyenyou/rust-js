@@ -55,6 +55,50 @@ export async function load(url) {
   return [response.status, response.ok, body];
 }
 
+export async function post(url, body) {
+  const init = {
+    method: "POST",
+    headers: undefined,
+    body,
+    referrer: undefined,
+    referrerPolicy: undefined,
+    mode: undefined,
+    credentials: undefined,
+    cache: undefined,
+    redirect: undefined,
+    integrity: undefined,
+    keepalive: undefined,
+    signal: undefined,
+    duplex: undefined,
+    priority: undefined,
+  };
+  return await (await window.fetch(url, init)).text();
+}
+
+export function listen_until_aborted() {
+  const count = { value: 0 };
+  const target = new EventTarget();
+  const controller = new AbortController();
+  const counted = count;
+  const options = {
+    capture: undefined,
+    passive: undefined,
+    once: undefined,
+    signal: controller.signal,
+  };
+  target.addEventListener(
+    "ping",
+    () => {
+      counted.value = (counted.value + 1) >>> 0;
+    },
+    options,
+  );
+  target.dispatchEvent(new Event("ping"));
+  controller.abort();
+  target.dispatchEvent(new Event("ping"));
+  return count.value;
+}
+
 export async function load_bytes(url) {
   const response = await window.fetch(url);
   const copy = response.clone();

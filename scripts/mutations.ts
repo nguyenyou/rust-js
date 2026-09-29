@@ -709,6 +709,22 @@ export const mutations: Mutation[] = [
     replace: "BINDINGS.contains(&name.as_str()) && false",
     tests: ["test/crates.test.ts", "-t", "installed inside a Cargo workspace"],
   },
+  {
+    name: "binding-value-bare",
+    breaks: "a binding as a value is the JS function itself, which `.map` gives each index too: `parseInt(text, i)`",
+    file: "src/lower/calls.rs",
+    find: "            (JsForm::Call(name), None) => Expr::call(self.js_ref(&name), values),\n            (JsForm::New(name), None) => Expr::new_(self.js_ref(&name), values),\n            (JsForm::Get(name), Some(this)) if values.is_empty() && !name.contains('#') => Expr::member(this, name),",
+    replace: "            (JsForm::Call(name), None) => return Ok(self.js_ref(&name)),\n            (JsForm::New(name), None) => Expr::new_(self.js_ref(&name), values),\n            (JsForm::Get(name), Some(this)) if values.is_empty() && !name.contains('#') => Expr::member(this, name),",
+    tests: ["test/jsx.test.ts", "-t", "a binding is a value"],
+  },
+  {
+    name: "binding-component-as-value",
+    breaks: "a JS module's component is lowered as a value, an arrow, which isn't a JSX tag",
+    file: "src/lower/jsx.rs",
+    find: "                let tag = match self.binding_component(component) {\n",
+    replace: "                let tag = match self.binding_component(component).filter(|_| false) {\n",
+    tests: ["test/jsx.test.ts", "-t", "a binding is a value"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

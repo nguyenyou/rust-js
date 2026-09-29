@@ -10,7 +10,7 @@ Playwright, on Bun. See
 bun run setup                                  # once: the tools, and the browsers
 
 # Compile the tests for a browser: `--cfg browser` turns on the ones that need one.
-./target/debug/rust-js --test examples/counter.rs -o out/counter.js -- --extern web=target/libweb.rmeta --cfg=browser
+./target/debug/rust-js --test examples/counter.rs -o out/counter.js -- --extern webapi=target/libwebapi.rmeta --cfg=browser
 
 # Then either runner:
 RUST_JS_TESTS=out/counter.test.js bunx --bun playwright test -c browser/playwright.config.ts

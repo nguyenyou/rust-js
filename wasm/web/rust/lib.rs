@@ -24,7 +24,7 @@ mod styles;
 mod tree;
 
 use react::dom::client::create_root;
-use web::document;
+use webapi::document;
 
 use components::app::App;
 

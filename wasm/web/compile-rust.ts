@@ -44,7 +44,7 @@ function filesIn(dir: Directory, prefix = "", found = new Map<string, Uint8Array
 }
 
 /**
- * Compile ./rust/lib.rs, with the react and web crates. With `manifest`,
+ * Compile ./rust/lib.rs, with the react, webapi and js crates. With `manifest`,
  * write the compiler's manifest there, its paths the real ones. Throws
  * rustc's errors.
  */
@@ -68,13 +68,13 @@ export async function compileRust(job: { manifest?: string } = {}) {
     ConsoleStdout.lineBuffered((line) => stderr.push(line)), // stderr
     crateDir,
     new PreopenDirectory("/sysroot", new Map([["lib", dir({ rustlib: dir({ "wasm32-unknown-unknown": dir({ lib: new Directory(sysroot) }) }) })]])),
-    new PreopenDirectory("/crates", new Map([["libreact.rmeta", crate("libreact.rmeta")], ["libweb.rmeta", crate("libweb.rmeta")]])),
+    new PreopenDirectory("/crates", new Map(["libreact.rmeta", "libwebapi.rmeta", "libjs.rmeta"].map((name) => [name, crate(name)]))),
     out,
   ];
   const args = [
     "rust-js", `${virtual}/lib.rs`, "-o", `${virtual}/lib.js`, "--manifest", "/out/manifest.json",
     "--", "--target", "wasm32-unknown-unknown", "--sysroot", "/sysroot",
-    "--extern", "web=/crates/libweb.rmeta", "--extern", "react=/crates/libreact.rmeta", "-L", "/crates",
+    "--extern", "webapi=/crates/libwebapi.rmeta", "--extern", "js=/crates/libjs.rmeta", "--extern", "react=/crates/libreact.rmeta", "-L", "/crates",
   ];
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
   // Without options, the shim logs every call it handles.

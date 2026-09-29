@@ -8,13 +8,15 @@ use react::dom::server::{
     RenderStream, StreamOptions, StringOptions, render_to_readable_stream, render_to_string_with,
 };
 use react::dom::{create_portal, flush_sync, use_form_status};
-use react::web;
+use react::js;
+use react::webapi;
 use react::{
     Activity, ActivityMode, Element, Lazy, Module, Phase, Ref, Style, import_module, inner_html, lazy, use_,
     use_action_state, use_deferred_value, use_effect, use_effect_event, use_id, use_imperative_handle,
     use_layout_effect, use_optimistic, use_reducer_with, use_ref, use_state, use_sync_external_store, use_transition,
 };
-use web::{FormData, Promise, form_data};
+use js::Promise;
+use webapi::{FormData, form_data};
 
 unsafe extern "Rust" {
     /// The test's own JS: a promise, a store, and where things are logged.
@@ -27,7 +29,7 @@ unsafe extern "Rust" {
     #[link_name = "globalThis.log"]
     safe fn log(what: &str);
     #[link_name = "globalThis.portalTarget"]
-    safe static portal_target: &'static web::Element;
+    safe static portal_target: &'static webapi::Element;
     #[link_name = "globalThis.flushedText"]
     safe fn flushed_text() -> String;
 }
@@ -108,7 +110,7 @@ pub fn FancyInput(FancyInputProps { handle }: FancyInputProps) -> Element {
 
 pub fn Refs() -> Element {
     let handle: Ref<Option<&'static str>> = use_ref(None);
-    let element: Ref<Option<&'static web::Element>> = use_ref(None);
+    let element: Ref<Option<&'static webapi::Element>> = use_ref(None);
     let (shown, set_shown) = use_state(true);
     use_layout_effect(move || log("layout"), ());
     use_effect(
@@ -131,7 +133,7 @@ pub fn Refs() -> Element {
             {if *shown {
                 Some(jsx! {
                     <b
-                        ref={move |node: Option<&'static web::Element>| {
+                        ref={move |node: Option<&'static webapi::Element>| {
                             log(if node.is_some() { "attached" } else { "null" });
                             move || log("detached")
                         }}>
@@ -244,7 +246,7 @@ pub async fn page_stream() -> &'static RenderStream {
     stream
 }
 
-pub fn mount(container: &web::Element) -> &'static Root {
+pub fn mount(container: &webapi::Element) -> &'static Root {
     let root = create_root_with(container, RootOptions::new().identifier_prefix("c-"));
     root.render(jsx! {
         <Page />

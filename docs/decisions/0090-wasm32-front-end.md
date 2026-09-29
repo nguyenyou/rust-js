@@ -43,7 +43,7 @@ cfg!(target_pointer_width = "32")// true
   shouldn't have to guess from `target_arch = "wasm32"`.
 - **A `--target` after `--` is the one,** as the playground's is.
 - **What rust-js reads is built for it too:** the web, React and serde
-  metadata, and a Cargo dependency's (`serde/build.sh`, `web/build.sh`,
+  metadata, and a Cargo dependency's (`serde/build.sh`, `webapi/build.sh`,
   `react/build.sh`, `tooling/build.js`). A procedural macro, `serde_derive`,
   still runs on the machine compiling, as Cargo builds it.
 - **The pinned toolchain installs the target's standard library**

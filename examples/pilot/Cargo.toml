@@ -1,0 +1,5 @@
+# The pilot (ROADMAP M3.3): a contacts app whose models and validation are
+# one crate, used by a native server and by a React client rust-js compiles.
+[workspace]
+members = ["models", "server", "frontend"]
+resolver = "2"

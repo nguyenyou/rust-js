@@ -61,9 +61,9 @@ needs, and then compiles the crate in the editor on each click (or
 you can add to and delete from, and the JS files it compiles to, one per module
 ([ADR 0019](../docs/decisions/0019-one-js-file-per-module.md)). The examples
 come straight from `examples/`, starting with a counter written against the DOM.
-Every program can use the `web` crate (the DOM, [ADR 0024](../docs/decisions/0024-web-crate.md)):
+Every program can use the `webapi` crate (the DOM, [ADR 0024](../docs/decisions/0024-web-crate.md)):
 the page downloads its metadata, built for `wasm32-unknown-unknown` by
-`web/build.sh`, and passes `--extern web=`.
+`webapi/build.sh`, and passes `--extern webapi=`.
 The Test button compiles with `--test` and runs the crate's `#[test]` functions
 in the same frame, in the browser's own DOM ([ADR 0026](../docs/decisions/0026-testing.md)),
 with a small stand-in for `bun test`'s `test()`. It needs libtest's metadata too.

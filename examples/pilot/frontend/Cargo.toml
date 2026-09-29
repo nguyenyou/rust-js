@@ -1,0 +1,13 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+models = { path = "../models" }
+serde = "1"
+serde_json = "1"
+js = { package = "rust-js-js", path = "../../../js" }
+react = { package = "rust-js-react", path = "../../../react" }
+webapi = { package = "rust-js-webapi", path = "../../../webapi" }

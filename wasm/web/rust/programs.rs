@@ -7,7 +7,7 @@
 // The frame has an opaque origin and allows scripts only. Programs can report
 // results through postMessage, but cannot access the editor's DOM or storage.
 
-use web::{JsObject, RegExp, reg_exp};
+use js::{JsObject, RegExp, reg_exp};
 
 use crate::compiler::{JsMap, text_entries};
 

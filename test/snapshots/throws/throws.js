@@ -50,4 +50,26 @@ export async function settled(fail) {
     return "rejected: " + String(result._0);
   }
 }
+
+export function uri(text) {
+  const encoded = encodeURIComponent(text);
+  const result = $try(() => decodeURIComponent(encoded));
+  const decoded = result.TAG === "Err" ? { TAG: "Err", _0: String(result._0) } : result;
+  const match = $try(() => decodeURIComponent("%E0%A4%A"));
+  if (match.TAG === "Ok") {
+    return [encoded, decoded];
+  } else {
+    return [encoded + " " + String(match._0), decoded];
+  }
+}
+
+export async function settle_either(fail) {
+  const promise = fail ? Promise.reject("no") : Promise.resolve(8);
+  const match = await $settle(promise);
+  if (match.TAG === "Ok") {
+    return String(match._0);
+  } else {
+    return "rejected: " + String(match._0);
+  }
+}
 //# sourceMappingURL=throws.js.map

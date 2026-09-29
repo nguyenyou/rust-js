@@ -22,7 +22,7 @@ code. `vite-plugin-rust-js` runs the native `rust-js` binary.
 
 ```text
 vite.config.ts
-  playgroundFiles()   site.ts: rust-js.wasm, the sysroot, the web crate and
+  playgroundFiles()   site.ts: rust-js.wasm, the sysroot, the webapi crate and
                       the examples, served in dev and emitted by the build
   rustJs({ compile }) vite-plugin-rust-js, compiling with compile-rust.ts
   react()             plugin-react 6: JSX, Fast Refresh

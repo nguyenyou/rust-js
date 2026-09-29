@@ -4,12 +4,13 @@
   "type": "module",
   "description": "Compile Rust to readable JavaScript. Every task is a script here: `bun run` lists them.",
   "workspaces": [
-    "web",
+    "webapi",
     "react",
     "wasm/web",
     "vite-plugin",
     "tooling",
-    "examples/vite-react"
+    "examples/vite-react",
+    "examples/pilot/web"
   ],
   "scripts": {
     "setup": "bun install && bunx --bun playwright install chromium",
@@ -22,7 +23,7 @@
     "test:rustc:bless": "cargo build --release && bun scripts/rustc-suite.ts --bless",
     "fmt": "bun scripts/format.ts",
     "fmt:check": "bun scripts/format.ts --check",
-    "generate": "bun web/generate.ts",
+    "generate": "bun webapi/generate.ts",
     "generate:react": "bun react/generate.ts",
     "react-example": "bun run --cwd examples/vite-react dev",
     "wasm": "wasm/build.sh",

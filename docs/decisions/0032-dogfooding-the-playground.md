@@ -15,7 +15,7 @@ Porting all of it at once isn't possible yet. It also uses `try`/`catch`
 around a trap, JS `Map`s, a recursive tree (an enum with fields), string and
 regex work, and number formatting. The last steps added what the loading part
 needs: imports from JS modules (ADR 0028), `async` (0029), `fetch`, binary data
-and WebAssembly in the web crate, `Option` (0030) and constants (0031).
+and WebAssembly in the webapi crate, `Option` (0030) and constants (0031).
 
 ## Decision
 
@@ -35,7 +35,7 @@ editor's files and reading the JS back, with a trapped compile as an `Err`
 is the file trees: an enum of folders and files, sorted (ADR 0036) and drawn
 with the DOM, with `Rc<dyn Fn>` callbacks from `main.ts`. The fourth is
 `link` and `resolve`, which join the compiled modules into one script for the
-Result frame, with JS's `RegExp` (in the web crate) and `replace` with a
+Result frame, with JS's `RegExp` (in the webapi crate) and `replace` with a
 closure. Porting it found that the TypeScript linker only unwrapped
 `export function`, so a program with a `pub const` or a `pub async fn` didn't
 run there. The Rust one unwraps all three. The fifth is running the program:

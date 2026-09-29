@@ -1,9 +1,0 @@
-{
-  "name": "rust-js-web-generator",
-  "private": true,
-  "description": "Generates the web crate (src/lib.rs) from W3C's WebIDL. See docs/decisions/0024-web-crate.md.",
-  "devDependencies": {
-    "@webref/idl": "3.84.0",
-    "webidl2": "24.5.0"
-  }
-}

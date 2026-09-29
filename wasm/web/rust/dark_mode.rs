@@ -2,7 +2,7 @@
 // In JS it's `useDarkMode`, the name React finds a hook by (ADR 0046).
 
 use react::{Notify, use_sync_external_store};
-use web::{MediaQueryList, abort_controller, media_query_list, window};
+use webapi::{MediaQueryList, abort_controller, media_query_list, window};
 
 use crate::listen::listen;
 

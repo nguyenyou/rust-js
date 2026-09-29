@@ -13,4 +13,5 @@ name = "react"
 path = "src/lib.rs"
 
 [dependencies]
-web = { package = "rust-js-web", path = "../web" }
+js = { package = "rust-js-js", path = "../js" }
+webapi = { package = "rust-js-webapi", path = "../webapi" }

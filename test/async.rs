@@ -1,10 +1,14 @@
 //! `async fn`, `.await`, `async` blocks and closures, and `spawn` (ADR 0029),
-//! and the web crate's promises: `fetch`, binary data and WebAssembly.
+//! and the webapi crate's promises: `fetch`, binary data and WebAssembly.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{JsObject, Promise, Uint8Array, array_buffer, response, spawn, uint8_array, web_assembly, web_assembly_instance, window};
+use js::{JsObject, Promise, Uint8Array, array_buffer, spawn, uint8_array};
+use webapi::{
+    AddEventListenerOptions, RequestInit, abort_controller, event, event_target, response, web_assembly,
+    web_assembly_instance, window,
+};
 
 unsafe extern "Rust" {
     /// Resolves with `value` after `ms` milliseconds.
@@ -63,16 +67,37 @@ pub fn spawned() -> Rc<RefCell<Vec<u32>>> {
     log
 }
 
-/// `fetch`, from the web crate: its promises, awaited one after the other.
+/// `fetch`, from the webapi crate: its promises, awaited one after the other.
 pub async fn load(url: &str) -> (u16, bool, String) {
-    let response = window::fetch_with_str(window, url).await;
+    let response = window::fetch(window, url).await;
     let body = response::text(response).await;
     (response::status(response), response::ok(response), body)
 }
 
+/// A dictionary a function takes (ADR 0102): a struct of what's given, the
+/// rest `..Default::default()`, which JS reads as not given.
+pub async fn post(url: &str, body: &str) -> String {
+    let init = RequestInit { method: Some("POST"), body: Some(body), ..Default::default() };
+    response::text(window::fetch_with_init(window, url, init).await).await
+}
+
+/// A listener that goes when its signal aborts: `addEventListener`'s options.
+pub fn listen_until_aborted() -> u32 {
+    let count = Rc::new(RefCell::new(0));
+    let target = event_target::new();
+    let controller = abort_controller::new();
+    let counted = Rc::clone(&count);
+    let options = AddEventListenerOptions { signal: Some(abort_controller::signal(controller)), ..Default::default() };
+    event_target::add_event_listener_with_options(target, "ping", Box::new(move |_| *counted.borrow_mut() += 1), options);
+    let _ = event_target::dispatch_event(target, event::new("ping"));
+    abort_controller::abort(controller);
+    let _ = event_target::dispatch_event(target, event::new("ping"));
+    *count.borrow()
+}
+
 /// Binary data: `bytes()`, `arrayBuffer()`, and a view of a buffer.
 pub async fn load_bytes(url: &str) -> (u32, u32, u32) {
-    let response = window::fetch_with_str(window, url).await;
+    let response = window::fetch(window, url).await;
     let copy = response::clone(response);
     let bytes = response::bytes(response).await;
     let buffer = response::array_buffer(copy).await;

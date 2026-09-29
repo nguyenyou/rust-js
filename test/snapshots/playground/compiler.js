@@ -38,13 +38,15 @@ export async function load(stat) {
   const start = performance.now();
   const module = loadCompiler(start, stat);
   const sysroot = loadSysroot(start, stat);
-  const webCrate = loadBindingCrate("web", start, stat);
+  const webapiCrate = loadBindingCrate("webapi", start, stat);
+  const jsCrate = loadBindingCrate("js", start, stat);
   const reactCrate = loadBindingCrate("react", start, stat);
   const examples = loadExamples();
   const loaded = {
     module: await module,
     sysroot: await sysroot,
-    webCrate: await webCrate,
+    webapiCrate: await webapiCrate,
+    jsCrate: await jsCrate,
     reactCrate: await reactCrate,
     examples: await examples,
   };
@@ -85,7 +87,7 @@ async function loadSysrootFile(name) {
 }
 
 async function loadBindingCrate(name, start, stat) {
-  const bytes = await (await window.fetch(`./web/lib${name}.rmeta`)).arrayBuffer();
+  const bytes = await (await window.fetch(`./crates/lib${name}.rmeta`)).arrayBuffer();
   stat(`download ${name} crate`, `${ms(performance.now() - start)} (${mb(bytes.byteLength)})`);
   return new File(new Uint8Array(bytes), { readonly: true });
 }
@@ -170,9 +172,10 @@ export async function compile(loaded, sources, rootFile, test) {
       new Map([["lib", dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysrootDir)))]]),
     ),
     new PreopenDirectory(
-      "/web",
+      "/crates",
       new Map([
-        ["libweb.rmeta", loaded.webCrate],
+        ["libwebapi.rmeta", loaded.webapiCrate],
+        ["libjs.rmeta", loaded.jsCrate],
         ["libreact.rmeta", loaded.reactCrate],
       ]),
     ),
@@ -197,9 +200,16 @@ export async function compile(loaded, sources, rootFile, test) {
   if (test) {
     args.push("--cfg=browser");
   }
-  args.push("--extern");
-  args.push("web=/web/libweb.rmeta");
-  for (const arg$2 of ["--extern", "react=/web/libreact.rmeta", "-L", "/web"]) {
+  for (const arg$2 of [
+    "--extern",
+    "webapi=/crates/libwebapi.rmeta",
+    "--extern",
+    "js=/crates/libjs.rmeta",
+    "--extern",
+    "react=/crates/libreact.rmeta",
+    "-L",
+    "/crates",
+  ]) {
     args.push(arg$2);
   }
   const wasi = new WASI(args, ["RUSTC_ICE=0"], fds, { debug: false });

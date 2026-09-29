@@ -46,12 +46,12 @@ function exported(entry: string, name: string, release: string): boolean {
 function bindings(release: string): Set<string> {
   const out = join(target, "react-docs", release);
   mkdirSync(out, { recursive: true });
-  run(["web/build.sh", "-o", join(out, "libweb.rmeta")]);
+  run(["webapi/build.sh", "-o", join(out, "libwebapi.rmeta")]);
   run([
     "rustdoc", "-Zunstable-options", "--document-hidden-items", "--output-format=json", "--edition=2024", "--crate-name=react",
     // As rust-js checks it, for its target (ADR 0090).
     "--target=wasm32-unknown-unknown",
-    "react/src/lib.rs", "--extern", `web=${join(out, "libweb.rmeta")}`, ...cfgFlags(release).flags, "-o", out,
+    "react/src/lib.rs", "--extern", `webapi=${join(out, "libwebapi.rmeta")}`, "--extern", `js=${join(out, "libjs.rmeta")}`, "-L", out, ...cfgFlags(release).flags, "-o", out,
   ]);
   const docs = JSON.parse(readFileSync(join(out, "react.json"), "utf8"));
   const found = new Set<string>();

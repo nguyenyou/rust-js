@@ -87,7 +87,7 @@ refused, with `cargo clean -p <package> --target wasm32-unknown-unknown`
 as the remedy, not given to an app that imports it.
 
 **The bindings are Cargo dependencies,** `rust-js-react` (its library
-`react`) and `rust-js-web` (`web`), paths into rust-js or the tooling's
+`react`) and `rust-js-webapi` (`web`), paths into rust-js or the tooling's
 resources for now. They're rustc's crates to check, as `react/build.sh`
 checks them: rust-js knows their items by their `#[rust_js::link_name]`s,
 not by the crate. Installed under an app's `node_modules`, they're in its

@@ -172,7 +172,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 && adt.variants().iter().any(|v| !v.fields.is_empty()))
     }
 
-    /// A struct that stands for a JS object, like `web::Element` (ADR 0024):
+    /// A struct that stands for a JS object, like `webapi::Element` (ADR 0024):
     /// its only field is `PhantomData` of an extern type. Rust never builds
     /// one; it only holds references to them, which are the JS objects.
     pub(super) fn is_js_object(&self, ty: Ty<'tcx>) -> bool {
@@ -527,7 +527,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return None;
             }
-            // `&dyn Any` is any JS value, as the web crate's `object`
+            // `&dyn Any` is any JS value, as the webapi crate's `object`
             // parameters take: a struct, say, which is a JS object already.
             ty::Dynamic(traits, ..)
                 if traits

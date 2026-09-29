@@ -1,13 +1,13 @@
-# web: the DOM for rust-js
+# webapi: the browser for rust-js
 
-The `web` crate declares the web platform for rust-js programs: DOM
+The `webapi` crate declares the web platform for rust-js programs: DOM
 bindings **generated from W3C's WebIDL**, the same source TypeScript's
 `lib.dom.d.ts` and Rust's `web-sys` come from. It holds declarations only,
 so it's never compiled to JS: a program calls what it declares, and the
 calls become plain JS. See [ADR 0024](../docs/decisions/0024-web-crate.md).
 
 ```rust
-use web::{document, element, event_target, node};
+use webapi::{document, element, event_target, node};
 
 let b = document::create_element(document, "button");   // document.createElement("button")
 node::set_text_content(b, "+");                          // b.textContent = "+"
@@ -25,13 +25,16 @@ element::append(app, b);                                  // app.append(b)
   `html_input_element::unchecked_from(document::create_element(document, "input"))`.
 - A result that may be `null` is an `Option`:
   `document::get_element_by_id(document, "app").expect("the page has an #app")`.
-- A promise is a `Promise<T>`, to `.await`: `window::fetch_with_str(window, url).await`
-  ([ADR 0029](../docs/decisions/0029-async-await.md)).
-- Binary data is JS's `ArrayBuffer` and `Uint8Array`: `response::bytes(r).await`.
-- An optional argument adds a form: `text_encoder::encode_with_input(e, "hi")`,
-  `text_decoder::decode_with_uint8_array(d, bytes)`.
-- JS's `RegExp` is there for what Rust would use `regex` for: `reg_exp::new(r"^\d+$", "")`.
-  String methods that take one (`replace` with a closure) are bindings a program declares.
+- A promise is a `Promise<T>`, the js crate's, to `.await`: `window::fetch(window, url).await`
+  ([ADR 0029](../docs/decisions/0029-async-await.md)). `js::settle(p).await` is a `Result`.
+- Binary data is JS's `ArrayBuffer` and `Uint8Array`, the js crate's: `response::bytes(r).await`.
+- Names follow ReScript's webapi ([ADR 0102](../docs/decisions/0102-js-and-webapi.md)): the common
+  form keeps the plain name, `window::fetch(window, url)`, and the others say what's
+  different, `fetch_with_request`. An optional argument adds a form:
+  `window::fetch_with_init(window, url, init)`, `text_encoder::encode_with_input(e, "hi")`.
+- An options object is a struct of `Option` fields, the rest `..Default::default()`:
+  `RequestInit { method: Some("POST"), body: Some(&json), ..Default::default() }`.
+- A constructor is `new`, `event::new("ping")`, or one per source, `request::from_url(url)`.
 - A namespace is a module: `web_assembly::compile(bytes).await` is
   `await WebAssembly.compile(bytes)`. An `object` parameter takes any Rust value
   as `&dyn Any`, such as a struct for an import object.
@@ -40,10 +43,10 @@ element::append(app, b);                                  // app.append(b)
 
 ```bash
 bun run build                                                    # its metadata, for the host
-./target/debug/rust-js app.rs -- --extern web=target/libweb.rmeta
+./target/debug/rust-js app.rs -- --extern webapi=target/libwebapi.rmeta --extern js=target/libjs.rmeta -L target
 ```
 
-The playground compiles every program with the `web` crate available.
+The playground compiles every program with the `webapi` crate available.
 
 ## Regenerate it
 

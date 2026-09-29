@@ -6,7 +6,8 @@
 //   /in/lib.rs, /in/stats.rs, ...   the crate, from the Rust editor
 //   /out/lib.js, /out/stats.js, ... what rust-js writes (plus .js.map files)
 //   /sysroot/...                    the std metadata rustc type-checks against
-//   /web/libweb.rmeta               the web crate's metadata (ADR 0024)
+//   /crates/libwebapi.rmeta         the webapi crate's metadata (ADR 0024)
+//   /crates/libjs.rmeta             the js crate's, which it uses (ADR 0102)
 //
 // Each compile gets a fresh instance of the (compiled once) module: rustc
 // keeps global state, and a failed compile ends in a trap.
@@ -14,10 +15,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{
-    JsError, JsObject, Promise, Response, Uint8Array, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule,
-    array_buffer, js_error, response, text_decoder, text_encoder, uint8_array, web_assembly, web_assembly_instance,
-    web_assembly_memory, window,
+use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, uint8_array};
+use webapi::{
+    Response, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule, response, text_decoder, text_encoder,
+    web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
 // Some JS functions are declared more than once, typed for each use (`json`
@@ -121,7 +122,7 @@ unsafe extern "Rust" {
     safe fn error_message(this: &JsError) -> String;
     /// The last compile, for automated checks.
     #[link_name = "set lastResult"]
-    pub safe fn set_last_result(this: &web::Window, result: &Compiled);
+    pub safe fn set_last_result(this: &webapi::Window, result: &Compiled);
 }
 
 /// An example program: its files, under `examples/<name>/`.
@@ -136,7 +137,8 @@ pub struct Example {
 pub struct Loaded {
     pub module: &'static WebAssemblyModule,
     pub sysroot: &'static JsMap,
-    pub web_crate: &'static WasiFile,
+    pub webapi_crate: &'static WasiFile,
+    pub js_crate: &'static WasiFile,
     pub react_crate: &'static WasiFile,
     pub examples: Vec<Example>,
 }
@@ -158,7 +160,7 @@ pub fn mb(n: f64) -> String {
     format!("{} MB", to_fixed(n / 1048576.0, 1))
 }
 
-/// Download the compiler, the sysroot, the web crate and the examples,
+/// Download the compiler, the sysroot, the webapi and js crates and the examples,
 /// giving `stat` each one's time as it arrives.
 pub async fn load(stat: Stat) -> Loaded {
     let start = now();
@@ -166,13 +168,15 @@ pub async fn load(stat: Stat) -> Loaded {
     // (ADR 0029). Awaiting them one by one below only collects the results.
     let module = load_compiler(start, stat.clone());
     let sysroot = load_sysroot(start, stat.clone());
-    let web_crate = load_binding_crate("web", start, stat.clone());
+    let webapi_crate = load_binding_crate("webapi", start, stat.clone());
+    let js_crate = load_binding_crate("js", start, stat.clone());
     let react_crate = load_binding_crate("react", start, stat.clone());
     let examples = load_examples();
     let loaded = Loaded {
         module: module.await,
         sysroot: sysroot.await,
-        web_crate: web_crate.await,
+        webapi_crate: webapi_crate.await,
+        js_crate: js_crate.await,
         react_crate: react_crate.await,
         examples: examples.await,
     };
@@ -181,13 +185,13 @@ pub async fn load(stat: Stat) -> Loaded {
 }
 
 async fn load_compiler(start: f64, stat: Stat) -> &'static WebAssemblyModule {
-    let module = web_assembly::compile_streaming(window::fetch_with_str(window, "./rust-js.wasm")).await;
+    let module = web_assembly::compile_streaming(window::fetch(window, "./rust-js.wasm")).await;
     stat("download + compile rust-js.wasm".to_string(), ms(now() - start));
     module
 }
 
 async fn load_sysroot(start: f64, stat: Stat) -> &'static JsMap {
-    let names = names_json(window::fetch_with_str(window, "./sysroot.json").await).await;
+    let names = names_json(window::fetch(window, "./sysroot.json").await).await;
     // Every file's download starts before the first is awaited.
     let mut downloads = Vec::new();
     for name in names {
@@ -208,13 +212,13 @@ async fn load_sysroot(start: f64, stat: Stat) -> &'static JsMap {
 }
 
 async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
-    let response = window::fetch_with_str(window, &format!("./sysroot/{name}")).await;
+    let response = window::fetch(window, &format!("./sysroot/{name}")).await;
     let bytes = uint8_array::new(response::array_buffer(response).await);
     (name, new_file(bytes, &FileOptions { readonly: true }))
 }
 
 async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {
-    let bytes = response::array_buffer(window::fetch_with_str(window, &format!("./web/lib{name}.rmeta")).await).await;
+    let bytes = response::array_buffer(window::fetch(window, &format!("./crates/lib{name}.rmeta")).await).await;
     stat(
         format!("download {name} crate"),
         format!(
@@ -227,11 +231,11 @@ async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static Wasi
 }
 
 async fn load_examples() -> Vec<Example> {
-    examples_json(window::fetch_with_str(window, "./examples.json").await).await
+    examples_json(window::fetch(window, "./examples.json").await).await
 }
 
 async fn fetch_example_file(name: String, path: String) -> (String, String) {
-    let response = window::fetch_with_str(window, &format!("./examples/{name}/{path}")).await;
+    let response = window::fetch(window, &format!("./examples/{name}/{path}")).await;
     (path, response::text(response).await)
 }
 
@@ -339,9 +343,10 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
             )]),
         )),
         preopen_fd(new_preopen(
-            "/web",
+            "/crates",
             new_inode_map(vec![
-                ("libweb.rmeta".to_string(), file_inode(loaded.web_crate)),
+                ("libwebapi.rmeta".to_string(), file_inode(loaded.webapi_crate)),
+                ("libjs.rmeta".to_string(), file_inode(loaded.js_crate)),
                 ("libreact.rmeta".to_string(), file_inode(loaded.react_crate)),
             ]),
         )),
@@ -352,8 +357,8 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     };
     // `--test`: the `#[test]` functions too, and `<root>.test.js` to run them
     // (ADR 0026). This is a real browser, so tests marked `#[cfg(browser)]` run
-    // too (ADR 0027). Every program may use the web crate; rustc only reads
-    // it if one does.
+    // too (ADR 0027). Every program may use the webapi and js crates; rustc
+    // only reads them if one does.
     let mut args = vec!["rust-js".to_string()];
     if test {
         args.push("--test".to_string());
@@ -367,9 +372,16 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     if test {
         args.push("--cfg=browser".to_string());
     }
-    args.push("--extern".to_string());
-    args.push("web=/web/libweb.rmeta".to_string());
-    for arg in ["--extern", "react=/web/libreact.rmeta", "-L", "/web"] {
+    for arg in [
+        "--extern",
+        "webapi=/crates/libwebapi.rmeta",
+        "--extern",
+        "js=/crates/libjs.rmeta",
+        "--extern",
+        "react=/crates/libreact.rmeta",
+        "-L",
+        "/crates",
+    ] {
         args.push(arg.to_string());
     }
     // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI

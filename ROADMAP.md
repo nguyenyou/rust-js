@@ -154,8 +154,21 @@ pilot. No delivery dates are assigned yet.
   handling, and at least one external npm component through the supported
   interop path. Test real client/server JSON in both directions, including
   invalid inputs. Keep the app outside this repository's workspace layout.
+  Evidence: [the pilot](examples/pilot/README.md), a contacts app of a shared
+  `models` crate, a native server and a React client in one Cargo workspace,
+  built by Vite's Cargo mode. [`test/pilot.test.ts`](test/pilot.test.ts) checks
+  hash routing, a searched list whose older searches are aborted, loading and
+  error states with a retry, a form validated as the server validates and
+  showing the server's errors by field, Sonner's toasts, and the server's
+  refusals of invalid JSON and contacts, in a browser with the server running.
+  Open: the app is still in this repository, with a path to its bindings,
+  until the resources are published (M4).
 - [ ] **M3.4 — Close the pilot's compatibility blockers.** Fix required gaps
-  with native comparisons and readable-output snapshots. Demonstrate error
+  with native comparisons and readable-output snapshots. From the pilot: a
+  binding as a value and a package's component as a JSX tag are fixed, and
+  options objects (`RequestInit`, listener options) and the JS language's
+  globals are the `webapi` and `js` crates' ([ADR 0102](docs/decisions/0102-js-and-webapi.md));
+  `str::bytes()` iteration and `Result::as_ref` are worked around there. Demonstrate error
   recovery, Fast Refresh, source-level debugging, and a deployed production
   bundle. Record any remaining limitations in the supported contract.
 

@@ -53,7 +53,7 @@ use core::marker::PhantomData;
 use core::ops::Deref;
 use std::thread::LocalKey;
 
-use web::{JsError, JsObject, Promise};
+use js::{JsError, JsObject, Promise};
 
 pub mod dom;
 mod elements;
@@ -61,8 +61,9 @@ pub mod event;
 
 #[doc(hidden)]
 pub use elements::html;
-/// The DOM, whose types React's APIs use: `react::web::FormData`.
-pub use web;
+/// The DOM, whose types React's APIs use: `react::webapi::FormData`.
+pub use js;
+pub use webapi;
 
 /// A React element: what a component returns, and what goes in children.
 /// Construct it with `jsx! { <Tag ... /> }`.
@@ -253,9 +254,9 @@ pub struct FunctionAction<M>(PhantomData<M>);
 pub struct DispatchAction;
 impl<T: Value> FormAction<UrlAction> for T {}
 #[cfg(react = "19.0")]
-impl<M, R: ActionResult<M>, F: Fn(&'static web::FormData) -> R + 'static> FormAction<FunctionAction<M>> for F {}
+impl<M, R: ActionResult<M>, F: Fn(&'static webapi::FormData) -> R + 'static> FormAction<FunctionAction<M>> for F {}
 #[cfg(react = "19.0")]
-impl FormAction<DispatchAction> for Dispatch<&'static web::FormData> {}
+impl FormAction<DispatchAction> for Dispatch<&'static webapi::FormData> {}
 
 // ── Hooks ───────────────────────────────────────────────────────────────
 //
@@ -811,22 +812,22 @@ impl ViewTransitionInstance {
 
     /// `::view-transition-old`, `new`, `group` and `image-pair`.
     #[rust_js::link_name = "get old"]
-    pub fn old(&self) -> &'static web::Element {
+    pub fn old(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
     #[rust_js::link_name = "get new"]
-    pub fn new(&self) -> &'static web::Element {
+    pub fn new(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
     #[rust_js::link_name = "get group"]
-    pub fn group(&self) -> &'static web::Element {
+    pub fn group(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
     #[rust_js::link_name = "get imagePair"]
-    pub fn image_pair(&self) -> &'static web::Element {
+    pub fn image_pair(&self) -> &'static webapi::Element {
         unreachable!()
     }
 }
@@ -990,7 +991,7 @@ pub fn cache<F: 'static>(f: F) -> F {
 /// `None` elsewhere.
 #[cfg(react = "19.2")]
 #[rust_js::link_name = "react#cacheSignal"]
-pub fn cache_signal() -> Option<&'static web::AbortSignal> {
+pub fn cache_signal() -> Option<&'static webapi::AbortSignal> {
     unreachable!()
 }
 

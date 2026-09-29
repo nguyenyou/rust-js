@@ -43,7 +43,7 @@ browser) to drive that loop. JS has one built in: the event loop.
 | `e.await` | `await e` |
 | `async move { .. }` | `(async () => { .. })()` |
 | `async \|y\| ..` | `async (y) => ..` |
-| a future (`impl Future`, `dyn Future`, a `web::Promise<T>`) | a JS promise |
+| a future (`impl Future`, `dyn Future`, a `webapi::Promise<T>`) | a JS promise |
 | `spawn(Box::new(async move { .. }))` | `(async () => { .. })();`, not awaited |
 
 - **An `async fn`'s body is its coroutine's body.** rustc moves each
@@ -53,9 +53,9 @@ browser) to drive that loop. JS has one built in: the event loop.
 - **`.await` is recognized whole**, like `for` (ADR 0025): the `match`
   on `IntoFuture::into_future(e)` whose one arm is the poll loop.
   `yield`, `poll` and the task context never reach the JS.
-- **JS promises have a Rust type**, `web::Promise<T>`, which implements
+- **JS promises have a Rust type**, `webapi::Promise<T>`, which implements
   `Future` with `Output = T`, so rustc accepts `.await` on it. Its `poll` is
-  never compiled: rust-js turns `.await` into `await`. The web crate's
+  never compiled: rust-js turns `.await` into `await`. The webapi crate's
   WebIDL promise results are now included, with the Fetch Standard:
   `window::fetch_with_str(window, url).await` is `await window.fetch(url)`,
   and `response::text(r).await` is `await r.text()`. `extern` functions
@@ -65,7 +65,7 @@ browser) to drive that loop. JS has one built in: the event loop.
   #[link_name = "node:timers/promises#setTimeout"]
   safe fn later(ms: u32, value: u32) -> Promise<u32>;
   ```
-- **`web::spawn`** runs a future without waiting for it, for event handlers.
+- **`webapi::spawn`** runs a future without waiting for it, for event handlers.
   It's an `extern` function of the `"this"` form (ADR 0024), so it's the
   promise itself.
 - **A rejected promise throws at its `await`**, the way a panic does. In
@@ -102,7 +102,7 @@ still runs. `test/async.rs` and the countdown example pin this down.
 
 ## Consequences
 
-- `Promise` and `spawn` live in the web crate, though they're JS and not
+- `Promise` and `spawn` live in the webapi crate, though they're JS and not
   the web platform. A `js` crate may take them later.
 - `extern` functions can't be generic, so a program declares `new Promise`
   for each result type it needs. The countdown example declares one for

@@ -5,8 +5,9 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use js::JsObject;
 use react::{Element, use_effect, use_ref};
-use web::{Event, HtmlIFrameElement, JsObject, abort_controller, abort_signal, window};
+use webapi::{Event, HtmlIFrameElement, abort_controller, abort_signal, window};
 
 use crate::listen::listen;
 use crate::programs::{Outcome, Program, Report, outcome};

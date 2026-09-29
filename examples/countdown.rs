@@ -4,7 +4,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use web::{Element, Promise, document, element, event_target, node, spawn};
+use js::{Promise, spawn};
+use webapi::{Element, document, element, event_target, node};
 
 unsafe extern "Rust" {
     #[link_name = "setTimeout"]
@@ -53,7 +54,7 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use web::html_element;
+    use webapi::html_element;
 
     /// An empty page with the `<div id="app">` that `main` looks for.
     fn page() -> &'static Element {

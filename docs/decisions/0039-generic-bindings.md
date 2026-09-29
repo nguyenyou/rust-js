@@ -62,7 +62,14 @@ impl<T> SetState<T> {
   an argument, since a function returning `()` still returns `undefined`.
   So `use_effect(f, ())` is `useEffect(f, [])`.
 - **A function used as a value is its JS name.** `component(Card, props)`
-  passes `Card`.
+  passes `Card`. **A binding used as a value is an arrow of its own
+  parameters**, named as the binding names them, calling it as a call
+  would: `.map(encode)` is `.map((text) => encodeURIComponent(text))`, and a
+  getter's `.map(abort_signal::aborted)` is `.map((abortSignal) =>
+  abortSignal.aborted)`. JS would give the function itself more than Rust
+  does: `.map(parseInt)` gives it each index too. As a JSX component
+  (ADR 0040), a binding is its import itself, as a tag must be. Found by
+  the pilot (ROADMAP M3.3), whose toasts are an npm package's.
 - **`#![rust_js::import = "./App.css"]`** in a module is `import "./App.css";`
   in its file.
 - **A default import held by one `static` is named after it:**

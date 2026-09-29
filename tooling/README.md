@@ -17,7 +17,7 @@ const builder = createNativeBuilder({
   resources: "/absolute/rust-js-resources",
   cacheDir: "/absolute/app/.cache/rust-js",
   bindings: [],
-  externs: { web: "/absolute/metadata/libweb.rmeta" },
+  externs: { web: "/absolute/metadata/libwebapi.rmeta" },
   rustcFlags: [],
 });
 await builder.compile({

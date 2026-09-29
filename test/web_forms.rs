@@ -1,7 +1,8 @@
-//! Every JS form the web crate's bindings use (ADR 0024), for the test to
+//! Every JS form the webapi crate's bindings use (ADR 0024), for the test to
 //! check in the generated JS.
 
-use web::{Event, document, element, event, event_target, html_input_element, node, text_decoder, text_encoder, uint8_array, window};
+use js::uint8_array;
+use webapi::{Event, document, element, event, event_target, html_input_element, node, text_decoder, text_encoder, window};
 
 pub fn forms() -> String {
     let input = html_input_element::unchecked_from(document::create_element(document, "input"));

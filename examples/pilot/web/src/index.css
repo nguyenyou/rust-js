@@ -1,0 +1,17 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1f2328;
+  background: #f6f8fa;
+}
+body { margin: 0; }
+.app { max-width: 36rem; margin: 2rem auto; padding: 0 1rem; }
+nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+input { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #d0d7de; border-radius: 6px; }
+input[aria-invalid="true"] { border-color: #cf222e; }
+button { font: inherit; padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid #d0d7de; background: white; }
+.contacts { list-style: none; padding: 0; }
+.contacts li { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #d0d7de; }
+.email, .status { color: #59636e; }
+.error { color: #cf222e; }
+.field { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
+.field-error { color: #cf222e; font-size: 0.875rem; }

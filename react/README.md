@@ -160,7 +160,7 @@ which gate.
 ## Build it
 
 ```bash
-react/build.sh -o target/libreact.rmeta                         # the latest React; also writes libweb.rmeta
+react/build.sh -o target/libreact.rmeta                         # the latest React; also writes libwebapi.rmeta and libjs.rmeta
 react/build.sh -o target/react-18/libreact.rmeta --react 18.2.0 # for React 18.2
 rust-js App.rs -- --extern react=target/libreact.rmeta -L target
 ```

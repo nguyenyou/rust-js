@@ -1,11 +1,11 @@
-// A todo list, written against the DOM through the `web` crate (ADR 0024).
+// A todo list, written against the DOM through the `webapi` crate (ADR 0024).
 // The todos live in one `Rc<RefCell<State>>`; after every change, the list
 // is drawn again from it (ADR 0025).
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use web::{
+use webapi::{
     Element, document, element, event_target, html_element, html_input_element, keyboard_event, node,
     css_style_declaration,
 };
@@ -160,9 +160,9 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use web::{Event, HtmlInputElement, node_list};
+    use webapi::{Event, HtmlInputElement, node_list};
 
-    /// `new KeyboardEvent(type, { key })`. The web crate can't take
+    /// `new KeyboardEvent(type, { key })`. The webapi crate can't take
     /// dictionaries yet, but a struct is a JS object with the same fields
     /// (ADR 0020), so it can be declared here (ADR 0021).
     #[allow(dead_code)] // `key` is read by JS, not by Rust.
@@ -211,7 +211,7 @@ mod tests {
     }
 
     /// The `n`th element matching `selector`, to click.
-    fn nth(app: &Element, selector: &str, n: u32) -> &'static web::HtmlElement {
+    fn nth(app: &Element, selector: &str, n: u32) -> &'static webapi::HtmlElement {
         html_element::unchecked_from(node_list::item(element::query_selector_all(app, selector), n).unwrap())
     }
 
