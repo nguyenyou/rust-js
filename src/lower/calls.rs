@@ -56,6 +56,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return self.call_with_boxes(def_id, generic_args, args, discarded, span, out);
         }
+        // `n.bump()` of a trait's `&mut self` method on a number: the impl's
+        // method, which takes a box as any `&mut` to one does (ADR 0099).
+        if self.tcx.trait_of_assoc(def_id).is_some()
+            && args.iter().any(|&a| self.boxed_arg(a).is_some())
+            && let Some((method, method_args)) = self.impl_method(def_id, generic_args)?
+        {
+            return self.call_with_boxes(method, method_args, args, discarded, span, out);
+        }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(written);
         }
@@ -1015,6 +1023,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             None => Ok(old),
         }
+    }
+
+    /// The crate's own impl method a trait method call resolves to, if it
+    /// does: in a copied default, `Self` is the impl's type (ADR 0049).
+    fn impl_method(
+        &self,
+        id: DefId,
+        generic_args: ty::GenericArgsRef<'tcx>,
+    ) -> R<Option<(DefId, ty::GenericArgsRef<'tcx>)>> {
+        let generic_args = match self.self_args {
+            Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+            None => generic_args,
+        };
+        Ok(ty::Instance::try_resolve(self.tcx, self.typing_env, id, generic_args)?
+            .filter(|instance| {
+                self.is_rust_fn(instance.def_id()) && self.tcx.trait_of_assoc(instance.def_id()).is_none()
+            })
+            .map(|instance| (instance.def_id(), instance.args)))
     }
 
     /// What a `&mut` argument points at, to read and write: `p` of `&mut p`,

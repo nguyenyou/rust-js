@@ -790,6 +790,14 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts", "-t", "assignment_order.rs"],
   },
   {
+    name: "trait-mut-self-unboxed",
+    breaks: "`n.bump()` of a trait's `&mut self` method on a number is refused: its argument isn't boxed as a function's is",
+    file: "src/lower/calls.rs",
+    find: "            && let Some((method, method_args)) = self.impl_method(def_id, generic_args)?\n",
+    replace: "            && let Some((method, method_args)) = self.impl_method(def_id, generic_args)?.filter(|_| false)\n",
+    tests: ["test/corpus.test.ts", "-t", "trait_mut_self_value"],
+  },
+  {
     name: "mut-ref-loop-unchecked",
     breaks: "`for x in &mut v[3..9]` of four items runs to the end instead of panicking",
     file: "src/lower.rs",

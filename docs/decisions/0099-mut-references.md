@@ -150,6 +150,10 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   p { *n += 1 }` is `o += 1`. Of an object, its variable may be a `&mut`
   itself, and assigning it wouldn't replace what it points to: that stays
   an error.
+- **A trait's `&mut self` method on a number or a `String` is called as a
+  function taking one is:** its impl's method takes a box (ADR 0074), so
+  `n.bump()`, which resolves to it, boxes `n` and takes it back after
+  (`trait_mut_self_value`).
 - **A `&mut` to an object in a variable is still the object** (ADR 0025),
   and `*r = v` of one still an error: replacing an object whole through a
   `&mut` comes with handles.
