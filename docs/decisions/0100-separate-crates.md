@@ -250,3 +250,7 @@ or a box (ADR 0074). ADR 0099's handles have the same `value`.
   helpers it uses: `models`' serde codecs bring the JSON reader's.
 - ADR 0085's scalar contract was manifest version 1; version 2 replaces it,
   and its tests take the new one.
+- **Of rustc's tests,** two that passed are now refused, each for what its
+  generic impl's drop needs and rust-js doesn't do yet: dropping an
+  `Option<T>`, and a `dyn` of a value with a destructor. They had passed
+  because their `T` happens to drop nothing.

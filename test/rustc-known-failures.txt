@@ -2,7 +2,7 @@
 # Rewritten by `bun scripts/rustc-suite.ts --bless`.
 abi/c-stack-returning-int64.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 abi/nullable-pointer-ffi-compat.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-abi/numbers-arithmetic/float-struct.rs	error: rust-js does not support calling `std::hint::black_box` yet
+abi/numbers-arithmetic/float-struct.rs	error: rust-js does not support values of type `&mut T` yet
 allocator/alloc-shrink-oob-read.rs	error: rust-js does not support values of type `*mut u8` yet
 allocator/dyn-compatible.rs	error: rust-js does not support values of type `dyn std::alloc::Allocator` yet
 allocator/empty-alloc-nonnull-guarantee.rs	error: rust-js does not support values of type `std::option::Option<std::boxed::Box<()>>` yet
@@ -153,7 +153,6 @@ borrowck/borrowck-box-sensitivity.rs	error: rust-js does not support values of t
 borrowck/borrowck-closures-slice-patterns-ok.rs	error: rust-js does not support this pattern yet
 borrowck/borrowck-field-sensitivity-rpass.rs	error: rust-js does not support values of type `&mut isize` yet
 borrowck/borrowck-macro-interaction-issue-6304.rs	error: rust-js does not support this pattern yet
-borrowck/borrowck-mut-uniq.rs	error: rust-js does not support calling `std::mem::swap` yet
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support values of type `&mut A` yet
 borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support `&mut` references to a `static mut` yet
 borrowck/borrowck-use-mut-borrow-rpass.rs	error: rust-js does not support values of type `&mut std::boxed::Box<isize>` yet
@@ -179,7 +178,6 @@ box/unit/unique-pat-2.rs	error: rust-js does not support this pattern yet
 box/unit/unique-pat-3.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 box/unit/unique-pat.rs	error: rust-js does not support this pattern yet
 box/unit/unique-send.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-box/unit/unique-swap.rs	error: rust-js does not support calling `std::mem::swap` yet
 builtin-superkinds/builtin-superkinds-capabilities-transitive.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 builtin-superkinds/builtin-superkinds-capabilities.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 c-variadic/copy.rs	error: rust-js does not support values of type `*const std::ffi::c_void` yet
@@ -228,8 +226,7 @@ codegen/issue-27859.rs	error: rust-js does not support values of type `f32` yet
 codegen/issue-55976.rs	error: rust-js does not support this expression yet
 codegen/llvm-miscompile-metadata-invalidation-36023.rs	error: rust-js does not support calling `std::result::Result::<T, E>::as_ref` yet
 codegen/rvalue-mut-ref-box-drop.rs	error: rust-js does not support assigning to this place yet
-codegen/shift-right-operand-mutation.rs	error: rust-js does not support calling `std::hint::black_box` yet
-codegen/StackColoring-not-blowup-stack-issue-40883.rs	error: rust-js does not support calling `test::black_box` yet
+codegen/StackColoring-not-blowup-stack-issue-40883.rs	error: rust-js does not support this expression yet
 coercion/any-trait-object-debug-12744.rs	error: rust-js does not support `{:?}` of a `dyn std::any::Any` yet
 coercion/basic-ptr-coercions.rs	error: rust-js does not support values of type `&mut isize` yet
 coercion/coerce-mut-trait-object-8248.rs	error: rust-js does not support values of type `&mut dyn A` yet
@@ -460,7 +457,7 @@ destructuring-assignment/tuple_destructure.rs	error: rust-js does not support th
 destructuring-assignment/tuple_struct_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
 destructuring-assignment/warn-unused-duplication.rs	error: rust-js does not support assigning to this place yet
 drop/box-conditional-drop-allocator.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/drop-count-assertion-16151.rs	error: rust-js does not support calling `std::mem::replace` yet
+drop/drop-count-assertion-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/drop-order-comparisons-let-chains.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 drop/drop-struct-as-object.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/dropck_legal_cycles.rs	error: rust-js does not support generic trait parameters yet
@@ -470,14 +467,14 @@ drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support a temporar
 drop/if-let-guards-2.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
 drop/issue-21486.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support a temporary with a destructor in a branch yet
-drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support calling `std::mem::replace` yet
+drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 drop/issue-48962.rs	error: rust-js does not support moving a value with a destructor here yet
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support values of type `*mut std::option::Option<(S<'_>, S<'_>)>` yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support values of type `&mut i32` yet
 drop/nested-return-drop-order.rs	error: rust-js does not support a temporary with a destructor here yet
 drop/nondrop-cycle.rs	error: rust-js does not support this `let` pattern without a value yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support calling `std::cell::RefCell::<T>::into_inner` yet
-drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support calling `std::mem::replace` yet
+drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/trait-object-drop-10802.rs	error: rust-js: generated trait implementation name `boxMyTrait` collides; put the implementations in separate modules
 dropck/issue-24805-dropck-itemless.rs	error: rust-js does not support this `let` pattern without a value yet
@@ -500,7 +497,7 @@ eii/duplicate/multiple_impls.rs	error: rust-js does not support externally imple
 eii/linking/codegen_single_crate.rs	error: rust-js does not support externally implementable items, `#[eii]`, yet
 eii/linking/same-symbol.rs	error: rust-js does not support externally implementable items, `#[eii]`, yet
 enum-discriminant/actually_not_an_enum-discriminant.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
-enum-discriminant/arbitrary_enum_discriminant.rs	error: rust-js does not support calling `test::black_box` yet
+enum-discriminant/arbitrary_enum_discriminant.rs	error: rust-js does not support this expression yet
 enum-discriminant/discriminant_size.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
 enum-discriminant/discriminant_value-wrapper.rs	error: rust-js does not support calling `std::mem::discriminant` yet
 enum-discriminant/discriminant_value.rs	error: rust-js does not support calling `std::intrinsics::discriminant_value` yet
@@ -516,7 +513,7 @@ explicit-tail-calls/callee_is_track_caller.rs	error: rust-js does not support th
 explicit-tail-calls/ctfe-collatz-multi-rec.rs	error: rust-js does not support this expression yet
 explicit-tail-calls/drop-order.rs	error: rust-js does not support calling `std::cell::RefCell::<T>::into_inner` yet
 explicit-tail-calls/indexer.rs	error: rust-js does not support this expression yet
-explicit-tail-calls/recursion-etc.rs	error: rust-js does not support calling `std::hint::black_box` yet
+explicit-tail-calls/recursion-etc.rs	error: rust-js does not support this expression yet
 expr/compound-assignment/eval-order.rs	error: rust-js does not support assigning to this place yet
 expr/early-return-in-binop.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 expr/weird-exprs.rs	error: rust-js does not support generic trait methods yet
@@ -588,8 +585,6 @@ impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Int
 impl-trait/not_general_enough_regression_106630.rs	error: rust-js does not support associated types yet
 impl-trait/type-alias-generic-param.rs	error: rust-js does not support associated types yet
 impl-trait/universal_in_trait_defn_parameters.rs	error: rust-js does not support generic trait methods yet
-imports/import-glob-crate.rs	error: rust-js does not support calling `std::mem::swap` yet
-imports/import-in-block.rs	error: rust-js does not support calling `std::mem::replace` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
 inference/issue-36053.rs	error: rust-js does not support user implementations of this standard or external trait yet
 inference/issue-3743.rs	error: rust-js does not support associated types yet
@@ -696,7 +691,6 @@ issues/issue-4735.rs	error: rust-js does not support values of type `*const u8` 
 issues/issue-48006.rs	error: rust-js does not support calling `std::iter::Step::steps_between` yet
 issues/issue-48132.rs	error: rust-js does not support values of type `<I as std::iter::Iterator>::Item` yet
 issues/issue-50415.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
-issues/issue-50811.rs	error: rust-js does not support calling `test::black_box` yet
 issues/issue-5315.rs	error: rust-js does not support this expression yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
 iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
@@ -811,7 +805,7 @@ nll/issue-57960.rs	error: rust-js does not support associated constants yet
 nll/mutating_references.rs	error: rust-js does not support values of type `&mut T` yet
 nll/user-annotations/issue-55241.rs	error: rust-js does not support generic trait parameters yet
 no_std/no-core-edition2018-syntax.rs	error: rust-js does not support values of type `core::option::Option<()>` yet
-numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calling `std::hint::black_box` yet
+numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calling `core::f64::<impl f64>::signum` yet
 numbers-arithmetic/f16-f128-lit.rs	error: rust-js does not support calling `core::f16::<impl f16>::to_bits` yet
 numbers-arithmetic/f32-literal-rounding-32805.rs	error: rust-js does not support values of type `f32` yet
 numbers-arithmetic/float_math.rs	error: rust-js does not support calling `std::intrinsics::fadd_fast` yet
@@ -857,7 +851,7 @@ packed/dyn-trait.rs	error: rust-js does not support calling `std::mem::ManuallyD
 packed/issue-118537-field-offset-ice.rs	error: rust-js does not support values of type `*const PackedUnsized` yet
 packed/issue-118537-field-offset.rs	error: rust-js does not support values of type `*const PackedUnsized` yet
 packed/issue-46152.rs	error: rust-js does not support user implementations of this standard or external trait yet
-packed/misaligned-reference-drop-field-99838.rs	error: rust-js does not support calling `std::hint::black_box` yet
+packed/misaligned-reference-drop-field-99838.rs	error: rust-js does not support this expression yet
 packed/packed-struct-address-of-element.rs	error: rust-js does not support values of type `*const usize` yet
 packed/packed-struct-drop-aligned.rs	error: rust-js does not support values of type `*const Aligned<'_>` yet
 packed/packed-struct-generic-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -896,7 +890,6 @@ pattern/slice-pattern-recursion-15104.rs	error: rust-js does not support this pa
 pin-ergonomics/pin-coercion.rs	error: rust-js does not support values of type `&mut T` yet
 privacy/pub-extern-privacy.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 process/env-vars.rs	error: rust-js does not support iterating over `std::env::VarsOs` yet
-ptr_ops/ptr-swap-basic.rs	error: rust-js does not support calling `std::mem::swap` yet
 ptr_ops/ptr-swap-overlapping-regions.rs	error: rust-js does not support calling `std::ptr::swap` yet
 ptr_ops/ptr-write-bool-representation.rs	error: rust-js does not support calling `std::ptr::write` yet
 ptr_ops/raw-pointer-type-basic.rs	error: rust-js does not support values of type `*const isize` yet
@@ -913,12 +906,12 @@ regions/regions-dependent-addr-of.rs	error: rust-js does not support this patter
 regions/regions-early-bound-lifetime-in-assoc-fn.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-early-bound-used-in-bound.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-early-bound-used-in-type-param.rs	error: rust-js does not support generic trait parameters yet
-regions/regions-infer-borrow-scope-addr-of.rs	error: rust-js does not support calling `std::mem::swap` yet
 regions/regions-infer-reborrow-ref-mut-recurse.rs	error: rust-js does not support values of type `&mut isize` yet
 regions/regions-issue-21422.rs	error: rust-js does not support values of type `*const &u8` yet
 regions/regions-issue-22246.rs	error: rust-js does not support generic trait parameters yet
 regions/regions-lifetime-static-items-enclosing-scopes.rs	error: rust-js does not support assigning to this place yet
 regions/regions-mock-codegen.rs	error: rust-js does not support calling `std::alloc::Layout::new` yet
+regions/regions-no-bound-in-argument-cleanup.rs	error: rust-js does not support dropping `std::option::Option<T>` yet
 regions/regions-simple.rs	error: rust-js does not support values of type `&mut isize` yet
 regions/regions-static-bound-rpass.rs	error: rust-js does not support values of type `&mut &()` yet
 resolve/primitive-usage.rs	error: rust-js does not support constants of type `f128` yet
@@ -1106,6 +1099,7 @@ traits/negative-impls/negative-impls-basic.rs	error: rust-js does not support th
 traits/normalize-associated-type-in-where-clause.rs	error: rust-js does not support generic trait parameters yet
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support associated types yet
+traits/object/exclusion.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 traits/object/generics.rs	error: rust-js does not support generic trait parameters yet
 traits/object/lifetime-first.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/overlap-permitted-for-marker-traits.rs	error: rust-js: generated trait implementation name `tMyMarker` collides; put the implementations in separate modules
@@ -1123,7 +1117,6 @@ traits/trait-upcasting/multiple-supertraits-modulo-binder.rs	error: rust-js does
 traits/trait-upcasting/multiple-supertraits-modulo-normalization.rs	error: rust-js does not support generic trait parameters yet
 traits/trait-upcasting/struct.rs	error: rust-js does not support values of type `dyn Baz` yet
 traits/trait-upcasting/supertraits-modulo-inner-binder.rs	error: rust-js does not support generic trait parameters yet
-traits/virtual-call-parameter-handling.rs	error: rust-js does not support calling `std::hint::black_box` yet
 traits/where-clause-vs-impl.rs	error: rust-js does not support generic trait parameters yet
 traits/with-bounds-default.rs	error: rust-js does not support generic trait parameters yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
