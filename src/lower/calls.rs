@@ -1033,7 +1033,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// The crate's own impl method a trait method call resolves to, if it
     /// does: in a copied default, `Self` is the impl's type (ADR 0049).
-    fn impl_method(
+    pub(super) fn impl_method(
         &self,
         id: DefId,
         generic_args: ty::GenericArgsRef<'tcx>,
@@ -1084,6 +1084,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             place = reborrowed;
         }
         Some(place)
+    }
+
+    /// Can what `fn_id` returns hold the borrow its parameter `i` is given: does
+    /// its return type name a lifetime that parameter's type does (ADR 0099)?
+    fn result_borrows(&self, fn_id: DefId, i: usize) -> bool {
+        let sig = self.tcx.fn_sig(fn_id).instantiate_identity().skip_binder();
+        let Some(&input) = sig.inputs().get(i) else {
+            return false;
+        };
+        let regions = |ty: Ty<'tcx>| ty.walk().filter_map(|part| part.as_region()).collect::<Vec<_>>();
+        let returned = regions(sig.output());
+        regions(input).iter().any(|region| returned.contains(region))
     }
 
     /// How `arg` is given as parameter `i` of `fn_id`: in a box, if that's a
@@ -1197,6 +1209,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (mut values, mut backs) = (Vec::new(), Vec::new());
         for (i, &arg) in args.iter().enumerate() {
             match self.arg_form(def_id, i, arg) {
+                // What it returns can hold the borrow, `pick(&mut a, &mut b)`: a
+                // handle, since a box would be copied back before it's used.
+                ArgForm::Boxed(place) if self.result_borrows(def_id, i) => {
+                    let handle = Expr::handle(self.fixed_place(place, span, out)?);
+                    values.push(handle);
+                }
                 ArgForm::Boxed(place) => {
                     let current = self.expr(place, out)?;
                     let target = match self.element(place) {

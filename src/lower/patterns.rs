@@ -280,6 +280,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         name
                     }
                 };
+                // `let mut r = &mut x;`: a cell, whose `value` is `x` (ADR 0099).
+                if mode.0 == ByRef::No && self.is_cell(*ty) {
+                    self.locals.boxes.insert(*var);
+                }
                 if let Some(owned) = owned {
                     self.own(*var, Expr::var(&name), owned, pat.span, out)?;
                 }
@@ -434,6 +438,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // place, so each binding has its own. `n @ 1..=9` binds nothing else.
         let stable = stable && !(bindings.len() > 1 && bindings.iter().any(|b| b.whole));
         for b in bindings {
+            // `Some(r)` of an `Option<&mut i32>`: `r` is a cell (ADR 0099).
+            if !b.by_ref_mut && self.is_cell(b.ty) {
+                self.locals.boxes.insert(b.var);
+            }
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
             // A `ref mut` one always does: `*r = x` writes the place it names.
             // One that owns what it binds, by value, drops it as its scope

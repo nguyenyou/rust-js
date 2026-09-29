@@ -1645,15 +1645,23 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
                 ..
             } if {
                 // To a `dyn`: an array unsized to a slice is the same array.
-                let pointee = |ty: Ty<'tcx>| {
-                    let pointee = ty.builtin_deref(true).unwrap_or(ty);
-                    match pointee.kind() {
-                        ty::Adt(_, args) if pointee.is_box() => args.type_at(0),
-                        _ => pointee,
-                    }
+                // What's unsized, and what to: `&D` or `Box<D>` to a `dyn`, and
+                // `Rc<D>` to `Rc<dyn Send>` too, whose destructor then runs
+                // through the `dyn`. Found by rustc's `issue-25515.rs`.
+                let target = expr.ty;
+                let from = self.thir[source].ty;
+                let (to, from) = match (target.builtin_deref(true), from.builtin_deref(true)) {
+                    (Some(to), Some(from)) => (to, from),
+                    _ => match (target.kind(), from.kind()) {
+                        (ty::Adt(_, to_args), ty::Adt(_, from_args)) => to_args
+                            .types()
+                            .zip(from_args.types())
+                            .find(|(to, _)| matches!(to.kind(), ty::Dynamic(..)))
+                            .unwrap_or((target, from)),
+                        _ => (target, from),
+                    },
                 };
-                matches!(pointee(expr.ty).kind(), ty::Dynamic(..))
-                    && self.cx.drops(pointee(self.thir[source].ty)) != Drops::Nothing
+                matches!(to.kind(), ty::Dynamic(..)) && self.cx.drops(from) != Drops::Nothing
             } =>
             {
                 self.problem(expr.span, "a `dyn` of a value with a destructor");

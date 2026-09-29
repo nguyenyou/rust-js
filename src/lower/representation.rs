@@ -196,6 +196,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// A `&mut` to a value JS can't change in place, as a value: a cell, a box
+    /// or a handle, whose `value` is the place it points at (ADR 0099).
+    pub(super) fn is_cell(&self, ty: Ty<'tcx>) -> bool {
+        matches!(*ty.kind(), ty::Ref(_, inner, Mutability::Mut) if self.is_boxable(inner))
+    }
+
     /// Is `fn_id`'s parameter `i` a box: a `&mut` to a value JS can't change in
     /// place (ADR 0074), or to a type parameter (ADR 0099)?
     pub(super) fn param_is_box(&self, fn_id: DefId, i: usize) -> bool {
@@ -622,6 +628,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) || self.is_callable(*inner) => {
                 return self.unsupported_in(*inner, seen);
             }
+            // A `&mut` to anything else is a cell (ADR 0099).
+            ty::Ref(_, inner, Mutability::Mut) if self.is_boxable(*inner) => return None,
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_in(*elem, seen),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
             // An `Option` is its value or `undefined` (ADR 0030), so the value

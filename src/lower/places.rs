@@ -169,6 +169,39 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `e` as a place, a variable and some of its fields, without reading it.
     /// Also says whether that variable is mutable.
+    /// Is `e`'s JS value a cell, a box or a handle (ADR 0099)? A `&mut` to a
+    /// value JS can't change in place, as rust-js makes one: a variable
+    /// holding one, a field or an item keeping one, what a reference to one
+    /// points at, or what the crate's own function returns. Not a std call's,
+    /// as `v[i]`'s `index_mut` is: that's the item itself.
+    pub(super) fn is_cell_value(&self, e: ExprId) -> bool {
+        if !self.is_cell(self.thir[e].ty) {
+            return false;
+        }
+        match self.thir[self.strip(e)].kind {
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => self.locals.boxes.contains(&id),
+            ExprKind::Field { .. } | ExprKind::Index { .. } | ExprKind::Deref { .. } => true,
+            // `if c { a } else { b }` of cells.
+            ExprKind::If {
+                then,
+                else_opt: Some(otherwise),
+                ..
+            } => self.is_cell_value(then) && self.is_cell_value(otherwise),
+            ExprKind::Block { block } => self.thir[block].expr.is_some_and(|value| self.is_cell_value(value)),
+            // `&mut *a` of a cell: the cell.
+            ExprKind::Borrow { arg, .. } => {
+                matches!(self.thir[self.strip(arg)].kind, ExprKind::Deref { arg: inner } if self.is_cell_value(inner))
+            }
+            // The crate's own function, or the impl's method a trait's resolves to.
+            ExprKind::Call { fun, .. } => match *self.thir[self.strip(fun)].ty.kind() {
+                ty::FnDef(def_id, _) if self.tcx.trait_of_assoc(def_id).is_none() => self.is_rust_fn(def_id),
+                ty::FnDef(def_id, args) => self.impl_method(def_id, args).ok().flatten().is_some(),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub(super) fn place(&self, e: ExprId) -> Option<(Expr, bool)> {
         // Inside a closure, a place it captured by value is its snapshot.
         if !self.captures.is_empty()
@@ -189,12 +222,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (base, mutable) = self.place(lhs)?;
                 Some((self.project(base, self.thir[lhs].ty, name.as_usize()), mutable))
             }
-            // `*out` of a box (ADR 0072): what's in it.
+            // `*out` of a box (ADR 0072), or of a handle (ADR 0099): what's in it.
             ExprKind::Deref { arg }
-                if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
+                if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } =
+                    self.thir[self.strip(arg)].kind
                     && self.locals.boxes.contains(&id) =>
             {
-                Some((Expr::member(self.locals.vars[&id].place.clone(), "value"), true))
+                let (cell, _) = self.place(arg)?;
+                Some((Expr::member(cell, "value"), true))
+            }
+            // `*self.0` of a cell kept in a field, an item or behind a reference
+            // (ADR 0099): what's in it. A variable of one that isn't a box
+            // names its place, as `let r = &mut x;` does.
+            ExprKind::Deref { arg }
+                if self.is_cell_value(arg)
+                    && !matches!(
+                        self.thir[self.strip(arg)].kind,
+                        ExprKind::VarRef { .. } | ExprKind::UpvarRef { .. } | ExprKind::Call { .. }
+                    ) =>
+            {
+                let (cell, _) = self.place(arg)?;
+                Some((Expr::member(cell, "value"), true))
             }
             // A reference is the value it points to, so `*r` is where `r` is.
             // (A static is reached through a pointer to it.)
@@ -478,6 +526,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 Ok(self.project(base, self.thir[lhs].ty, name.as_usize()))
             }
+            // `*pick(a, b) = v` of a cell a call returns: its `value` (ADR 0099).
+            ExprKind::Deref { arg } if self.is_cell_value(arg) && self.place(e).is_none() => {
+                let cell = self.expr(arg, out)?;
+                let cell = if cell.reads_same() {
+                    cell
+                } else {
+                    self.spill("cell", cell, out)
+                };
+                Ok(Expr::member(cell, "value"))
+            }
             _ => self.assignee(e),
         }
     }
@@ -558,6 +616,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .get(&id)
                         .is_some_and(|v| matches!(v.place.kind, js::ExprKind::Member(..) | js::ExprKind::Index(..)))
             }
+            // A cell kept in a field, `*self.0 = v`: its `value` (ADR 0099).
+            ExprKind::Field { .. } => self.is_cell_value(arg),
             _ => false,
         };
         if let ExprKind::Deref { arg } = self.thir[self.strip(e)].kind
@@ -584,6 +644,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && self.locals.aliases.contains(&id)
             && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
         {
+            // A `&mut` to a number kept, `S { r: y }`: a handle on its place.
+            if self.is_cell(ty) {
+                return Ok(Expr::handle(self.locals.vars[&id].place.clone()));
+            }
             return Err(self.unsupported(self.thir[e].span, "a `&mut` in a variable used as a value"));
         }
         self.moved(e, out)?;
@@ -614,6 +678,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // reading a place does: `*v.first().unwrap()` isn't `v[0]` itself.
             ExprKind::Deref { arg } => {
                 let value = self.expr(arg, out)?;
+                // `*pick(a, b)` of a cell it returned: what's in it (ADR 0099).
+                let value = if self.is_cell_value(arg) {
+                    Expr::member(value, "value")
+                } else {
+                    value
+                };
                 Ok(self.copy_if_needed(value, ty))
             }
             _ => Err(self.unsupported(self.thir[e].span, "reading this")),

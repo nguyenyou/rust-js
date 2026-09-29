@@ -237,6 +237,10 @@ pub enum ExprKind {
     /// `\`Some(${x})\``: the texts around the values, as they read (one more
     /// than the values), and the values (ADR 0066).
     Template(Vec<String>, Vec<Expr>),
+    /// `{ get value() { return x; }, set value(value) { x = value; } }`: a
+    /// `&mut` kept, reading and writing its place each time (ADR 0099). The
+    /// place is what's read then, not before: it's never taken out.
+    Handle(Box<Expr>),
 }
 
 /// A JSX element (ADR 0040).
@@ -352,6 +356,10 @@ impl Expr {
 
     pub fn var(name: &str) -> Expr {
         Expr::new(ExprKind::Var(name.to_string()))
+    }
+
+    pub fn handle(place: Expr) -> Expr {
+        Expr::new(ExprKind::Handle(Box::new(place)))
     }
 
     pub fn member(object: Expr, property: impl Into<String>) -> Expr {
@@ -484,6 +492,7 @@ impl Expr {
                 _ => false,
             }),
             ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.contains_jsx(),
+            ExprKind::Handle(_) => false,
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
             ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
             ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
@@ -567,6 +576,7 @@ impl Expr {
             }
             ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => return None,
             ExprKind::Member(a, field) => ExprKind::Member(one(a)?, field.clone()),
+            ExprKind::Handle(place) => ExprKind::Handle(one(place)?),
             ExprKind::Index(a, b) => ExprKind::Index(one(a)?, one(b)?),
             ExprKind::Array(items) => ExprKind::Array(all(items)?),
             ExprKind::Object(fields) => ExprKind::Object(props(fields)?),
@@ -596,6 +606,23 @@ impl Expr {
             | ExprKind::Regex(_) => self.kind.clone(),
         };
         Some(Expr { kind, span: self.span })
+    }
+
+    /// Does this name the variable `name` anywhere in it?
+    pub fn mentions_var(&self, name: &str) -> bool {
+        match &self.kind {
+            ExprKind::Var(n) => n == name,
+            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) | ExprKind::Handle(a) => {
+                a.mentions_var(name)
+            }
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.mentions_var(name) || b.mentions_var(name),
+            ExprKind::Cond(a, b, c) => a.mentions_var(name) || b.mentions_var(name) || c.mentions_var(name),
+            ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
+                f.mentions_var(name) || args.iter().any(|a| a.mentions_var(name))
+            }
+            ExprKind::Array(items) => items.iter().any(|a| a.mentions_var(name)),
+            _ => false,
+        }
     }
 
     /// Could this read one of `names`? Only a path of them, `a.b`, or a
@@ -650,6 +677,8 @@ impl Expr {
             // It lets other code run meanwhile.
             ExprKind::Await(_) => true,
             ExprKind::Member(object, _) => object.has_effects(),
+            // Making one reads nothing: its getter does, later.
+            ExprKind::Handle(_) => false,
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
             ExprKind::Array(items) | ExprKind::Template(_, items) => items.iter().any(Expr::has_effects),
             ExprKind::Object(props) => props.iter().any(|p| match p {

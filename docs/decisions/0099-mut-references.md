@@ -1,8 +1,9 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
 Status: Accepted in part: a `&mut` in a variable, the index loop, a
-generic `&mut T` given as a parameter, and a `&mut` to a closure.
-Handles, and a generic `&mut T` returned or kept, are to come. Extends
+generic `&mut T` given as a parameter, a `&mut` to a closure, and handles
+of a `&mut` to a value JS can't change in place. A generic `&mut T`
+returned or kept, and a handle to an object replaced whole, are to come. Extends
 [0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
 ## Context
@@ -179,6 +180,23 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   `mut_ref_as_generic`), and one already in a box is the box: an impl for
   `&mut i32`, taking it by value, changes the number. Found by rustc's
   `issue-55809.rs`, which stopped when only a declared `&mut T` was boxed.
+- **A `&mut` kept is a handle** (`mut_ref_handle`, `mut_ref_kept`): in a
+  struct, written through as it's dropped, chosen by a branch, in a `let
+  mut` assigned again, in an `Option` and a `Vec`, returned, and from a
+  user `IndexMut`. It's a new kind of JS expression, `Handle(place)`,
+  printed as the getter and setter above: its place is read when it's
+  used, never before. A `&mut` to one of these values, as a value, is a
+  cell, a box or a handle: `*r` of a variable holding one, a field keeping
+  one, a branch or a call of the crate's giving one back, is `r.value`. A
+  std call's isn't one: `v[i]`'s `index_mut` is the item itself. A call
+  whose return type names a parameter's lifetime, `pick(&mut a, &mut b)`,
+  is given handles, not boxes copied back before its result is used. A
+  `&mut` in a variable (rule 1) kept is a handle on its place. `for r in
+  refs` of a `Vec<&mut i32>` isn't an index loop: its items are cells. Of
+  rustc's 45 tests stopping at such a `&mut`, 8 pass; one that then
+  compiled and gave another answer, `issue-25515.rs`, had an `Rc<dyn Send>`
+  of a value with a destructor that never ran, which is refused now, as
+  `Box<dyn>` of one is.
 - **A `&mut` to a closure is the closure** (`closure_mut_ref`): of a type
   parameter bound by `FnMut`, an `impl FnMut`, a `dyn FnMut` and a function,
   `&mut square`. `f()` calls it, and `call(f)` passes it on. A `dyn FnMut`

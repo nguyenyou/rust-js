@@ -157,6 +157,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ..
             } if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) => {
                 self.check_value_ty(*ty, f.pat.span)?;
+                if self.is_cell(*ty) {
+                    self.locals.boxes.insert(*var);
+                }
                 js::Pattern::Name(self.bind(*var, name.as_str(), false))
             }
             _ if let Some((pattern, is_mut)) = self.js_pattern(pat) => {
@@ -273,7 +276,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let items = self.thir[e].ty.peel_refs();
         let sequence = items.is_array() || items.is_slice() || self.is_vec_like(items);
-        (sequence && self.place(e).is_some()).then_some((e, range))
+        // Its own items borrowed, not `&mut`s it holds: `for r in refs` of a
+        // `Vec<&mut i32>` gives each cell (ADR 0099).
+        let element = match items.kind() {
+            ty::Array(element, _) | ty::Slice(element) => Some(*element),
+            ty::Adt(_, args) => args.types().next(),
+            _ => None,
+        };
+        (sequence && element == Some(item) && self.place(e).is_some()).then_some((e, range))
     }
 
     /// `for x in &mut v`: `for (let i = 0; i < v.length; i++)`, with `*x`

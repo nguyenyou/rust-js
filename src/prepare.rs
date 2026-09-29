@@ -10,6 +10,7 @@ use std::collections::HashSet;
 /// out by us (ADR 0040), so it doesn't count, but what's in it does.
 fn prints_on_lines(value: &Expr) -> bool {
     match &value.kind {
+        ExprKind::Handle(_) => true,
         ExprKind::Array(items) => items.len() > 2 || items.iter().any(prints_on_lines),
         ExprKind::Object(props) => {
             props.len() > 1

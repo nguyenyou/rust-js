@@ -639,6 +639,7 @@ impl<'a> Cx<'a> {
         let b = &self.b;
         let sp = span(e.span);
         match &e.kind {
+            ExprKind::Handle(place) => self.handle(sp, place),
             ExprKind::Num(n) => self.number(sp, *n),
             // `5n`, and `-5n` as `-` of it, as a number is written.
             ExprKind::BigInt(n) => {
@@ -864,6 +865,47 @@ impl<'a> Cx<'a> {
     fn jsx_newline(&self, depth: u32) -> JSXChild<'a> {
         let text = format!("\n{}", "  ".repeat(depth as usize));
         JSXChild::new_text(SPAN, self.name(&text), None, &self.b)
+    }
+
+    /// A handle (ADR 0099): `{ get value() { return x; }, set value(value) { x = value; } }`,
+    /// the setter's parameter named as the place doesn't name anything.
+    fn handle(&self, sp: Span, place: &js::Expr) -> Expression<'a> {
+        let b = &self.b;
+        let mut param = "value".to_string();
+        while place.mentions_var(&param) {
+            param.push('_');
+        }
+        let accessor = |kind: PropertyKind, params: Vec<js::Pattern>, body: Vec<js::Stmt>| {
+            let params = self.params(FormalParameterKind::FormalParameter, &params);
+            let body = FunctionBody::new(SPAN, ArenaVec::new_in(b), self.stmts(&body), b);
+            let value = Expression::new_function_expression(
+                SPAN,
+                FunctionType::FunctionExpression,
+                None,
+                false, // generator
+                false, // async
+                false, // declare
+                None,  // type parameters
+                None,  // this param
+                ArenaBox::new_in(params, b),
+                None, // return type
+                Some(ArenaBox::new_in(body, b)),
+                b,
+            );
+            let key = PropertyKey::new_static_identifier(SPAN, self.name("value"), b);
+            ObjectPropertyKind::new_object_property(SPAN, kind, key, value, false, false, false, b)
+        };
+        let get = accessor(
+            PropertyKind::Get,
+            Vec::new(),
+            vec![js::StmtKind::Return(Some(place.clone())).at(place.span)],
+        );
+        let set = accessor(
+            PropertyKind::Set,
+            vec![js::Pattern::Name(param.clone())],
+            vec![js::StmtKind::Assign(place.clone(), js::Expr::var(&param)).at(place.span)],
+        );
+        Expression::new_object_expression(sp, ArenaVec::from_iter_in([get, set], b), b)
     }
 
     fn property(&self, prop: &Prop) -> ObjectPropertyKind<'a> {

@@ -676,6 +676,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some((place, _)) => Ok(place),
                 None => self.referent(arg, out),
             },
+            // `&mut *e` of a `&mut` that isn't a variable's: `e`'s own, a cell
+            // kept in a field or given back by a block, a branch or a call of
+            // the crate's (ADR 0099). Not a std call's, as `v[i]`'s `index_mut`
+            // is: that's the item, whose `&mut` is a handle on it.
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Mut { .. },
+                arg,
+            } if let ExprKind::Deref { arg: inner } = self.thir[self.strip(arg)].kind
+                && self.is_cell(self.thir[inner].ty)
+                && match self.thir[self.strip(inner)].kind {
+                    ExprKind::VarRef { .. } | ExprKind::UpvarRef { .. } => false,
+                    ExprKind::Call { .. } => self.is_cell_value(inner),
+                    _ => true,
+                } =>
+            {
+                self.expr(inner, out)
+            }
+            // `&mut x` kept, of a value JS can't change in place: a handle on
+            // `x`, fixed where it's borrowed (ADR 0099).
+            ExprKind::Borrow {
+                borrow_kind: BorrowKind::Mut { .. },
+                arg,
+            } if self.is_boxable(self.thir[arg].ty) => {
+                // `&mut *&mut v[0]`, a reborrow: of `v[0]`.
+                let place = self.mut_borrowed(e).unwrap_or(arg);
+                Ok(Expr::handle(self.fixed_place(place, self.thir[place].span, out)?))
+            }
             ExprKind::Borrow { arg, .. } => {
                 Err(self.unsupported(span, &format!("`&mut` to a `{}`", self.thir[arg].ty)))
             }
