@@ -1189,7 +1189,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let flag = match self.thir[self.strip(lhs)].kind {
             ExprKind::VarRef { id } => self.drop_state.flags.get(&id).cloned(),
             // A part that may have moved, `pair.a = ..` after `consume(pair.a)`.
-            _ => self.place_path(lhs).and_then(|(var, fields)| {
+            _ => self.body_query().place_path(lhs).and_then(|(var, fields)| {
                 let path: Path = fields.into_iter().map(|f| (None, f)).collect();
                 self.drop_state.part_flags.get(&(var, path)).cloned()
             }),

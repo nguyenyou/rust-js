@@ -54,7 +54,13 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .filter_map(|def_id| {
             let (thir, expr) = tcx.thir_body(def_id).ok()?;
             let thir = (*thir.borrow()).clone();
-            Some(Body { def_id, thir, expr })
+            let facts = super::body_queries::BodyFacts::collect(tcx, &thir);
+            Some(Body {
+                def_id,
+                thir,
+                expr,
+                facts,
+            })
         })
         .collect()
 }

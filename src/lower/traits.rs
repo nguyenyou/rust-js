@@ -747,7 +747,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             drops,
             unsupported,
         };
-        let enclosing = self.enter_body(&body.thir, id, nested)?;
+        let enclosing = self.enter_body(body, id, nested)?;
         let mut rest = Vec::new();
         let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest)?;
         // Only the drops it uses: most defaults drop nothing of their `Self`.

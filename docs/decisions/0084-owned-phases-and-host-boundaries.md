@@ -46,6 +46,29 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   component selections and child computations retain their original order;
   conditional inputs remain inside their selected branches. Static inputs and
   immutable local bindings need no temporary.
+  The same rule applies to ternary candidates and `matches!` guards. Lower each
+  branch once into an `Evaluation`. Keep a ternary (or `&&` guard) only when
+  its conditional evaluations have no prerequisite statements; otherwise emit
+  an `if` with branch-local setup and result assignment. A primitive `&mut`
+  argument needs a box and copy-back even when its Rust call looks simple.
+- Keep lowering dispatch and sequencing in `lower.rs`; put function and nested
+  body lifecycle in `lower/bodies.rs`, patterns and bindings in `patterns.rs`,
+  loops in `loops.rs`, place operations in `places.rs`, and arithmetic/casts
+  alongside numeric methods in `numbers.rs`. These remain parts of the same
+  lowerer, with shared `FnCx` state; splitting files does not make them
+  independent compiler phases.
+  `lower/body_queries.rs` is a narrower boundary: only immutable THIR and rustc
+  queries, with no emission context. Each captured `Body` owns context-independent
+  variable-use counts, mutably borrowed roots and stepped iterators, collected
+  once. Nested-body entry switches the current facts and exit restores them.
+  Type/representation caches still depend on the active typing environment and
+  trait arguments and are not added to these facts.
+  `PreparedPlace` gives ordinary assignment targets, map entries and borrowed
+  map-value slots a common read/write contract after preparation. Preparation
+  sequences the RHS before a primitive assignment's target and captures target
+  operands when they cannot safely be read twice. Map checks and slot write-back
+  remain explicit. Overloaded assignment calls retain receiver-before-argument
+  order; assignments that drop the old value retain their cleanup path.
 - `lower/recognition.rs` classifies standard-library calls from a definition ID
   and generic arguments. Its context contains only rustc type queries, the typing
   environment, and immutable local trait-implementation identities. It cannot
@@ -179,6 +202,15 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
 compiler dependency versions. `test/semantics.test.ts` compares nested updates,
 discarded calls, and operand prerequisites with native Rust. Generated snapshots
 record the additional temporaries needed to retain evaluation order.
+The [conditional-regions corpus](../../test/corpus/conditional_regions.rs)
+compares skipped branches, boxed mutable arguments, guarded patterns, nesting,
+condition effects and repeated loop execution with native Rust. Its snapshot
+keeps the generated branch structure reviewable. The `conditional-prerequisites`
+mutation restores unconditional hoisting, which this case must catch.
+Architecture tests also prohibit emission state in `body_queries.rs`.
+The [prepared-places corpus](../../test/corpus/prepared_places.rs) checks
+statement-valued writes through borrowed map entries and primitive versus
+overloaded compound-assignment order against native Rust.
 
 `test/emission.test.ts` covers copied-body source origins and native output
 ownership. `test/manifest.test.ts` rejects malformed/incompatible manifests and

@@ -109,6 +109,10 @@ pilot. No delivery dates are assigned yet.
   generated/property-based cases for supported constructs, effect order,
   aliasing, Unicode, numeric boundaries, and malformed input. Retain minimized
   regressions. Require diagnostics and preserved output for rejected programs.
+  The [conditional-regions regression](test/corpus/conditional_regions.rs)
+  covers branch-local mutable-argument boxing/copy-back, guarded patterns,
+  nested conditionals and repeated evaluation; its mutation restores the
+  incorrect hoisting to verify the test detects it.
   Added evidence: [nested lowering regressions](test/semantics.rs) and their
   [native comparisons](test/semantics.test.ts) cover struct updates, effect
   order, and used inner results inside discarded calls. The [oracle](test/oracle.ts) compares panics by their

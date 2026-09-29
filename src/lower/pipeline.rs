@@ -132,6 +132,7 @@ pub fn lower_crate<'tcx>(
         .chain(dictionaries.iter().map(|id| (*id, None)))
         .collect();
     let (mut used, mut queued) = (HashSet::new(), HashSet::new());
+    let no_facts = super::body_queries::BodyFacts::default();
     let mut next = 0;
     loop {
         // Then the codecs something uses, a round at a time, each in the
@@ -164,6 +165,7 @@ pub fn lower_crate<'tcx>(
             dependencies: Default::default(),
             captures: HashMap::new(),
             thir: body.map_or(&no_body, |body| &body.thir),
+            body_facts: body.map_or(&no_facts, |body| &body.facts),
             module,
             locals: Locals::default(),
             // Locals must never shadow a function or an import of this file.
@@ -175,7 +177,7 @@ pub fn lower_crate<'tcx>(
             jsx: false,
             writer: None,
             codec_params: Vec::new(),
-            stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
+            stepped: body.map_or_else(HashSet::new, |body| body.facts.stepped.clone()),
             cloning: Vec::new(),
             item: def_id,
             representable: RefCell::new(HashMap::new()),

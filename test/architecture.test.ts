@@ -62,6 +62,12 @@ test("library recognition cannot access function emission state", () => {
   expect(read("src/lower/recognition.rs")).toContain("pub(super) struct Recognition");
 });
 
+test("body queries cannot access emission state", () => {
+  const source = read("src/lower/body_queries.rs");
+  expect(source).not.toMatch(/\b(?:FnCx|Dependencies|Evaluation)\b|\bRefCell\s*<|crate::js|runtime::/);
+  expect(source).not.toMatch(/\bfn\s+\w+\s*\([^)]*&mut\s+self/);
+});
+
 test("library identity checks and method tables stay in recognition", () => {
   for (const file of files("src/lower").filter(file => !file.includes("/recognition") && !file.endsWith("/library.rs"))) {
     // The scalar linkage adapter owns canonical crate names, not library intrinsics.

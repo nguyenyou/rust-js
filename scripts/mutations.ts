@@ -30,9 +30,17 @@ export type Mutation = {
 
 export const mutations: Mutation[] = [
   {
+    name: "conditional-prerequisites",
+    breaks: "unselected branches and failed match patterns still run their calls and copy-back",
+    file: "src/lower.rs",
+    find: "        if yes.statements.is_empty() && no.statements.is_empty() {",
+    replace: "        out.append(&mut yes.statements);\n        out.append(&mut no.statements);\n        if true {",
+    tests: ["test/corpus.test.ts", "-t", "conditional_regions"],
+  },
+  {
     name: "element-value-first",
     breaks: "`v[i] = f()` checks `i` before `f` runs, and reads what the index wrote",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "        if (writes && !value.is_constant()) || (panics && value.has_effects()) {",
     replace: "        if false && ((writes && !value.is_constant()) || (panics && value.has_effects())) {",
     tests: ["test/corpus.test.ts", "-t", "assignment_order"],
@@ -40,9 +48,9 @@ export const mutations: Mutation[] = [
   {
     name: "compound-place-read",
     breaks: "`x += g()` reads `x` before `g`, which changes it, runs",
-    file: "src/lower.rs",
-    find: "let rhs_js = if rhs_js.has_effects() && self.may_change(lhs) {",
-    replace: "let rhs_js = if false && rhs_js.has_effects() && self.may_change(lhs) {",
+    file: "src/lower/places.rs",
+    find: "let value = if read && value.has_effects() && self.may_change(lhs) {",
+    replace: "let value = if false && read && value.has_effects() && self.may_change(lhs) {",
     tests: ["test/corpus.test.ts", "-t", "assignment_order\\.rs"],
   },
   {
@@ -80,7 +88,7 @@ export const mutations: Mutation[] = [
   {
     name: "guard-statements",
     breaks: "a guard's statements don't run before its test",
-    file: "src/lower.rs",
+    file: "src/lower/patterns.rs",
     find: "                before.push(StmtKind::If(guard, body, None).at(span));",
     replace: "                before.clear();\n                before.push(StmtKind::If(guard, body, None).at(span));",
     tests: ["test/corpus.test.ts", "-t", "guard_statements"],
@@ -136,7 +144,7 @@ export const mutations: Mutation[] = [
   {
     name: "while-condition-statements",
     breaks: "a `while` condition's statements are put in the loop, after its test",
-    file: "src/lower.rs",
+    file: "src/lower/loops.rs",
     find: "                if before.is_empty() {\n                    self.stmt(then, &Dest::Discard, &mut body_out)?;",
     replace: "                if true {\n                    body_out.extend(before);\n                    self.stmt(then, &Dest::Discard, &mut body_out)?;",
     tests: ["test/corpus.test.ts", "-t", "lazy_effects"],
@@ -144,7 +152,7 @@ export const mutations: Mutation[] = [
   {
     name: "at-binding-copy",
     breaks: "a binding after `@` reads its part of the value in place, which the binding before it changes",
-    file: "src/lower.rs",
+    file: "src/lower/patterns.rs",
     find: "        let stable = stable && !(bindings.len() > 1 && bindings.iter().any(|b| b.whole));",
     replace: "        let stable = stable || bindings.iter().any(|b| b.whole);",
     tests: ["test/corpus.test.ts", "-t", "binding_after_at"],
@@ -152,7 +160,7 @@ export const mutations: Mutation[] = [
   {
     name: "option-some-rest",
     breaks: "`Some(..)`, whose `..` names no field, is taken as `None`",
-    file: "src/lower.rs",
+    file: "src/lower/patterns.rs",
     find: "                    let op = if some { Op::LooseNe } else { Op::LooseEq };",
     replace: "                    let op = if some && false { Op::LooseNe } else { Op::LooseEq };",
     tests: ["test/corpus.test.ts", "-t", "option_rest_pattern"],
@@ -176,7 +184,7 @@ export const mutations: Mutation[] = [
   {
     name: "never-loop-value",
     breaks: "a `loop` that never ends, used as a value, is rejected",
-    file: "src/lower.rs",
+    file: "src/lower/body_queries.rs",
     find: "            ExprKind::NeverToAny { source } => match self.thir[source].kind {\n                ExprKind::Loop { body } => Some(body),",
     replace: "            ExprKind::NeverToAny { source } => match self.thir[source].kind {\n                ExprKind::Loop { body } if false => Some(body),",
     tests: ["test/corpus.test.ts", "-t", "loop_values"],
@@ -192,7 +200,7 @@ export const mutations: Mutation[] = [
   {
     name: "static-mut-place",
     breaks: "a `static mut` is read and written as its value, not its `{ value }`",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: '                    true => (Expr::member(item, "value"), true),',
     replace: "                    true => (item, true),",
     tests: ["test/corpus.test.ts", "-t", "static_mut"],
@@ -240,7 +248,7 @@ export const mutations: Mutation[] = [
   {
     name: "returned-field-write",
     breaks: "a field of what a call's `&mut` points to can't be written",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "                    (None, None) if self.returned(lhs) => self.referent(lhs, out)?,\n",
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "user_deref|returned_references"],
@@ -312,7 +320,7 @@ export const mutations: Mutation[] = [
   {
     name: "closure-stepped-iterators",
     breaks: "a closure's body doesn't find its own stepped iterators, and `it.next()` in one is rejected",
-    file: "src/lower.rs",
+    file: "src/lower/bodies.rs",
     find: "            Nested::Closure { names } => {\n                self.stepped.extend(own);\n",
     replace: "            Nested::Closure { names } => {\n",
     tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
@@ -328,7 +336,7 @@ export const mutations: Mutation[] = [
   {
     name: "drop-ref-parameter",
     breaks: "a parameter bound by `ref` isn't dropped as its function ends",
-    file: "src/lower.rs",
+    file: "src/lower/bodies.rs",
     find: "                        if self.has_drops(param.ty) {\n                            self.own(*var, Expr::var(&name), param.ty, pat.span, out)?;\n",
     replace: "                        if mode.0 == ByRef::No && self.has_drops(param.ty) {\n                            self.own(*var, Expr::var(&name), param.ty, pat.span, out)?;\n",
     tests: ["test/corpus.test.ts", "-t", "drop_params"],
@@ -736,7 +744,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-index-each-use",
     breaks: "`let r = &mut v[i]; i = 2; *r += 10` writes `v[2]`: the index is evaluated at each use, not where it's borrowed",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "                let index = if index.is_constant() {\n",
     replace: "                let index = if true || index.is_constant() {\n",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_local"],
@@ -744,7 +752,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-rebound",
     breaks: "`let c = &mut cur.count; cur = &mut b; *c += 1` changes `b`: the place follows the variable, not the object it held",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "Ok(self.fixed(place, rebound, out))",
     replace: "Ok(self.fixed(place, false, out))",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_local"],
@@ -752,7 +760,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-rebound-element",
     breaks: "`let x = &mut cur[0]; cur = &mut b; *x += 1` of a `Vec` changes `b[0]`: `index_mut(&mut *cur, 0)` hides that it's through `cur`",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "ExprKind::Field { lhs, .. } | ExprKind::Index { lhs, .. } | ExprKind::Borrow { arg: lhs, .. } => {",
     replace: "ExprKind::Field { lhs, .. } | ExprKind::Index { lhs, .. } => {",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_local"],
@@ -760,7 +768,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-field-rebound",
     breaks: "`let x = &mut h.list[0]; h.list = &mut b; *x += 1` changes `b`: a reference in a field is taken to stay put",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "                    }\n                    _ => true,\n                }\n        };\n        if followed && reassignable(e) {",
     replace: "                    }\n                    ExprKind::Field { .. } => false,\n                    _ => true,\n                }\n        };\n        if followed && reassignable(e) {",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_l"],
@@ -768,7 +776,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-element-rebound",
     breaks: "`let x = &mut refs[0][0]; refs[0] = &mut b; *x += 1` changes `b`: only a variable's or a field's reference is taken to change",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "                    }\n                    _ => true,\n                }\n        };\n        if followed && reassignable(e) {",
     replace: "                    }\n                    ExprKind::Field { .. } => true,\n                    _ => false,\n                }\n        };\n        if followed && reassignable(e) {",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_l"],
@@ -776,7 +784,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-loop-rebound",
     breaks: "`for x in cur.iter_mut() { cur = &mut b; *x += 1 }` changes `b`: the loop follows `cur`, not the collection it started with",
-    file: "src/lower.rs",
+    file: "src/lower/loops.rs",
     find: "        let place = if self.through_rebound(items, true) {",
     replace: "        let place = if false && self.through_rebound(items, true) {",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_loop"],
@@ -800,7 +808,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-loop-unchecked",
     breaks: "`for x in &mut v[3..9]` of four items runs to the end instead of panicking",
-    file: "src/lower.rs",
+    file: "src/lower/loops.rs",
     find: "let end = self.spill(\"end\", Expr::call(Expr::var(\"$sliceEnd\"), args), out);",
     replace: "let end = if args.len() == 3 { args.pop().unwrap() } else { length };",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_loop_bounds"],
@@ -808,7 +816,7 @@ export const mutations: Mutation[] = [
   {
     name: "mut-ref-as-value",
     breaks: "`go(y)` of a `&mut` in a variable, a generic `T`, passes its place's value, which `*self += 1` can't write",
-    file: "src/lower.rs",
+    file: "src/lower/places.rs",
     find: "            && self.locals.aliases.contains(&id)\n            && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))",
     replace: "            && self.locals.aliases.contains(&id)\n            && false",
     tests: ["test/diagnostics.test.ts", "-t", "passed as a generic value"],
@@ -816,7 +824,7 @@ export const mutations: Mutation[] = [
   {
     name: "ref-mut-let-refused",
     breaks: "`if let Some(n) = p { *n += 1 }`, of a `&mut` to a `let` variable, is refused",
-    file: "src/lower.rs",
+    file: "src/lower/patterns.rs",
     find: "&& self.is_let(&b.place)",
     replace: "&& false && self.is_let(&b.place)",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_local"],
@@ -824,7 +832,7 @@ export const mutations: Mutation[] = [
   {
     name: "ref-mut-object-let",
     breaks: "`*n = P { .. }` of a `ref mut` binding of `*cur`, a `&mut P` in a `let mut`, assigns `cur` instead of replacing `a`",
-    file: "src/lower.rs",
+    file: "src/lower/patterns.rs",
     find: "matches!(*b.ty.kind(), ty::Ref(_, inner, _) if !self.is_object(inner))",
     replace: "matches!(*b.ty.kind(), ty::Ref(..))",
     tests: ["test/diagnostics.test.ts", "-t", "ref mut through a reference variable"],

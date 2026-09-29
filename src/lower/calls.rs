@@ -358,11 +358,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ExprKind::Borrow { arg: place, .. } = self.thir[self.strip(args[0])].kind else {
                 return Err(self.unsupported(span, "this assignment"));
             };
-            if self.slots_write(place) {
+            if let Some(target) = self.slot_place(place) {
                 let value = self.expr(args[1], out)?;
                 let ty = self.thir[place].ty;
-                let write = |this: &mut Self, current| this.binary(op, current, value.clone(), None, ty, span);
-                self.slot_write(place, &write, span, out)?;
+                let value = self.binary(op, target.read(), value, None, ty, span)?;
+                target.write(value, self.js_span(span), out);
                 return Ok(Expr::undefined());
             }
             // `*m.entry(k).or_insert(0) += n` with a `&u32` `n`: as with a `u32` (ADR 0059).

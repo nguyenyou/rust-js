@@ -23,9 +23,10 @@ If `a()` and `b()` have side effects, we've changed the program.
 
 ## Decision
 
-Amended by [ADR 0084](0084-owned-phases-and-host-boundaries.md): operand
-sequencing now uses actual prerequisite statements, not `is_simple` predictions.
-The evaluation-order contract below is unchanged.
+Amended by [ADR 0084](0084-owned-phases-and-host-boundaries.md): operand and
+conditional sequencing now use actual prerequisite statements, not `is_simple`
+predictions. `is_simple` is a readability heuristic; points 1–2 below describe
+the original implementation. The evaluation-order contract is unchanged.
 
 1. **`is_simple(e)`** answers: "Can `e` become a JS expression with no
    statements before it?" Literals, variables, operators, calls with simple
@@ -75,3 +76,8 @@ code (`fib(n - 1) + fib(n - 2)`) has none.
   round, before the test. Both had run otherwise: the call always, and the
   condition read a variable before its declaration. Found by rustc's
   `lazy-and-or.rs` (`lazy_effects.rs`).
+- Ternary candidates and `matches!` guards obey the same rule. Branch setup,
+  calls and copy-back run only after the condition or pattern selects them.
+  `if take { bump(&mut x) } else { 7 }` must leave `x` alone when `take` is
+  false. The lowerer inspects both branches' actual `Evaluation`s and emits
+  branch-local statements when needed (`conditional_regions.rs`).
