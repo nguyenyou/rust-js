@@ -23,6 +23,8 @@ pub(super) struct Recognition<'a, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub typing_env: ty::TypingEnv<'tcx>,
     pub trait_impls: &'a [DefId],
+    /// What the crate's libraries export (ADR 0100).
+    pub foreign: &'a super::library::Foreign<'a, 'tcx>,
 }
 
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
@@ -825,7 +827,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_user_impl(&self, tr: ty::TraitRef<'tcx>) -> bool {
         let tr = self.tcx.erase_and_anonymize_regions(tr);
         matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
-            Ok(ImplSource::UserDefined(imp)) if self.trait_impls.contains(&imp.impl_def_id))
+            Ok(ImplSource::UserDefined(imp))
+                if self.trait_impls.contains(&imp.impl_def_id) || self.foreign.has_impl(imp.impl_def_id))
     }
 
     pub(super) fn json_type(&self, ty: Ty<'tcx>) -> Option<Json> {
@@ -1222,6 +1225,18 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         [sym::core, sym::alloc, sym::std].contains(&self.tcx.crate_name(id.krate))
     }
 
+    /// Is `id` the standard library's: std, core, alloc, or a crate rustc's
+    /// sysroot holds beside them, as `hashbrown`, which std's maps are made of?
+    pub(super) fn in_sysroot(&self, id: DefId) -> bool {
+        self.is_std(id) || {
+            let sysroots: Vec<&std::path::Path> = self.tcx.sess.opts.sysroot.all_paths().collect();
+            self.tcx
+                .used_crate_source(id.krate)
+                .paths()
+                .any(|path| sysroots.iter().any(|sysroot| path.starts_with(sysroot)))
+        }
+    }
+
     pub(super) fn is_derived_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
         let tr = ty::TraitRef::new_from_args(self.tcx, trait_id, self.args_of(trait_id, ty));
         let tr = self.tcx.erase_and_anonymize_regions(tr);
@@ -1366,8 +1381,12 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     }
 }
 
-pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
+/// Is `id` a trait whose impls are passed as dictionaries (ADR 0049)? One of
+/// the crate's own, or a library's (ADR 0100), which its consumers must pass
+/// as it takes them, and the std traits rust-js calls.
+pub(super) fn operational(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_>, id: DefId) -> bool {
     id.is_local()
+        || foreign.in_library(id)
         || tcx.is_lang_item(id, LangItem::Copy)
         || tcx.is_lang_item(id, LangItem::Clone)
         || tcx.is_lang_item(id, LangItem::PartialEq)
@@ -1380,8 +1399,8 @@ pub(super) fn operational(tcx: TyCtxt<'_>, id: DefId) -> bool {
         || serde_trait(tcx, id).is_some()
 }
 
-pub(super) fn implementable(tcx: TyCtxt<'_>, id: DefId) -> bool {
-    operational(tcx, id)
+pub(super) fn implementable(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_>, id: DefId) -> bool {
+    operational(tcx, foreign, id)
         || tcx.is_diagnostic_item(sym::From, id)
         || tcx.is_diagnostic_item(sym::TryFrom, id)
         || tcx.is_diagnostic_item(sym::Eq, id)

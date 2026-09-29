@@ -12,6 +12,7 @@ use rustc_middle::traits::ImplSource;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
+use std::collections::HashMap;
 
 /// A trait whose bounds take dictionaries (ADR 0049): the crate's own, and
 /// the std ones rust-js has dictionaries for (ADR 0052).
@@ -29,7 +30,7 @@ pub(super) use super::recognition::implementable;
 /// `a += b` call on a type of the crate's own.
 pub(super) use super::recognition::is_operator;
 
-pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
+pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_>) -> bool {
     let mut valid = true;
     for id in tcx.hir_crate_items(()).definitions() {
         if bindings::is_binding(tcx, id.to_def_id()) {
@@ -82,7 +83,7 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
             let mut names = std::collections::HashSet::new();
             for (predicate, span) in tcx.explicit_super_predicates_of(id).iter_identity_copied() {
                 if let ty::ClauseKind::Trait(p) = predicate.kind().skip_binder()
-                    && operational(tcx, p.trait_ref.def_id)
+                    && operational(tcx, foreign, p.trait_ref.def_id)
                 {
                     let name = tcx.item_name(p.trait_ref.def_id).to_string();
                     if name == "__proto__" || !names.insert(name) {
@@ -112,10 +113,14 @@ pub(super) fn validate(tcx: TyCtxt<'_>) -> bool {
 }
 
 /// Signature order, including parent impl bounds. Never depend on body usage.
-pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tcx>> {
+pub(super) fn bounds<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    foreign: &super::library::Foreign<'_, 'tcx>,
+    id: DefId,
+) -> Vec<ty::TraitRef<'tcx>> {
     let mut result = Vec::new();
     if let Some(trait_id) = tcx.trait_of_assoc(id)
-        && operational(tcx, trait_id)
+        && operational(tcx, foreign, trait_id)
     {
         result.push(ty::TraitRef::identity(tcx, trait_id));
     }
@@ -132,7 +137,7 @@ pub(super) fn bounds<'tcx>(tcx: TyCtxt<'tcx>, id: DefId) -> Vec<ty::TraitRef<'tc
             let partial_eq = tcx.require_lang_item(LangItem::PartialEq, tcx.def_span(id));
             tr = ty::TraitRef::new(tcx, partial_eq, [tr.self_ty(), tr.self_ty()]);
         }
-        if operational(tcx, tr.def_id) && !result.contains(&tr) {
+        if operational(tcx, foreign, tr.def_id) && !result.contains(&tr) {
             result.push(tr);
         }
     }
@@ -177,7 +182,7 @@ fn js_word(text: &str) -> String {
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn evidence_params(&mut self, id: DefId) -> Vec<js::Pattern> {
-        let mut params: Vec<js::Pattern> = bounds(self.tcx, id)
+        let mut params: Vec<js::Pattern> = bounds(self.tcx, self.krate.foreign, id)
             .into_iter()
             .map(|tr| {
                 // `writeT` and `readT`, as a generic codec's (ADR 0081).
@@ -207,7 +212,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Some(value);
         }
         // A std trait's dictionary, like `Copy`'s, has no supertraits in it.
-        if !from.def_id.is_local() {
+        if !self.is_rust_trait(from.def_id) {
             return None;
         }
         for (clause, _) in self
@@ -307,8 +312,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             )]));
         }
         let selected = self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr));
+        // The crate's own impl's accessor, or one a library exports (ADR 0100).
         if let Ok(ImplSource::UserDefined(imp)) = selected
-            && self.krate.trait_impls.contains(&imp.impl_def_id)
+            && (self.krate.trait_impls.contains(&imp.impl_def_id) || self.krate.foreign.item(imp.impl_def_id).is_some())
         {
             let callee = self.fn_ref(imp.impl_def_id);
             let args = self.evidence_args(imp.impl_def_id, imp.args, span)?;
@@ -318,7 +324,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn evidence_args(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
-        let mut values = bounds(self.tcx, id)
+        let mut values = bounds(self.tcx, self.krate.foreign, id)
             .into_iter()
             .map(|bound| {
                 let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
@@ -328,7 +334,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Each drop function it takes: a type's with nothing to drop is none,
         // left out at the end (ADR 0098).
         let mut drops = Vec::new();
-        for &index in self.krate.drop_params.get(&id).into_iter().flatten() {
+        let given = match self.krate.foreign.item(id) {
+            Some(item) => item.drops.as_slice(),
+            None => self.krate.drop_params.get(&id).map_or(&[][..], Vec::as_slice),
+        };
+        for &index in given {
             drops.push(self.drop_function(args.type_at(index as usize), span)?);
         }
         while matches!(drops.last(), Some(None)) {
@@ -362,7 +372,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             None => generic_args,
         };
         let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
-        if matches!(tr.self_ty().kind(), ty::Dynamic(..)) && operational(self.tcx, trait_id) {
+        if matches!(tr.self_ty().kind(), ty::Dynamic(..)) && operational(self.tcx, self.krate.foreign, trait_id) {
             let mut values = values;
             let receiver = values.remove(0);
             // The pair is read twice, so one with effects goes in a `const`
@@ -384,7 +394,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             )));
         }
         if let Some(instance) = ty::Instance::try_resolve(self.tcx, self.typing_env, id, generic_args)?
-            && self.krate.fns.contains_key(&instance.def_id())
+            && self.is_rust_fn(instance.def_id())
             && self.tcx.trait_of_assoc(instance.def_id()).is_none()
         {
             let mut values = values;
@@ -423,11 +433,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(None);
         }
         // A std trait's dictionary has only its required methods.
-        if operational(self.tcx, trait_id) && !trait_id.is_local() && self.tcx.defaultness(id).has_value() {
+        if operational(self.tcx, self.krate.foreign, trait_id)
+            && !self.is_rust_trait(trait_id)
+            && self.tcx.defaultness(id).has_value()
+        {
             let what = format!("calling `{}`", self.tcx.def_path_str(id));
             return Err(self.unsupported(span, &what));
         }
-        if operational(self.tcx, trait_id) {
+        if operational(self.tcx, self.krate.foreign, trait_id) {
             let dictionary = self.dictionary(tr, span)?;
             return Ok(Some(Expr::call(
                 Expr::member(dictionary, bindings::fn_name(self.tcx, id)),
@@ -437,10 +450,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(None)
     }
 
+    /// A trait rust-js compiled: the crate's own, or a library's (ADR 0100).
+    /// Any other is std's, whose dictionaries rust-js makes as it knows them.
+    pub(super) fn is_rust_trait(&self, id: DefId) -> bool {
+        id.is_local() || self.krate.foreign.in_library(id)
+    }
+
     pub(super) fn dynamic_trait(&self, ty: Ty<'tcx>) -> Option<DefId> {
         let inner = self.pointee(ty);
         match inner.kind() {
-            ty::Dynamic(predicates, ..) => predicates.principal_def_id().filter(|id| id.is_local()),
+            ty::Dynamic(predicates, ..) => predicates.principal_def_id().filter(|&id| self.is_rust_trait(id)),
             _ => None,
         }
     }
@@ -478,7 +497,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A pointer of the crate's own, as `#[derive(CoercePointee)]` makes
         // one, would hold a `dyn`'s value and impl where it holds the value.
         if let ty::Adt(adt, _) = target.kind()
-            && adt.did().is_local()
+            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()))
         {
             return Err(self.unsupported(span, &format!("unsizing a `{target}`")));
         }
@@ -494,7 +513,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let tail = self.tcx.struct_tail_for_codegen(pointee, self.typing_env);
         if pointee.is_adt()
             && matches!(tail.kind(), ty::Dynamic(traits, ..)
-                if traits.principal_def_id().is_some_and(|id| id.is_local()) || self.is_dyn_debug(tail))
+                if traits.principal_def_id().is_some_and(|id| self.is_rust_trait(id)) || self.is_dyn_debug(tail))
         {
             return Err(self.unsupported(span, &format!("a `{pointee}`, whose last field is a `dyn`")));
         }
@@ -544,7 +563,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .iter_instantiated_copied(self.tcx, tr.args)
         {
             if let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder()
-                && operational(self.tcx, predicate.trait_ref.def_id)
+                && operational(self.tcx, self.krate.foreign, predicate.trait_ref.def_id)
             {
                 let dictionary = self.dictionary(predicate.trait_ref, span)?;
                 props.push(Prop::Field(
@@ -559,7 +578,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A std trait's provided methods, like `Clone::clone_from`,
             // aren't in its dictionary: nothing calls them through it.
-            if !tr.def_id.is_local() && self.tcx.defaultness(item.def_id).has_value() {
+            if !self.is_rust_trait(tr.def_id) && self.tcx.defaultness(item.def_id).has_value() {
                 continue;
             }
             if self
@@ -579,6 +598,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, item.def_id, args)?
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
             let method = instance.def_id();
+            // A library's trait's default, whose body is the library's (ADR 0100).
+            if self.krate.foreign.in_library(method) {
+                let what = format!(
+                    "implementing another crate's trait without its default `{}`: write the method in the impl",
+                    self.tcx.def_path_str(method)
+                );
+                return Err(self.unsupported(span, &what));
+            }
             if !self.krate.fns.contains_key(&method) {
                 return Err(self.unsupported(span, &format!("trait method `{}`", self.tcx.def_path_str(method))));
             }
@@ -599,13 +626,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 - usize::from(self.formatter_param(method).is_some());
             let args: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = args.iter().map(|name| Expr::var(name)).collect();
-            // A default body has a Self dictionary. Build its thunk without
-            // recursively forcing the dictionary currently being assembled.
-            let mut evidence = Vec::new();
-            for bound in bounds(self.tcx, method) {
-                let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, instance.args);
-                evidence.push(self.dictionary(bound, span)?);
-            }
+            // Everything the method takes that its caller through the dictionary
+            // doesn't give: its dictionaries, then its drops (ADR 0098), which
+            // are this impl's own.
+            let evidence = self.evidence_args(method, instance.args, span)?;
             let value = if evidence.is_empty() {
                 callee
             } else {
@@ -643,7 +667,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .at(js::Span::NONE),
             );
             self.runtime.insert(Helper::TraitImpl);
-            let keys = Expr::array(self.evidence.iter().map(|(_, value)| value.clone()).collect());
+            // One dictionary for each set of what it's given: its dictionaries,
+            // and its drops, which may be none.
+            let keys = Expr::array(
+                self.evidence
+                    .iter()
+                    .map(|(_, value)| value.clone())
+                    .chain(self.given_drops().iter().map(|name| Expr::var(name)))
+                    .collect(),
+            );
             let make = Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(object)).at(js::Span::NONE)]);
             body.push(
                 StmtKind::Return(Some(Expr::call(
@@ -669,20 +701,52 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn default_method(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>) -> R<Expr> {
         let span = self.tcx.def_span(id);
         let mut specialized = Vec::new();
-        for bound in bounds(self.tcx, id) {
+        for bound in bounds(self.tcx, self.krate.foreign, id) {
             let concrete = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
             specialized.push((bound, self.dictionary(concrete, span)?));
+        }
+        // Its trait's type parameters, `Self` among them, drop as the impl's
+        // arguments for them do, with the impl's drops (ADR 0098): each is
+        // made here, and the body is given it by name.
+        let mut made = Vec::new();
+        let mut drops = HashMap::new();
+        let generics = self.tcx.generics_of(id);
+        for (index, arg) in args.iter().enumerate() {
+            let Some(ty) = arg.as_type() else {
+                continue;
+            };
+            let Some(drop) = self.drop_function(ty, span)? else {
+                continue;
+            };
+            let name = match &drop.kind {
+                js::ExprKind::Var(name) => name.clone(),
+                _ => {
+                    let name = self.fresh(&format!("drop{}", generics.param_at(index, self.tcx).name));
+                    made.push((index as u32, StmtKind::Const(name.clone(), drop).at(js::Span::NONE)));
+                    name
+                }
+            };
+            drops.insert(index as u32, name);
         }
         let body = self.krate.bodies[&id];
         let nested = super::Nested::Default {
             evidence: specialized,
             self_args: args,
             typing_env: ty::TypingEnv::post_analysis(self.tcx, id),
+            drops,
         };
         let enclosing = self.enter_body(&body.thir, id, nested)?;
-        let mut out = Vec::new();
-        let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut out)?;
+        let mut rest = Vec::new();
+        let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest)?;
+        // Only the drops it uses: most defaults drop nothing of their `Self`.
+        let used = self.used_drops();
         self.leave_body(enclosing)?;
+        let mut out: Vec<_> = made
+            .into_iter()
+            .filter(|(index, _)| used.contains(index))
+            .map(|(_, stmt)| stmt)
+            .collect();
+        out.extend(rest);
         Ok(if is_async {
             Expr::async_arrow(params, out)
         } else {
@@ -712,7 +776,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .explicit_super_predicates_of(id)
                 .iter_identity_copied()
                 .all(|(clause, _)| match clause.kind().skip_binder() {
-                    ty::ClauseKind::Trait(p) if operational(self.tcx, p.trait_ref.def_id) => {
+                    ty::ClauseKind::Trait(p) if operational(self.tcx, self.krate.foreign, p.trait_ref.def_id) => {
                         self.readonly_dyn(p.trait_ref.def_id)
                     }
                     _ => true,

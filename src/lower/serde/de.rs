@@ -20,7 +20,7 @@
 //! A tagged or untagged enum is read as serde reads one, through the value
 //! read first and kept (ADR 0079).
 
-use super::{Attrs, Rule, SerdeDefault, Tagging, serde_trait};
+use super::{Attrs, Rule, SerdeDefault, Tagging};
 use crate::js::{self, Expr, Op, Pattern, Prop, Stmt, StmtKind};
 use crate::lower::bindings::variant_name;
 use crate::lower::representation::Num;
@@ -49,14 +49,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The function that reads a `ty` value from JSON, the derived
     /// `Deserialize::deserialize` of the crate's own type, if it has one.
     fn deserialize_fn(&self, ty: Ty<'tcx>) -> Option<DefId> {
-        let ty::Adt(adt, _) = ty.kind() else {
-            return None;
-        };
-        self.krate.trait_impls.iter().copied().find_map(|imp| {
-            let tr = self.tcx.impl_trait_ref(imp).instantiate_identity();
-            let same = matches!(tr.self_ty().kind(), ty::Adt(a, _) if a.did() == adt.did());
-            (same && serde_trait(self.tcx, tr.def_id) == Some(false)).then(|| self.tcx.associated_item_def_ids(imp)[0])
-        })
+        self.codec_fn(ty, false)
     }
 
     fn use_reader(&mut self) {

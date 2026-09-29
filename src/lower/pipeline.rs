@@ -39,7 +39,6 @@ pub fn lower_crate<'tcx>(
 ) -> Option<Unlinked> {
     let sources = super::sources::CapturedSources::new(tcx);
     let AnalyzedCrate {
-        external,
         bodies,
         closures,
         trait_impls,
@@ -53,13 +52,17 @@ pub fn lower_crate<'tcx>(
         taken,
         fns,
         mut failed,
-        called_from_elsewhere,
+        mut called_from_elsewhere,
         tests,
         paths,
         mutated,
         changed_vecs,
         drop_params,
-    } = analyze_crate(tcx, all_bodies, dependencies)?;
+    } = analyze_crate(tcx, all_bodies, dependencies, export_library)?;
+    // A library exports what its consumers can reach (ADR 0100).
+    if export_library {
+        called_from_elsewhere.extend(fns.keys().copied().filter(|&id| super::library::reachable(tcx, id)));
+    }
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
     for &def_id in consts.iter().filter(|&&d| !is_thread_local(tcx, d)) {
@@ -107,8 +110,10 @@ pub fn lower_crate<'tcx>(
     // Lower each body once. Cross-module references have symbolic names until
     // the link step knows exactly which imports and local names survive.
     let mut lowered_items = Vec::new();
+    let foreign = super::library::Foreign::new(tcx, dependencies);
     let crate_facts = CrateFacts {
-        external: &external,
+        foreign: &foreign,
+        library: export_library,
         sources: &sources,
         mutated: &mutated,
         changed_vecs: &changed_vecs,
@@ -132,11 +137,14 @@ pub fn lower_crate<'tcx>(
         // Then the codecs something uses, a round at a time, each in the
         // order they're declared. A shared crate derives both for its types,
         // so one that's never used isn't lowered: its type needn't be one
-        // rust-js reads or writes.
+        // rust-js reads or writes. A library's consumers may use one they can
+        // reach (ADR 0100).
         if next == work.len() {
             let round: Vec<_> = codecs
                 .iter()
-                .filter(|&&id| used.contains(&id) && queued.insert(id))
+                .filter(|&&id| {
+                    (used.contains(&id) || (export_library && super::library::reachable(tcx, id))) && queued.insert(id)
+                })
                 .map(|&id| (id, None))
                 .collect();
             if round.is_empty() {
@@ -224,7 +232,14 @@ pub fn lower_crate<'tcx>(
     let roots = edges
         .clone()
         .filter(|(from, _)| !derived.contains(from))
-        .map(|(_, to)| to);
+        .map(|(_, to)| to)
+        // A library's consumers may reach one (ADR 0100).
+        .chain(
+            derived
+                .iter()
+                .copied()
+                .filter(|&id| export_library && super::library::reachable(tcx, id)),
+        );
     let reached = crate::reachability::reachable(roots, edges);
     let mut pass = Pass::default();
     for (def_id, mut lowered) in lowered_items
@@ -399,7 +414,7 @@ pub fn lower_crate<'tcx>(
         })
         .collect();
     tcx.dcx().has_errors().is_none().then_some(Unlinked {
-        library: export_library.then(|| super::library::exports(tcx, &fns)),
+        library: export_library.then(|| super::library::exports(tcx, &fns, &drop_params, &trait_impls, dependencies)),
         sources: sources.output,
         modules: lowered,
         tests,

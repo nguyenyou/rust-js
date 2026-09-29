@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 pub(crate) struct Artifact {
     pub(crate) path: PathBuf,
-    pub(crate) text: String,
+    /// JS, a map, a manifest, or a library's metadata (ADR 0100).
+    pub(crate) bytes: Vec<u8>,
 }
 
 /// Constructed only after all names and contents have been validated.
@@ -32,13 +33,13 @@ fn publish(artifacts: &[Artifact], stale: &[PathBuf]) -> Result<(), String> {
     if cfg!(target_os = "wasi") {
         for a in artifacts {
             std::fs::create_dir_all(parent_dir(&a.path)).map_err(|e| e.to_string())?;
-            std::fs::write(&a.path, &a.text).map_err(|e| e.to_string())?;
+            std::fs::write(&a.path, &a.bytes).map_err(|e| e.to_string())?;
         }
         return Ok(());
     }
     let artifacts: Vec<&Artifact> = artifacts
         .iter()
-        .filter(|a| !std::fs::read(&a.path).is_ok_and(|bytes| bytes == a.text.as_bytes()))
+        .filter(|a| !std::fs::read(&a.path).is_ok_and(|bytes| bytes == a.bytes))
         .collect();
     // Stage every file next to its destination before replacing any output.
     // Keep originals for rollback on an I/O error. This is not a multi-file
@@ -58,7 +59,7 @@ fn publish(artifacts: &[Artifact], stale: &[PathBuf]) -> Result<(), String> {
                 }
             };
             staged.push(temp.clone());
-            std::fs::write(temp.join("next"), &a.text).map_err(|e| e.to_string())?;
+            std::fs::write(temp.join("next"), &a.bytes).map_err(|e| e.to_string())?;
         }
         let originals: Vec<(PathBuf, Option<Vec<u8>>)> = artifacts
             .iter()

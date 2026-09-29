@@ -207,12 +207,14 @@ impl Helper {
             Helper::TraitImpl => {
                 r#"
 function $traitImpl(cache, keys, make) {
+  // Each key is a dictionary or a drop, held weakly: a drop made for one call
+  // goes when it does. No drop, `undefined`, is keyed by this function.
   for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
+    const key = keys[i] ?? $traitImpl;
     if (!cache.has(key)) cache.set(key, new WeakMap());
     cache = cache.get(key);
   }
-  const key = keys[keys.length - 1];
+  const key = keys[keys.length - 1] ?? $traitImpl;
   if (!cache.has(key)) cache.set(key, make());
   return cache.get(key);
 }

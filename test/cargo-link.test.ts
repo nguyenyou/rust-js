@@ -10,7 +10,9 @@ const pin = readFileSync(join(root, "rust-toolchain.toml"), "utf8").match(/chann
 // What rust-js checks programs for (ADR 0090), so what their dependencies are built for.
 const target = "wasm32-unknown-unknown";
 
-test("a real Cargo dependency links scalar functions and function values into JS", async () => {
+// A library is compiled by rust-js, which writes its JS, its manifest, and
+// the metadata its consumers' rustc reads, from one build (ADR 0100).
+test("a real Cargo dependency links functions and function values into JS", async () => {
   const dir = fixture("cargo-shared-library");
   writeFileSync(join(dir, "Cargo.toml"), '[workspace]\nmembers = ["shared", "app"]\nresolver = "2"\n');
   for (const name of ["shared", "app"]) {
@@ -26,16 +28,12 @@ test("a real Cargo dependency links scalar functions and function values into JS
   const graph = await planCargoLibraries({ manifestPath, toolchain: pin, target });
   expect(graph.libraries.map(p => p.name)).toEqual(["shared", "app"]);
   const libraryManifest = join(dir, "js/shared/manifest.json");
+  const metadata = join(dir, "js/shared/libshared.rmeta");
   const output = join(dir, "js/app/lib.js"), manifest = join(dir, "js/app/manifest.json");
-  function compile() {
-    const messages = run(["cargo", `+${pin}`, "check", "--frozen", "--lib", "--target", target, "--manifest-path", manifestPath, "--message-format=json"])
-      .trim().split("\n").map(line => JSON.parse(line));
-    const shared = messages.find(m => m.reason === "compiler-artifact" && m.target.name === "shared");
-    const metadata = shared.filenames.find((p: string) => p.endsWith(".rmeta"));
-    run([compiler, source, "-o", join(dir, "js/shared/lib.js"), "--library", "--manifest", libraryManifest, "--", "--crate-name", "shared"]);
-    return [compiler, join(dir, "app/src/lib.rs"), "-o", output, "--manifest", manifest, "--dependency", libraryManifest, "--", "--crate-name", "app", "--extern", `model=${metadata}`, "-L", `dependency=${join(dir, "target", target, "debug/deps")}`];
-  }
-  let command = compile();
+  const library = () => run([compiler, source, "-o", join(dir, "js/shared/lib.js"), "--library", "--manifest", libraryManifest, "--", "--crate-name", "shared", `--emit=metadata=${metadata}`]);
+  // Cargo's alias for it, `model`, doesn't change the crate it is.
+  const command = [compiler, join(dir, "app/src/lib.rs"), "-o", output, "--manifest", manifest, "--dependency", libraryManifest, "--", "--crate-name", "app", "--extern", `model=${metadata}`];
+  library();
   run(command);
   const native = () => Number(run(["cargo", `+${pin}`, "run", "--frozen", "--quiet", "--manifest-path", manifestPath]));
   const javascript = () => Number(run([process.execPath, "--eval", `const m = await import(${JSON.stringify(output)}); console.log(m.run());`]));
@@ -48,7 +46,7 @@ test("a real Cargo dependency links scalar functions and function values into JS
   expect(consumer.sources).toContain(source);
   writeFileSync(source, 'pub fn increment(n: u32) -> u32 { n + 2 }\npub fn positive(n: i32) -> bool { n > 0 }\n');
   expect(() => run(command)).toThrow("dependency artifact changed");
-  command = compile();
+  library();
   run(command);
   expect(javascript()).toBe(native());
   expect(javascript()).toBe(43);
@@ -58,8 +56,7 @@ test("a real Cargo dependency links scalar functions and function values into JS
   for (const [edit, message] of [
     [(m: any) => m.library.version = 999, "unsupported library ABI"],
     [(m: any) => m.compiler.toolchain = "wrong", "incompatible dependency compiler identity"],
-    [(m: any) => m.library.functions[0].signature.output = "bool", "dependency signature mismatch"],
-    [(m: any) => m.library.functions = [], "does not export"],
+    [(m: any) => m.library.items = [], "isn't one of the items `shared`'s manifest exports"],
   ] as const) {
     const contract = JSON.parse(original);
     edit(contract);
@@ -73,8 +70,8 @@ test("a real Cargo dependency links scalar functions and function values into JS
   expect(readFileSync(output, "utf8")).toBe(previous);
 }, 120_000);
 
-test("scalar linkage supports sibling outputs and rejects generic and aggregate APIs", () => {
-  const dir = fixture("scalar-library");
+test("a library's generic and aggregate functions link too, from a sibling output", () => {
+  const dir = fixture("sibling-library");
   const source = join(dir, "shared.rs"), metadata = join(dir, "libshared.rmeta");
   writeFileSync(source, `
     pub fn notify() {}
@@ -82,19 +79,16 @@ test("scalar linkage supports sibling outputs and rejects generic and aggregate 
     pub fn generic<T>(value: T) -> T { value }
     pub fn pair() -> (u32, u32) { (1, 2) }
   `);
-  run(["rustc", `+${pin}`, source, "--crate-name", "shared", "--crate-type=lib", "--emit=metadata", `--target=${target}`, "-o", metadata]);
   const libraryManifest = join(dir, "shared.json");
-  run([compiler, source, "-o", join(dir, ".shared.js"), "--library", "--manifest", libraryManifest]);
+  run([compiler, source, "-o", join(dir, ".shared.js"), "--library", "--manifest", libraryManifest, "--", "--crate-name", "shared", `--emit=metadata=${metadata}`]);
   const app = join(dir, "app.rs"), output = join(dir, "app.js");
   const command = [compiler, app, "-o", output, "--dependency", libraryManifest, "--", "--extern", `shared=${metadata}`];
+  const result = () => run([process.execPath, "--eval", `const m = await import(${JSON.stringify(output)}); console.log(m.run());`]).trim();
   writeFileSync(app, "pub fn run() -> bool { shared::notify(); shared::negate(false) }");
   run(command);
   expect(readFileSync(output, "utf8")).toContain('from "./.shared.js"');
-  expect(run([process.execPath, "--eval", `const m = await import(${JSON.stringify(output)}); console.log(m.run());`]).trim()).toBe("true");
-  const previous = readFileSync(output, "utf8");
-  for (const expression of ["shared::generic(1u32)", "shared::pair().0"]) {
-    writeFileSync(app, `pub fn run() -> u32 { ${expression} }`);
-    expect(() => run(command)).toThrow("does not export");
-    expect(readFileSync(output, "utf8")).toBe(previous);
-  }
+  expect(result()).toBe("true");
+  writeFileSync(app, "pub fn run() -> u32 { shared::generic(1u32) + shared::pair().1 }");
+  run(command);
+  expect(result()).toBe("3");
 }, 120_000);

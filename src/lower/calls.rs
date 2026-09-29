@@ -41,11 +41,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Err(self.unsupported(f.span, "calling this"));
         };
-        if self.krate.external.contains_key(&(self.module, def_id)) {
-            let callee = self.expr(fun, out)?;
-            let values = self.operands(args, out)?;
-            return Ok(Expr::call(callee, values));
-        }
         // serde_json's `Value` and what makes one (ADR 0083).
         if let Some(value) = self.json_call(def_id, generic_args, args, span, out)? {
             return Ok(value);
@@ -55,7 +50,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (def_id, generic_args) = self
             .resolve_into(def_id, generic_args)
             .unwrap_or((def_id, generic_args));
-        if self.krate.fns.contains_key(&def_id)
+        if self.is_rust_fn(def_id)
             && self.tcx.trait_of_assoc(def_id).is_none()
             && args.iter().any(|&a| self.boxed_arg(a).is_some())
         {
@@ -64,7 +59,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(written);
         }
-        if self.krate.fns.contains_key(&def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
+        if self.is_rust_fn(def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
             let mut values = self.operands(args, out)?;
             // An iterator of the crate's own, given where a generic one goes,
@@ -159,10 +154,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self
             .tcx
             .trait_of_assoc(def_id)
-            .is_some_and(|id| super::traits::operational(self.tcx, id))
+            .is_some_and(|id| super::traits::operational(self.tcx, self.krate.foreign, id))
             || (self.tcx.trait_of_assoc(def_id).is_some()
                 && ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, generic_args)?
-                    .is_some_and(|i| self.krate.fns.contains_key(&i.def_id())))
+                    .is_some_and(|i| self.is_rust_fn(i.def_id())))
         {
             let mut pending = Vec::new();
             let values = self.operands(args, &mut pending)?;
@@ -202,6 +197,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .span_err(span, format!("rust-js does not support {what}: {why}")));
             }
             let path = self.tcx.def_path_str(def_id);
+            // A library's, that its manifest doesn't list (ADR 0100).
+            if let Some(why) = self.krate.foreign.unlisted(def_id) {
+                return Err(self.tcx.dcx().span_err(self.thir[fun].span, why));
+            }
             return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
         };
         // One that takes a value with a destructor, or changes a place that
@@ -1177,7 +1176,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `TryInto` as `TryFrom`, if that's a hand-written impl.
     fn resolve_into(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(DefId, ty::GenericArgsRef<'tcx>)> {
         let (method, args, implementation) = self.recognition().resolve_into(def_id, args)?;
-        self.krate.fns.contains_key(&implementation).then_some((method, args))
+        self.is_rust_fn(implementation).then_some((method, args))
     }
 
     /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
@@ -1188,7 +1187,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A function or its type's method object, imported by name when it lives
     /// in another module. The linker resolves collisions after lowering.
+    /// Is `def_id` a Rust function rust-js compiled: the crate's own, or one a
+    /// library exports (ADR 0100)?
+    pub(super) fn is_rust_fn(&self, def_id: DefId) -> bool {
+        self.krate.fns.contains_key(&def_id) || self.krate.foreign.item(def_id).is_some()
+    }
+
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
+        // A library's, imported by the name it chose (ADR 0100).
+        if let Some(item) = self.krate.foreign.item(def_id) {
+            let export = (item.from.clone(), item.export.clone());
+            self.dependencies
+                .borrow_mut()
+                .package_uses
+                .insert((self.module, export.clone()));
+            let reference = Expr::var(&self.krate.imports[&export]);
+            return match &item.member {
+                Some(method) => Expr::member(reference, method.clone()),
+                None => reference,
+            };
+        }
         self.dependencies.borrow_mut().uses.push((self.item, def_id));
         let target = &self.krate.fns[&def_id];
         if target.module != self.module {

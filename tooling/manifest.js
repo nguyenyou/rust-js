@@ -30,14 +30,16 @@ export function parseManifest(text) {
   }
   if (result.library !== undefined) {
     const library = result.library;
-    const scalar = value => ["bool", "i32", "u32"].includes(value);
-    if (!object(library) || library.version !== 1 || typeof library.name !== "string" || !library.name
+    // ADR 0100: each item another crate can reach, by rustc's key for it.
+    if (!object(library) || library.version !== 2 || typeof library.name !== "string" || !library.name
+        || typeof library.crate_hash !== "string" || !library.crate_hash
         || !Array.isArray(library.inputs) || !library.inputs.every(fingerprint)
-        || !Array.isArray(library.functions) || !library.functions.every(fn => object(fn)
-          && typeof fn.rust_path === "string" && typeof fn.export === "string" && strings(fn.module)
-          && object(fn.signature) && Array.isArray(fn.signature.inputs) && fn.signature.inputs.every(scalar)
-          && (scalar(fn.signature.output) || fn.signature.output === "unit"))) {
-      throw new Error("Invalid rust-js scalar library contract; expected library ABI 1");
+        || !strings(library.impls) || !strings(library.libraries)
+        || !Array.isArray(library.items) || !library.items.every(item => object(item)
+          && typeof item.key === "string" && typeof item.rust_path === "string" && strings(item.module)
+          && typeof item.export === "string" && (item.member === null || typeof item.member === "string")
+          && Array.isArray(item.drops) && item.drops.every(Number.isInteger))) {
+      throw new Error("Invalid rust-js library contract; expected library ABI 2");
     }
   }
   if (!path(result.input) || !path(result.output) || !paths(result.sources)

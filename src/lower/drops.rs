@@ -18,6 +18,7 @@ use rustc_middle::thir::{
 };
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty};
+use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol};
 
 use super::bindings::variant_name;
@@ -120,6 +121,14 @@ pub(super) struct Statement<'tcx> {
     temps: Vec<Temp<'tcx>>,
 }
 
+/// A function's drops while a copied default body has its own.
+pub(super) struct SwappedDrops<'tcx> {
+    params: HashMap<u32, String>,
+    used: HashSet<u32>,
+    cache: HashMap<Ty<'tcx>, Drops<'tcx>>,
+    sizes: HashMap<Ty<'tcx>, (usize, bool)>,
+}
+
 /// A function's drops, as its bodies are lowered.
 #[derive(Default)]
 pub(super) struct DropState<'tcx> {
@@ -144,10 +153,18 @@ pub(super) struct DropState<'tcx> {
     /// The function being lowered's drop functions, by the index of the
     /// type parameter each drops.
     param_drops: HashMap<u32, String>,
+    /// The type parameters whose drops the body has used.
+    used_drops: HashSet<u32>,
     part_flags: HashMap<(LocalVarId, Path), String>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Is `drop`, a type's `Drop::drop`, one rust-js runs: the crate's own, or
+    /// a library's it exports (ADR 0100)?
+    pub(super) fn runs_drop(&self, drop: DefId) -> bool {
+        drop.is_local() || self.krate.foreign.item(drop).is_some()
+    }
+
     /// What dropping a `ty` runs.
     pub(super) fn drops(&self, ty: Ty<'tcx>) -> Drops<'tcx> {
         self.drops_in(
@@ -216,10 +233,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     all(self, &mut fields, walk)
                 };
                 match own {
-                    Some(d) if d.did.is_local() => match parts(walk) {
+                    Some(d) if self.runs_drop(d.did) => match parts(walk) {
                         Drops::Unsupported(t, what) => Drops::Unsupported(t, what),
                         _ => Drops::Runs,
                     },
+                    // Another crate's, that rust-js didn't compile, or that doesn't
+                    // export it: what it runs is out of sight (ADR 0100).
+                    Some(_) if !self.recognition().in_sysroot(adt.did()) => {
+                        Drops::Unsupported(ty, "a destructor of another crate's that its manifest doesn't export")
+                    }
                     // A std type that drops what it holds its own way: an
                     // `Rc` when its last clone goes, a map its entries. A `Cell`
                     // drops the old value when it's set.
@@ -275,7 +297,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Array(item, _) | ty::Slice(item) => self.drop_size(*item, stack),
             ty::Tuple(items) => sum(self, &mut items.iter(), stack),
             ty::Adt(adt, args) => {
-                let own = usize::from(self.tcx.adt_destructor(adt.did()).is_some_and(|d| d.did.is_local()));
+                let own = usize::from(
+                    self.tcx
+                        .adt_destructor(adt.did())
+                        .is_some_and(|d| self.runs_drop(d.did)),
+                );
                 let (parts, recursive) = sum(self, &mut adt.all_fields().map(|f| f.ty(self.tcx, args)), stack);
                 (own + parts, recursive)
             }
@@ -305,7 +331,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // a list is, gets a function of its own, which calls itself for the
         // ones inside: its drop is written once, not once for each path to it.
         if let ty::Adt(adt, _) = ty.kind()
-            && adt.did().is_local()
+            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()))
             && let (size, recursive) = self.drop_size(ty, &mut Vec::new())
             && (recursive || size > 8)
         {
@@ -339,6 +365,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, made, out)?,
             // `dropT?.(value)`: the caller's drop, if its `T` has one.
             ty::Param(param) => {
+                self.drop_state.used_drops.insert(param.index);
                 let drop = Expr::var(&self.drop_state.param_drops[&param.index]);
                 let js_span = self.js_span(span);
                 out.push(
@@ -358,7 +385,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ty::Adt(adt, args) => {
                 if let Some(d) = self.tcx.adt_destructor(adt.did())
-                    && d.did.is_local()
+                    && self.runs_drop(d.did)
                 {
                     // `drop(&mut self)`: a `&mut` to what isn't an object is a
                     // box of it (ADR 0072).
@@ -872,17 +899,56 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.drop_state.param_drops.insert(index, name);
     }
 
+    /// A copied default body's drops, in place of this function's, for its
+    /// trait's type parameters, `Self` among them (ADR 0049): each is what the
+    /// impl's argument for it drops, with the impl's own drops. What was
+    /// there, and what was found with it, is given back by `restore_drops`.
+    pub(super) fn swap_drops(&mut self, drops: HashMap<u32, String>) -> SwappedDrops<'tcx> {
+        let cache = std::mem::take(&mut *self.drop_state.cache.borrow_mut());
+        let sizes = std::mem::take(&mut *self.drop_state.sizes.borrow_mut());
+        SwappedDrops {
+            params: std::mem::replace(&mut self.drop_state.param_drops, drops),
+            used: std::mem::take(&mut self.drop_state.used_drops),
+            cache,
+            sizes,
+        }
+    }
+
+    /// The type parameters whose drops the body being lowered has used.
+    pub(super) fn used_drops(&self) -> HashSet<u32> {
+        self.drop_state.used_drops.clone()
+    }
+
+    pub(super) fn restore_drops(&mut self, swapped: SwappedDrops<'tcx>) {
+        self.drop_state.param_drops = swapped.params;
+        self.drop_state.used_drops = swapped.used;
+        *self.drop_state.cache.borrow_mut() = swapped.cache;
+        *self.drop_state.sizes.borrow_mut() = swapped.sizes;
+    }
+
+    /// The drops this function is given, as it takes them: by their type
+    /// parameters' order.
+    pub(super) fn given_drops(&self) -> Vec<String> {
+        let mut given: Vec<(&u32, &String)> = self.drop_state.param_drops.iter().collect();
+        given.sort();
+        given.into_iter().map(|(_, name)| name.clone()).collect()
+    }
+
     /// The function that drops a `ty`, which a generic function is given for
     /// its type parameter: its `drop` itself, when that's all its drop is,
     /// `noisyDrop_drop`, or an arrow; a type parameter's is the one this
     /// function was given. None for a type with nothing to drop.
     pub(super) fn drop_function(&mut self, ty: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
         if let ty::Param(param) = ty.kind() {
-            return Ok(self
+            let drop = self
                 .drop_state
                 .param_drops
                 .get(&param.index)
-                .map(|name| Expr::var(name)));
+                .map(|name| Expr::var(name));
+            if drop.is_some() {
+                self.drop_state.used_drops.insert(param.index);
+            }
+            return Ok(drop);
         }
         match self.drops(ty) {
             Drops::Nothing => return Ok(None),
@@ -961,7 +1027,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() => self.drops_once(args.type_at(0)),
             ty::Adt(adt, args) => {
-                self.tcx.adt_destructor(adt.did()).is_some_and(|d| d.did.is_local())
+                self.tcx
+                    .adt_destructor(adt.did())
+                    .is_some_and(|d| self.runs_drop(d.did))
                     && adt.is_struct()
                     && adt.all_fields().all(|f| !self.has_drops(f.ty(self.tcx, args)))
             }
@@ -1267,7 +1335,7 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                 self.cx
                     .tcx
                     .adt_destructor(adt.adt_def.did())
-                    .is_some_and(|d| d.did.is_local())
+                    .is_some_and(|d| self.cx.runs_drop(d.did))
                     || adt.fields.iter().any(|f| self.cx.has_drops(self.thir[f.expr].ty))
                     || !matches!(adt.base, AdtExprBase::None)
             }
@@ -1585,7 +1653,11 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
         // call resolves to.
         if let ty::FnDef(def_id, args) = *expr.ty.kind()
             && matches!(expr.kind, ExprKind::ZstLiteral { .. })
-            && self.cx.tcx.trait_of_assoc(def_id).is_some_and(|t| t.is_local())
+            && self
+                .cx
+                .tcx
+                .trait_of_assoc(def_id)
+                .is_some_and(|t| self.cx.is_rust_trait(t))
             && args
                 .types()
                 .skip(usize::from(self.cx.tcx.trait_of_assoc(def_id).is_some()))

@@ -311,13 +311,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The function that writes a `ty` value as JSON, the derived
     /// `Serialize::serialize` of the crate's own type, if it has one.
     fn serialize_fn(&self, ty: Ty<'tcx>) -> Option<DefId> {
+        self.codec_fn(ty, true)
+    }
+
+    /// A type's derived `serialize`, or `deserialize`: the crate's own, or one
+    /// a library of it exports (ADR 0100).
+    pub(super) fn codec_fn(&self, ty: Ty<'tcx>, serialize: bool) -> Option<DefId> {
         let ty::Adt(adt, _) = ty.kind() else {
             return None;
         };
-        self.krate.trait_impls.iter().copied().find_map(|imp| {
+        let foreign = self.krate.foreign.in_library(adt.did());
+        let impls = match foreign {
+            true => self.tcx.trait_impls_in_crate(adt.did().krate),
+            false => self.krate.trait_impls,
+        };
+        impls.iter().copied().find_map(|imp| {
             let tr = self.tcx.impl_trait_ref(imp).instantiate_identity();
             let same = matches!(tr.self_ty().kind(), ty::Adt(a, _) if a.did() == adt.did());
-            (same && serde_trait(self.tcx, tr.def_id) == Some(true)).then(|| self.tcx.associated_item_def_ids(imp)[0])
+            if !same || serde_trait(self.tcx, tr.def_id) != Some(serialize) {
+                return None;
+            }
+            let method = self.tcx.associated_item_def_ids(imp)[0];
+            (!foreign || self.krate.foreign.item(method).is_some()).then_some(method)
         })
     }
 

@@ -48,7 +48,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     ) -> R<Expr> {
         let args = self.tcx.erase_and_anonymize_regions(args);
         let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args)?
-            .filter(|i| self.krate.fns.contains_key(&i.def_id()))
+            .filter(|i| self.is_rust_fn(i.def_id()))
             .ok_or_else(|| self.unsupported(span, "this implementation"))?;
         values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
         Ok(Expr::call(self.fn_ref(instance.def_id()), values))
@@ -114,7 +114,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         needs
     }
 
-    fn is_std(&self, id: DefId) -> bool {
+    /// A type rust-js compiled: the crate's own, or a library's (ADR 0100).
+    fn is_rust_adt(&self, id: DefId) -> bool {
+        id.is_local() || self.krate.foreign.in_library(id)
+    }
+
+    pub(super) fn is_std(&self, id: DefId) -> bool {
         self.recognition().is_std(id)
     }
 
@@ -199,17 +204,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.clone_parts(place, ty, span, out)
     }
 
-    /// Is `ty`, one of the crate's own, inside itself, through its fields or
-    /// what a std type holds? A std type that holds one is cloned in place.
+    /// Is `ty`, one of the crate's own or a library's (ADR 0100), inside
+    /// itself, through its fields or what a std type holds? A std type that
+    /// holds one is cloned in place.
     fn is_recursive(&self, ty: Ty<'tcx>) -> bool {
         let mut seen = Vec::new();
-        matches!(ty.kind(), ty::Adt(adt, _) if adt.did().is_local()) && self.holds(ty, ty, &mut seen)
+        matches!(ty.kind(), ty::Adt(adt, _) if self.is_rust_adt(adt.did())) && self.holds(ty, ty, &mut seen)
     }
 
     /// Does `outer` hold `target` anywhere inside it?
     fn holds(&self, outer: Ty<'tcx>, target: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
         let parts: Vec<Ty<'tcx>> = match outer.kind() {
-            ty::Adt(adt, args) if adt.did().is_local() => adt.all_fields().map(|f| f.ty(self.tcx, args)).collect(),
+            ty::Adt(adt, args) if self.is_rust_adt(adt.did()) => {
+                adt.all_fields().map(|f| f.ty(self.tcx, args)).collect()
+            }
             ty::Adt(_, args) => args.types().collect(),
             ty::Tuple(tys) => tys.to_vec(),
             ty::Array(item, _) | ty::Slice(item) | ty::Ref(_, item, _) => vec![*item],

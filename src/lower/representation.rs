@@ -276,24 +276,46 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// An enum rust-js writes as ADR 0033 says, that's `Copy`: one of the
-    /// crate's own, or `Result`.
+    /// crate's own, or a library's (ADR 0100), or `Result`.
     fn is_copy_enum(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()
-            && (adt.did().is_local() || self.is_std_adt(ty, sym::Result)))
+            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()) || self.is_std_adt(ty, sym::Result)))
             && self.is_copy(ty)
     }
 
     /// Is `ty` itself changed in place somewhere, not just a part of it?
     pub(super) fn mutated_itself(&self, ty: Ty<'tcx>) -> bool {
-        self.krate.mutated.iter().any(|&mutated| self.instance_of(ty, mutated))
+        self.crosses_crates(ty) || self.krate.mutated.iter().any(|&mutated| self.instance_of(ty, mutated))
     }
 
-    /// Is `ty` a `Vec` type something may change (ADR 0052)?
+    /// Might another crate change `ty` in place (ADR 0100)? Any crate using a
+    /// library's type might, and so might a library's consumers its own type
+    /// they can reach. This crate can't see their code, so it assumes they do,
+    /// of a type that's a JS object: a fieldless enum's string can't change.
+    /// A tuple or an array is any crate's, so in a library, or a crate using
+    /// one, any may cross.
+    fn crosses_crates(&self, ty: Ty<'tcx>) -> bool {
+        let shared = match ty.kind() {
+            ty::Adt(adt, _) => {
+                self.krate.foreign.in_library(adt.did())
+                    || (self.krate.library && super::library::reachable(self.tcx, adt.did()))
+            }
+            ty::Tuple(_) | ty::Array(..) => self.krate.library || self.krate.foreign.any(),
+            _ => false,
+        };
+        shared && self.is_object(ty)
+    }
+
+    /// Is `ty` a `Vec` type something may change (ADR 0052)? One another crate
+    /// can hold might be changed there (ADR 0100): in a library, or a crate
+    /// using one, any may be.
     pub(super) fn vec_changed(&self, ty: Ty<'tcx>) -> bool {
-        self.krate
-            .changed_vecs
-            .iter()
-            .any(|&changed| self.instance_of(ty, changed))
+        (self.krate.library || self.krate.foreign.any())
+            || self
+                .krate
+                .changed_vecs
+                .iter()
+                .any(|&changed| self.instance_of(ty, changed))
     }
 
     /// Is `ty` one of the types `general` stands for? A type mutated in a

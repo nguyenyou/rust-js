@@ -165,6 +165,27 @@ function main() {
   consume([1], noisyDrop_drop);
   consume(5);
   ```
+- **A generic trait impl is given a drop for each type parameter that isn't
+  `Copy`,** and so is each of its methods: they're called through the
+  impl's dictionary, or resolved where they're called, by callers the walk
+  for who gives what can't see, and what one drops needn't be in its own
+  body. A helper it lends its value to may drop a clone, a std method, as
+  `clear`, drops what it removes, and a default of the trait drops what
+  it's given. Only a derive whose body drops nothing isn't: `Clone`'s,
+  `Copy`'s, `Debug`'s, `Default`'s and the comparisons', and serde's,
+  whose codecs rust-js writes. A method that drops nothing is given a drop
+  it doesn't use, the price of not needing to prove it. The dictionary's
+  accessor takes the drops after its dictionaries,
+  `wrapConsume(TClone, dropT)`, is cached by both, weakly, and passes both
+  on in each method: `consume: (arg0) => wrapConsume_consume(arg0, TClone,
+  dropT)`. A default copied into it drops its trait's `Self` as the impl's
+  type does: that drop is made from the impl's, `const dropSelf = (wrap) =>
+  { dropT?.(wrap[0]); }`, and it's the body's drop for `Self`, which, as a
+  type parameter of the trait, isn't the impl's `T`. Found in review, across
+  crates, but true within one: the impl's `T` had never been dropped, and
+  then a default had dropped its `Self` with `T`'s drop. (Amended as it was done: decided first from
+  the signatures, then from each method's body, each of which missed a
+  way to drop one.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of

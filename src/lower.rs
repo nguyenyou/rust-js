@@ -193,6 +193,9 @@ enum Nested<'tcx> {
         evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
         self_args: ty::GenericArgsRef<'tcx>,
         typing_env: ty::TypingEnv<'tcx>,
+        /// The drop, by name, for each of its trait's type parameters the
+        /// impl's argument for has one (ADR 0098).
+        drops: HashMap<u32, String>,
     },
 }
 
@@ -208,6 +211,7 @@ struct Enclosing<'a, 'tcx> {
     evidence: Option<Vec<(ty::TraitRef<'tcx>, Expr)>>,
     self_args: Option<Option<ty::GenericArgsRef<'tcx>>>,
     typing_env: Option<ty::TypingEnv<'tcx>>,
+    drops: Option<drops::SwappedDrops<'tcx>>,
 }
 
 /// Immutable analysis inputs shared by function lowering.
@@ -221,7 +225,10 @@ struct CrateFacts<'a, 'tcx> {
     bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,
     imports: &'a HashMap<Export, String>,
-    external: &'a HashMap<(LocalModDefId, DefId), Export>,
+    /// What the crate's libraries export (ADR 0100).
+    foreign: &'a library::Foreign<'a, 'tcx>,
+    /// Is this crate compiled as a library, for others to use (ADR 0100)?
+    library: bool,
     trait_impls: &'a [DefId],
     /// `#[serde(..)]` attributes, from the expanded crate (ADR 0077).
     serde_attrs: &'a serde::SerdeAttributes,
@@ -2238,18 +2245,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             } => self.expr(source, out),
             ExprKind::ZstLiteral { .. }
                 if let &ty::FnDef(id, _) = ty.kind()
-                    && let Some(export) = self.krate.external.get(&(self.module, id)) =>
+                    && let Some(why) = self.krate.foreign.unlisted(id) =>
             {
-                self.dependencies
-                    .borrow_mut()
-                    .package_uses
-                    .insert((self.module, export.clone()));
-                Ok(Expr::var(&self.krate.imports[export]))
+                Err(self.tcx.dcx().span_err(span, why))
             }
-            // A function as a value, `component(Card, props)`: its JS name.
+            // A function as a value, `component(Card, props)`: its JS name, or
+            // a library's import of it (ADR 0100), given its dictionaries.
             ExprKind::ZstLiteral { .. }
                 if let &ty::FnDef(def_id, args) = ty.kind()
-                    && self.krate.fns.contains_key(&def_id) =>
+                    && self.is_rust_fn(def_id) =>
             {
                 if self.tcx.trait_of_assoc(def_id).is_some() {
                     let count = self
@@ -3073,6 +3077,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             evidence: None,
             self_args: None,
             typing_env: None,
+            drops: None,
         };
         match nested {
             Nested::Closure { names } => {
@@ -3085,7 +3090,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 evidence,
                 self_args,
                 typing_env,
+                drops,
             } => {
+                enclosing.drops = Some(self.swap_drops(drops));
                 enclosing.names = Some(self.names.clone());
                 enclosing.vars = Some(std::mem::take(&mut self.vars));
                 enclosing.evidence = Some(std::mem::replace(&mut self.evidence, evidence));
@@ -3121,6 +3128,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(typing_env) = enclosing.typing_env {
             self.typing_env = typing_env;
+        }
+        if let Some(drops) = enclosing.drops {
+            self.restore_drops(drops);
         }
         Ok(())
     }
@@ -4106,6 +4116,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             tcx: self.tcx,
             typing_env: self.typing_env,
             trait_impls: self.krate.trait_impls,
+            foreign: self.krate.foreign,
         }
     }
 }

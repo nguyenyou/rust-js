@@ -1,6 +1,6 @@
 # 0085. An experimental scalar library contract links separately compiled crates
 
-Status: Accepted. Extends 0019 and 0084 for a deliberately narrow subset.
+Status: Accepted, and replaced by [0100](0100-separate-crates.md), whose manifest version 2 is this contract grown to the types, methods and impls a library exports. Extends 0019 and 0084 for a deliberately narrow subset.
 
 ## Context
 

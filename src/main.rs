@@ -59,6 +59,12 @@ struct RustJs {
     output: output::OutputPlan,
     dependencies: library::Dependencies,
     export_library: bool,
+    /// `--emit=metadata` among rustc's flags: rustc goes on to write the
+    /// crate's metadata, for the crates that use it (ADR 0100).
+    metadata: bool,
+    /// What's planned and published once rustc has written the metadata too:
+    /// a library's JS and its metadata are one build's, or neither is.
+    pending: Option<(link::Linked, Vec<PathBuf>)>,
 }
 
 impl Callbacks for RustJs {
@@ -82,26 +88,32 @@ impl Callbacks for RustJs {
             && let Some(unlinked) =
                 lower::lower_crate(tcx, &bodies, &serde_attrs, &self.dependencies, self.export_library)
             && tcx.dcx().has_errors().is_none()
-            && let Err(err) = self
-                .output
-                .plan(
-                    link::link(unlinked),
-                    tcx.sess
-                        .source_map()
-                        .files()
-                        .iter()
-                        .filter(|file| file.src.is_some())
-                        .filter_map(|file| file.name.clone().into_local_path())
-                        .chain(self.dependencies.inputs.iter().cloned())
-                        .collect(),
-                )
-                .and_then(|plan| plan.publish())
         {
-            tcx.dcx().err(format!("rust-js: {err}"));
+            let linked = link::link(unlinked);
+            let sources = tcx
+                .sess
+                .source_map()
+                .files()
+                .iter()
+                .filter(|file| file.src.is_some())
+                .filter_map(|file| file.name.clone().into_local_path())
+                .chain(self.dependencies.inputs.iter().cloned())
+                .collect();
+            if self.metadata {
+                self.pending = Some((linked, sources));
+            } else if let Err(err) = self.output.plan(linked, sources).and_then(|plan| plan.publish()) {
+                tcx.dcx().err(format!("rust-js: {err}"));
+            }
         }
 
-        // We never want rustc's own codegen.
-        Compilation::Stop
+        // We never want rustc's own codegen, only, for a library, the metadata
+        // its consumers' rustc reads: that of the crate rust-js compiled, as it
+        // configured it, `cfg(rust_js)` and all.
+        if self.metadata && tcx.dcx().has_errors().is_none() {
+            Compilation::Continue
+        } else {
+            Compilation::Stop
+        }
     }
 }
 
@@ -233,12 +245,85 @@ fn main() -> ExitCode {
         rustc_args.retain(|arg| !arg.starts_with("--target="));
     }
     rustc_args.extend(to_rustc.iter().cloned());
+    // `--emit=metadata=<path>` (ADR 0100): rustc writes it to a directory of
+    // its own beside the JS, and it's published with the JS, as an artifact
+    // of the same plan, checked for collisions with the rest, or not at all.
+    let mut metadata: Option<(PathBuf, PathBuf)> = None;
+    let stage = output
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."))
+        .join(format!(".rust-js-metadata-{}", std::process::id()));
+    // `--emit mir`, rustc's other spelling, as `--emit=mir`.
+    while let Some(i) = rustc_args.iter().position(|arg| arg == "--emit") {
+        let kinds = if i + 1 < rustc_args.len() {
+            rustc_args.remove(i + 1)
+        } else {
+            String::new()
+        };
+        rustc_args[i] = format!("--emit={kinds}");
+    }
+    for arg in rustc_args.iter_mut() {
+        let Some(kinds) = arg.strip_prefix("--emit=") else {
+            continue;
+        };
+        let mut rewritten = Vec::new();
+        for kind in kinds.split(',') {
+            match kind.strip_prefix("metadata") {
+                Some(rest) => {
+                    let Some(path) = rest.strip_prefix('=').map(PathBuf::from) else {
+                        eprintln!("rust-js: say where a library's metadata goes: --emit=metadata=<path>");
+                        return ExitCode::FAILURE;
+                    };
+                    let staged = stage.join(path.file_name().unwrap_or_default());
+                    rewritten.push(format!("metadata={}", staged.display()));
+                    metadata = Some((staged, path));
+                }
+                // rustc's other outputs are written after rust-js has published,
+                // past its checks, and are no part of what rust-js makes.
+                None => {
+                    eprintln!(
+                        "rust-js: rustc's `--emit={kind}` isn't something rust-js writes; only a library's --emit=metadata=<path>"
+                    );
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        *arg = format!("--emit={}", rewritten.join(","));
+    }
+    if metadata.is_some()
+        && let Err(error) = std::fs::create_dir_all(&stage)
+    {
+        eprintln!("rust-js: cannot stage the metadata: {error}");
+        return ExitCode::FAILURE;
+    }
+    let mut plan = output::OutputPlan::new(input, output, test, manifest);
+    plan.metadata = metadata.clone();
     let mut callbacks = RustJs {
         dependencies,
         export_library,
-        output: output::OutputPlan::new(input, output, test, manifest),
+        metadata: metadata.is_some(),
+        pending: None,
+        output: plan,
     };
-    rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks))
+    let exit = rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut callbacks));
+    // Once rustc has written the metadata: if it couldn't, nothing is published.
+    let published = match callbacks.pending.take() {
+        Some((linked, sources)) if exit == ExitCode::SUCCESS => {
+            callbacks.output.plan(linked, sources).and_then(|plan| plan.publish())
+        }
+        _ => Ok(()),
+    };
+    if metadata.is_some() {
+        let _ = std::fs::remove_dir_all(&stage);
+    }
+    match published {
+        Ok(()) => exit,
+        Err(error) => {
+            eprintln!("rust-js: {error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// The target rustc checks programs for (ADR 0090): WebAssembly's, whose
@@ -272,6 +357,11 @@ fn enable_features(sess: &Session, krate: &mut rustc_ast::Crate) {
     .filter(|feature| !features.contains(feature))
     .map(|feature| format!("feature({feature})"))
     .collect();
+    // Ones rust-js adds, the crate doesn't use: rustc says so when it goes on
+    // to write a library's metadata.
+    if !missing.is_empty() {
+        missing.push("allow(unused_features)".to_string());
+    }
     if !tools.contains(&Symbol::intern("rust_js")) {
         missing.push("register_tool(rust_js)".to_string());
     }

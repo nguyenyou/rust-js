@@ -298,6 +298,11 @@ tooling while preserving rust-js's own readable-output goals.
   now separately compiles and links a scalar path library, compares native/JS
   execution, and rejects stale inputs, incompatible identities and signatures
   before publication. See [ADR 0085](docs/decisions/0085-scalar-library-linkage.md).
+  [ADR 0100](docs/decisions/0100-separate-crates.md) grows that contract to the
+  types, methods, impls and generic functions a library exports: rust-js writes
+  each library's JS, its metadata and a manifest from one build, and a consumer
+  checks the crate hash of what rustc loaded against it. `test/crates.test.ts`
+  compiles a three-crate app, each crate on its own, and compares it with native.
   Automatic Cargo compilation, metadata/JS build-identity binding, transitive
   build coverage and cache invalidation remain open.
   First proof: a separate Cargo library with a non-generic scalar function,
@@ -315,6 +320,10 @@ tooling while preserving rust-js's own readable-output goals.
   validation, serialization, and domain-logic crates on a native Rust server
   and a rust-js client, including dependencies. Require integration and
   differential tests to agree across the client/server boundary.
+  First proof (ADR 0100): `validation` and `models` crates, with serde, used by
+  a rust-js `frontend` compiled separately, print what the same crates do
+  natively, before and after an edit to `validation`. A Cargo-driven build of
+  the graph, and a server talking to the client, remain.
 
 ### M9 — Mature JavaScript ecosystem and developer experience
 

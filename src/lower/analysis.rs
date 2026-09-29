@@ -5,7 +5,7 @@ use super::bindings::{Export, is_binding, js_import, js_path, module_binding};
 use super::traits;
 use super::{Body, FnInfo, TestFn, camel_case, fresh_in, module_path, strip};
 use rustc_hir::def::DefKind;
-use rustc_hir::find_attr;
+use rustc_hir::{LangItem, find_attr};
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
@@ -62,7 +62,6 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
 /// Crate-wide facts collected before function emission. Body references point
 /// into the captured THIR; all collections are owned by this analysis result.
 pub(super) struct AnalyzedCrate<'a, 'tcx> {
-    pub external: HashMap<(LocalModDefId, DefId), Export>,
     pub bodies: Vec<&'a Body<'tcx>>,
     pub closures: HashMap<LocalDefId, &'a Body<'tcx>>,
     pub trait_impls: Vec<DefId>,
@@ -91,8 +90,14 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &'a [Body<'tcx>],
     dependencies: &crate::library::Dependencies,
+    library: bool,
 ) -> Option<AnalyzedCrate<'a, 'tcx>> {
-    if !bindings::validate(tcx) || !traits::validate(tcx) || !super::jsx_api::validate(tcx) {
+    let foreign = super::library::Foreign::new(tcx, dependencies);
+    if !bindings::validate(tcx)
+        || !traits::validate(tcx, &foreign)
+        || !super::jsx_api::validate(tcx)
+        || !foreign.check()
+    {
         return None;
     }
     // With `--test`, rustc adds a harness: a `const` per test, marked
@@ -115,7 +120,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     };
     let all_bodies: Vec<&Body<'tcx>> = all_bodies.iter().filter(|body| !is_harness(body.def_id)).collect();
 
-    if !reject_unsupported(tcx, &markers) || !reject_static_references(tcx, &all_bodies) {
+    if !reject_unsupported(tcx, &foreign, &markers) || !reject_static_references(tcx, &all_bodies) {
         return None;
     }
 
@@ -136,7 +141,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let dictionaries: Vec<DefId> = trait_impls
         .iter()
         .copied()
-        .filter(|&id| traits::operational(tcx, tcx.impl_trait_ref(id).instantiate_identity().def_id))
+        .filter(|&id| traits::operational(tcx, &foreign, tcx.impl_trait_ref(id).instantiate_identity().def_id))
         .filter(|&id| serde_impl(tcx, id).is_none())
         .collect();
 
@@ -147,11 +152,13 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let all_bodies = &all_bodies;
     let closures: HashMap<LocalDefId, &Body<'tcx>> = closures.into_iter().map(|b| (b.def_id, b)).collect();
 
-    let external = super::library::imports(tcx, all_bodies, dependencies)?;
     let mut uses = js_uses(tcx, all_bodies);
-    for (&(module, id), export) in &external {
-        uses.bound_to.entry(export.clone()).or_default().insert(id);
-        uses.imported.entry(export.clone()).or_default().insert(module);
+    // What the crate's libraries export (ADR 0100) is named before lowering,
+    // and imported by the modules that turn out to use it.
+    for imported in foreign.all() {
+        let export = (imported.from.clone(), imported.export.clone());
+        uses.bound_to.entry(export.clone()).or_default();
+        uses.imported.entry(export).or_default();
     }
     let (import_names, globals) = name_imports(tcx, &uses);
     let imported = uses.imported;
@@ -212,10 +219,9 @@ pub(super) fn analyze_crate<'a, 'tcx>(
 
     let mutated = mutated_types(all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
-    let drop_params = drop_params(tcx, all_bodies, &fns);
+    let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
 
     Some(AnalyzedCrate {
-        external,
         bodies,
         closures,
         trait_impls,
@@ -259,7 +265,11 @@ fn in_thread_local(tcx: TyCtxt<'_>, d: LocalDefId) -> Option<LocalDefId> {
 }
 
 /// Report each item rust-js can't compile yet. False if there was one.
-fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool {
+fn reject_unsupported(
+    tcx: TyCtxt<'_>,
+    foreign: &super::library::Foreign<'_, '_>,
+    markers: &[(LocalDefId, Symbol)],
+) -> bool {
     let mut valid = true;
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
@@ -295,7 +305,11 @@ fn reject_unsupported(tcx: TyCtxt<'_>, markers: &[(LocalDefId, Symbol)]) -> bool
             DefKind::AssocTy => "associated types",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())
-                    && !traits::implementable(tcx, tcx.impl_trait_ref(def_id).instantiate_identity().def_id) =>
+                    && !traits::implementable(
+                        tcx,
+                        foreign,
+                        tcx.impl_trait_ref(def_id).instantiate_identity().def_id,
+                    ) =>
             {
                 "user implementations of this standard or external trait"
             }
@@ -318,8 +332,66 @@ fn drop_params<'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &[&Body<'tcx>],
     fns: &HashMap<DefId, FnInfo>,
+    foreign: &super::library::Foreign<'_, 'tcx>,
+    library: bool,
 ) -> HashMap<DefId, Vec<u32>> {
     let mut given: HashSet<(DefId, u32)> = HashSet::new();
+    // A trait impl's methods are called through its dictionary, or resolved
+    // where they're called, by callers the walk below can't see (ADRs 0098,
+    // 0100), and what one drops needn't be in its own body: a helper it lends
+    // a value to may, or a std method, or a default the trait wrote. So a
+    // generic impl is given a drop for each type parameter that isn't `Copy`,
+    // and so are its methods, unless it's a derive whose body drops none.
+    let impls: HashSet<DefId> = fns
+        .keys()
+        .filter_map(|&id| {
+            tcx.trait_impl_of_assoc(id)
+                .or((tcx.def_kind(id) == DefKind::Impl { of_trait: true }).then_some(id))
+        })
+        .collect();
+    for imp in impls {
+        if drops_nothing_derived(tcx, imp) {
+            continue;
+        }
+        let typing_env = ty::TypingEnv::non_body_analysis(tcx, imp);
+        let owners: Vec<DefId> = std::iter::once(imp)
+            .chain(tcx.associated_item_def_ids(imp).iter().copied())
+            .collect();
+        for param in &tcx.generics_of(imp).own_params {
+            if let ty::GenericParamDefKind::Type { .. } = param.kind
+                && !tcx.type_is_copy_modulo_regions(typing_env, Ty::new_param(tcx, param.index, param.name))
+            {
+                for &id in &owners {
+                    given.insert((id, param.index));
+                }
+            }
+        }
+    }
+    // A library's consumers are callers it never sees (ADR 0100): a function
+    // of it they can reach is given a drop for each type parameter they could
+    // give a value with a destructor, one that isn't `Copy`.
+    if library {
+        for &id in fns.keys() {
+            // A trait impl's, and its methods, are decided above.
+            if tcx.trait_of_assoc(id).is_some()
+                || tcx.trait_impl_of_assoc(id).is_some()
+                || matches!(tcx.def_kind(id), DefKind::Impl { .. })
+                || !super::library::reachable(tcx, id)
+            {
+                continue;
+            }
+            let typing_env = ty::TypingEnv::non_body_analysis(tcx, id);
+            let generics = tcx.generics_of(id);
+            for index in 0..generics.count() {
+                let param = generics.param_at(index, tcx);
+                if let ty::GenericParamDefKind::Type { .. } = param.kind
+                    && !tcx.type_is_copy_modulo_regions(typing_env, Ty::new_param(tcx, param.index, param.name))
+                {
+                    given.insert((id, index as u32));
+                }
+            }
+        }
+    }
     // A caller's type parameter passed on as a callee's: `relay<U>` calling `consume::<U>`.
     let mut passed: Vec<((DefId, u32), (DefId, u32))> = Vec::new();
     for body in all_bodies {
@@ -334,7 +406,7 @@ fn drop_params<'tcx>(
             for (index, arg) in args.iter().enumerate() {
                 let Some(ty) = arg.as_type() else { continue };
                 let index = index as u32;
-                if holds_user_drop(tcx, ty, &mut Vec::new()) {
+                if holds_user_drop(tcx, foreign, ty, &mut Vec::new()) {
                     given.insert((callee, index));
                 }
                 for part in ty.walk() {
@@ -366,26 +438,62 @@ fn drop_params<'tcx>(
     params
 }
 
+/// Is `imp` a derive whose body drops nothing of what it's given or makes:
+/// `Clone`'s, `Debug`'s, `Default`'s and the comparisons', or serde's, whose
+/// codecs rust-js writes (ADR 0077)?
+fn drops_nothing_derived(tcx: TyCtxt<'_>, imp: DefId) -> bool {
+    if !tcx.is_automatically_derived(imp) {
+        return false;
+    }
+    let tr = tcx.impl_trait_ref(imp).instantiate_identity().def_id;
+    [
+        LangItem::Clone,
+        LangItem::Copy,
+        LangItem::PartialEq,
+        LangItem::PartialOrd,
+    ]
+    .into_iter()
+    .any(|item| tcx.is_lang_item(tr, item))
+        || [
+            sym::Eq,
+            sym::Ord,
+            sym::Hash,
+            Symbol::intern("Debug"),
+            Symbol::intern("Default"),
+        ]
+        .into_iter()
+        .any(|name| tcx.is_diagnostic_item(name, tr))
+        || serde_impl(tcx, imp).is_some()
+}
+
 /// Whether dropping a `ty` could run a `Drop` of the crate's own, through
 /// its fields, variants or what it holds.
-fn holds_user_drop<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+fn holds_user_drop<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    foreign: &super::library::Foreign<'_, 'tcx>,
+    ty: Ty<'tcx>,
+    seen: &mut Vec<Ty<'tcx>>,
+) -> bool {
     if seen.contains(&ty) {
         return false;
     }
     seen.push(ty);
     let found = match ty.kind() {
         ty::Adt(adt, args) => {
-            tcx.adt_destructor(adt.did()).is_some_and(|d| d.did.is_local())
-                || adt.all_fields().any(|f| holds_user_drop(tcx, f.ty(tcx, args), seen))
-                || args.types().any(|t| holds_user_drop(tcx, t, seen))
+            tcx.adt_destructor(adt.did())
+                .is_some_and(|d| d.did.is_local() || foreign.item(d.did).is_some())
+                || adt
+                    .all_fields()
+                    .any(|f| holds_user_drop(tcx, foreign, f.ty(tcx, args), seen))
+                || args.types().any(|t| holds_user_drop(tcx, foreign, t, seen))
         }
-        ty::Tuple(items) => items.iter().any(|t| holds_user_drop(tcx, t, seen)),
-        ty::Array(item, _) | ty::Slice(item) => holds_user_drop(tcx, *item, seen),
+        ty::Tuple(items) => items.iter().any(|t| holds_user_drop(tcx, foreign, t, seen)),
+        ty::Array(item, _) | ty::Slice(item) => holds_user_drop(tcx, foreign, *item, seen),
         ty::Closure(_, args) => args
             .as_closure()
             .upvar_tys()
             .iter()
-            .any(|t| holds_user_drop(tcx, t, seen)),
+            .any(|t| holds_user_drop(tcx, foreign, t, seen)),
         _ => false,
     };
     seen.pop();

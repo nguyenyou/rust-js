@@ -13,6 +13,9 @@ pub struct OutputPlan {
     pub output: PathBuf,
     pub test: bool,
     pub manifest: Option<PathBuf>,
+    /// A library's metadata (ADR 0100): where rustc wrote it, and where it's
+    /// published, with the JS, as an artifact of this plan.
+    pub metadata: Option<(PathBuf, PathBuf)>,
     jsx: HashSet<Vec<String>>,
 }
 
@@ -82,7 +85,7 @@ impl OutputPlan {
             for (path, text) in [(&js_path, &output.code), (&map_path, &output.map)] {
                 artifacts.push(Artifact {
                     path: path.clone(),
-                    text: text.clone(),
+                    bytes: text.clone().into_bytes(),
                 });
             }
         }
@@ -156,7 +159,10 @@ impl OutputPlan {
             .to_string_lossy()
             .into_owned();
         let path = self.output.with_file_name(format!("{stem}.test.js"));
-        Some(Artifact { path, text: code })
+        Some(Artifact {
+            path,
+            bytes: code.into_bytes(),
+        })
     }
 
     /// Where a module's JS goes: the root to the output file, `a::b` to
@@ -275,6 +281,7 @@ impl OutputPlan {
             output,
             test,
             manifest,
+            metadata: None,
             jsx: HashSet::new(),
         }
     }
@@ -324,6 +331,17 @@ impl OutputPlan {
         if let Some(test) = &test_artifact {
             planned.push(absolute(&test.path)?);
         }
+        // A library's metadata, as rustc wrote it: published where it's asked
+        // for, with what's made from the same build, or not at all.
+        let metadata = match &self.metadata {
+            Some((written, path)) => {
+                let path = absolute(path)?;
+                planned.push(path.clone());
+                let bytes = std::fs::read(written).map_err(|e| format!("cannot read the metadata rustc wrote: {e}"))?;
+                Some(Artifact { path, bytes })
+            }
+            None => None,
+        };
         let input = absolute(&self.input)?;
         let output = absolute(&self.output)?;
         let manifest_path = self.manifest.as_deref().map(absolute).transpose()?;
@@ -342,6 +360,7 @@ impl OutputPlan {
 
         let mut artifacts = self.generate(lowered.modules, &lowered.sources)?;
         artifacts.extend(test_artifact);
+        artifacts.extend(metadata);
         for artifact in &mut artifacts {
             artifact.path = absolute(&artifact.path)?;
         }
@@ -384,16 +403,17 @@ impl OutputPlan {
                     .iter()
                     .map(|a| manifest::Artifact {
                         file: a.path.clone(),
-                        hash: fingerprint(a.text.as_bytes()),
+                        hash: fingerprint(&a.bytes),
                     })
                     .collect(),
             };
             artifacts.push(Artifact {
                 path,
-                text: format!(
+                bytes: format!(
                     "{}\n",
                     serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?
-                ),
+                )
+                .into_bytes(),
             });
         }
         Ok(ArtifactPlan { artifacts, stale })

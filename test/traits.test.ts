@@ -84,7 +84,9 @@ test("dictionaries are explicit, cached and usable from JavaScript", () => {
   expect(module.circleLabeled().Shape()).toBe(module.circleShape());
   expect(module.largest([{ value: NaN, impl: module.f64Shape() }])).toBe(0);
   expect(output).toContain("circleShape_area(c)");
-  expect(output).toMatch(/function total\(shapes, TShape\)/);
+  // Its dictionary, then a drop for `T`, which `vecShape_area`, a generic
+  // impl's method, passes on (ADR 0098).
+  expect(output).toMatch(/function total\(shapes, TShape, dropT\)/);
   expect(output).not.toContain("function shape_name"); // defaults are copied into dictionaries
   // No IIFEs: an upcast of a variable reads it twice, a conversion to the same
   // trait is the pair itself, and a receiver with effects is one `const`.
