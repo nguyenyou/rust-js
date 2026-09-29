@@ -13,7 +13,7 @@ const files = (directory: string): string[] => readdirSync(join(root, directory)
 //
 //   driver ──► front end (rustc) ──► owned output ──► printing (oxc)
 const layers = {
-  driver: ["src/main.rs"],
+  driver: ["src/main.rs", "src/cargo.rs"],
   front: ["src/lower.rs", "src/lower/", "src/jsx_syntax.rs", "src/jsx_syntax/"],
   owned: ["src/library.rs", "src/reachability.rs", "src/link.rs", "src/names.rs", "src/program.rs", "src/js.rs",
     "src/prepare.rs", "src/output.rs", "src/publish.rs", "src/manifest.rs", "src/runtime.rs"],

@@ -16,6 +16,9 @@ pub struct OutputPlan {
     /// A library's metadata (ADR 0100): where rustc wrote it, and where it's
     /// published, with the JS, as an artifact of this plan.
     pub metadata: Option<(PathBuf, PathBuf)>,
+    /// Files of the build tool's published with the JS, as artifacts of this
+    /// plan, and no part of the manifest: what Cargo is told (ADR 0101).
+    pub extra: Vec<(PathBuf, Vec<u8>)>,
     jsx: HashSet<Vec<String>>,
 }
 
@@ -282,6 +285,7 @@ impl OutputPlan {
             test,
             manifest,
             metadata: None,
+            extra: Vec::new(),
             jsx: HashSet::new(),
         }
     }
@@ -342,6 +346,12 @@ impl OutputPlan {
             }
             None => None,
         };
+        let mut extra = Vec::new();
+        for (path, bytes) in std::mem::take(&mut self.extra) {
+            let path = absolute(&path)?;
+            planned.push(path.clone());
+            extra.push(Artifact { path, bytes });
+        }
         let input = absolute(&self.input)?;
         let output = absolute(&self.output)?;
         let manifest_path = self.manifest.as_deref().map(absolute).transpose()?;
@@ -416,6 +426,7 @@ impl OutputPlan {
                 .into_bytes(),
             });
         }
+        artifacts.extend(extra);
         Ok(ArtifactPlan { artifacts, stale })
     }
 }

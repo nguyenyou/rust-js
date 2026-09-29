@@ -11,11 +11,12 @@ export const target = join(root, "target");
 const given = process.env.RUST_JS_COMPILER;
 export const compiler = given ? resolve(given) : join(target, "debug", "rust-js");
 
-/** What `cmd` printed, or why it failed. It's stopped after `timeout` ms:
+/** What `cmd` printed, with `env` added to its environment, or why it
+ * failed. It's stopped after `timeout` ms:
  * as the tests load, no test's deadline applies yet. The default is what
  * a setup hook is allowed, for the first build. */
-export function run(cmd: string[], timeout = 600_000): string {
-  const p = runSync(cmd, root, timeout);
+export function run(cmd: string[], timeout = 600_000, env: Record<string, string> = {}): string {
+  const p = runSync(cmd, root, timeout, env);
   const why = stopped(p, timeout);
   if (p.code !== 0 || why) throw new Error(`${cmd.join(" ")} failed${why ? `: it ${why}` : ""}:\n${p.stderr}`);
   return p.stdout;

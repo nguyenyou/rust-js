@@ -136,7 +136,9 @@ pilot. No delivery dates are assigned yet.
   and [independent-app test](test/shared-code.test.ts) compile common models and
   validation into native Rust and JavaScript, exchange JSON in both directions,
   reject malformed requests, and rebuild after a shared-source edit. The test
-  uses subprocess transport; a Cargo shared-crate build remains open.
+  uses subprocess transport. A Cargo workspace of shared crates builds with
+  rust-js as Cargo's workspace wrapper ([ADR 0101](docs/decisions/0101-cargo-workspace-wrapper.md));
+  a pilot built that way remains open.
 - [x] **M3.2 — Integrate Serde into application tooling.** The
   [native adapter](tooling/build.js) and Vite accept `bindings: ["react", "serde"]`.
   They build locked Serde dependencies with the pinned toolchain and discover
@@ -303,8 +305,13 @@ tooling while preserving rust-js's own readable-output goals.
   each library's JS, its metadata and a manifest from one build, and a consumer
   checks the crate hash of what rustc loaded against it. `test/crates.test.ts`
   compiles a three-crate app, each crate on its own, and compares it with native.
-  Automatic Cargo compilation, metadata/JS build-identity binding, transitive
-  build coverage and cache invalidation remain open.
+  [ADR 0101](docs/decisions/0101-cargo-workspace-wrapper.md) builds a workspace
+  with Cargo: rust-js is its `RUSTC_WORKSPACE_WRAPPER`, compiling each library
+  of the workspace with Cargo's flags, and rustc builds serde, build scripts and
+  procedural macros. The same crates as a workspace, with serde from crates.io,
+  print what native `cargo run` does and follow an edit; each feature set is
+  JS of its own, beside Cargo's metadata of it, and rust-js changed rebuilds
+  them. Registry crates compiled to JS, and `cargo build`, remain open.
   First proof: a separate Cargo library with a non-generic scalar function,
   consumed through a path dependency by both a native executable and a rust-js
   application. Resolve the dependency from Cargo metadata, compile it separately,

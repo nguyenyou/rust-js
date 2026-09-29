@@ -160,8 +160,6 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         uses.bound_to.entry(export.clone()).or_default();
         uses.imported.entry(export).or_default();
     }
-    let (import_names, globals) = name_imports(tcx, &uses);
-    let imported = uses.imported;
 
     // Each thread-local's `init` function: lowered like any function, its
     // body is the variable's value.
@@ -211,7 +209,14 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         }
     }
 
-    let (taken, fns, failed) = name_items(tcx, &items, &modules, &globals, &trait_impls);
+    // The crate's own names first: an export is what its consumers and JS
+    // call it by. An import is named around every one of them.
+    let (mut taken, fns, failed) = name_items(tcx, &items, &modules, &uses.globals, &trait_impls);
+    let import_names = name_imports(tcx, &uses, &taken);
+    for names in taken.values_mut() {
+        names.extend(import_names.values().cloned());
+    }
+    let imported = uses.imported;
     let mut called_from_elsewhere = exported_across_modules(tcx, all_bodies, &fns);
     let tests = collect_tests(tcx, &markers, &bodies, &fns, &mut called_from_elsewhere);
 
@@ -610,13 +615,18 @@ fn js_uses<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[&Body<'tcx>]) -> JsUses {
 /// after the export, or the module for a default or namespace import. A
 /// default import held by one `static` is named after it, as JS code names
 /// an asset: `static hero_img` is `import heroImg from "./hero.png"`.
-/// Like globals, every module reserves them: the second result is both.
+/// It's named around the globals and every module's items, as `taken` has
+/// them, which then reserve it like a global.
 /// Namespaces are named last, so a module's default export gets its plain name.
-fn name_imports(tcx: TyCtxt<'_>, uses: &JsUses) -> (HashMap<Export, String>, HashSet<String>) {
-    let mut reserved = uses.globals.clone();
+fn name_imports(
+    tcx: TyCtxt<'_>,
+    uses: &JsUses,
+    taken: &HashMap<LocalModDefId, HashSet<String>>,
+) -> HashMap<Export, String> {
+    let mut reserved: HashSet<String> = uses.globals.iter().chain(taken.values().flatten()).cloned().collect();
     let (namespaces, others): (Vec<&Export>, Vec<&Export>) =
         uses.imported.keys().partition(|(_, export)| export == "*");
-    let names = others
+    others
         .into_iter()
         .chain(namespaces)
         .map(|(from, export)| {
@@ -634,8 +644,7 @@ fn name_imports(tcx: TyCtxt<'_>, uses: &JsUses) -> (HashMap<Export, String>, Has
             };
             ((from.clone(), export.clone()), fresh_in(&mut reserved, &base))
         })
-        .collect();
-    (names, reserved)
+        .collect()
 }
 
 /// An item's JS name before it's made unique: a trait impl's accessor

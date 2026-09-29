@@ -1,6 +1,6 @@
 # 0100. Each crate is compiled once, to JS of its own, with a manifest of what crosses
 
-Status: Accepted. Extends [0085](0085-scalar-library-linkage.md), [0049](0049-traits-and-generics.md) and [0098](0098-destructors.md).
+Status: Accepted. Extends [0085](0085-scalar-library-linkage.md), [0049](0049-traits-and-generics.md) and [0098](0098-destructors.md). Cargo runs these compilations as [0101](0101-cargo-workspace-wrapper.md) says.
 
 ## Context
 
@@ -175,10 +175,6 @@ or a box (ADR 0074). ADR 0099's handles have the same `value`.
 
 **Not yet:**
 
-- **A driver:** the proof compiles each crate in order itself, as Cargo's
-  graph gives them (`tooling/cargo.js`, ADR 0085); running rust-js as
-  Cargo's `RUSTC_WORKSPACE_WRAPPER`, as Clippy runs, would give each crate
-  its Cargo flags.
 - **Implementing another crate's trait that has default methods:** a
   default's body is copied into each impl (ADR 0049), and a consumer can't
   read the library's. The library could export each default as a generic

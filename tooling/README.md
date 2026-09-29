@@ -214,6 +214,33 @@ the same outputs. Publication preserves unchanged files, checks stale-file
 ownership, and rolls back ordinary I/O errors. It does not guarantee crash-atomic
 multi-file replacement.
 
+## Build a Cargo workspace
+
+Cargo builds a workspace's libraries with rust-js as its workspace wrapper
+([ADR 0101](../docs/decisions/0101-cargo-workspace-wrapper.md)), each to JS of
+its own ([ADR 0100](../docs/decisions/0100-separate-crates.md)):
+
+```js
+import { checkCargo } from "rust-js-build/cargo";
+
+const { js, crates } = await checkCargo({
+  manifestPath: "Cargo.toml", toolchain: "<pinned nightly>", compiler: "/path/to/rust-js",
+  packageName: "frontend", features: [],
+});
+```
+
+It runs `RUSTC_WORKSPACE_WRAPPER=<compiler> cargo check --target
+wasm32-unknown-unknown`. Each library of the workspace that `frontend` uses,
+and `frontend` itself, is JS in Cargo's target directory, beside the metadata
+of that build of it, importing the others; `js` is `frontend`'s, and `crates`
+each crate's JS and manifest. A feature set built before is the JS it was.
+Each file a crate's manifest lists is checked, of a build Cargo has as done
+too: one gone or edited is refused, and `cargo clean -p <package> --target
+wasm32-unknown-unknown` builds it again.
+Registry crates, build scripts and procedural macros are built by rustc, as
+Cargo asks; of registry crates, only serde's are known to rust-js at run time.
+`cargo build` is refused.
+
 ## Experimental Cargo planning
 
 `rust-js-build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,

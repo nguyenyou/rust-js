@@ -30,6 +30,7 @@ extern crate rustc_parse;
 extern crate rustc_session;
 extern crate rustc_span;
 
+mod cargo;
 mod format;
 mod js;
 mod jsx_syntax;
@@ -119,6 +120,11 @@ impl Callbacks for RustJs {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Cargo's workspace wrapper (ADR 0101): its call, as rust-js's, or rustc's.
+    let args = match cargo::translate(args) {
+        cargo::Invocation::RustJs(args) => args,
+        cargo::Invocation::Rustc(exit) => return exit,
+    };
     if args.as_slice() == ["--version-json"] {
         println!(
             "{}",
@@ -162,6 +168,14 @@ fn main() -> ExitCode {
         None => (&args[..], &[][..]),
     };
     let mut ours = ours.to_vec();
+    // Cargo's build (ADR 0101): its record of the sources is one of rustc's
+    // outputs rust-js lets rustc write, where Cargo asks.
+    let cargo = if let Some(i) = ours.iter().position(|arg| arg == "--cargo") {
+        ours.remove(i);
+        true
+    } else {
+        false
+    };
     let export_library = if let Some(i) = ours.iter().position(|arg| arg == "--library") {
         ours.remove(i);
         true
@@ -249,6 +263,7 @@ fn main() -> ExitCode {
     // its own beside the JS, and it's published with the JS, as an artifact
     // of the same plan, checked for collisions with the rest, or not at all.
     let mut metadata: Option<(PathBuf, PathBuf)> = None;
+    let mut dep_info: Option<(PathBuf, PathBuf)> = None;
     let stage = output
         .parent()
         .filter(|dir| !dir.as_os_str().is_empty())
@@ -281,6 +296,13 @@ fn main() -> ExitCode {
                 }
                 // rustc's other outputs are written after rust-js has published,
                 // past its checks, and are no part of what rust-js makes.
+                // Cargo's record of the sources (ADR 0101), staged as the
+                // metadata is, and published with it.
+                None if cargo && let Some(path) = kind.strip_prefix("dep-info=").map(PathBuf::from) => {
+                    let staged = stage.join(path.file_name().unwrap_or_default());
+                    rewritten.push(format!("dep-info={}", staged.display()));
+                    dep_info = Some((staged, path));
+                }
                 None => {
                     eprintln!(
                         "rust-js: rustc's `--emit={kind}` isn't something rust-js writes; only a library's --emit=metadata=<path>"
@@ -291,12 +313,13 @@ fn main() -> ExitCode {
         }
         *arg = format!("--emit={}", rewritten.join(","));
     }
-    if metadata.is_some()
+    if (metadata.is_some() || dep_info.is_some())
         && let Err(error) = std::fs::create_dir_all(&stage)
     {
         eprintln!("rust-js: cannot stage the metadata: {error}");
         return ExitCode::FAILURE;
     }
+    let recorded = cargo.then(|| (manifest.clone(), metadata.clone()));
     let mut plan = output::OutputPlan::new(input, output, test, manifest);
     plan.metadata = metadata.clone();
     let mut callbacks = RustJs {
@@ -310,11 +333,28 @@ fn main() -> ExitCode {
     // Once rustc has written the metadata: if it couldn't, nothing is published.
     let published = match callbacks.pending.take() {
         Some((linked, sources)) if exit == ExitCode::SUCCESS => {
-            callbacks.output.plan(linked, sources).and_then(|plan| plan.publish())
+            // What Cargo is told of the build, published with it (ADR 0101).
+            let extra = match &recorded {
+                Some((Some(manifest), Some((_, metadata)))) => cargo::record(
+                    manifest,
+                    &dependency_paths,
+                    metadata,
+                    dep_info
+                        .as_ref()
+                        .map(|(staged, path)| (staged.as_path(), path.as_path())),
+                ),
+                _ => Ok(Vec::new()),
+            };
+            extra
+                .and_then(|extra| {
+                    callbacks.output.extra = extra;
+                    callbacks.output.plan(linked, sources)
+                })
+                .and_then(|plan| plan.publish())
         }
         _ => Ok(()),
     };
-    if metadata.is_some() {
+    if metadata.is_some() || dep_info.is_some() {
         let _ = std::fs::remove_dir_all(&stage);
     }
     match published {
