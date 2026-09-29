@@ -11,7 +11,8 @@ import { $debugStr, $parseInt } from "@rust-js/runtime";
 ```
 
 A module imports the helpers its code names; the package has the ones they
-use in turn. Each is a named export, so a bundler keeps only what's used.
+use in turn. Each is a named export, so a bundler keeps only what's used. An
+app installs the compiler's own version: the build adapter refuses another.
 
 `index.js` is written by the compiler, from the helpers it has:
 

@@ -67,6 +67,7 @@ test("virtual path mapping preserves JSON escaping and unrelated values", () => 
 test("native build adapter compiles an independent application and preserves output on failure", async () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js-independent-")));
+  installRuntime(root);
   try {
     const source = join(root, "lib.rs");
     const output = join(root, "lib.js");
@@ -84,6 +85,29 @@ test("native build adapter compiles an independent application and preserves out
     writeFileSync(source, "pub fn broken(");
     await expect(builder.compile({ crate: source, output, manifest: manifestPath })).rejects.toThrow();
     expect(readFileSync(output, "utf8")).toBe(previous);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 600_000);
+
+// The JS a compiler writes imports helpers of its own release (ADR 0103):
+// an app without @rust-js/runtime, or with another version's, is refused
+// before anything's compiled, as the resources of another version are.
+test("the build adapter refuses an app without the compiler's @rust-js/runtime", async () => {
+  buildCompiler();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js-runtime-version-")));
+  try {
+    const source = join(root, "lib.rs");
+    writeFileSync(source, "pub fn answer() -> u32 { 42 }");
+    const job = { crate: source, output: join(root, "lib.js"), manifest: join(root, "manifest.json") };
+    const builder = () => createNativeBuilder({ root, rustJs: compiler, bindings: [] });
+    const version = parseCompilerIdentity(Bun.spawnSync([compiler, "--version-json"], { stdout: "pipe" }).stdout.toString()).version;
+    await expect(builder().compile(job)).rejects.toThrow(`imports @rust-js/runtime ${version}: install it`);
+    mkdirSync(join(root, "node_modules", "@rust-js", "runtime"), { recursive: true });
+    writeFileSync(join(root, "node_modules", "@rust-js", "runtime", "package.json"), '{ "name": "@rust-js/runtime", "version": "0.0.1", "exports": { "./package.json": "./package.json" } }\n');
+    await expect(builder().compile(job)).rejects.toThrow(`needs @rust-js/runtime ${version}, not the installed 0.0.1`);
+    rmSync(join(root, "node_modules"), { recursive: true });
+    installRuntime(root);
+    await builder().compile(job);
+    expect((await import(job.output)).answer()).toBe(42);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);
 

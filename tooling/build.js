@@ -43,6 +43,25 @@ function installedReact(root) {
   }
 }
 
+/**
+ * `@rust-js/runtime` as the project installed it, of `version`, the
+ * compiler's: the helpers the JS it writes imports are its release's (ADR
+ * 0103). Throws with what to install otherwise.
+ */
+function checkRuntime(root, version) {
+  // Where Node finds a package, from the app up: looked for each time, as
+  // it may be installed while a dev server runs.
+  let found;
+  for (let dir = resolve(root); !found; dir = dirname(dir)) {
+    const candidate = join(dir, "node_modules", "@rust-js", "runtime", "package.json");
+    if (existsSync(candidate)) found = candidate;
+    else if (dirname(dir) === dir) break;
+  }
+  if (!found) throw new Error(`the JS rust-js ${version} writes imports @rust-js/runtime ${version}: install it`);
+  const installed = JSON.parse(readFileSync(found, "utf8")).version;
+  if (installed !== version) throw new Error(`rust-js ${version} needs @rust-js/runtime ${version}, not the installed ${installed}`);
+}
+
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: { ...process.env, RUST_JS_JS_RUNTIME: process.execPath }, stdio: ["ignore", "pipe", "pipe"] });
@@ -68,16 +87,21 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
   const compilerArgs = packaged ? [compilerPath] : [];
   const metadataInputs = resourceInputs(bindings).map(p => join(repo, p));
   const pinned = () => readFileSync(join(repo, "rust-toolchain.toml"), "utf8").match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
+  // What the compiler says it is, once: `--version-json`.
+  let identity;
+  const compilerIdentity = async () => (identity ??= parseCompilerIdentity(await run(compilerCommand, [...compilerArgs, "--version-json"], root)));
+
   // Each recipe uses the pinned resources and a content-keyed cache directory.
   async function prepare() {
     if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: configure rustJs with an installed compiler or build it with cargo build`);
+    checkRuntime(root, (await compilerIdentity()).version);
     const react = bindings.includes("react") ? installedReact(root) : null;
     if (!bindings.length) return { flags: [], react };
     const packagePath = join(repo, "package.json");
     if (existsSync(packagePath)) {
       const resourcePackage = JSON.parse(await readFile(packagePath, "utf8"));
       if (resourcePackage.name === "rust-js-resources") {
-        const identity = parseCompilerIdentity(await run(compilerCommand, [...compilerArgs, "--version-json"], root));
+        const identity = await compilerIdentity();
         const pin = (await readFile(join(repo, "rust-toolchain.toml"), "utf8")).match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
         if (resourcePackage.version !== identity.version || pin !== identity.toolchain) {
           throw new Error(`Incompatible rust-js resources: compiler ${identity.version} (${identity.toolchain}), resources ${resourcePackage.version} (${pin ?? "missing Rust pin"}). Install matching compiler and resources.`);
@@ -131,7 +155,8 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
   return {
     /** A Cargo workspace's check (ADR 0101), with the pinned toolchain, this
      * compiler, and the React the project has installed. */
-    checkCargo(options) {
+    async checkCargo(options) {
+      checkRuntime(root, (await compilerIdentity()).version);
       return checkCargo({ ...options, toolchain: pinned(), compiler: rustJs, react: installedReact(root) ?? undefined });
     },
     /** The workspace of a Cargo manifest, and its target directory. */

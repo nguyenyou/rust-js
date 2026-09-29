@@ -96,5 +96,9 @@ compiler's version, released with it, as ReScript's is:
   corpus and the snapshots were blessed.
 - **A test running JS as a script, not a module,** in a bare VM, puts the
   package's module first, its exports plain declarations.
-- **Not yet:** refusing an installed runtime of another version than the
-  compiler's, which the manifest's compiler identity (ADR 0042) can.
+- **The runtime installed is the compiler's release's:** the build adapter,
+  and so Vite's two modes, refuses an app without `@rust-js/runtime`, or
+  with another version than the compiler's `--version-json` says, before
+  anything's compiled, and says which to install. It's looked for where
+  Node finds a package, from the app up, each time: it may be installed
+  while a dev server runs. A test checks both refusals.

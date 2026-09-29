@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "The helpers the JS rust-js writes imports, released with the compiler, as @rescript/runtime is with ReScript. See docs/decisions/0103-runtime-package.md.",
   "type": "module",
-  "exports": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
   "files": ["index.js"],
   "sideEffects": false
 }
