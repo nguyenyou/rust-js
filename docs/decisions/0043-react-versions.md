@@ -140,3 +140,7 @@ because making a function or a literal evaluates nothing (ADR 0042).
   docs.
 - Not bound: class components and error boundaries (rust-js has no classes),
   and `<Suspense defer>`, which is experimental.
+- **As a Cargo dependency** (ADR 0101), the crate's build script gives the
+  same `cfg`s, for the release `RUST_JS_REACT` names, or the latest, from
+  `versions.json`; Cargo checks it again when either changes. A test checks
+  them against `cfg.js`'s.

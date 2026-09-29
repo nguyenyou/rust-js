@@ -79,11 +79,23 @@ A crate's JS is where Cargo's hash for its build says, so
 `checkCargo` (`tooling/cargo.js`) runs `cargo check --message-format=json`
 and says where. Cargo reports each crate's metadata, built or found done,
 and the marker beside it says where its manifest is, which says where its
-JS is. Cargo checks its own outputs, not rust-js's, so `checkCargo` checks
-each file a crate's manifest lists, of a build Cargo has as done too,
-against the fingerprint it was published with. One gone or changed is
+JS is: the crate root's module, `lib.jsx` when it has JSX. Cargo checks
+its own outputs, not rust-js's, so `checkCargo` checks each file a crate's
+manifest lists, of a build Cargo has as done too, against the fingerprint
+it was published with. One gone or changed is
 refused, with `cargo clean -p <package> --target wasm32-unknown-unknown`
 as the remedy, not given to an app that imports it.
+
+**The bindings are Cargo dependencies,** `rust-js-react` (its library
+`react`) and `rust-js-web` (`web`), paths into rust-js or the tooling's
+resources for now. They're rustc's crates to check, as `react/build.sh`
+checks them: rust-js knows their items by their `#[rust_js::link_name]`s,
+not by the crate. Installed under an app's `node_modules`, they're in its
+workspace, and so its members, which Cargo runs the wrapper for: the
+wrapper gives these two packages, by `CARGO_PKG_NAME`, to rustc. Neither
+is a workspace of its own, or Cargo would find two roots. The React
+release's `cfg`s (ADR 0043) are the build script's, for the release
+`RUST_JS_REACT` names, which `checkCargo` sets from its `react`.
 
 ## Why
 
@@ -131,6 +143,11 @@ as the remedy, not given to an app that imports it.
   leaves the previous build's JS; and a library's JS deleted from a build
   Cargo has as done, refused until `cargo clean -p` builds it again. Each rule above has a mutation the tests
   catch.
+- **A component using the react crate** is the JS it is outside Cargo, and
+  a build for React 18.2 refuses what 19.2 added, then compiles for 19.3,
+  then refuses it again. The bindings as the tooling installs them, inside
+  the app's workspace, are checked by rustc, the whole workspace too.
+  Found in review.
 - **Found by the proof:** an import took the name of the crate's own
   function, and it was the crate's that was renamed, `main$1`, so JS
   calling `shell.main` found none. A crate's items are now named first,

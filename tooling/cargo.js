@@ -67,11 +67,12 @@ export async function planCargoLibraries({ manifestPath, toolchain, target, pack
  * JS: beside the metadata Cargo keeps for that build of it, so a feature set
  * built before is the JS it was. Cargo reports each crate it built or found
  * fresh; the `.rust-js` beside its metadata says where its manifest is. `js` is
- * the selected package's, or the manifest's own package's.
- * @param {{ manifestPath: string, toolchain: string, compiler: string, packageName?: string, features?: string[], noDefaultFeatures?: boolean, offline?: boolean }} options
+ * the selected package's, or the manifest's own package's. `react` is the
+ * React release the react crate is checked for (ADR 0043), or its latest.
+ * @param {{ manifestPath: string, toolchain: string, compiler: string, packageName?: string, features?: string[], noDefaultFeatures?: boolean, offline?: boolean, react?: string }} options
  * @returns {Promise<{ js: string, crates: Map<string, { js: string, manifest: string }> }>}
  */
-export async function checkCargo({ manifestPath, toolchain, compiler, packageName, features = [], noDefaultFeatures = false, offline = false }) {
+export async function checkCargo({ manifestPath, toolchain, compiler, packageName, features = [], noDefaultFeatures = false, offline = false, react }) {
   if (!/^nightly-\d{4}-\d{2}-\d{2}$/.test(toolchain ?? "")) throw new Error("Cargo builds require an exact nightly toolchain pin");
   const manifest = resolve(manifestPath);
   const args = [`+${toolchain}`, "check", "--message-format=json", "--target", "wasm32-unknown-unknown", "--manifest-path", manifest];
@@ -80,6 +81,8 @@ export async function checkCargo({ manifestPath, toolchain, compiler, packageNam
   if (noDefaultFeatures) args.push("--no-default-features");
   if (offline) args.push("--offline");
   const env = { ...process.env, RUSTC_WORKSPACE_WRAPPER: resolve(compiler) };
+  if (react) env.RUST_JS_REACT = react;
+  else delete env.RUST_JS_REACT;
   const { stdout } = await execute("cargo", args, { cwd: dirname(manifest), env, maxBuffer: 64 * 1024 * 1024 }).catch((error) => {
     const messages = String(error.stdout ?? "").split("\n").filter(Boolean).map(line => JSON.parse(line));
     const rendered = messages.filter(m => m.reason === "compiler-message").map(m => m.message.rendered).join("");
@@ -104,7 +107,8 @@ export async function checkCargo({ manifestPath, toolchain, compiler, packageNam
       throw new Error(`${changed.file} isn't what rust-js wrote for Cargo's build of ${name}, which has it as done: `
         + `\`cargo clean -p ${name} --target wasm32-unknown-unknown\` to build it again`);
     }
-    const entry = { js: built.output, manifest: library };
+    // The crate root's module: `lib.jsx` when it has JSX (ADR 0075).
+    const entry = { js: built.modules.find(module => module.module.length === 0).file, manifest: library };
     crates.set(message.target.name, entry);
     if (packageName ? packageNameOf(message.package_id) === packageName : message.manifest_path === manifest) js = entry.js;
   }

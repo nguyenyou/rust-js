@@ -1,0 +1,16 @@
+# The react crate as a Cargo dependency (ADR 0101): rustc checks it, as
+# react/build.sh does, for the React release `RUST_JS_REACT` names, or the
+# latest the crate knows (ADR 0043); build.rs gives its `cfg`s.
+[package]
+name = "rust-js-react"
+version = "0.1.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[lib]
+name = "react"
+path = "src/lib.rs"
+
+[dependencies]
+web = { package = "rust-js-web", path = "../web" }

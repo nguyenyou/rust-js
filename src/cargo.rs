@@ -21,6 +21,9 @@ pub enum Invocation {
 /// rust-js's target (ADR 0090): what a crate Cargo checks for it is built for.
 const TARGET: &str = "wasm32-unknown-unknown";
 
+/// The packages of the bindings rust-js ships, `react/` and `web/`.
+const BINDINGS: [&str; 2] = ["rust-js-react", "rust-js-web"];
+
 pub fn translate(args: Vec<String>) -> Invocation {
     let Some(rustc) = args
         .first()
@@ -41,7 +44,11 @@ pub fn translate(args: Vec<String>) -> Invocation {
     let probe = flags
         .iter()
         .any(|flag| flag == "-" || flag == "-vV" || flag.starts_with("--print"));
-    if probe || !library || values(&flags, "--target").next().as_deref() != Some(TARGET) {
+    // rust-js's bindings are metadata only (ADR 0024), rustc's to check, a
+    // member of the workspace or not: installed under an app's
+    // `node_modules`, they're in its workspace.
+    let bindings = std::env::var("CARGO_PKG_NAME").is_ok_and(|name| BINDINGS.contains(&name.as_str()));
+    if probe || bindings || !library || values(&flags, "--target").next().as_deref() != Some(TARGET) {
         return rustc_itself(&rustc, given);
     }
     match compile(&flags) {

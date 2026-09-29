@@ -4,7 +4,8 @@ export const bindingInputs = {
   react: [
     "react/build.sh", "react/cfg.js", "react/versions.json",
     "react/src/lib.rs", "react/src/event.rs", "react/src/dom.rs", "react/src/elements.rs",
-    "web/build.sh", "web/src/lib.rs",
+    "react/Cargo.toml", "react/build.rs",
+    "web/build.sh", "web/src/lib.rs", "web/Cargo.toml",
   ],
   serde: ["serde/Cargo.toml", "serde/Cargo.lock", "serde/src/lib.rs"],
 };

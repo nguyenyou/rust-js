@@ -701,6 +701,14 @@ export const mutations: Mutation[] = [
     replace: "                    for (path, bytes) in &extra {\n                        let _ = std::fs::write(path, bytes);\n                    }\n",
     tests: ["test/crates.test.ts", "-t", "can't record what it made"],
   },
+  {
+    name: "cargo-bindings-compiled",
+    breaks: "the bindings installed inside an app's workspace are its members, and compiled by rust-js, which can't",
+    file: "src/cargo.rs",
+    find: "BINDINGS.contains(&name.as_str())",
+    replace: "BINDINGS.contains(&name.as_str()) && false",
+    tests: ["test/crates.test.ts", "-t", "installed inside a Cargo workspace"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

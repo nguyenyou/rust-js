@@ -241,6 +241,14 @@ Registry crates, build scripts and procedural macros are built by rustc, as
 Cargo asks; of registry crates, only serde's are known to rust-js at run time.
 `cargo build` is refused.
 
+A crate using React depends on the bindings in rust-js, and `checkCargo`'s
+`react` is the release it's checked for (ADR 0043), the latest otherwise:
+
+```toml
+[dependencies]
+react = { package = "rust-js-react", path = "/path/to/rust-js/react" }
+```
+
 ## Experimental Cargo planning
 
 `rust-js-build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,
