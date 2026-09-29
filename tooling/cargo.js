@@ -116,6 +116,22 @@ export async function checkCargo({ manifestPath, toolchain, compiler, packageNam
   return { js, crates };
 }
 
+/**
+ * The workspace a Cargo manifest is of, a member's or the root's, and where
+ * Cargo builds it: what Cargo reads, and what it writes (ADR 0101).
+ * @param {{ manifestPath: string, toolchain: string, offline?: boolean }} options
+ * @returns {Promise<{ root: string, target: string }>}
+ */
+export async function cargoWorkspace({ manifestPath, toolchain, offline = false }) {
+  const manifest = resolve(manifestPath);
+  const args = [`+${toolchain}`, "metadata", "--no-deps", "--format-version=1", "--manifest-path", manifest, ...(offline ? ["--offline"] : [])];
+  const { stdout } = await execute("cargo", args, { cwd: dirname(manifest), maxBuffer: 64 * 1024 * 1024 }).catch((error) => {
+    throw new Error(`cargo metadata failed:\n${error.stderr ?? error.message}`);
+  });
+  const metadata = JSON.parse(stdout);
+  return { root: metadata.workspace_root, target: metadata.target_directory };
+}
+
 /** The package's name in a Cargo package ID: `path+file:///dir#name@1.0`, or `path+file:///dir/name#1.0`. */
 function packageNameOf(id) {
   const [url, fragment = ""] = id.split("#");

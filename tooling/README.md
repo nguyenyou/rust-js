@@ -249,6 +249,23 @@ A crate using React depends on the bindings in rust-js, and `checkCargo`'s
 react = { package = "rust-js-react", path = "/path/to/rust-js/react" }
 ```
 
+In Vite, the plugin's `cargo` option builds the workspace with `checkCargo`, for
+the React the app has installed, and the app imports the package's JS as
+`rust-js:<package>`:
+
+```js
+// vite.config.js, in the workspace's web/
+plugins: [rustJs({ cargo: { package: "frontend", manifestPath: "../Cargo.toml" } }), react()]
+```
+
+```js
+import { App } from "rust-js:frontend";
+```
+
+An edit to any crate of the workspace is one `cargo check`, and the JS it
+changes is a Fast Refresh. Cargo's target directory must be one Vite serves
+from: its workspace root, or another of `server.fs.allow`.
+
 ## Experimental Cargo planning
 
 `rust-js-build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,

@@ -137,8 +137,10 @@ pilot. No delivery dates are assigned yet.
   validation into native Rust and JavaScript, exchange JSON in both directions,
   reject malformed requests, and rebuild after a shared-source edit. The test
   uses subprocess transport. A Cargo workspace of shared crates builds with
-  rust-js as Cargo's workspace wrapper ([ADR 0101](docs/decisions/0101-cargo-workspace-wrapper.md));
-  a pilot built that way remains open.
+  rust-js as Cargo's workspace wrapper ([ADR 0101](docs/decisions/0101-cargo-workspace-wrapper.md)),
+  with the React bindings as Cargo dependencies, and Vite's plugin builds such
+  a workspace, with Fast Refresh across its crates; a pilot built that way
+  remains open.
 - [x] **M3.2 — Integrate Serde into application tooling.** The
   [native adapter](tooling/build.js) and Vite accept `bindings: ["react", "serde"]`.
   They build locked Serde dependencies with the pinned toolchain and discover

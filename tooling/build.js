@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cargoWorkspace, checkCargo } from "./cargo.js";
 import { resourceInputs } from "./resources.js";
 import { parseCompilerIdentity } from "./manifest.js";
 
@@ -27,6 +28,18 @@ function installedResources(root) {
   catch (error) {
     if (error.code !== "MODULE_NOT_FOUND") throw error;
     return defaultResources;
+  }
+}
+
+/** The React the project has installed, whose API the react crate is built
+ * with (ADR 0043): what a later React added doesn't compile. `null` without
+ * one, which gets the latest's. */
+function installedReact(root) {
+  try {
+    const require = createRequire(join(root, "package.json"));
+    return JSON.parse(readFileSync(require.resolve("react/package.json"), "utf8")).version;
+  } catch {
+    return null;
   }
 }
 
@@ -54,22 +67,11 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
   const compilerCommand = packaged ? process.execPath : rustJs;
   const compilerArgs = packaged ? [compilerPath] : [];
   const metadataInputs = resourceInputs(bindings).map(p => join(repo, p));
-  // The React the project has installed, whose API the react crate is built
-  // with (ADR 0043): what a later React added doesn't compile. `null` without
-  // one, which gets the latest's.
-  function installedReact() {
-    try {
-      const require = createRequire(join(root, "package.json"));
-      return JSON.parse(readFileSync(require.resolve("react/package.json"), "utf8")).version;
-    } catch {
-      return null;
-    }
-  }
-
+  const pinned = () => readFileSync(join(repo, "rust-toolchain.toml"), "utf8").match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
   // Each recipe uses the pinned resources and a content-keyed cache directory.
   async function prepare() {
     if (!existsSync(rustJs)) throw new Error(`no rust-js at ${rustJs}: configure rustJs with an installed compiler or build it with cargo build`);
-    const react = bindings.includes("react") ? installedReact() : null;
+    const react = bindings.includes("react") ? installedReact(root) : null;
     if (!bindings.length) return { flags: [], react };
     const packagePath = join(repo, "package.json");
     if (existsSync(packagePath)) {
@@ -125,6 +127,15 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
   }
 
   return {
+    /** A Cargo workspace's check (ADR 0101), with the pinned toolchain, this
+     * compiler, and the React the project has installed. */
+    checkCargo(options) {
+      return checkCargo({ ...options, toolchain: pinned(), compiler: rustJs, react: installedReact(root) ?? undefined });
+    },
+    /** The workspace of a Cargo manifest, and its target directory. */
+    cargoWorkspace(options) {
+      return cargoWorkspace({ ...options, toolchain: pinned() });
+    },
     watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), ...compilerInputs, ...Object.values(externs)],
     prepare,
     async compile({ crate, output, manifest }) {

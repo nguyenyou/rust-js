@@ -97,6 +97,17 @@ is a workspace of its own, or Cargo would find two roots. The React
 release's `cfg`s (ADR 0043) are the build script's, for the release
 `RUST_JS_REACT` names, which `checkCargo` sets from its `react`.
 
+**In Vite,** the plugin's `cargo` option runs `checkCargo` for the React the
+app has installed, and resolves `rust-js:<package>` to the package's JS.
+An edit to a Rust source, `Cargo.toml` or `Cargo.lock` of the workspace,
+the one `cargo metadata` says the manifest given is of, a member's too, or
+of a source a manifest lists, a module by `#[path]` outside it, is
+one `cargo check`: Cargo rebuilds what it changed, and each JS file it
+rewrites is Vite's to update, a Fast Refresh. Another set of files, another
+build's, is a reload. A package a module Cargo built imports is resolved
+as from Vite's root: it's the app's, in its `node_modules`, not the
+target directory's.
+
 ## Why
 
 - **Cargo's flags are Cargo's:** features, `cfg`s, editions, renamed
@@ -148,6 +159,15 @@ release's `cfg`s (ADR 0043) are the build script's, for the release
   then refuses it again. The bindings as the tooling installs them, inside
   the app's workspace, are checked by rustc, the whole workspace too.
   Found in review.
+- **In Vite** (`test/vite.test.ts`): an app in `web/` of a workspace of
+  `ui` and `models`, given `ui`'s manifest, builds, and in the browser, a
+  binding into a package of `web/node_modules` works, an edit to `models` is
+  a Fast Refresh that keeps a counter's state; an error is the overlay, and
+  gone once it's fixed; a broken crate fails `vite build`; and an edit of
+  a module outside the workspace, by `#[path]`, is a Fast Refresh too.
+  Found in review: the package, resolved from the target directory, and
+  the sibling's edit, outside the member's directory, and the module's,
+  outside the workspace, each failed.
 - **Found by the proof:** an import took the name of the crate's own
   function, and it was the crate's that was renamed, `main$1`, so JS
   calling `shell.main` found none. A crate's items are now named first,

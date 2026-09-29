@@ -7,7 +7,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { chromium } from "@playwright/test";
 import rustJs from "../vite-plugin/index.js";
-import { buildCompiler, buildReact, compiler, fixture } from "./support";
+import { buildCompiler, buildReact, compiler, fixture, root } from "./support";
 
 // Real Vite, real compiler, real React Fast Refresh. Isolated sources and
 // outputs: the example application and its development server are untouched.
@@ -297,3 +297,91 @@ pub fn App() -> Element {
     await server.close();
   }
 }, 60_000);
+
+// A Cargo workspace (ADR 0101): Cargo builds each crate, rust-js as its
+// workspace wrapper, and the app imports its package's JS, where Cargo's
+// build of it has it, as `rust-js:<package>`. An edit to a crate the
+// component uses is a Fast Refresh, and an error is the overlay. The app is
+// a directory of the workspace, as a full-stack one's is: what Cargo builds
+// is outside Vite's root. Found in review: a package the Rust imports is the
+// app's, in `web/node_modules`, and Vite is given `ui`'s manifest, a member's,
+// whose sibling `models` is the workspace's too.
+test("Vite builds a Cargo workspace's package and refreshes it when a crate it uses changes", async () => {
+  buildCompiler();
+  const dir = fixture("vite-cargo");
+  writeFileSync(join(dir, "Cargo.toml"), '[workspace]\nmembers = ["ui", "models"]\nresolver = "2"\n');
+  for (const name of ["ui", "models"]) mkdirSync(join(dir, name, "src"), { recursive: true });
+  writeFileSync(join(dir, "models/Cargo.toml"), '[package]\nname = "models"\nversion = "0.1.0"\nedition = "2024"\n');
+  const models = join(dir, "models/src/lib.rs");
+  writeFileSync(models, 'pub fn label() -> &\'static str {\n    "Count "\n}\n');
+  writeFileSync(join(dir, "ui/Cargo.toml"), `[package]\nname = "ui"\nversion = "0.1.0"\nedition = "2024"\n\n[dependencies]\nmodels = { path = "../models" }\nreact = { package = "rust-js-react", path = ${JSON.stringify(join(root, "react"))} }\n`);
+  const ui = join(dir, "ui/src/lib.rs");
+  const source = `#![allow(non_snake_case)]
+use react::{Element, use_state};
+
+#[rust_js::link_name = "widget#greeting"]
+fn greeting() -> &'static str {
+    unreachable!()
+}
+
+pub fn App() -> Element {
+    let (count, set_count) = use_state(0);
+    jsx! { <button title={greeting()} onClick={move |_| set_count.update(|n| n + 1)}>{models::label()}{count}</button> }
+}
+`;
+  writeFileSync(ui, source);
+  const web = join(dir, "web");
+  mkdirSync(join(web, "src"), { recursive: true });
+  mkdirSync(join(web, "node_modules/widget"), { recursive: true });
+  writeFileSync(join(web, "node_modules/widget/package.json"), '{ "name": "widget", "type": "module", "main": "index.js" }\n');
+  writeFileSync(join(web, "node_modules/widget/index.js"), 'export function greeting() { return "hello from widget"; }\n');
+  writeFileSync(join(web, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  writeFileSync(join(web, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "rust-js:ui"; createRoot(document.getElementById("root")).render(<App/>);');
+  const plugins = () => [rustJs({ rustJs: compiler, cargo: { package: "ui", manifestPath: "../ui/Cargo.toml", offline: true } }), react()];
+  await build({ root: web, configFile: false, plugins: plugins(), logLevel: "silent" });
+  expect(readFileSync(join(web, "dist/index.html"), "utf8")).toContain("/assets/");
+  // The JS is Cargo's, not beside the sources.
+  expect(existsSync(join(dir, "ui/src/lib.jsx"))).toBe(false);
+  const server = await createServer({ root: web, configFile: false, plugins: plugins(), logLevel: "silent", server: { port: 0 } });
+  let browser;
+  try {
+    await server.listen();
+    if (!server.resolvedUrls) throw new Error("Vite did not expose a listening URL");
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(server.resolvedUrls.local[0]);
+    const button = page.getByRole("button");
+    await button.filter({ hasText: "Count 0" }).waitFor();
+    expect(await button.getAttribute("title")).toBe("hello from widget");
+    await button.click();
+    await button.filter({ hasText: "Count 1" }).waitFor();
+    await page.evaluate(() => { (window as any).sameDocument = true; });
+
+    writeFileSync(models, 'pub fn label() -> &\'static str {\n    "Changed "\n}\n');
+    await button.filter({ hasText: "Changed 1" }).waitFor();
+    expect(await page.evaluate(() => (window as any).sameDocument)).toBe(true);
+
+    // A source outside the workspace, a module by `#[path]`, is one rust-js
+    // read: an edit of it is one too. Found in review.
+    const shared = `${dir}-shared.rs`;
+    writeFileSync(shared, 'pub fn label() -> &\'static str {\n    "Shared "\n}\n');
+    writeFileSync(models, `#[path = ${JSON.stringify(shared)}]\nmod shared;\n\npub fn label() -> &'static str {\n    shared::label()\n}\n`);
+    // Another module is another set of files: a reload.
+    await button.filter({ hasText: "Shared 0" }).waitFor();
+    await button.click();
+    writeFileSync(shared, 'pub fn label() -> &\'static str {\n    "Edited "\n}\n');
+    await button.filter({ hasText: "Edited 1" }).waitFor();
+
+    writeFileSync(ui, source + "pub fn broken(");
+    await page.locator("vite-error-overlay").waitFor();
+    writeFileSync(ui, source);
+    await page.locator("vite-error-overlay").waitFor({ state: "detached" });
+    await button.filter({ hasText: "Edited 1" }).waitFor();
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+  expect(() => rustJs({ cargo: { package: "ui" }, compile: async () => {} })).toThrow("give `cargo` or `compile`, not both");
+  writeFileSync(ui, source + "pub fn broken(");
+  await expect(build({ root: web, configFile: false, plugins: plugins(), logLevel: "silent" })).rejects.toThrow("pub fn broken(");
+}, 180_000);
