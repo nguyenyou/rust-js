@@ -112,6 +112,8 @@ export function playgroundFiles(): Plugin {
     if (path === "/crates/libwebapi.rmeta") return { file: webapiCrate };
     if (path === "/crates/libreact.rmeta") return { file: join(dirname(webapiCrate), "libreact.rmeta") };
     if (path === "/crates/libjs.rmeta") return { file: join(dirname(webapiCrate), "libjs.rmeta") };
+    // What the programs it compiles import (ADR 0103).
+    if (path === "/runtime.js") return { file: join(import.meta.dir, "../../runtime/index.js") };
     if (path === "/examples.json") return { json: examplesManifest() };
     // Only files an example lists: never an arbitrary path.
     const [example, ...rest] = path.startsWith("/examples/") ? path.slice("/examples/".length).split("/") : [];
@@ -121,7 +123,7 @@ export function playgroundFiles(): Plugin {
   }
   // Every path the build needs, for `generateBundle`.
   function all(): string[] {
-    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/examples.json"];
+    const paths = ["/rust-js.wasm", "/sysroot.json", "/crates/libwebapi.rmeta", "/crates/libjs.rmeta", "/crates/libreact.rmeta", "/runtime.js", "/examples.json"];
     paths.push(...sysrootFiles().map((name) => `/sysroot/${name}`));
     for (const example of examples()) paths.push(...example.files.map((file) => `/examples/${example.name}/${file}`));
     return paths;

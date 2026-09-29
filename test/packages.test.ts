@@ -36,7 +36,7 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
     else run(pack);
     const distribution = JSON.parse(readFileSync(join(bundle, "distribution.json"), "utf8"));
     expect(distribution.compiler).toEqual(JSON.parse(run([compiler, "--version-json"])));
-    expect(distribution.artifacts).toHaveLength(4);
+    expect(distribution.artifacts).toHaveLength(5);
     run(["shasum", "-a", "256", "-c", "SHA256SUMS"], bundle);
     const previousDistribution = readFileSync(join(bundle, "distribution.json"), "utf8");
     expect(() => run(pack)).toThrow("Output already exists");
@@ -55,6 +55,7 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
         "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js.tgz",
         "rust-js-resources": "./artifacts/resources.tgz",
         "rust-js-native": "./artifacts/native.tgz",
+        "@rust-js/runtime": "./artifacts/runtime.tgz",
       },
       overrides: { "rust-js-build": "./artifacts/rust-js-build.tgz" },
     }));

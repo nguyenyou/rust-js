@@ -1,6 +1,6 @@
 # 0012. Panics throw, via runtime helpers emitted on demand
 
-Status: Accepted, and amended by [0103](0103-runtime-package.md): with `--runtime-package`, helpers are imported from `@rust-js/runtime`. `panic!` and the assertion macros followed, with the same
+Status: Accepted, and its helpers' place replaced by [0103](0103-runtime-package.md): a module imports them from `@rust-js/runtime`, not each its own. `panic!` and the assertion macros followed, with the same
 `throw new Error(..)`: see [0026](0026-testing.md).
 
 ## Context

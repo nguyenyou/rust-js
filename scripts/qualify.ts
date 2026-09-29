@@ -73,6 +73,7 @@ const packages: [string, string][] = [
   ["vite-plugin-rust-js", "vite-plugin-rust-js.tgz"],
   ["rust-js-resources", "resources.tgz"],
   ["rust-js-native", "native.tgz"],
+  ["@rust-js/runtime", "runtime.tgz"],
 ];
 
 /** Every file under `dir`, by its path from there. */
@@ -217,6 +218,7 @@ async function main() {
           "vite-plugin-rust-js": dependency("vite-plugin-rust-js.tgz"),
           "rust-js-resources": dependency("resources.tgz"),
           "rust-js-native": dependency("native.tgz"),
+          "@rust-js/runtime": dependency("runtime.tgz"),
         },
         overrides: { "rust-js-build": dependency("rust-js-build.tgz") },
       }),

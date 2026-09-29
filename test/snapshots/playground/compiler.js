@@ -8,23 +8,7 @@ import {
   PreopenDirectory,
   WASI,
 } from "@bjorn3/browser_wasi_shim";
-
-function $stripSuffix(s, suffix) {
-  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
-}
-
-function $rsplitOnce(s, separator) {
-  const i = s.lastIndexOf(separator);
-  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
-}
-
-function $try(f) {
-  try {
-    return { TAG: "Ok", _0: f() };
-  } catch (e) {
-    return { TAG: "Err", _0: e };
-  }
-}
+import { $rsplitOnce, $stripSuffix, $try } from "@rust-js/runtime";
 
 export function ms(t) {
   return `${t.toFixed(0)} ms`;
@@ -41,6 +25,7 @@ export async function load(stat) {
   const webapiCrate = loadBindingCrate("webapi", start, stat);
   const jsCrate = loadBindingCrate("js", start, stat);
   const reactCrate = loadBindingCrate("react", start, stat);
+  const runtime = loadRuntime(start, stat);
   const examples = loadExamples();
   const loaded = {
     module: await module,
@@ -48,6 +33,7 @@ export async function load(stat) {
     webapiCrate: await webapiCrate,
     jsCrate: await jsCrate,
     reactCrate: await reactCrate,
+    runtime: await runtime,
     examples: await examples,
   };
   stat("ready after", ms(performance.now() - start));
@@ -84,6 +70,12 @@ async function loadSysrootFile(name) {
   const response = await window.fetch(`./sysroot/${name}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   return [name, new File(bytes, { readonly: true })];
+}
+
+async function loadRuntime(start, stat) {
+  const text = await (await window.fetch("./runtime.js")).text();
+  stat("download runtime", ms(performance.now() - start));
+  return text;
 }
 
 async function loadBindingCrate(name, start, stat) {

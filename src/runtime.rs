@@ -1,10 +1,10 @@
-//! Runtime support: each helper emitted into the module that uses it, or,
-//! with `--runtime-package`, imported from `@rust-js/runtime` (ADR 0103).
+//! Runtime support: the helpers a module uses, imported from
+//! `@rust-js/runtime`, the package of every one (ADR 0103).
 
 /// Declares the helpers, and `Helper::ALL`, every one, for the package.
 macro_rules! helpers {
     ($($name:ident,)*) => {
-        /// Runtime helpers, emitted into the module only when used.
+        /// Runtime helpers, each imported by the modules that use it.
         #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub enum Helper {
             $($name,)*
@@ -199,26 +199,21 @@ pub fn package_module() -> String {
     module
 }
 
-/// The package's names `code` refers to, sorted: what a module imports.
-pub fn imported_helpers(code: &str) -> Vec<&'static str> {
-    use std::collections::BTreeSet;
-    use std::sync::OnceLock;
-    static EXPORTS: OnceLock<BTreeSet<&'static str>> = OnceLock::new();
-    let exports = EXPORTS.get_or_init(|| {
-        Helper::ALL
-            .iter()
-            .flat_map(|helper| declared(helper.source()))
-            .collect()
-    });
+/// What a module imports of the package, sorted: each name its helpers,
+/// `sources`, declare that its `code` refers to. A name one of them
+/// declares that only another helper uses stays in the package.
+pub fn imported_helpers(sources: &[&'static str], code: &str) -> Vec<&'static str> {
+    let declared: std::collections::BTreeSet<&'static str> =
+        sources.iter().flat_map(|source| declared(source)).collect();
     let bytes = code.as_bytes();
     let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'$';
-    let mut used = BTreeSet::new();
+    let mut used = std::collections::BTreeSet::new();
     let mut i = 0;
     while i < bytes.len() {
         // A `$` that starts a name, not one inside `text$1`.
         if bytes[i] == b'$' && (i == 0 || !ident(bytes[i - 1])) {
             let end = (i + 1..bytes.len()).find(|&j| !ident(bytes[j])).unwrap_or(bytes.len());
-            if let Some(name) = exports.get(&code[i..end]) {
+            if let Some(name) = declared.get(&code[i..end]) {
                 used.insert(*name);
             }
             i = end;

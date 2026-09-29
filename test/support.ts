@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { runSync, stopped } from "./child";
@@ -37,6 +37,13 @@ export function buildWebapi() {
     web = true;
   }
 }
+/** `@rust-js/runtime`, installed in an app outside the checkout, as a package
+ * manager installs it: what its JS imports (ADR 0103). */
+export function installRuntime(app: string) {
+  mkdirSync(join(app, "node_modules", "@rust-js"), { recursive: true });
+  symlinkSync(join(root, "runtime"), join(app, "node_modules", "@rust-js", "runtime"));
+}
+
 export function fixture(name: string): string {
   mkdirSync(target, { recursive: true });
   return mkdtempSync(join(target, `${name}-`));

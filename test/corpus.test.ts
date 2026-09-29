@@ -234,9 +234,17 @@ test("print! without a process writes whole lines, and loses none", () => {
   const context = {
     console: { log: (s: string) => lines.push(`log ${s}`), error: (s: string) => lines.push(`error ${s}`) },
     queueMicrotask: (task: () => void) => tasks.push(task),
+    // What a browser has, and the runtime makes one of as it loads.
+    TextDecoder,
   };
-  const code = readFileSync(compiled.js, "utf8").replace(/^export /gm, "").replace(/^\/\/# sourceMappingURL=.*$/m, "");
-  runInNewContext(`${code}\nentry();`, context);
+  // A script, with the runtime it imports before it (ADR 0103), in a context
+  // with no `process`.
+  const runtime = readFileSync(join(root, "runtime", "index.js"), "utf8").replace(/^export /gm, "");
+  const code = readFileSync(compiled.js, "utf8")
+    .replace(/^import \{[^}]*\} from "@rust-js\/runtime";$/m, "")
+    .replace(/^export /gm, "")
+    .replace(/^\/\/# sourceMappingURL=.*$/m, "");
+  runInNewContext(`${runtime}\n${code}\nentry();`, context);
   expect(lines).toEqual(["log ab", "error x", "log "]);
   // The task ends: what no line end wrote is written.
   for (const task of tasks) task();

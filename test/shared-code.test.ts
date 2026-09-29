@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createNativeBuilder } from "../tooling/build.js";
 import { parseManifest } from "../tooling/manifest.js";
-import { buildCompiler, buildSerde, compiler, root as repository, run } from "./support";
+import { buildCompiler, buildSerde, compiler, installRuntime, root as repository, run } from "./support";
 
 test("independent native and JS clients share models, validation, and source edits", async () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js shared app ")));
+  installRuntime(root);
   try {
     for (const dir of ["shared", "client", "server"]) mkdirSync(join(root, dir));
     const model = join(root, "shared/model.rs");

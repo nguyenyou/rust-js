@@ -129,10 +129,7 @@ pub fn emit(
     }
     // The helpers its code names, from the package (ADR 0103), with the
     // other packages' imports.
-    let helpers = match module.runtime_package {
-        true => crate::runtime::imported_helpers(&generated.code),
-        false => Vec::new(),
-    };
+    let helpers = crate::runtime::imported_helpers(&module.runtime, &generated.code);
     if !helpers.is_empty() {
         if module.packages.is_empty() {
             code.push('\n');
@@ -159,10 +156,6 @@ pub fn emit(
                 .collect();
             code.push_str(&format!("import {{ {} }} from {:?};\n", named.join(", "), import.from));
         }
-    }
-    for helper in &module.runtime {
-        code.push('\n');
-        code.push_str(helper.trim_start());
     }
     if !module.caches.is_empty() {
         code.push_str(&format!("\nvar {};\n", module.caches.join(", ")));

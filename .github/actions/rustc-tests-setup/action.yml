@@ -1,5 +1,5 @@
 name: Set up for rustc's tests
-description: Bun, Node, the pinned Rust toolchain, rustc's tests/ui at the toolchain's commit (ADR 0089), and, unless another job built it, rust-js.
+description: Bun and the workspace's packages, Node, the pinned Rust toolchain, rustc's tests/ui at the toolchain's commit (ADR 0089), and, unless another job built it, rust-js.
 inputs:
   build:
     description: "'true' to build rust-js here, at target/release/rust-js; 'false' when a build job's is downloaded instead."
@@ -16,6 +16,10 @@ runs:
         node-version: '24'
     # rust-js loads the toolchain's rustc at run time, and each test's native
     # side is built with it, so every job needs it, built or not.
+    # What each case's JS imports: @rust-js/runtime, the workspace's (ADR 0103).
+    - name: Install the packages
+      shell: bash
+      run: bun install --frozen-lockfile
     - name: Install the pinned Rust toolchain
       shell: bash
       run: rustup show

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseManifest, mapManifestPaths, parseCompilerIdentity } from "../tooling/manifest.js";
 import { createNativeBuilder } from "../tooling/build.js";
-import { buildCompiler, compiler, root as repository } from "./support";
+import { buildCompiler, compiler, installRuntime, root as repository } from "./support";
 
 const manifest = {
   version: 1, input: "/virtual/lib.rs", output: "/virtual/lib.js",
@@ -90,6 +90,7 @@ test("native build adapter compiles an independent application and preserves out
 test("build adapter prepares Serde for an independent app, reuses metadata, and rebuilds source edits", async () => {
   buildCompiler();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js serde app ")));
+  installRuntime(root);
   try {
     const source = join(root, "lib.rs");
     const output = join(root, "lib.js");

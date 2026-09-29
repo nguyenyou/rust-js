@@ -1,7 +1,7 @@
 # 0103. The runtime is a package, `@rust-js/runtime`, as ReScript's is
 
-Status: Accepted. Amends [0012](0012-panics-and-runtime-helpers.md) and
-[0019](0019-one-js-file-per-module.md), whose helpers are each module's own.
+Status: Accepted. Replaces [0012](0012-panics-and-runtime-helpers.md)'s helpers,
+each module's own, and amends [0019](0019-one-js-file-per-module.md).
 
 ## Context
 
@@ -42,21 +42,30 @@ compiler's version, released with it, as ReScript's is:
   declare one name. One source: the compiler.
 - **One module, of named exports,** not one per topic as ReScript's is: a
   bundler keeps only what's imported, and one import reads as one.
-- **A module compiled with `--runtime-package` imports the helpers its code
-  names,** and defines none: `import { $debugStr, $index } from
-  "@rust-js/runtime";`. What those use in turn, the package has.
-- **Cargo's builds use it** (ADR 0101): every crate's modules import one
-  copy. A build of one file keeps its helpers as ADR 0012 has them, until
-  the default changes.
+- **A module imports the helpers its code names,** and defines none:
+  `import { $debugStr, $index } from "@rust-js/runtime";`. It asks for
+  helpers as it's lowered, as ADR 0012 has it; of those, and of what they
+  use, it imports the names its code has. What only another helper uses,
+  the package has for it. There's no other way to have them: every build,
+  one file's or Cargo's, imports the package, as every ReScript module does.
 - **A helper's state is the app's now, not each module's:** `$printed`, the
   unfinished line of a `print!` in a browser, is one buffer for every
   module, as Rust has one stdout.
 
-**Where the JS runs, it resolves the package:** an app depends on it, and
-the compiler's package will too, as `rescript` depends on
-`@rescript/runtime`. In this checkout, the root and the pilot's app depend
-on the workspace's. Vite resolves a bare import from a Cargo-built module
-from its root (ADR 0101), so the app's is the one.
+**Where the JS runs, it resolves the package:**
+
+- **An app depends on it**, as on the compiler: the distribution has
+  `runtime.tgz` beside `native.tgz`, of the compiler's version, which the
+  distribution checks, as it checks the others.
+- **In this checkout,** the root, the playground's app, the examples' and
+  the pilot's depend on the workspace's, so JS written anywhere in it
+  resolves it: `target/`'s tests, and rustc's, whose CI jobs install it.
+- **Vite** resolves it as any package, and a bare import from a Cargo-built
+  module from its root (ADR 0101), so the app's is the one.
+- **In a browser without a bundler,** an import map names it: the page the
+  browser test runner serves (ADR 0027) maps it to the project's installed
+  one, and the playground's Result frame to `runtime.js`, which the site
+  serves, loaded with the compiler and the crates.
 
 ## Why
 
@@ -79,11 +88,13 @@ from its root (ADR 0101), so the app's is the one.
 ## Consequences
 
 - **The proof** (`test/runtime-package.test.ts`, and the pilot): a module
-  compiled against the package imports the four helpers it names and runs;
-  the pilot's crates import it, and its browser flows pass. Mutations
-  catch a module that neither defines nor imports its helpers, and Cargo
-  builds that don't use the package.
-- **Not yet:** the default for a build of one file, Vite's other mode, the
-  corpus and the playground, whose compiled programs run in a page that
-  must resolve the package; and refusing a runtime of another version than
-  the compiler's, which the manifest's compiler identity (ADR 0042) can.
+  imports the four helpers it names and runs; the pilot's crates import
+  it, and its browser flows pass; the corpus, the snapshots and rustc's
+  tests run against it. A mutation catches a module that neither defines
+  nor imports its helpers.
+- **Every generated file changed:** its helpers are an import line. The
+  corpus and the snapshots were blessed.
+- **A test running JS as a script, not a module,** in a bare VM, puts the
+  package's module first, its exports plain declarations.
+- **Not yet:** refusing an installed runtime of another version than the
+  compiler's, which the manifest's compiler identity (ADR 0042) can.

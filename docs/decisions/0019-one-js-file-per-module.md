@@ -88,8 +88,8 @@ mod helpers { .. }  ──► out/helpers.js       inline modules too
 
 - The output is a set of files. The CLI still takes one `-o <file>`, for the
   root, and places the other modules relative to it.
-- Runtime helpers such as `$div` are still per file
-  ([0012](0012-panics-and-runtime-helpers.md)), so they're repeated across files.
+- Runtime helpers such as `$div` are imported from `@rust-js/runtime`
+  ([0103](0103-runtime-package.md)): one copy for every file.
 - The playground shows only the root file for now.
 - Multiple *crates* (Cargo dependencies) remain future work. Each would become
   its own folder of modules.

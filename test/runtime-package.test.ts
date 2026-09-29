@@ -25,7 +25,7 @@ test("the committed @rust-js/runtime is the compiler's helpers, each exported on
 
 // A module names a few helpers, and imports just those; one a helper uses,
 // the package has for it.
-test("a module compiled with --runtime-package imports the helpers it names, and runs", () => {
+test("a module imports the helpers it names from @rust-js/runtime, and runs", () => {
   const dir = fixture("runtime-package");
   writeFileSync(join(dir, "lib.rs"), `pub fn main() {
     let names = vec!["ada", "grace"];
@@ -36,7 +36,7 @@ test("a module compiled with --runtime-package imports the helpers it names, and
 }
 `);
   const out = join(dir, "lib.js");
-  run([compiler, join(dir, "lib.rs"), "-o", out, "--runtime-package"]);
+  run([compiler, join(dir, "lib.rs"), "-o", out]);
   const js = readFileSync(out, "utf8");
   expect(js).toMatch(/^import \{ [^}]+ \} from "@rust-js\/runtime";$/m);
   expect(js).not.toMatch(/^function \$/m);

@@ -93,9 +93,6 @@ fn compile(flags: &[String]) -> Result<Vec<String>, String> {
         "--manifest".into(),
         dir.join("lib.manifest.json").display().to_string(),
         "--cargo".into(),
-        // The helpers from `@rust-js/runtime`, one copy for every crate's
-        // modules, as ReScript's are `@rescript/runtime`'s (ADR 0103).
-        "--runtime-package".into(),
         // Each is a library, the one Cargo was asked for too: built as the
         // app, it would be fresh when another build uses it, and Cargo can't
         // be told which it was, as it drops what it set for rustc itself,

@@ -106,9 +106,11 @@ That starts with representations a JavaScript programmer would recognize:
 | `async` / `.await` | `async` / `await`, with promises |
 | module | ES module |
 
-Runtime helpers are emitted where the required behavior needs them. Each
-helper should earn its place; readable output is a design constraint throughout
-the compiler.
+Runtime helpers are imported where the required behavior needs them, from
+[`@rust-js/runtime`](runtime/README.md), released with the compiler, as
+ReScript's are from `@rescript/runtime`: `import { $index } from "@rust-js/runtime";`.
+Each helper should earn its place; readable output is a design constraint
+throughout the compiler.
 
 ### Work with JavaScript's runtime
 

@@ -729,17 +729,9 @@ export const mutations: Mutation[] = [
     name: "runtime-import-missing",
     breaks: "a module compiled against @rust-js/runtime calls its helpers, and neither defines nor imports them",
     file: "src/to_oxc.rs",
-    find: "        true => crate::runtime::imported_helpers(&generated.code),\n",
-    replace: "        true => Vec::<&str>::new(),\n",
+    find: "    let helpers = crate::runtime::imported_helpers(&module.runtime, &generated.code);\n",
+    replace: "    let helpers = Vec::<&str>::new();\n",
     tests: ["test/runtime-package.test.ts"],
-  },
-  {
-    name: "cargo-runtime-inline",
-    breaks: "a Cargo build's crates each carry their own copy of every helper, not @rust-js/runtime's one",
-    file: "src/cargo.rs",
-    find: '        "--runtime-package".into(),\n',
-    replace: "",
-    tests: ["test/pilot.test.ts", "-t", "committed JS"],
   },
 ];
 

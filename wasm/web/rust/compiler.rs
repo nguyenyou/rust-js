@@ -140,6 +140,8 @@ pub struct Loaded {
     pub webapi_crate: &'static WasiFile,
     pub js_crate: &'static WasiFile,
     pub react_crate: &'static WasiFile,
+    /// `@rust-js/runtime`, what the programs it compiles import (ADR 0103).
+    pub runtime: String,
     pub examples: Vec<Example>,
 }
 
@@ -171,6 +173,7 @@ pub async fn load(stat: Stat) -> Loaded {
     let webapi_crate = load_binding_crate("webapi", start, stat.clone());
     let js_crate = load_binding_crate("js", start, stat.clone());
     let react_crate = load_binding_crate("react", start, stat.clone());
+    let runtime = load_runtime(start, stat.clone());
     let examples = load_examples();
     let loaded = Loaded {
         module: module.await,
@@ -178,6 +181,7 @@ pub async fn load(stat: Stat) -> Loaded {
         webapi_crate: webapi_crate.await,
         js_crate: js_crate.await,
         react_crate: react_crate.await,
+        runtime: runtime.await,
         examples: examples.await,
     };
     stat("ready after".to_string(), ms(now() - start));
@@ -215,6 +219,12 @@ async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
     let response = window::fetch(window, &format!("./sysroot/{name}")).await;
     let bytes = uint8_array::new(response::array_buffer(response).await);
     (name, new_file(bytes, &FileOptions { readonly: true }))
+}
+
+async fn load_runtime(start: f64, stat: Stat) -> String {
+    let text = response::text(window::fetch(window, "./runtime.js").await).await;
+    stat("download runtime".to_string(), ms(now() - start));
+    text
 }
 
 async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static WasiFile {

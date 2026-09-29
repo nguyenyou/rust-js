@@ -75,8 +75,15 @@ pub enum Prepared {
     Page(String),
 }
 
-/// `from`'s directory joined with a relative specifier like `../lib.js`.
+/// What the programs import of the playground's own: `@rust-js/runtime`.
+const RUNTIME: &str = "@rust-js/runtime";
+
+/// `from`'s directory joined with a relative specifier like `../lib.js`. A
+/// package's, `@rust-js/runtime`, is itself.
 pub fn resolve(from: &str, specifier: &str) -> String {
+    if !specifier.starts_with('.') {
+        return specifier.to_string();
+    }
     let mut parts: Vec<&str> = from.split('/').collect();
     parts.pop();
     for part in specifier.split('/') {
@@ -92,11 +99,11 @@ pub fn resolve(from: &str, specifier: &str) -> String {
 /// Link generated ES modules through an import map. Virtual specifiers avoid
 /// embedding URLs recursively, so cycles work. The browser owns module
 /// evaluation, named imports and live bindings; no identifier rewriting.
-pub fn link(files: &JsMap) -> String {
+pub fn link(files: &[(String, String)]) -> String {
     let imports = reg_exp::new(r#"^import ([^;]+?) from "([^"]+)";$"#, "gm");
     let source_map = reg_exp::new(r"^//# sourceMappingURL=.*$", "m");
     let mut entries = Vec::new();
-    for (path, code) in text_entries(files) {
+    for (path, code) in files.iter().cloned() {
         let from = path.clone();
         let body = replace_matches(
             &code,
@@ -162,8 +169,10 @@ const FRAME_HEAD: &str = r#"<!doctype html>
 
 /// The page that runs the root module's `main()`, or with `test`, the
 /// crate's tests, and reports as run number `run`.
-pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared {
-    let sources = text_entries(files);
+pub fn prepare(files: &JsMap, runtime: &str, root_file: &str, test: bool, run: u32) -> Prepared {
+    // The program's modules, and the runtime they import, as one of them.
+    let mut sources = text_entries(files);
+    sources.push((RUNTIME.to_string(), runtime.to_string()));
     let tests = match root_file.strip_suffix(".jsx").or_else(|| root_file.strip_suffix(".js")) {
         Some(stem) => format!("{stem}.test.js"),
         None => root_file.to_string(),
@@ -199,7 +208,7 @@ pub fn prepare(files: &JsMap, root_file: &str, test: bool, run: u32) -> Prepared
         return Prepared::Blocked(external);
     }
     let report = |message: &str| format!("parent.postMessage({{ run: {run}, {message} }}, \"*\")");
-    let linked = link(files);
+    let linked = link(&sources);
     let entry = json_string(&format!("rust-js:{}", if test { &tests } else { root_file }));
     let start = if test {
         format!("await import({entry});\n{TEST_RUNNER}")

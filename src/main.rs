@@ -181,13 +181,6 @@ fn main() -> ExitCode {
     } else {
         false
     };
-    // The helpers imported from `@rust-js/runtime` (ADR 0103).
-    let runtime_package = if let Some(i) = ours.iter().position(|arg| arg == "--runtime-package") {
-        ours.remove(i);
-        true
-    } else {
-        false
-    };
     let export_library = if let Some(i) = ours.iter().position(|arg| arg == "--library") {
         ours.remove(i);
         true
@@ -276,11 +269,14 @@ fn main() -> ExitCode {
     // of the same plan, checked for collisions with the rest, or not at all.
     let mut metadata: Option<(PathBuf, PathBuf)> = None;
     let mut dep_info: Option<(PathBuf, PathBuf)> = None;
-    let stage = output
+    // Named only when something is staged: WASI, the playground's, has no
+    // process id to name it by.
+    let beside = output
         .parent()
         .filter(|dir| !dir.as_os_str().is_empty())
         .unwrap_or(std::path::Path::new("."))
-        .join(format!(".rust-js-metadata-{}", std::process::id()));
+        .to_path_buf();
+    let stage = move || beside.join(format!(".rust-js-metadata-{}", std::process::id()));
     // `--emit mir`, rustc's other spelling, as `--emit=mir`.
     while let Some(i) = rustc_args.iter().position(|arg| arg == "--emit") {
         let kinds = if i + 1 < rustc_args.len() {
@@ -302,7 +298,7 @@ fn main() -> ExitCode {
                         eprintln!("rust-js: say where a library's metadata goes: --emit=metadata=<path>");
                         return ExitCode::FAILURE;
                     };
-                    let staged = stage.join(path.file_name().unwrap_or_default());
+                    let staged = stage().join(path.file_name().unwrap_or_default());
                     rewritten.push(format!("metadata={}", staged.display()));
                     metadata = Some((staged, path));
                 }
@@ -311,7 +307,7 @@ fn main() -> ExitCode {
                 // Cargo's record of the sources (ADR 0101), staged as the
                 // metadata is, and published with it.
                 None if cargo && let Some(path) = kind.strip_prefix("dep-info=").map(PathBuf::from) => {
-                    let staged = stage.join(path.file_name().unwrap_or_default());
+                    let staged = stage().join(path.file_name().unwrap_or_default());
                     rewritten.push(format!("dep-info={}", staged.display()));
                     dep_info = Some((staged, path));
                 }
@@ -326,14 +322,13 @@ fn main() -> ExitCode {
         *arg = format!("--emit={}", rewritten.join(","));
     }
     if (metadata.is_some() || dep_info.is_some())
-        && let Err(error) = std::fs::create_dir_all(&stage)
+        && let Err(error) = std::fs::create_dir_all(stage())
     {
         eprintln!("rust-js: cannot stage the metadata: {error}");
         return ExitCode::FAILURE;
     }
     let recorded = cargo.then(|| (manifest.clone(), metadata.clone()));
     let mut plan = output::OutputPlan::new(input, output, test, manifest);
-    plan.runtime_package = runtime_package;
     plan.metadata = metadata.clone();
     let mut callbacks = RustJs {
         dependencies,
@@ -368,7 +363,7 @@ fn main() -> ExitCode {
         _ => Ok(()),
     };
     if metadata.is_some() || dep_info.is_some() {
-        let _ = std::fs::remove_dir_all(&stage);
+        let _ = std::fs::remove_dir_all(stage());
     }
     match published {
         Ok(()) => exit,

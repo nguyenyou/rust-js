@@ -16,7 +16,7 @@ const run = (args: string[], cwd = root) => {
   return result.stdout.toString();
 };
 const identity = parseCompilerIdentity(run([compiler, "--version-json"]));
-for (const directory of ["tooling", "vite-plugin"]) {
+for (const directory of ["tooling", "vite-plugin", "runtime"]) {
   const pkg = JSON.parse(readFileSync(join(root, directory, "package.json"), "utf8"));
   if (pkg.version !== identity.version) throw new Error(`${pkg.name} ${pkg.version} does not match compiler ${identity.version}`);
 }
@@ -27,12 +27,13 @@ const source = { commit: run(["git", "rev-parse", "HEAD"]).trim(), clean: run(["
 mkdirSync(dirname(output), { recursive: true });
 const staging = mkdtempSync(join(dirname(output), ".rust-js-distribution-"));
 try {
-  for (const [directory, file] of [["tooling", "rust-js-build.tgz"], ["vite-plugin", "vite-plugin-rust-js.tgz"]]) {
+  // @rust-js/runtime, what the JS the compiler writes imports (ADR 0103).
+  for (const [directory, file] of [["tooling", "rust-js-build.tgz"], ["vite-plugin", "vite-plugin-rust-js.tgz"], ["runtime", "runtime.tgz"]]) {
     run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", join(staging, file)], join(root, directory));
   }
   run([process.execPath, "scripts/package-resources.ts", join(staging, "resources.tgz")]);
   run([process.execPath, "scripts/package-compiler.ts", compiler, join(staging, "native.tgz")]);
-  const files = ["rust-js-build.tgz", "vite-plugin-rust-js.tgz", "resources.tgz", "native.tgz"];
+  const files = ["rust-js-build.tgz", "vite-plugin-rust-js.tgz", "runtime.tgz", "resources.tgz", "native.tgz"];
   const sha256 = (file: string) => createHash("sha256").update(readFileSync(join(staging, file))).digest("hex");
   const artifacts = files.map(file => ({ file, sha256: sha256(file) }));
   writeFileSync(join(staging, "distribution.json"), JSON.stringify({

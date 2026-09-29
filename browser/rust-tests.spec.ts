@@ -8,7 +8,8 @@
 // test. The page is served from a made-up origin by `page.route`: no server.
 
 import { readFileSync } from "node:fs";
-import { basename, dirname, relative, resolve, sep } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import { test } from "@playwright/test";
 
@@ -19,10 +20,15 @@ if (files.length === 0) {
   throw new Error("set RUST_JS_TESTS to the .test.js files that `rust-js --test` wrote");
 }
 
+/** `@rust-js/runtime`, as the project installed it: what the modules import (ADR 0103). */
+const runtime = createRequire(join(process.cwd(), "package.json")).resolve("@rust-js/runtime");
+const RUNTIME = "/@rust-js/runtime.js";
+
 /** The page: `test()` as bun test and Vitest provide it, and a way to run one. */
 const page = (testFile: string) => `<!doctype html>
 <meta charset="utf-8">
 <body></body>
+<script type="importmap">{"imports":{"@rust-js/runtime":"${RUNTIME}"}}</script>
 <script type="module">
   const tests = new Map();
   globalThis.test = (name, f) => tests.set(name, f);
@@ -64,6 +70,7 @@ for (const file of files) {
           if (url.pathname === "/") {
             return route.fulfill({ contentType: "text/html", body: page(basename(path)) });
           }
+          if (url.pathname === RUNTIME) return route.fulfill({ path: runtime, contentType: "text/javascript" });
           // Only files next to the test file.
           const target = resolve(dir, `.${decodeURIComponent(url.pathname)}`);
           return target.startsWith(dir + sep) ? route.fulfill({ path: target }) : route.fulfill({ status: 404 });

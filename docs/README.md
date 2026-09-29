@@ -50,7 +50,7 @@ This folder is where we write those choices down.
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
 | `src/lower/serde.rs`, `src/lower/serde/`, `serde/` | `#[serde(..)]` attributes, and JSON written and read as serde_json does; the serde crates, built with the pinned toolchain |
 | `src/runtime/from_json.js` | serde_json's reader, ported to JS |
-| `src/runtime.rs` | Runtime helpers emitted on demand |
+| `src/runtime.rs` | Runtime helpers, the `@rust-js/runtime` package's (`runtime/`) |
 | `src/prepare.rs` | JSX readability preparation after lowering |
 | `src/program.rs`, `src/lower/sources.rs` | Owned linked modules and multi-file source origins |
 | `src/output.rs`, `src/manifest.rs` | Validated artifact plans and the versioned build result |

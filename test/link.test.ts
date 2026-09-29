@@ -61,7 +61,9 @@ test("derived Debug dependencies are retained transitively without unused implem
   expect(readFileSync(join(dir, "lib.js"), "utf8")).not.toContain("Unused");
 });
 
-test("heap modules request only their operations and linking supplies helper dependencies", async () => {
+// Each module imports its own operations from @rust-js/runtime (ADR 0103);
+// what those use, `$siftUp` and `$siftDown`, the package has for them.
+test("heap modules import only their operations, and the package has what those use", async () => {
   const dir = fixture("heap-runtime-dependencies");
   writeFileSync(join(dir, "lib.rs"), `
     pub mod push_pop {
@@ -83,11 +85,11 @@ test("heap modules request only their operations and linking supplies helper dep
   run(["rustc", "--edition=2024", "-Awarnings", join(dir, "native.rs"), "-o", join(dir, "native")]);
   const expected = run([join(dir, "native")]).trim().split("\n").map(line => JSON.parse(line));
   run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js")]);
-  for (const [i, name, needed, unused] of [[0, "push_pop", "$siftUp", "$siftDown"], [1, "sorted", "$siftDown", "$siftUp"]] as const) {
+  for (const [i, name, imports] of [[0, "push_pop", "$cmp, $heapPop, $heapPush"], [1, "sorted", "$cmp, $heapFrom, $heapSorted"]] as const) {
     const file = join(dir, `${name}.js`);
     expect((await import(file)).run()).toEqual(expected[i]);
     const code = readFileSync(file, "utf8");
-    expect(code).toContain(`function ${needed}(`);
-    expect(code).not.toContain(unused);
+    expect(code).toContain(`import { ${imports} } from "@rust-js/runtime";`);
+    expect(code).not.toContain("$sift");
   }
 });

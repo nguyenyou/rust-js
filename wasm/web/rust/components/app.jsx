@@ -2,6 +2,7 @@
 
 import { compileInWorker } from "../../compiler-client.js";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { $rsplitOnce, $stripSuffix } from "@rust-js/runtime";
 
 import { outputState, sourceState } from "../codemirror.js";
 import { load, loadExample, mb, ms } from "../compiler.js";
@@ -14,15 +15,6 @@ import { Toolbar } from "./toolbar.jsx";
 import { prepare } from "../programs.js";
 import { Project, jsName } from "../projects.js";
 import { buildTree } from "../tree.js";
-
-function $stripSuffix(s, suffix) {
-  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
-}
-
-function $rsplitOnce(s, separator) {
-  const i = s.lastIndexOf(separator);
-  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
-}
 
 function say(text, tone) {
   return { text, tone };
@@ -93,10 +85,10 @@ export function App() {
     const view = source.current;
     return view != null ? view.state : undefined;
   };
-  const run = (files, rootJs, test) => {
+  const run = (files, runtime, rootJs, test) => {
     const n = (runs.current + 1) >>> 0;
     runs.current = n;
-    const match = prepare(files, rootJs, test, n);
+    const match = prepare(files, runtime, rootJs, test, n);
     if (match === "Nothing") {
       setProgram(undefined);
     } else if (match === "Jsx") {
@@ -147,7 +139,7 @@ export function App() {
           const shown$1 = files.some((param) => param[0] === shown) ? shown : rootJs$1;
           setOutput({ TAG: "Files", files, shown: shown$1 });
           setStatus(say(`Compiled: ${count} JS file${count === 1 ? "" : "s"}.`, "Good"));
-          run(r.files, rootJs$1, test);
+          run(r.files, loaded$1.runtime, rootJs$1, test);
         } else {
           setOutput({ TAG: "Diagnostics", _0: r.stderr });
           setProgram(undefined);

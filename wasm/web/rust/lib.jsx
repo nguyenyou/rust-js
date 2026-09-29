@@ -2,15 +2,9 @@
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { $unwrap } from "@rust-js/runtime";
 
 import { App } from "./components/app.jsx";
-
-function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
-  if (value == null) {
-    throw new Error(message);
-  }
-  return value;
-}
 
 export function start() {
   const root = createRoot($unwrap(document.getElementById("app"), "the page has an #app"));
