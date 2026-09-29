@@ -1035,7 +1035,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// `p` of `&mut p`, a reborrow's `&mut *&mut v[0]` too: `v[0]`.
-    fn mut_borrowed(&self, arg: ExprId) -> Option<ExprId> {
+    pub(super) fn mut_borrowed(&self, arg: ExprId) -> Option<ExprId> {
         let ExprKind::Borrow {
             borrow_kind: rustc_middle::mir::BorrowKind::Mut { .. },
             arg: mut place,

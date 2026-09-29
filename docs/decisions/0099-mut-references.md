@@ -1,6 +1,7 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
-Status: Proposed. Extends [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
+Status: Accepted in part: its first two rules, a `&mut` in a variable and
+the index loop. Handles, generic `&mut T` and closures are to come. Extends [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
 ## Context
 
@@ -127,6 +128,35 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
 
 ## Consequences
 
+- **The first two rules are in,** each with its corpus cases, compared
+  with native Rust, and its mutations:
+  - `mut_ref_local`: a number, a `String`, an `Option` and a field
+    through a `&mut` in a variable, one passed on and one reborrowed; an
+    index fixed where it's borrowed, `const at = $at(v, i);` and then
+    `v[at]`. Reached through a reference that can be assigned again, one
+    anywhere but an immutable variable (a `let mut`, a field, an element,
+    behind another `&mut`), the place is in the object of that moment,
+    kept: `const o = cur;` for `&mut cur[0]`, `const o = h.list;` for
+    `&mut h.list[0]`, `const o = refs[0];` for `&mut refs[0][0]`. Rust
+    freezes the rest of the path while it's borrowed, but not where a
+    reference is.
+  - `mut_ref_loop`: `&mut v` and `iter_mut()` of a `Vec`, an array and a
+    slice, `continue` and `break`. The loop keeps the collection it starts
+    with, `const items = cur;`, if what holds it is assigned again. Of
+    `&mut v[a..b]`, it runs from `a` to where `$sliceEnd` says it ends,
+    which panics as `$slice` does (`mut_ref_loop_bounds`).
+- **A `ref mut` binding of a `let` variable writes it too,** as a `&mut`
+  in a variable does, for a value that isn't an object: `if let Some(n) =
+  p { *n += 1 }` is `o += 1`. Of an object, its variable may be a `&mut`
+  itself, and assigning it wouldn't replace what it points to: that stays
+  an error.
+- **A `&mut` to an object in a variable is still the object** (ADR 0025),
+  and `*r = v` of one still an error: replacing an object whole through a
+  `&mut` comes with handles.
+- **Anything else stays an error:** a `&mut` kept in a struct, a `Vec` or
+  an `Option`, chosen by a branch, passed to a generic function or
+  returned. The diagnostics test checks a struct's, a branch's and a
+  generic function's.
 - Most of the 37 tests of `&mut` to a value that isn't an object need the
   first two rules only, and those come first; handles, generic `&mut T`
   and closures follow, each with its corpus cases and mutations.

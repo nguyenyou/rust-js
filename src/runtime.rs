@@ -109,6 +109,7 @@ helpers! {
     ParseBool,
     ParseChar,
     SliceRange,
+    SliceEnd,
     Extend,
     InsertAt,
     RemoveAt,
@@ -1641,6 +1642,16 @@ function $slice(items, start, end = items.length) {
   if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
   if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
   return items.slice(start, end);
+}
+"#
+            }
+            // `for x in &mut v[a..b]` (ADR 0099): where it ends, with `$slice`'s panics.
+            Helper::SliceEnd => {
+                r#"
+function $sliceEnd(items, start, end = items.length) {
+  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
+  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
+  return end;
 }
 "#
             }

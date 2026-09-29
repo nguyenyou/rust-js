@@ -44,6 +44,13 @@ makes the array longer, where Rust panics.
   `total += f(x)` stays as it is. Found by a generated program (seed
   1476), where an index checked first panicked before Rust's `% 0` did,
   and in review.
+- **A `Vec`'s index is a call, `index_mut(&mut *cur, i)`,** which takes
+  `*cur` before `i` runs; an array's is the place `(*cur)[i]`, which
+  follows `cur` only after, as JS does. So where the index could assign
+  `cur`, `cur[{ cur = &mut b; 0 }] += 1`, a `Vec`'s is taken first,
+  `const tmp = cur;`, and the array's isn't. A place a reference is followed
+  to changes when the reference does, which a borrow of it doesn't stop
+  (ADR 0099). Found in review.
 - **An array that has elements written is a type that changes in place**
   (ADR 0020). A copy of it is `a.slice()`, or a copy of each item that
   changes too. `let b = a; a[1] = 9;` leaves `b` as it was.

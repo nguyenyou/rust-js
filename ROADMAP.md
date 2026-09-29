@@ -288,7 +288,10 @@ tooling while preserving rust-js's own readable-output goals.
   Progress: `i64`/`u64` are exact BigInts, with saturating float casts and
   integer `TryFrom` ([ADR 0086](docs/decisions/0086-64-bit-integers.md),
   [`wide` example](examples/wide.rs) compared with native Rust); 128-bit
-  integers and `f32` remain.
+  integers and `f32` remain. A `&mut` to a number, a `String` or an
+  `Option` in a variable names its place, and `for x in &mut v` of them is
+  an index loop ([ADR 0099](docs/decisions/0099-mut-references.md)); a
+  `&mut` kept elsewhere, a handle, remains.
 - [ ] **M7.3 — Complete reusable abstraction support.** Extend associated
   types/constants, generic traits and methods, const generics, trait objects,
   closures, macros, and async composition against the inventory. Test them

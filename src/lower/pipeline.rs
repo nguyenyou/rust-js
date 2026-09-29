@@ -179,6 +179,7 @@ pub fn lower_crate<'tcx>(
             stepped: body.map_or_else(HashSet::new, |body| super::stepped_locals(tcx, &body.thir)),
             iterators: HashSet::new(),
             boxes: HashSet::new(),
+            aliases: HashSet::new(),
             cloning: Vec::new(),
             item: def_id,
             representable: RefCell::new(HashMap::new()),

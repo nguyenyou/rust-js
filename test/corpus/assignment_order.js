@@ -98,6 +98,59 @@ function main() {
   const value$13 = inc();
   e = (e + value$13) | 0;
   console.log(`${d.n} ${e}`);
+  let [a$1, b] = [
+    [1, 2],
+    [10, 20],
+  ];
+  let cur = a$1;
+  const tmp = cur;
+  cur = b;
+  tmp[$at(tmp, 0)] = (tmp[$at(tmp, 0)] + 1) | 0;
+  console.log(
+    `[${a$1.map((item) => String(item)).join(", ")}] [${b.map((item) => String(item)).join(", ")}]`,
+  );
+  let [a$2, b$1] = [
+    [1, 2],
+    [10, 20],
+  ];
+  let cur$1 = a$2;
+  const tmp$1 = cur$1;
+  cur$1 = b$1;
+  tmp$1[$at(tmp$1, 0)] = 7;
+  console.log(
+    `[${a$2.map((item) => String(item)).join(", ")}] [${b$1.map((item) => String(item)).join(", ")}]`,
+  );
+  let [a$3, b$2] = [
+    [1, 2],
+    [10, 20],
+  ];
+  let cur$2 = a$3;
+  const tmp$2 = cur$2;
+  cur$2 = b$2;
+  const at = $at(tmp$2, 0);
+  tmp$2[at] = (tmp$2[at] + 1) | 0;
+  console.log(
+    `[${a$3.map((item) => String(item)).join(", ")}] [${b$2.map((item) => String(item)).join(", ")}]`,
+  );
+  const tmp$3 = [
+    [1, 2],
+    [10, 20],
+  ];
+  let a$4 = tmp$3[0].slice();
+  let b$3 = tmp$3[1].slice();
+  let cur$3 = a$4;
+  cur$3 = b$3;
+  const o = cur$3;
+  o[0] = (o[0] + 1) | 0;
+  console.log(
+    `[${a$4
+      .slice()
+      .map((item) => String(item))
+      .join(", ")}] [${b$3
+      .slice()
+      .map((item) => String(item))
+      .join(", ")}]`,
+  );
   let empty = [];
   const value$14 = (value("out of bounds", 8) << 24) >> 24;
   empty[$at(empty, index("out of bounds", 0))] = value$14;

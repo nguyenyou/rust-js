@@ -287,6 +287,9 @@ struct FnCx<'a, 'tcx> {
     /// Parameters that are a `&mut` to a value JS can't change in place, a
     /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
     boxes: HashSet<LocalVarId>,
+    /// Variables bound once to a `&mut` of a value that isn't an object:
+    /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
+    aliases: HashSet<LocalVarId>,
     /// The recursive types being cloned, and the function each one's clone
     /// is (`clone_value`), which a clone inside it calls.
     cloning: Vec<(Ty<'tcx>, String)>,
@@ -995,6 +998,39 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.vars.insert(var, alias);
             return Ok(());
         }
+        // `let y = &mut x;`: `y` names `x`, so `*y = 5` is `x = 5` (ADR 0099).
+        // While `y` lives, Rust lets nothing else use `x`.
+        if let PatKind::Binding {
+            var,
+            mode: BindingMode(ByRef::No, Mutability::Not),
+            subpattern: None,
+            ty,
+            ..
+        } = pat.kind
+            && let ty::Ref(_, inner, Mutability::Mut) = *ty.kind()
+            && !self.is_object(inner)
+            && let Some(init) = init
+            && let moved = match self.thir[self.strip(init)].kind {
+                ExprKind::VarRef { id } => self.aliases.contains(&id).then_some(id),
+                _ => None,
+            }
+            && let Some(borrowed) = self.mut_borrowed(init).or(moved.map(|_| init))
+        {
+            let place = match moved {
+                Some(id) => self.vars[&id].place.clone(),
+                None => self.fixed_place(borrowed, pat.span, out)?,
+            };
+            self.aliases.insert(var);
+            self.vars.insert(
+                var,
+                Var {
+                    place,
+                    mutable: true,
+                    depth: self.loops.len(),
+                },
+            );
+            return Ok(());
+        }
         let span = self.js_span(span);
         match &pat.kind {
             PatKind::Binding {
@@ -1196,6 +1232,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // ends (ADR 0098): a `const` of its own, named as in Rust.
             let owns = self.is_owner(b.var)?;
             if (stable || b.by_ref_mut) && !b.mutable && !b.place.has_effects() && !owns {
+                // `ref mut` of a `let` variable writes it, as a `&mut` in a
+                // variable does (ADR 0099): `if let Some(n) = p { *n += 1 }`.
+                // Not an object's: its variable may be a `&mut` itself.
+                if b.by_ref_mut
+                    && matches!(*b.ty.kind(), ty::Ref(_, inner, _) if !self.is_object(inner))
+                    && self.is_let(&b.place)
+                {
+                    self.aliases.insert(b.var);
+                }
                 self.vars.insert(
                     b.var,
                     Var {
@@ -1398,6 +1443,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             hir::ExprKind::Loop(_, Some(label), ..) => label.ident.name.as_str().trim_start_matches('\'').to_string(),
             _ => "loop".to_string(),
         };
+        if let Some((items, range)) = self.mut_items(&f) {
+            return self.index_loop(f, label_base, items, range, span, out);
+        }
         let head_ty = self.reveal(self.thir[f.head].ty);
         let head_span = self.thir[f.head].span;
         let inclusive = self.inclusive_range(f.head);
@@ -1530,6 +1578,164 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     }
                 }
                 (None, None) => unreachable!("a range or a sequence"),
+            }
+            .at(span),
+        );
+        Ok(())
+    }
+
+    /// What `for x in &mut v` changes, if it's an index loop (ADR 0099):
+    /// `v` of `&mut v` or `v.iter_mut()`, of a `Vec`, an array or a slice
+    /// whose items aren't objects, bound to a plain `x`; and the range
+    /// of `&mut v[a..b]`, if it's one.
+    fn mut_items(&self, f: &ForLoop<'a, 'tcx>) -> Option<(ExprId, Option<ExprId>)> {
+        let PatKind::Binding {
+            mode: BindingMode(ByRef::No, Mutability::Not),
+            subpattern: None,
+            ty,
+            ..
+        } = f.pat.kind
+        else {
+            return None;
+        };
+        let ty::Ref(_, item, Mutability::Mut) = *ty.kind() else {
+            return None;
+        };
+        if self.is_object(item) {
+            return None;
+        }
+        let mut e = self.strip(f.head);
+        let mut range = None;
+        loop {
+            match self.thir[e].kind {
+                ExprKind::Borrow { arg, .. }
+                | ExprKind::Deref { arg }
+                | ExprKind::PointerCoercion { source: arg, .. } => {
+                    e = self.strip(arg);
+                }
+                ExprKind::Call { fun, ref args, .. } => {
+                    let index_mut = matches!(*self.thir[fun].ty.kind(), ty::FnDef(d, _)
+                        if self.tcx.trait_of_assoc(d).is_some_and(|t| self.tcx.is_lang_item(t, LangItem::IndexMut)));
+                    let by_range = [
+                        LangItem::Range,
+                        LangItem::RangeFrom,
+                        LangItem::RangeTo,
+                        LangItem::RangeFull,
+                    ]
+                    .into_iter()
+                    .any(|item| args.len() == 2 && self.is_lang_adt(self.thir[args[1]].ty, item));
+                    if index_mut && by_range && range.is_none() {
+                        range = Some(args[1]);
+                    } else if self.std_fn(fun) != Some(Std::Same) {
+                        return None;
+                    }
+                    e = self.strip(args[0]);
+                }
+                _ => break,
+            }
+        }
+        let items = self.thir[e].ty.peel_refs();
+        let sequence = items.is_array() || items.is_slice() || self.is_vec_like(items);
+        (sequence && self.place(e).is_some()).then_some((e, range))
+    }
+
+    /// `for x in &mut v`: `for (let i = 0; i < v.length; i++)`, with `*x`
+    /// naming `v[i]` (ADR 0099). Of `&mut v[a..b]`, from `a` to `b`, as
+    /// Rust checks them.
+    fn index_loop(
+        &mut self,
+        f: ForLoop<'a, 'tcx>,
+        label_base: String,
+        items: ExprId,
+        range: Option<ExprId>,
+        span: js::Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<()> {
+        let PatKind::Binding { var, .. } = f.pat.kind else {
+            unreachable!("`mut_items` binds a name")
+        };
+        let (place, _) = self.place(items).expect("`mut_items` has a place");
+        // The collection of the loop's start, whatever `cur` holds after.
+        let place = if self.through_rebound(items, true) {
+            self.spill("items", place, out)
+        } else {
+            self.fixed(place, false, out)
+        };
+        let length = Expr::member(place.clone(), "length");
+        let (start, end) = match range.map(|r| self.strip(r)) {
+            None => (Expr::int(0), length),
+            Some(range) => {
+                let range_ty = self.thir[range].ty;
+                let ExprKind::Adt(ref adt) = self.thir[range].kind else {
+                    return Err(self.unsupported(self.thir[range].span, "slicing by a range in a variable"));
+                };
+                let bound = |i: usize| {
+                    adt.fields
+                        .iter()
+                        .find(|field| field.name.as_usize() == i)
+                        .map(|field| field.expr)
+                };
+                let (start, end) = if self.is_lang_adt(range_ty, LangItem::Range) {
+                    (bound(0), bound(1))
+                } else if self.is_lang_adt(range_ty, LangItem::RangeFrom) {
+                    (bound(0), None)
+                } else if self.is_lang_adt(range_ty, LangItem::RangeTo) {
+                    (None, bound(0))
+                } else {
+                    (None, None)
+                };
+                let mut bounds: Vec<ExprId> = start.into_iter().collect();
+                bounds.extend(end);
+                let mut values = self.operands(&bounds, out)?.into_iter();
+                let start = match start {
+                    Some(_) => values.next().expect("a start"),
+                    None => Expr::int(0),
+                };
+                let end = end.map(|_| values.next().expect("an end"));
+                if matches!(start.kind, js::ExprKind::Num(n) if n == 0.0) && end.is_none() {
+                    (start, length)
+                } else {
+                    // Where it ends, checked as `&v[a..b]` is, once.
+                    let start = if start.is_constant() {
+                        start
+                    } else {
+                        self.spill("start", start, out)
+                    };
+                    let mut args = vec![place.clone(), start.clone()];
+                    args.extend(end);
+                    self.runtime.insert(Helper::SliceEnd);
+                    let end = self.spill("end", Expr::call(Expr::var("$sliceEnd"), args), out);
+                    (start, end)
+                }
+            }
+        };
+        let name = self.fresh("i");
+        self.aliases.insert(var);
+        self.vars.insert(
+            var,
+            Var {
+                place: Expr::index(place, Expr::var(&name)),
+                mutable: true,
+                depth: self.loops.len(),
+            },
+        );
+        self.loops.push(Loop {
+            scope: f.scope,
+            label_base,
+            label: None,
+            dest: Dest::Discard,
+        });
+        let mut body = Vec::new();
+        self.stmt(f.body, &Dest::Discard, &mut body)?;
+        let label = self.loops.pop().unwrap().label;
+        let test = Expr::bin(Op::Lt, Expr::var(&name), end);
+        out.push(
+            StmtKind::For {
+                label,
+                name,
+                start,
+                test,
+                body,
             }
             .at(span),
         );
@@ -2452,9 +2658,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
             out.extend(evaluated.statements);
-            // Borrowed or immutable places cannot change before the call.
-            let borrowed =
-                matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. } if self.place(arg).is_some());
+            // Borrowed or immutable places cannot change before the call. A
+            // reference they're reached through can: `&mut *cur` of
+            // `index_mut(&mut *cur, { cur = &mut b; 0 })` is the `Vec` `cur`
+            // held then (ADR 0099).
+            let borrowed = matches!(self.thir[self.strip(e)].kind, ExprKind::Borrow { arg, .. }
+                if self.place(arg).is_some() && !self.through_rebound(arg, false));
             let settled = evaluated.value.is_constant()
                 || borrowed
                 || self.stable_place(self.strip_refs(e)).is_some()
@@ -3425,6 +3634,111 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// Is `place` a variable declared with `let`, which can be assigned?
+    fn is_let(&self, place: &Expr) -> bool {
+        let js::ExprKind::Var(name) = &place.kind else {
+            return false;
+        };
+        self.vars
+            .values()
+            .chain(self.captures.values())
+            .any(|v| v.mutable && matches!(&v.place.kind, js::ExprKind::Var(n) if n == name))
+    }
+
+    /// What a `&mut` in a variable names (ADR 0099), fixed where it's
+    /// borrowed, since the variables it's reached through may change
+    /// meanwhile: an index is evaluated once, `let r = &mut v[i]` keeping
+    /// the index of that moment, and so is an object reached through a
+    /// reference in a variable that's assigned again, `&mut cur.count`.
+    fn fixed_place(&mut self, borrowed: ExprId, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let place = if self.in_element(borrowed) {
+            self.element_target(borrowed, out)?
+        } else {
+            match self.place(borrowed) {
+                Some((place, _)) => place,
+                None => return Err(self.unsupported(span, "a `&mut` of this in a variable")),
+            }
+        };
+        let rebound = self.through_rebound(borrowed, false);
+        Ok(self.fixed(place, rebound, out))
+    }
+
+    /// Is `e` reached through a reference that can be assigned again while
+    /// `e` is borrowed, as `cur[0]` is of a `let mut cur = &mut a`, and
+    /// `h.list[0]` of a field `list: &mut Vec<i32>`, `refs[0][0]` of an
+    /// element and `outer[0]` of a `&mut &mut Vec<i32>`? Then what's meant
+    /// is the object it holds now, not the place holding it. With
+    /// `followed`, `e` is itself such a reference, followed.
+    fn through_rebound(&self, e: ExprId, followed: bool) -> bool {
+        // Rust freezes the rest of the path while it's borrowed, but not
+        // where a reference is: only what it points to. Only an immutable
+        // variable's, or a `&mut` in a variable's, which names its place,
+        // stays put; keeping any other's object, a temporary's say, is
+        // the same object anyway.
+        let reassignable = |r: ExprId| {
+            matches!(self.thir[r].ty.kind(), ty::Ref(..))
+                && match self.thir[self.strip(r)].kind {
+                    ExprKind::VarRef { id } => {
+                        self.vars.get(&id).is_some_and(|v| v.mutable) && !self.aliases.contains(&id)
+                    }
+                    _ => true,
+                }
+        };
+        if followed && reassignable(e) {
+            return true;
+        }
+        let mut root = self.strip(e);
+        loop {
+            match self.thir[root].kind {
+                ExprKind::Field { lhs, .. } | ExprKind::Index { lhs, .. } | ExprKind::Borrow { arg: lhs, .. } => {
+                    root = self.strip(lhs)
+                }
+                // `cur[0]` of a `Vec` is `*index_mut(&mut *cur, 0)`.
+                ExprKind::Deref { arg } => match self.element(root) {
+                    Some((items, _)) => root = self.strip(items),
+                    None if reassignable(arg) => return true,
+                    None => root = self.strip(arg),
+                },
+                _ => return false,
+            }
+        }
+    }
+
+    /// A place whose parts are evaluated now: each index that isn't a
+    /// constant, and what it's in, if that isn't a variable's path. If
+    /// it's `rebound`, what it's in is kept, `const o = h.list;`: the
+    /// object then, which is the one the place is in.
+    fn fixed(&mut self, place: Expr, rebound: bool, out: &mut Vec<Stmt>) -> Expr {
+        let span = place.span;
+        match place.kind {
+            js::ExprKind::Var(_) => place,
+            js::ExprKind::Member(object, key) => {
+                let object = self.fixed_object(*object, rebound, out);
+                Expr::member(object, &key).or_at(span)
+            }
+            js::ExprKind::Index(items, index) => {
+                let items = self.fixed_object(*items, rebound, out);
+                let index = if index.is_constant() {
+                    *index
+                } else {
+                    self.spill("at", *index, out)
+                };
+                Expr::index(items, index).or_at(span)
+            }
+            _ => self.spill("item", place, out),
+        }
+    }
+
+    fn fixed_object(&mut self, object: Expr, rebound: bool, out: &mut Vec<Stmt>) -> Expr {
+        match object.kind {
+            // A `const` is the object already.
+            js::ExprKind::Var(_) if rebound && self.is_let(&object) => self.spill("o", object, out),
+            _ if rebound && !matches!(object.kind, js::ExprKind::Var(_)) => self.spill("o", object, out),
+            js::ExprKind::Var(_) => object,
+            _ => self.fixed(object, false, out),
+        }
+    }
+
     /// An array or slice and an index into it: the array itself, not a
     /// copy, since only the element is read or written.
     fn indexed(&mut self, items: ExprId, index: ExprId, out: &mut Vec<Stmt>) -> R<Vec<Expr>> {
@@ -3611,6 +3925,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let names_place = |arg: ExprId| match self.thir[self.strip(arg)].kind {
             ExprKind::VarRef { id } => {
                 self.boxes.contains(&id)
+                    || self.aliases.contains(&id)
                     || self
                         .vars
                         .get(&id)
@@ -3636,6 +3951,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Read a variable or field's value.
     fn read(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
         let ty = self.thir[e].ty;
+        // A `&mut` in a variable is its place (ADR 0099). Read as a value,
+        // `generic(y)`, it would be the place's value, not a `&mut`.
+        if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } = self.thir[self.strip(e)].kind
+            && self.aliases.contains(&id)
+            && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
+        {
+            return Err(self.unsupported(self.thir[e].span, "a `&mut` in a variable used as a value"));
+        }
         self.moved(e, out)?;
         if let Some((place, _)) = self.place(e) {
             return Ok(self.copy_if_needed(place, ty));

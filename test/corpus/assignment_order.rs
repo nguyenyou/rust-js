@@ -87,6 +87,39 @@ fn main() {
     };
     e += inc();
     println!("{} {e}", d.n);
+    // A `Vec`'s index is `index_mut(&mut *cur, i)`, which takes `*cur`
+    // before `i` runs; an array's is the place `(*cur)[i]`, which follows
+    // `cur` after. Found in review.
+    let (mut a, mut b) = (vec![1, 2], vec![10, 20]);
+    let mut cur = &mut a;
+    cur[{
+        cur = &mut b;
+        0
+    }] += 1;
+    println!("{a:?} {b:?}");
+    let (mut a, mut b) = (vec![1, 2], vec![10, 20]);
+    let mut cur = &mut a;
+    cur[{
+        cur = &mut b;
+        0
+    }] = 7;
+    println!("{a:?} {b:?}");
+    let (mut a, mut b) = (vec![1, 2], vec![10, 20]);
+    let mut cur = &mut a;
+    let x = &mut cur[{
+        cur = &mut b;
+        0
+    }];
+    *x += 1;
+    println!("{a:?} {b:?}");
+    let (mut a, mut b) = ([1, 2], [10, 20]);
+    let mut cur = &mut a;
+    let x = &mut cur[{
+        cur = &mut b;
+        0
+    }];
+    *x += 1;
+    println!("{a:?} {b:?}");
     let mut empty: Vec<i8> = Vec::new();
     empty[index("out of bounds", 0)] = value("out of bounds", 8) as i8;
 }
