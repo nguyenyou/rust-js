@@ -1,3 +1,5 @@
+> I thought it would be great if I could do UI programming—my day job—in Rust.
+
 # rust-js
 
 **Rust in. Readable JavaScript out.**
