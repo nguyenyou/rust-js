@@ -26,22 +26,10 @@ array-slice-vec/vec-matching-fold.rs	error: rust-js does not support this patter
 array-slice-vec/vec-matching-legal-tail-element-borrow.rs	error: rust-js does not support this pattern yet
 array-slice-vec/vec-matching.rs	error: rust-js does not support this pattern yet
 array-slice-vec/vec-tail-matching.rs	error: rust-js does not support this pattern yet
-associated-consts/associated-const-const-eval.rs	error: rust-js does not support associated constants yet
 associated-consts/associated-const-in-global-const.rs	error: rust-js does not support constants of type `f32` yet
-associated-consts/associated-const-overwrite-default.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-range-match-patterns.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-resolution-order.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-self-type.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-type-parameters.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-ufcs-infer-trait.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-use-default.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const-use-impl-of-same-trait.rs	error: rust-js does not support associated constants yet
-associated-consts/associated-const.rs	error: rust-js does not support associated constants yet
-associated-consts/defaults-cyclic-pass.rs	error: rust-js does not support associated constants yet
-associated-consts/defaults-not-assumed-pass.rs	error: rust-js does not support associated constants yet
-associated-consts/mismatched_impl_ty_1.rs	error: rust-js does not support associated constants yet
-associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support associated constants yet
-associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support associated constants yet
+associated-consts/associated-const-type-parameters.rs	error: rust-js does not support a generic impl's constant of its parameters yet
+associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support this constant yet
+associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support this constant yet
 associated-type-bounds/duplicate-bound.rs	error: rust-js: trait dictionary names collide
 associated-type-bounds/enum-bounds.rs	error: rust-js does not support this expression yet
 associated-type-bounds/rpit.rs	error: rust-js: generated trait implementation name `aTr1` collides; put the implementations in separate modules
@@ -85,7 +73,7 @@ async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user 
 async-await/for-await-passthrough.rs	error: rust-js does not support values of type `*const std::task::Context<'static>` yet
 async-await/for-await.rs	error: rust-js does not support calling `std::async_iter::from_iter` yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support calling `std::pin::Pin::<Ptr>::new_unchecked` yet
-async-await/interior-with-const-generic-expr.rs	error: rust-js does not support const generics yet
+async-await/interior-with-const-generic-expr.rs	error: rust-js does not support values of type `f32` yet
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
 auto-traits/auto-traits.rs	error: rust-js does not support implementation evidence for `<i32 as Auto>` yet
 autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `*const alloc::sync::ArcInner<std::boxed::Box<{closure@<case>/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>` yet
@@ -183,85 +171,60 @@ collections/hashset-connected-border-12860.rs	error: rust-js does not support va
 collections/vecdeque-append-operation-54477.rs	error: rust-js does not support calling `std::collections::VecDeque::<T, A>::append` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this expression yet
 const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support this expression yet
-const-generics/associated-const-bindings/assoc-const.rs	error: rust-js does not support associated constants yet
-const-generics/associated-const-bindings/dyn-compat-self-const-projections-in-methods.rs	error: rust-js does not support const generics yet
-const-generics/broken-mir-1.rs	error: rust-js does not support const generics yet
-const-generics/coerce_unsized_array.rs	error: rust-js does not support const generics yet
-const-generics/const-arg-in-fn.rs	error: rust-js does not support const generics yet
-const-generics/const-fn-with-const-param.rs	error: rust-js does not support const generics yet
+const-generics/associated-const-bindings/assoc-const.rs	error: rust-js does not support type constants yet
+const-generics/associated-const-bindings/dyn-compat-self-const-projections-in-methods.rs	error: rust-js does not support type constants yet
 const-generics/const-generic-type_name.rs	error: rust-js does not support calling `std::any::type_name` yet
-const-generics/defaults/const-default.rs	error: rust-js does not support const generics yet
-const-generics/defaults/const-param-as-default-value.rs	error: rust-js does not support const generics yet
-const-generics/defaults/const-param-in-ty-defaults.rs	error: rust-js does not support const generics yet
-const-generics/defaults/rp_impl_trait.rs	error: rust-js does not support const generics yet
-const-generics/defaults/trait_objects.rs	error: rust-js does not support const generics yet
-const-generics/dyn-supertraits.rs	error: rust-js does not support const generics yet
-const-generics/early/const-param-hygiene.rs	error: rust-js does not support const generics yet
-const-generics/generic_arg_infer/dont-use-defaults.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/associated-consts.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/division.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/dyn-compatibility-ok.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/elaborate-trait-pred.rs	error: rust-js does not support `[x; N]` of a generic length yet
-const-generics/generic_const_exprs/fn_call.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/from-sig.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/infer-too-generic.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/issue-73899.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/less_than.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/nested_uneval_unification-1.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/nested_uneval_unification-2.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/nested-abstract-consts-1.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/nested-abstract-consts-2.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/subexprs_are_const_evalutable.rs	error: rust-js does not support const generics yet
-const-generics/generic_const_exprs/unop.rs	error: rust-js does not support const generics yet
-const-generics/impl-const-generic-struct.rs	error: rust-js does not support const generics yet
-const-generics/infer_arg_from_pat.rs	error: rust-js does not support const generics yet
-const-generics/inhabited-assoc-ty-ice-1.rs	error: rust-js does not support associated constants yet
-const-generics/inhabited-assoc-ty-ice-2.rs	error: rust-js does not support associated constants yet
-const-generics/issues/issue-105037.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-61432.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-62187-encountered-polymorphic-const.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-69654-run-pass.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-70125-1.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-70125-2.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-86535-2.rs	error: rust-js does not support const generics yet
-const-generics/issues/issue-86535.rs	error: rust-js does not support const generics yet
-const-generics/mgca/array-expr-simple.rs	error: rust-js does not support const generics yet
-const-generics/mgca/array-expr-with-assoc-const.rs	error: rust-js does not support const generics yet
-const-generics/mgca/array-expr-with-macro.rs	error: rust-js does not support const generics yet
-const-generics/mgca/array-expr-with-struct.rs	error: rust-js does not support const generics yet
-const-generics/mgca/array-expr-with-tuple.rs	error: rust-js does not support const generics yet
-const-generics/mgca/assoc-const-projection-in-bound.rs	error: rust-js does not support const generics yet
-const-generics/mgca/tuple_ctor_arg_simple.rs	error: rust-js does not support const generics yet
-const-generics/mgca/tuple_ctor_nested.rs	error: rust-js does not support const generics yet
-const-generics/mgca/tuple_ctor_type_relative.rs	error: rust-js does not support const generics yet
-const-generics/min_const_generics/const_fn_in_generics.rs	error: rust-js does not support const generics yet
-const-generics/min_const_generics/inferred_const.rs	error: rust-js does not support const generics yet
-const-generics/min_const_generics/macro.rs	error: rust-js does not support const generics yet
-const-generics/min_const_generics/type_and_const_defaults.rs	error: rust-js does not support const generics yet
-const-generics/promotion.rs	error: rust-js does not support const generics yet
-const-generics/slice-const-param.rs	error: rust-js does not support const generics yet
-const-generics/transmute.rs	error: rust-js does not support const generics yet
-const-generics/type_of_anon_const.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/issue-61936.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/issue-63695.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/issue-69816.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/issue-70507.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/issue-71805.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/qpath.rs	error: rust-js does not support const generics yet
-const-generics/type-dependent/simple.rs	error: rust-js does not support const generics yet
-const-generics/uninferred-consts-during-codegen-1.rs	error: rust-js does not support const generics yet
-const-generics/uninferred-consts-during-codegen-2.rs	error: rust-js does not support const generics yet
+const-generics/defaults/const-param-as-default-value.rs	error: rust-js does not support `Default` of `[u8; 13]` yet
+const-generics/defaults/rp_impl_trait.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/defaults/trait_objects.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/dyn-supertraits.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/generic_arg_infer/dont-use-defaults.rs	error: rust-js does not support this pattern yet
+const-generics/generic_const_exprs/associated-consts.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/division.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/dyn-compatibility-ok.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/generic_const_exprs/elaborate-trait-pred.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/fn_call.rs	error: rust-js does not support `size_of` of a type parameter yet
+const-generics/generic_const_exprs/infer-too-generic.rs	error: rust-js does not support calling `std::mem::ManuallyDrop::<T>::new` yet
+const-generics/generic_const_exprs/issue-73899.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/generic_const_exprs/nested_uneval_unification-1.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/nested_uneval_unification-2.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/nested-abstract-consts-1.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/nested-abstract-consts-2.rs	error: rust-js does not support this const argument yet
+const-generics/generic_const_exprs/subexprs_are_const_evalutable.rs	error: rust-js does not support this const argument yet
+const-generics/infer_arg_from_pat.rs	error: rust-js does not support this pattern yet
+const-generics/issues/issue-105037.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/issues/issue-70125-1.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/issues/issue-70125-2.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/issues/issue-86535.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/array-expr-simple.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/array-expr-with-assoc-const.rs	error: rust-js does not support type constants yet
+const-generics/mgca/array-expr-with-macro.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/array-expr-with-struct.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/array-expr-with-tuple.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/assoc-const-projection-in-bound.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/mgca/tuple_ctor_arg_simple.rs	error: rust-js does not support type constants yet
+const-generics/mgca/tuple_ctor_nested.rs	error: rust-js does not support this const argument yet
+const-generics/mgca/tuple_ctor_type_relative.rs	error: rust-js does not support this const argument yet
+const-generics/min_const_generics/macro.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/min_const_generics/type_and_const_defaults.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/slice-const-param.rs	error: rust-js does not support this literal yet
+const-generics/transmute.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
+const-generics/type_of_anon_const.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/type-dependent/issue-61936.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/type-dependent/issue-63695.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/type-dependent/issue-69816.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/type-dependent/issue-70507.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/type-dependent/issue-71805.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/uninferred-consts-during-codegen-1.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
+const-generics/uninferred-consts-during-codegen-2.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
 const-ptr/allowed_slices.rs	error: rust-js does not support statics of type `&'static [()]` yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
-consts/assoc-const.rs	error: rust-js does not support associated constants yet
 consts/cast-discriminant-zst-enum.rs	error: rust-js does not support constants of type `i128` yet
-consts/const_constructor/const_constructor_qpath.rs	error: rust-js does not support associated constants yet
 consts/const_constructor/const-construct-call.rs	error: rust-js does not support constants of type `std::panic::AssertUnwindSafe<(std::option::Option<i32>, std::result::Result<i32, bool>)>` yet
 consts/const_discriminant.rs	error: rust-js does not support constants of type `std::mem::Discriminant<Test>` yet
 consts/const_fn_unsize.rs	error: rust-js does not support constants of type `std::ptr::NonNull<[i32]>` yet
-consts/const_in_pattern/accept_structural.rs	error: rust-js does not support associated constants yet
+consts/const_in_pattern/accept_structural.rs	error: rust-js does not support `{:#?}` yet
 consts/const_in_pattern/custom-eq-branch-pass.rs	error: rust-js does not support this pattern yet
-consts/const_in_pattern/issue-73431.rs	error: rust-js does not support associated constants yet
 consts/const_in_pattern/null-raw-ptr-issue-119270.rs	error: rust-js does not support constants of type `&'static &'static WrapEmbedded` yet
 consts/const_let_eq_float.rs	error: rust-js does not support constants of type `f32` yet
 consts/const_refs_to_static.rs	error: rust-js does not support constants of type `*const i32` yet
@@ -311,14 +274,13 @@ consts/issue-17718-borrow-interior.rs	error: rust-js does not support statics of
 consts/issue-21721.rs	error: rust-js does not support values of type `*const u8` yet
 consts/issue-27890.rs	error: rust-js does not support statics of type `&'static (dyn std::ops::Fn(i32) -> i32 + std::marker::Sync + 'static)` yet
 consts/issue-33537.rs	error: rust-js does not support values of type `*const i8` yet
-consts/issue-44255.rs	error: rust-js does not support associated constants yet
 consts/issue-46553.rs	error: rust-js does not support statics of type `Data<i32>` yet
 consts/issue-54582.rs	error: rust-js does not support statics of type `[(&'static (dyn Stage + 'static), &'static str); 1]` yet
 consts/issue-58435-ice-with-assoc-const.rs	error: rust-js does not support this constant yet
 consts/issue-69532.rs	error: rust-js does not support statics of type `(f64, f64, f32, f32)` yet
 consts/issue-broken-mir.rs	error: rust-js does not support this literal yet
 consts/load-preserves-partial-init.rs	error: rust-js does not support constants of type `BagOfBits<[usize; 1]>` yet
-consts/mozjs-error.rs	error: rust-js does not support associated constants yet
+consts/mozjs-error.rs	error: rust-js does not support this constant yet
 consts/mut-ptr-to-static.rs	error: rust-js does not support statics of type `std::cell::SyncUnsafeCell<u32>` yet
 consts/oncecell-const-init-57781.rs	error: rust-js does not support this constant yet
 consts/references.rs	error: rust-js does not support this pattern yet
@@ -365,14 +327,12 @@ coroutine/yield-in-args-rev.rs	error: rust-js does not support this expression y
 coroutine/yield-in-initializer.rs	error: rust-js does not support this expression yet
 coroutine/yield-subtype.rs	error: rust-js does not support this expression yet
 delegation/generics/impl-trait-to-trait-method-pass.rs	error: rust-js does not support `std::iter::Iterator::next` of a value with a destructor yet
-delegation/generics/mapping/free-to-free-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/free-to-trait-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/impl-trait-to-free-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/impl-trait-to-trait-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/inherent-impl-to-free-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/inherent-impl-to-trait-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/trait-to-free-pass.rs	error: rust-js does not support const generics yet
-delegation/generics/mapping/trait-to-trait-pass.rs	error: rust-js does not support const generics yet
+delegation/generics/mapping/free-to-trait-pass.rs	error: rust-js does not support const generics of traits and their methods yet
+delegation/generics/mapping/impl-trait-to-free-pass.rs	error: rust-js does not support const generics of traits and their methods yet
+delegation/generics/mapping/impl-trait-to-trait-pass.rs	error: rust-js does not support const generics of traits and their methods yet
+delegation/generics/mapping/inherent-impl-to-trait-pass.rs	error: rust-js does not support const generics of traits and their methods yet
+delegation/generics/mapping/trait-to-free-pass.rs	error: rust-js does not support const generics of traits and their methods yet
+delegation/generics/mapping/trait-to-trait-pass.rs	error: rust-js does not support const generics of traits and their methods yet
 deref/deref-in-for-loop.rs	error: rust-js does not support iterating over `std::option::Iter<'_, &usize>` yet
 derives/derive-hrtb-for-bare-fn-field-with-lifetime.rs	error: rust-js does not support generic associated types yet
 deriving/deriving-associated-types.rs	error: rust-js does not support values of type `<i32 as DeclaredTrait>::Type` yet
@@ -479,7 +439,7 @@ functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics 
 functions-closures/fn-item-type-zero-sized.rs	error: rust-js does not support this expression yet
 generic-associated-types/collections.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support const generics yet
+generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support const generics of traits and their methods yet
 generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/generic-associated-type-bounds.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/issue-76826.rs	error: rust-js does not support generic associated types yet
@@ -541,7 +501,6 @@ issues/issue-23485.rs	error: rust-js does not support `&mut` to a `Self` yet
 issues/issue-23699.rs	error: rust-js does not support values of type `*const T` yet
 issues/issue-23958.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 issues/issue-24533.rs	error: rust-js does not support values of type `(dyn std::error::Error + std::marker::Send + std::marker::Sync + 'static)` yet
-issues/issue-24947.rs	error: rust-js does not support associated constants yet
 issues/issue-25145.rs	error: rust-js does not support statics of type `[u8; S::N]` yet
 issues/issue-25515.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 issues/issue-25693.rs	error: rust-js does not support values of type `<BP as Parameters>::SelfRef` yet
@@ -646,7 +605,6 @@ methods/method-two-trait-defer-resolution-1.rs	error: rust-js: generated trait i
 methods/method-two-trait-defer-resolution-2.rs	error: rust-js: generated trait implementation name `vecFoo` collides; put the implementations in separate modules
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
 methods/method-where-clause.rs	error: rust-js: generated trait implementation name `optionFoo` collides; put the implementations in separate modules
-methods/supertrait-shadowing/assoc-const.rs	error: rust-js does not support associated constants yet
 mir/mir_adt_construction.rs	error: rust-js does not support this expression yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
 mir/mir_augmented_assignments.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -671,14 +629,11 @@ never_type/regress/never-as-function-argument.rs	error: rust-js does not support
 never_type/regress/never-type-fallback-option.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 nll/borrowck-thread-local-static-mut-borrow-outlives-fn.rs	error: rust-js does not support `#[thread_local]` statics yet
 nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support this expression yet
-nll/issue-47153-generic-const.rs	error: rust-js does not support associated constants yet
 nll/issue-47589.rs	error: rust-js does not support values of type `<Resources as ResourcesTrait<'_>>::DescriptorSet` yet
 nll/issue-48623-closure.rs	error: rust-js does not support a `&mut` of this in a variable yet
 nll/issue-48623-coroutine.rs	error: rust-js does not support this expression yet
 nll/issue-50343.rs	error: rust-js does not support this expression yet
 nll/issue-53123-raw-pointer-cast.rs	error: rust-js does not support values of type `*mut T` yet
-nll/issue-57960.rs	error: rust-js does not support associated constants yet
-nll/user-annotations/issue-55241.rs	error: rust-js does not support associated constants yet
 no_std/no-core-edition2018-syntax.rs	error: rust-js does not support values of type `core::option::Option<()>` yet
 numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calling `core::f64::<impl f64>::signum` yet
 numbers-arithmetic/f16-f128-lit.rs	error: rust-js does not support calling `core::f16::<impl f16>::to_bits` yet
@@ -694,7 +649,6 @@ numbers-arithmetic/u128-as-f32.rs	error: rust-js does not support constants of t
 numbers-arithmetic/u128.rs	error: rust-js does not support values of type `u128` yet
 object-lifetime/object-lifetime-default-from-ref-struct.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 object-lifetime/object-lifetime-default-from-rptr.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
-object-lifetime/object-lifetime-default-inferred.rs	error: rust-js does not support const generics yet
 offset-of/offset-of-slice.rs	error: rust-js does not support this expression yet
 offset-of/offset-of-tuple-nested.rs	error: rust-js does not support this expression yet
 or-patterns/bindings-runpass-1.rs	error: rust-js does not support bindings inside `|` patterns yet
@@ -729,7 +683,7 @@ packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expr
 packed/packed-struct-size.rs	error: rust-js does not support statics of type `P4S16` yet
 packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::DebugStruct::<'a, 'b>::finish` yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-parser/macro/statement-boundaries.rs	error: rust-js does not support const generics yet
+parser/macro/statement-boundaries.rs	error: rust-js does not support user implementations of this standard or external trait yet
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
 parser/syntactic-trailing-commas.rs	error: rust-js does not support this pattern yet
@@ -780,7 +734,7 @@ rfcs/rfc-1445-restrict-constants-in-patterns/phantom-data-is-structurally-matcha
 rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics of type `&'static for<'a> fn(&'a [u8]) -> &'a [u8]` yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
 rfcs/rfc-2005-default-binding-mode/box.rs	error: rust-js does not support this pattern yet
-rfcs/rfc-2005-default-binding-mode/constref.rs	error: rust-js does not support associated constants yet
+rfcs/rfc-2005-default-binding-mode/constref.rs	error: rust-js does not support this literal yet
 rfcs/rfc-2005-default-binding-mode/general.rs	error: rust-js does not support `&mut` to a `&mut std::option::Option<i32>` yet
 rfcs/rfc-2005-default-binding-mode/lit-ok.rs	error: rust-js does not support this literal yet
 rfcs/rfc-2005-default-binding-mode/slice-ok.rs	error: rust-js does not support this literal yet
