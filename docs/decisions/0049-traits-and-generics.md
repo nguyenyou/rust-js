@@ -184,7 +184,8 @@ the pair of a `&mut` to a number reads and writes its place.
 
 ### Initial supported boundary
 
-This implementation supports local non-type-generic traits, handwritten
+This implementation supports local non-type-generic traits (a trait's type
+parameters are [ADR 0106](0106-generic-traits.md)'s), handwritten
 impls, defaults, supertraits, generic functions and impls over supported
 representations, multiple bounds, receiverless methods, captured dictionaries,
 function values, and dyn calls and upcasts, read-only at first. Trait lifetime

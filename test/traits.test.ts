@@ -170,7 +170,6 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 });
 
 for (const [name, source, diagnostic] of [
-  ["generic trait", `pub trait Convert<T> { fn convert(&self) -> T; }`, "generic trait parameters"],
   ["generic method", `pub trait Shape { fn f<T>(&self, value: T); }`, "generic trait methods"],
   ["associated type", `pub trait Source { type Item; }`, "associated types"],
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.

@@ -59,12 +59,6 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
             .any(|p| matches!(p.kind, ty::GenericParamDefKind::Const { .. }))
         {
             Some("const generics")
-        } else if kind == DefKind::Trait
-            && params
-                .iter()
-                .any(|p| p.index != 0 && !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-        {
-            Some("generic trait parameters")
         } else if kind == DefKind::AssocFn
             && tcx.inherent_impl_of_assoc(id.to_def_id()).is_none()
             && params
@@ -82,15 +76,11 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
         }
         if kind == DefKind::Trait {
             let mut names = std::collections::HashSet::new();
-            for (predicate, span) in tcx.explicit_super_predicates_of(id).iter_identity_copied() {
-                if let ty::ClauseKind::Trait(p) = predicate.kind().skip_binder()
-                    && operational(tcx, foreign, p.trait_ref.def_id)
-                {
-                    let name = tcx.item_name(p.trait_ref.def_id).to_string();
-                    if name == "__proto__" || !names.insert(name) {
-                        tcx.dcx().span_err(span, "rust-js: supertrait dictionary names collide");
-                        valid = false;
-                    }
+            let identity = ty::GenericArgs::identity_for_item(tcx, id);
+            for (name, tr, span) in supertraits(tcx, id.to_def_id(), identity) {
+                if operational(tcx, foreign, tr.def_id) && (name == "__proto__" || !names.insert(name)) {
+                    tcx.dcx().span_err(span, "rust-js: supertrait dictionary names collide");
+                    valid = false;
                 }
             }
             for item in tcx.associated_items(id).in_definition_order() {
@@ -150,22 +140,73 @@ pub(super) fn bounds<'tcx>(
 /// Meters`, and `versionPartialEq`, whose `Rhs` is `Self` (ADR 0052).
 pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
     let tr = tcx.impl_trait_ref(id).instantiate_identity();
-    let word = |ty: Ty<'_>| match ty.kind() {
+    format!(
+        "{}{}",
+        lower_first(&js_word(&type_word(tcx, tr.self_ty()))),
+        trait_word(tcx, tr)
+    )
+}
+
+/// A trait's supertraits, as its dictionary has them: each one's key, its
+/// trait's name, `PartialEq`, or with its arguments as the trait declares
+/// them where it has two of one trait, `LabelU32` and `LabelString` of
+/// `trait Both: Label<u32> + Label<String>`, so that a generic impl's
+/// dictionary and its caller agree; and the supertrait with
+/// `args`, its own lifetimes erased: a `for<'a> B<&'a ()>` is one
+/// dictionary, and rustc's trait selection takes no bound ones (ADR 0106).
+pub(super) fn supertraits<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    trait_id: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+) -> Vec<(String, ty::TraitRef<'tcx>, Span)> {
+    let predicates = tcx.explicit_super_predicates_of(trait_id);
+    let found: Vec<_> = predicates
+        .iter_identity_copied()
+        .zip(predicates.iter_instantiated_copied(tcx, args))
+        .filter_map(|((declared, span), (instantiated, _))| {
+            let ty::ClauseKind::Trait(declared) = declared.kind().skip_binder() else {
+                return None;
+            };
+            let ty::ClauseKind::Trait(instantiated) = tcx.instantiate_bound_regions_with_erased(instantiated.kind())
+            else {
+                return None;
+            };
+            Some((declared.trait_ref, instantiated.trait_ref, span))
+        })
+        .collect();
+    let twice = |id: DefId| found.iter().filter(|(declared, _, _)| declared.def_id == id).count() > 1;
+    found
+        .iter()
+        .map(|&(declared, instantiated, span)| {
+            let name = match twice(declared.def_id) {
+                true => trait_word(tcx, declared),
+                false => tcx.item_name(declared.def_id).to_string(),
+            };
+            (name, instantiated, span)
+        })
+        .collect()
+}
+
+/// A type as a word of a JS name: an ADT's own name, `Meters` of
+/// `Meters<T>`.
+fn type_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
+    match ty.kind() {
         ty::Adt(adt, _) => tcx.item_name(adt.did()).to_string(),
         _ => ty.to_string(),
-    };
-    let mut name = format!(
-        "{}{}",
-        lower_first(&js_word(&word(tr.self_ty()))),
-        tcx.item_name(tr.def_id)
-    );
+    }
+}
+
+/// The trait and its arguments other than their defaults, as a word of a JS
+/// name: `ConvertF64` of `Convert<f64>`, `PartialEq` of `PartialEq<Self>`.
+fn trait_word<'tcx>(tcx: TyCtxt<'tcx>, tr: ty::TraitRef<'tcx>) -> String {
+    let mut name = tcx.item_name(tr.def_id).to_string();
     let generics = tcx.generics_of(tr.def_id);
     for (param, arg) in generics.own_params.iter().zip(tr.args).skip(1) {
         let Some(arg) = arg.as_type() else { continue };
         if param.default_value(tcx).map(|d| d.instantiate(tcx, tr.args)) == Some(arg.into()) {
             continue;
         }
-        let arg = js_word(&word(arg.peel_refs()));
+        let arg = js_word(&type_word(tcx, arg.peel_refs()));
         let mut chars = arg.chars();
         name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
         name.extend(chars);
@@ -190,7 +231,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let name = match super::serde::serde_trait(self.tcx, tr.def_id) {
                     Some(true) => format!("write{}", tr.self_ty()),
                     Some(false) => format!("read{}", tr.self_ty()),
-                    None => format!("{}{}", tr.self_ty(), self.tcx.item_name(tr.def_id)),
+                    // `XConvertF64` and `XConvertString`, of two impls of one trait.
+                    None => format!("{}{}", tr.self_ty(), trait_word(self.tcx, tr)),
                 };
                 let name = self.fresh(&js_word(&name));
                 self.evidence.push((tr, Expr::var(&name)));
@@ -216,20 +258,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !self.is_rust_trait(from.def_id) {
             return None;
         }
-        for (clause, _) in self
-            .tcx
-            .explicit_super_predicates_of(from.def_id)
-            .iter_instantiated_copied(self.tcx, from.args)
-        {
-            if let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder() {
-                let tr = predicate.trait_ref;
-                let parent = Expr::call(
-                    Expr::member(value.clone(), self.tcx.item_name(tr.def_id).to_string()),
-                    Vec::new(),
-                );
-                if let Some(found) = self.super_evidence(tr, to, parent) {
-                    return Some(found);
-                }
+        for (name, tr, _) in supertraits(self.tcx, from.def_id, from.args) {
+            let parent = Expr::call(Expr::member(value.clone(), name), Vec::new());
+            if let Some(found) = self.super_evidence(tr, to, parent) {
+                return Some(found);
             }
         }
         None
@@ -586,22 +618,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn lower_dictionary(&mut self, id: DefId, cache: &str) -> R<js::Function> {
         let span = self.tcx.def_span(id);
-        // The crate's own generic traits are errors (`validate`); a std one's
-        // impl, like `PartialEq<Rhs>`'s, is for its arguments.
+        // An impl of a generic trait, `Convert<f64>`, or of a std one,
+        // `PartialEq<Rhs>`, is for its arguments: a dictionary of its own.
         let tr = self.tcx.impl_trait_ref(id).instantiate_identity();
         let params = self.evidence_params(id);
         let mut props = Vec::new();
-        for (clause, _) in self
-            .tcx
-            .explicit_super_predicates_of(tr.def_id)
-            .iter_instantiated_copied(self.tcx, tr.args)
-        {
-            if let ty::ClauseKind::Trait(predicate) = clause.kind().skip_binder()
-                && operational(self.tcx, self.krate.foreign, predicate.trait_ref.def_id)
-            {
-                let dictionary = self.dictionary(predicate.trait_ref, span)?;
+        for (name, supertrait, _) in supertraits(self.tcx, tr.def_id, tr.args) {
+            if operational(self.tcx, self.krate.foreign, supertrait.def_id) {
+                let dictionary = self.dictionary(supertrait, span)?;
                 props.push(Prop::Field(
-                    self.tcx.item_name(predicate.trait_ref.def_id).to_string(),
+                    name,
                     Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(dictionary)).at(js::Span::NONE)]),
                 ));
             }
@@ -813,17 +839,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// methods, and neither it nor a supertrait has type parameters. A `&mut
     /// self` method is given the pair, whose `value` a box's is (ADR 0099).
     pub(super) fn dyn_supported(&self, id: DefId) -> bool {
-        !self
-            .tcx
-            .generics_of(id)
-            .own_params
-            .iter()
-            .any(|p| p.index != 0 && !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-            && self
-                .tcx
-                .associated_items(id)
-                .in_definition_order()
-                .all(|item| self.tcx.def_kind(item.def_id) == DefKind::AssocFn)
+        self.tcx
+            .associated_items(id)
+            .in_definition_order()
+            .all(|item| self.tcx.def_kind(item.def_id) == DefKind::AssocFn)
             && self
                 .tcx
                 .explicit_super_predicates_of(id)
