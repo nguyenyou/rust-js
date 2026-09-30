@@ -2,7 +2,8 @@
 
 Status: Accepted. Amends [0039](0039-generic-bindings.md),
 [0040](0040-jsx.md), [0110](0110-stable-syntax.md) and
-[0112](0112-rust-js-compiles-the-bindings.md).
+[0112](0112-rust-js-compiles-the-bindings.md). Extended by
+[0114](0114-app-cargo-toml.md): an app is a Cargo package, which an editor checks.
 
 ## Context
 

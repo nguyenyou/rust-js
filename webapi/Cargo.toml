@@ -12,3 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 js = { package = "rust-js-builtins", path = "../builtins" }
+
+# rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_js)"] }

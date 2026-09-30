@@ -1,0 +1,25 @@
+# src/App.rs as a crate, for an editor's rust-analyzer and a `cargo check`,
+# which check it with a plain rustc (ADR 0114). rust-js's build of it is the
+# Vite plugin's. `bun create @rust-js` has the crates where the app installs
+# them, in @rust-js/resources.
+[package]
+name = "app"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/App.rs"
+
+[dependencies]
+js = { package = "rust-js-builtins", path = "../../builtins" }
+react = { package = "rust-js-react", path = "../../react" }
+webapi = { package = "rust-js-webapi", path = "../../webapi" }
+
+# rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for,
+# here too, in what `js::import!` expands to.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_js)"] }
+
+# Standalone: not part of a workspace of the directories above it.
+[workspace]

@@ -1,7 +1,8 @@
 # 0105. `bun create @rust-js` makes a Vite and React app in Rust
 
 Status: Accepted. Builds on [0041](0041-react.md), [0094](0094-qualification.md)
-and [0103](0103-runtime-package.md).
+and [0103](0103-runtime-package.md). Extended by [0114](0114-app-cargo-toml.md): the
+app has a `Cargo.toml`, for an editor.
 
 ## Context
 

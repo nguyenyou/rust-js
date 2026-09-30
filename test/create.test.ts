@@ -3,7 +3,7 @@
 // directory, with rust-js's packages at the release's version.
 
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { runSync } from "./child";
 import { fixture, root, run } from "./support";
@@ -65,6 +65,30 @@ test("a packed @rust-js/create makes the vite-react example's app, named for its
   expect(made.stdout).toContain("cd my-app");
   expect(made.stdout).toContain("bun install");
 });
+
+// An editor's rust-analyzer, or a `cargo check`, checks the app's Rust as
+// Cargo does: its Cargo.toml has the crates it uses where the app installs
+// them, in @rust-js/resources, as the packed package has them.
+test("a created app's Cargo.toml checks with the crates @rust-js/resources has", () => {
+  const index = packed();
+  const cwd = fixture("create-cargo");
+  expect(runSync([process.execPath, index, "app"], cwd, 60_000).code).toBe(0);
+  const app = join(cwd, "app");
+  expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).devDependencies["@rust-js/resources"]).toBe(version);
+  // As a package manager installs it: the packed package, unpacked.
+  const scope = join(app, "node_modules", "@rust-js");
+  mkdirSync(scope, { recursive: true });
+  run([process.execPath, "scripts/package-resources.ts", join(cwd, "resources.tgz")]);
+  run(["tar", "-xzf", join(cwd, "resources.tgz"), "-C", scope]);
+  renameSync(join(scope, "package"), join(scope, "resources"));
+  const check = runSync(["cargo", "check", "--offline", "--quiet", "--manifest-path", join(app, "Cargo.toml")], app, 300_000, { RUSTC_BOOTSTRAP: undefined });
+  // No error, and no warning of the crates it uses: the app's are of what's
+  // used only in JSX, which react's placeholder `jsx!` doesn't look inside.
+  const warnings = check.stderr.split("\n").filter((line) => /^(warning|error)\b/.test(line) && !/\(lib\) generated \d+ warnings?/.test(line));
+  expect(warnings.filter((line) => !/^warning: (unused variable: |static `\w+` is never used)/.test(line))).toEqual([]);
+  expect(check.stderr).not.toMatch(/`rust-js-\w+` \(lib\) generated/);
+  expect(check.code).toBe(0);
+}, 300_000);
 
 // Before a release is on npm: the packages `pack:distribution` made, each
 // the app's, and `@rust-js/build` the plugin's too, as Qualify installs them.

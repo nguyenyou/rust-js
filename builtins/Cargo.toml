@@ -9,3 +9,7 @@ publish = false
 [lib]
 name = "js"
 path = "src/lib.rs"
+
+# rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_js)"] }

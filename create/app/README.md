@@ -38,3 +38,7 @@ version that compiled. The browser's source map points at `App.rs`.
   else { "text-sky-500" }`, not a string built from pieces.
 - `rustJs()` comes first in `vite.config.js`, before `tailwindcss()`, so that
   a save refreshes the page instead of reloading it.
+- **`Cargo.toml` is for your editor** and `cargo check`: rust-analyzer finds
+  `react`, `webapi` and `js` in `node_modules/@rust-js/resources`, once the
+  app is installed. It doesn't look inside `jsx!`, so a variable used only in
+  JSX shows as unused there.

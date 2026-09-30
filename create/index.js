@@ -53,10 +53,15 @@ for (const field of ["dependencies", "devDependencies"]) {
     if (spec.startsWith("workspace:")) manifest[field][name] = dist ? archive(name) : self.version;
   }
 }
+// The app's own, so every package manager has it at node_modules/@rust-js/resources,
+// where its Cargo.toml has the crates the app uses.
+manifest.devDependencies["@rust-js/resources"] = dist ? archive("@rust-js/resources") : self.version;
+const cargo = join(app, "Cargo.toml");
+writeFileSync(cargo, readFileSync(cargo, "utf8").replaceAll('path = "../../', 'path = "node_modules/@rust-js/resources/'));
 // A release's `@rust-js/build` brings the compiler and its resources; a
 // distribution's are the app's own, and its `@rust-js/build` the plugin's too.
 if (dist) {
-  for (const name of ["@rust-js/build", "@rust-js/native", "@rust-js/resources"]) manifest.devDependencies[name] = archive(name);
+  for (const name of ["@rust-js/build", "@rust-js/native"]) manifest.devDependencies[name] = archive(name);
   manifest.overrides = { ...manifest.overrides, "@rust-js/build": archive("@rust-js/build") };
 }
 for (const field of ["dependencies", "devDependencies"]) {

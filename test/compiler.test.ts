@@ -7,6 +7,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { runSync } from "./child";
 import { decode, expected, same, type Outcome } from "./oracle";
 import { callInNode, type Call } from "./programs";
 import { root, target, run, buildCompiler, buildReact, buildSerde, buildWebapi, compiler, fixture } from "./support";
@@ -1189,3 +1190,17 @@ test("a plain stable rustc compiles the template's app and the crates it uses", 
   expect(rustc("react/src/lib.rs", "react", ["js", "webapi"])).toEqual(["react", 0, []]);
   expect(rustc("examples/vite-react/src/App.rs", "app", ["js", "webapi", "react"])).toEqual(["app", 0, []]);
 });
+
+// An editor's rust-analyzer checks the app as Cargo does, with a plain
+// stable rustc: the example's Cargo.toml has App.rs, and the crates it uses.
+test("a plain `cargo check` checks the vite-react example", () => {
+  const dir = join(fixture("cargo-check-example"), "target");
+  const example = join(root, "examples", "vite-react");
+  const p = runSync(["cargo", "check", "--offline", "--quiet", "--manifest-path", join(example, "Cargo.toml"), "--target-dir", dir], example, 300_000, { RUSTC_BOOTSTRAP: undefined });
+  // No error, and no warning of the crates it uses: the app's are of what's
+  // used only in JSX, which react's placeholder `jsx!` doesn't look inside.
+  const warnings = p.stderr.split("\n").filter((line) => /^(warning|error)\b/.test(line) && !/\(lib\) generated \d+ warnings?/.test(line));
+  expect(warnings.filter((line) => !/^warning: (unused variable: |static `\w+` is never used)/.test(line))).toEqual([]);
+  expect(p.stderr).not.toMatch(/`rust-js-\w+` \(lib\) generated/);
+  expect(p.code).toBe(0);
+}, 300_000);

@@ -26,3 +26,8 @@ dist-ssr
 # src/App.jsx is written by rust-js from src/App.rs, and committed, as
 # ReScript recommends for its JS. Its source map isn't.
 /src/App.jsx.map
+
+# What an editor's `cargo check` of Cargo.toml writes. Its crates are paths,
+# which a lockfile pins nothing of.
+/target
+/Cargo.lock
