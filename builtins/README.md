@@ -27,6 +27,6 @@ spawn(Box::new(async move {                            // runs, unawaited
 - `RegExp` is there for what Rust would use `regex` for: `reg_exp::new(r"^\d+$", "")`.
 
 ```bash
-js/build.sh -o "$PWD/target/libjs.rmeta"
+builtins/build.sh -o "$PWD/target/libjs.rmeta"
 ./target/debug/rust-js app.rs -- --extern js=target/libjs.rmeta
 ```

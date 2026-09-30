@@ -17,7 +17,7 @@ shift 2
 mkdir -p "$(dirname "$out")"
 dir=$(cd "$(dirname "$out")" && pwd)
 cd "$(dirname "$0")"
-../js/build.sh -o "$dir/libjs.rmeta" "$@"
+../builtins/build.sh -o "$dir/libjs.rmeta" "$@"
 target=(--target=wasm32-unknown-unknown)
 for arg in "$@"; do
   case "$arg" in --target | --target=*) target=() ;; esac

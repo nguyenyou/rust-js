@@ -11,4 +11,4 @@ name = "webapi"
 path = "src/lib.rs"
 
 [dependencies]
-js = { package = "rust-js-js", path = "../js" }
+js = { package = "rust-js-builtins", path = "../builtins" }

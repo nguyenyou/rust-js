@@ -21,8 +21,8 @@ pub enum Invocation {
 /// rust-js's target (ADR 0090): what a crate Cargo checks for it is built for.
 const TARGET: &str = "wasm32-unknown-unknown";
 
-/// The packages of the bindings rust-js ships: `react/`, `webapi/` and `js/`.
-const BINDINGS: [&str; 3] = ["rust-js-react", "rust-js-webapi", "rust-js-js"];
+/// The packages of the bindings rust-js ships: `react/`, `webapi/` and `builtins/`.
+const BINDINGS: [&str; 3] = ["rust-js-react", "rust-js-webapi", "rust-js-builtins"];
 
 pub fn translate(args: Vec<String>) -> Invocation {
     let Some(rustc) = args

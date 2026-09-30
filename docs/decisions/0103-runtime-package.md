@@ -124,6 +124,6 @@ A distribution's archives are named as the runtime's was, by the package's
 name in the scope: `build.tgz`, `vite-plugin.tgz`, `runtime.tgz`,
 `resources.tgz` and `native.tgz`. The root and the example apps, which
 nothing publishes, are in the scope too, so no name in the workspace is
-outside it. The Rust crates (`rust-js-react`,
-`rust-js-webapi`, `rust-js-js`) are Cargo's names, not npm's, and are
-unchanged.
+outside it. The Rust crates (`rust-js-react`, `rust-js-webapi`, and
+`rust-js-builtins`, [ADR 0102](0102-js-and-webapi.md)'s) are Cargo's names,
+not npm's.

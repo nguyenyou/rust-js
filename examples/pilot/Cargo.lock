@@ -7,7 +7,7 @@ name = "frontend"
 version = "0.1.0"
 dependencies = [
  "models",
- "rust-js-js",
+ "rust-js-builtins",
  "rust-js-react",
  "rust-js-webapi",
  "serde",
@@ -52,14 +52,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-js-js"
+name = "rust-js-builtins"
 version = "0.1.0"
 
 [[package]]
 name = "rust-js-react"
 version = "0.1.0"
 dependencies = [
- "rust-js-js",
+ "rust-js-builtins",
  "rust-js-webapi",
 ]
 
@@ -67,7 +67,7 @@ dependencies = [
 name = "rust-js-webapi"
 version = "0.1.0"
 dependencies = [
- "rust-js-js",
+ "rust-js-builtins",
 ]
 
 [[package]]

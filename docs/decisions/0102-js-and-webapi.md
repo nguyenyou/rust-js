@@ -36,7 +36,7 @@ fields, and constructors are `make`, one per source `from*`.
 
 **Two crates, as ReScript's two libraries:**
 
-- **`js`** (`rust-js-js`): what JS has that Rust's `std` doesn't. `JsObject`,
+- **`js`** (`rust-js-builtins`): what JS has that Rust's `std` doesn't. `JsObject`,
   `Promise`, `JsError`, `RegExp`, `ArrayBuffer`, `Uint8Array` and `spawn`,
   moved from the web crate, and the URI functions: `encode_uri_component`,
   `encode_uri`, and `decode_uri_component` and `decode_uri`, which throw a
@@ -117,3 +117,13 @@ ReScript's is edited by hand after generating.
 - **An options object's fields not given are written out as `undefined`**,
   `{ method: "POST", body, headers: undefined, .. }`. Leaving them out is a
   change of rust-js's objects: its `$eq` compares their keys.
+
+## Amendment: the `js` crate is `rust-js-builtins`, in `builtins/`
+
+It was `rust-js-js`. crates.io has no scopes, as npm has, so a crate's
+package name is its whole name there, and once published, it's kept for
+good: it's named for what it holds, JS's standard built-in objects, as MDN
+calls them, apart from the browser's, `rust-js-webapi`'s, and from Rust's
+`std`. So is its directory, `builtins/`, as `react/` and `webapi/` are
+theirs. Its library is still `js`: a program says `js::Promise`, beside
+`webapi::Element` and `react::use_state`.

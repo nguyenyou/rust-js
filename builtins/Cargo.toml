@@ -1,7 +1,7 @@
 # The js crate as a Cargo dependency (ADR 0101): rustc checks it, as
-# js/build.sh does, and rust-js reads its metadata (ADR 0102).
+# builtins/build.sh does, and rust-js reads its metadata (ADR 0102).
 [package]
-name = "rust-js-js"
+name = "rust-js-builtins"
 version = "0.1.0"
 edition = "2024"
 publish = false
