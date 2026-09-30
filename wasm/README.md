@@ -81,7 +81,7 @@ use (`compiler.rs` runs `rust-js.wasm` under the WASI shim, `codemirror.rs` bind
 the editors). `main.ts` only calls `start` in `lib.rs`. The page is a Vite app
 ([ADR 0045](../docs/decisions/0045-playground-on-vite.md)), with React
 ([ADR 0044](../docs/decisions/0044-playground-on-react.md)), React Compiler and
-Tailwind. `vite-plugin-rust-js` compiles `web/rust/` on start and on each save, with
+Tailwind. `@rust-js/vite-plugin` compiles `web/rust/` on start and on each save, with
 `rust-js.wasm` under the same WASI shim, in Bun (`web/compile-rust.ts`), so
 saving a component's file is a Fast Refresh of that component. On its own: `cd web && bun compile-rust.ts`.
 

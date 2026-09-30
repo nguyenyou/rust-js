@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import rustJs from "vite-plugin-rust-js";
+import rustJs from "@rust-js/vite-plugin";
 
 // The client is the Cargo workspace's `frontend` (ADR 0101), and `/api` is
 // the native server's: `cargo run -p server`, or `PILOT_API` for another.

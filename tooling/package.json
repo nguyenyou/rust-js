@@ -1,5 +1,5 @@
 {
-  "name": "rust-js-build",
+  "name": "@rust-js/build",
   "version": "0.1.0",
   "private": true,
   "type": "module",

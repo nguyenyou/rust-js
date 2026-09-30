@@ -14,7 +14,7 @@ The playground, the app we use most, had none of those.
 
 What makes the playground different is its compiler. It is compiled by the
 WebAssembly build, under the WASI shim, as the page compiles its users'
-code. `vite-plugin-rust-js` runs the native `rust-js` binary.
+code. `@rust-js/vite-plugin` runs the native `rust-js` binary.
 
 ## Decision
 
@@ -24,7 +24,7 @@ code. `vite-plugin-rust-js` runs the native `rust-js` binary.
 vite.config.ts
   playgroundFiles()   site.ts: rust-js.wasm, the sysroot, the webapi crate and
                       the examples, served in dev and emitted by the build
-  rustJs({ compile }) vite-plugin-rust-js, compiling with compile-rust.ts
+  rustJs({ compile }) @rust-js/vite-plugin, compiling with compile-rust.ts
   react()             plugin-react 6: JSX, Fast Refresh
   babel(reactCompilerPreset())
   tailwindcss()       scans rust/*.rs for class names

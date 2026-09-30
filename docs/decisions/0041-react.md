@@ -94,7 +94,7 @@ it's the value itself. `SetState::update` takes `Fn(&T) -> T` for the same
 reason, so an update copies before it changes anything. `set` and `update`
 are both `setCount(..)`, since React's setter takes a value or a function.
 
-**`vite-plugin-rust-js`** (`vite-plugin/index.js`) runs rust-js when Vite
+**`@rust-js/vite-plugin`** (`vite-plugin/index.js`) runs rust-js when Vite
 starts and on every save of a `.rs` file. It writes `src/App.jsx` beside
 `src/App.rs`, and from there it's an ordinary file of the project:
 

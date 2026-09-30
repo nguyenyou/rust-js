@@ -38,7 +38,7 @@ note: found an item that was configured out
 
 The version comes from the project:
 
-- **Vite:** `vite-plugin-rust-js` reads it from the project's
+- **Vite:** `@rust-js/vite-plugin` reads it from the project's
   `react/package.json` and builds the crate for it, each version in its own
   `target/react/<version>/`. On a gated error it also says which React is
   installed.

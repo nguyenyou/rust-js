@@ -48,24 +48,24 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
     expect(() => run([process.execPath, join(repository, "scripts/package-distribution.ts"), incompatible, failedBundle])).toThrow("Compiler does not match");
     expect(existsSync(failedBundle)).toBe(false);
     expect(readdirSync(root).some(name => name.startsWith(".rust-js-distribution-"))).toBe(false);
-    const resources = join(root, "node_modules/rust-js-resources");
+    const resources = join(root, "node_modules/@rust-js/resources");
     writeFileSync(join(root, "package.json"), JSON.stringify({
       private: true, type: "module", dependencies: {
-        "rust-js-build": "./artifacts/rust-js-build.tgz",
-        "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js.tgz",
-        "rust-js-resources": "./artifacts/resources.tgz",
-        "rust-js-native": "./artifacts/native.tgz",
+        "@rust-js/build": "./artifacts/build.tgz",
+        "@rust-js/vite-plugin": "./artifacts/vite-plugin.tgz",
+        "@rust-js/resources": "./artifacts/resources.tgz",
+        "@rust-js/native": "./artifacts/native.tgz",
         "@rust-js/runtime": "./artifacts/runtime.tgz",
       },
-      overrides: { "rust-js-build": "./artifacts/rust-js-build.tgz" },
+      overrides: { "@rust-js/build": "./artifacts/build.tgz" },
     }));
     // No registry access or lifecycle scripts. Real Vite is exercised by
     // vite.test.ts; this test invokes its plugin hooks without the peer.
     const install = [process.execPath, "install", "--offline", "--ignore-scripts", "--omit", "peer", "--backend", "copyfile"];
     run(install);
     run([...install, "--frozen-lockfile"]);
-    const plugin = JSON.parse(readFileSync(join(root, "node_modules/vite-plugin-rust-js/package.json"), "utf8"));
-    expect(plugin.dependencies["rust-js-build"]).toBe("0.1.0");
+    const plugin = JSON.parse(readFileSync(join(root, "node_modules/@rust-js/vite-plugin/package.json"), "utf8"));
+    expect(plugin.dependencies["@rust-js/build"]).toBe("0.1.0");
     const installedCompiler = join(root, "node_modules/.bin/rust-js");
     expect(JSON.parse(run([runtime, installedCompiler, "--version-json"]))).toEqual(JSON.parse(run([compiler, "--version-json"])));
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
@@ -85,11 +85,11 @@ use react::Element;
 pub fn App() -> Element { jsx! { <main><span>{"Packaged"}</span></main> } }
 `);
     writeFileSync(join(root, "check.js"), `
-import rustJs from "vite-plugin-rust-js";
-import { parseManifest } from "rust-js-build/manifest";
-import { publishArtifacts } from "rust-js-build/publish";
-import { createNativeBuilder } from "rust-js-build/build";
-import { planCargoLibraries } from "rust-js-build/cargo";
+import rustJs from "@rust-js/vite-plugin";
+import { parseManifest } from "@rust-js/build/manifest";
+import { publishArtifacts } from "@rust-js/build/publish";
+import { createNativeBuilder } from "@rust-js/build/build";
+import { planCargoLibraries } from "@rust-js/build/cargo";
 import { readFileSync, readdirSync } from "node:fs";
 const compiler = ${JSON.stringify(installedCompiler)};
 const inputs = createNativeBuilder({ root: ${JSON.stringify(root)} }).watchFiles;
@@ -108,8 +108,8 @@ console.log(JSON.stringify({ answer: answer(), watched, inputs, symlinkInputs, i
     expect(result.input).toBe(join(root, "lib.rs"));
     expect(result.publisher).toBe("function");
     expect(result.cargoPlanner).toBe("function");
-    expect(result.inputs).toContain(join(root, "node_modules/rust-js-native/bin/compiler"));
-    expect(result.symlinkInputs).toContain(join(root, "node_modules/rust-js-native/bin/compiler"));
+    expect(result.inputs).toContain(join(root, "node_modules/@rust-js/native/bin/compiler"));
+    expect(result.symlinkInputs).toContain(join(root, "node_modules/@rust-js/native/bin/compiler"));
     const jsx = readFileSync(join(root, "App.jsx"), "utf8");
     expect(jsx).toContain("<main>");
     expect(jsx).toContain("<span>Packaged</span>");

@@ -1,5 +1,5 @@
 {
-  "name": "pilot-web",
+  "name": "@rust-js/example-pilot-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -17,6 +17,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
     "vite": "^8.3.0",
-    "vite-plugin-rust-js": "workspace:*"
+    "@rust-js/vite-plugin": "workspace:*"
   }
 }

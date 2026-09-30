@@ -15,7 +15,7 @@ export const defaultCompiler = join(defaultResources, "target/debug/rust-js");
 
 export function findCompiler(root) {
   const require = createRequire(join(root, "package.json"));
-  try { return join(dirname(require.resolve("rust-js-native/package.json")), "bin/rust-js"); }
+  try { return join(dirname(require.resolve("@rust-js/native/package.json")), "bin/rust-js"); }
   catch (error) {
     if (error.code !== "MODULE_NOT_FOUND") throw error;
     return defaultCompiler;
@@ -24,7 +24,7 @@ export function findCompiler(root) {
 
 function installedResources(root) {
   const require = createRequire(join(root, "package.json"));
-  try { return dirname(require.resolve("rust-js-resources/package.json")); }
+  try { return dirname(require.resolve("@rust-js/resources/package.json")); }
   catch (error) {
     if (error.code !== "MODULE_NOT_FOUND") throw error;
     return defaultResources;
@@ -79,7 +79,7 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
   const compilerPath = existsSync(rustJs) ? realpathSync(rustJs) : rustJs;
   const compilerInputs = [...new Set([rustJs, compilerPath])];
   const nativePackage = join(dirname(compilerPath), "../package.json");
-  const packaged = existsSync(nativePackage) && JSON.parse(readFileSync(nativePackage, "utf8")).name === "rust-js-native";
+  const packaged = existsSync(nativePackage) && JSON.parse(readFileSync(nativePackage, "utf8")).name === "@rust-js/native";
   if (packaged) {
     compilerInputs.push(nativePackage, join(dirname(compilerPath), "compiler"));
   }
@@ -100,7 +100,7 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
     const packagePath = join(repo, "package.json");
     if (existsSync(packagePath)) {
       const resourcePackage = JSON.parse(await readFile(packagePath, "utf8"));
-      if (resourcePackage.name === "rust-js-resources") {
+      if (resourcePackage.name === "@rust-js/resources") {
         const identity = await compilerIdentity();
         const pin = (await readFile(join(repo, "rust-toolchain.toml"), "utf8")).match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
         if (resourcePackage.version !== identity.version || pin !== identity.toolchain) {

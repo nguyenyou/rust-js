@@ -134,7 +134,7 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   and Rust pin before preparing bindings. Development checkout resources keep
   their existing workflow; release identity does not replace artifact checksums.
 - `tooling/build.js` prepares native compilation. Vite owns scheduling, watching,
-  overlays and refresh. The `rust-js-build` package exposes build, manifest, and
+  overlays and refresh. The `@rust-js/build` package exposes build, manifest, and
   publication entry points; Vite and the playground use declared dependencies
   rather than imports outside their package directories. Local tarball tests
   exercise the plugin outside the checkout with an explicit compiler path.
@@ -147,7 +147,7 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   the application's dependencies, with checkout fallback for development. The
   package test installs local tarballs offline through Bun, repeats with a frozen
   lockfile, and compiles through plugin hooks without a resource-path override.
-  A local `rust-js-native` package pairs the native executable with a JavaScript launcher
+  A local `@rust-js/native` package pairs the native executable with a JavaScript launcher
   that locates pinned toolchain libraries. Hosts hash/watch the executable as
   well as the launcher, including when configured through the `.bin` symlink.
   This has development-host installation coverage, not clean-machine portability
@@ -157,7 +157,7 @@ module APIs rather than introducing a plugin framework or a second Rust IR.
   current runtime. Bun remains a repository development tool, not a distribution
   requirement. Package tests execute each runtime while blocking the other on PATH.
   Compiler discovery follows the same application boundary: explicit path,
-  installed `rust-js-native`, then checkout fallback. Native hosts and Vite use
+  installed `@rust-js/native`, then checkout fallback. Native hosts and Vite use
   the same resolver. Installed-package tests require no compiler or resource
   path overrides; explicit `.bin` paths remain supported.
   `scripts/package-distribution.ts` assembles the four version-matched packages

@@ -1,5 +1,5 @@
 {
-  "name": "rust-js-wasm-web",
+  "name": "@rust-js/wasm-web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -27,9 +27,9 @@
     "@tailwindcss/vite": "4.3.3",
     "@vitejs/plugin-react": "6.1.1",
     "babel-plugin-react-compiler": "1.0.0",
-    "rust-js-build": "workspace:*",
+    "@rust-js/build": "workspace:*",
     "tailwindcss": "4.3.3",
     "vite": "8.3.0",
-    "vite-plugin-rust-js": "workspace:*"
+    "@rust-js/vite-plugin": "workspace:*"
   }
 }

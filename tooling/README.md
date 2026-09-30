@@ -9,7 +9,7 @@ need it to run installed packages. Binding preparation and the native launcher
 use the host's current JavaScript runtime.
 
 ```js
-import { createNativeBuilder } from "rust-js-build/build";
+import { createNativeBuilder } from "@rust-js/build/build";
 
 const builder = createNativeBuilder({
   root: "/absolute/app",
@@ -27,7 +27,7 @@ await builder.compile({
 });
 ```
 
-`rust-js-build` exposes package entry points: `/build` for native compiler
+`@rust-js/build` exposes package entry points: `/build` for native compiler
 preparation, `/manifest` for build-result validation, and `/publish` for WASI
 artifact publication. Vite and the playground declare this package dependency;
 neither imports tooling through a path outside its own package.
@@ -37,8 +37,8 @@ tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
 The package test installs these tarballs with Bun into an independent application
 and compiles through the plugin. No registry release is implied.
 Compiler discovery first uses the supplied `rustJs` path, then the application's
-`rust-js-native` package, then the development checkout. Resource discovery uses the supplied `resources`
-path, then `rust-js-resources` resolved from the application's dependencies,
+`@rust-js/native` package, then the development checkout. Resource discovery uses the supplied `resources`
+path, then `@rust-js/resources` resolved from the application's dependencies,
 then the development checkout;
 compiler binaries and binding resources are not included in these host packages.
 
@@ -46,10 +46,10 @@ Build and package a native compiler for the current macOS or Linux host:
 
 ```sh
 cargo build --release --locked
-bun run pack:compiler target/release/rust-js /absolute/artifacts/rust-js-native.tgz
+bun run pack:compiler target/release/rust-js /absolute/artifacts/native.tgz
 ```
 
-The private `rust-js-native` package contains the binary and a JavaScript launcher,
+The private `@rust-js/native` package contains the binary and a JavaScript launcher,
 with OS/architecture restrictions in its package manifest. Install the pinned
 Rust toolchain with `rustc-dev` on the destination machine first. The launcher
 asks that toolchain for its sysroot and sets the dynamic-library search path
@@ -67,13 +67,13 @@ the archive is not a standalone portable compiler distribution.
 Create a separate resource tarball from the repository root:
 
 ```sh
-bun run pack:resources /absolute/artifacts/rust-js-resources.tgz
+bun run pack:resources /absolute/artifacts/resources.tgz
 ```
 
-This stages `rust-js-resources` with the compiler's version, root toolchain pin,
+This stages `@rust-js/resources` with the compiler's version, root toolchain pin,
 React/web binding sources and build scripts, and the locked Serde manifest and
 source. The resource package and metadata cache use the same input inventory.
-Install it as `rust-js-resources`, or unpack it and set `resources` to the
+Install it as `@rust-js/resources`, or unpack it and set `resources` to the
 directory containing its `package.json` and `rust-toolchain.toml`.
 Build outputs go to the configured cache, outside the
 resource directory. The resource tarball contains source inputs, not prebuilt
@@ -106,13 +106,13 @@ running the installed packages does not depend on that choice:
 {
   "devDependencies": {
     "vite": "8.3.0",
-    "vite-plugin-rust-js": "./artifacts/vite-plugin-rust-js.tgz",
-    "rust-js-build": "./artifacts/rust-js-build.tgz",
-    "rust-js-native": "./artifacts/native.tgz",
-    "rust-js-resources": "./artifacts/resources.tgz"
+    "@rust-js/vite-plugin": "./artifacts/vite-plugin.tgz",
+    "@rust-js/build": "./artifacts/build.tgz",
+    "@rust-js/native": "./artifacts/native.tgz",
+    "@rust-js/resources": "./artifacts/resources.tgz"
   },
   "overrides": {
-    "rust-js-build": "./artifacts/rust-js-build.tgz"
+    "@rust-js/build": "./artifacts/build.tgz"
   }
 }
 ```
@@ -144,7 +144,7 @@ matching the compiler identity in emitted manifests. The adapter requires the
 resource package's version and Rust pin to match, and accepts only ABI 1.
 Mismatch errors report both identities and leave existing output untouched.
 `rust-js --version` remains the human-readable form. Source-checkout resources
-without the `rust-js-resources` package identity retain the development workflow.
+without the `@rust-js/resources` package identity retain the development workflow.
 Matching version fields are a compatibility check, not proof of artifact
 provenance; release checksums and qualification are still needed.
 
@@ -221,7 +221,7 @@ Cargo builds a workspace's libraries with rust-js as its workspace wrapper
 its own ([ADR 0100](../docs/decisions/0100-separate-crates.md)):
 
 ```js
-import { checkCargo } from "rust-js-build/cargo";
+import { checkCargo } from "@rust-js/build/cargo";
 
 const { js, crates } = await checkCargo({
   manifestPath: "Cargo.toml", toolchain: "<pinned nightly>", compiler: "/path/to/rust-js",
@@ -271,7 +271,7 @@ from: its workspace root, or another of `server.fs.allow`.
 
 ## Experimental Cargo planning
 
-`rust-js-build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,
+`@rust-js/build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,
 packageName?, features?, noDefaultFeatures? })`. Supply an exact nightly pin and
 an explicit target triple. `packageName` selects a member of a virtual workspace.
 

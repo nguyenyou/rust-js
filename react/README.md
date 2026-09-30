@@ -166,6 +166,6 @@ rust-js App.rs -- --extern react=target/libreact.rmeta -L target
 ```
 
 `bun run build` does the first step. In a Vite project,
-[vite-plugin-rust-js](../vite-plugin/index.js) does both, on every save, for
+[@rust-js/vite-plugin](../vite-plugin/index.js) does both, on every save, for
 the React the project has installed. See
 [examples/vite-react](../examples/vite-react/README.md).

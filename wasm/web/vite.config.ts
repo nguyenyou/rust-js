@@ -2,13 +2,13 @@
 // Tailwind, set up as create-vite's react-compiler template and Tailwind's
 // Vite guide have them. Its own Rust (rust/lib.rs) is compiled by
 // rust-js.wasm, the compiler the page runs (compile-rust.ts), on start and
-// on every save, through vite-plugin-rust-js.
+// on every save, through @rust-js/vite-plugin.
 
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import rustJs from "vite-plugin-rust-js";
+import rustJs from "@rust-js/vite-plugin";
 
 import { compileRust } from "./compile-rust.ts";
 import { playgroundFiles } from "./site.ts";

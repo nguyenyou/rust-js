@@ -2,7 +2,7 @@ import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
-import rustJs from 'vite-plugin-rust-js'
+import rustJs from '@rust-js/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig({

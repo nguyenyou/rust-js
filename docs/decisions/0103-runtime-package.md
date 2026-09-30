@@ -102,3 +102,28 @@ compiler's version, released with it, as ReScript's is:
   anything's compiled, and says which to install. It's looked for where
   Node finds a package, from the app up, each time: it may be installed
   while a dev server runs. A test checks both refusals.
+
+## Amendment: every package is `@rust-js`'s
+
+The runtime's scope is the project's: each package of this repository is
+named in it, as `@vitejs/plugin-react` and `@tailwindcss/vite` are, so an
+app's `package.json` says at a glance which of its dependencies are rust-js,
+and one npm organization owns every name a release publishes.
+
+| Was | Is |
+| --- | --- |
+| `vite-plugin-rust-js` | `@rust-js/vite-plugin` |
+| `rust-js-build` | `@rust-js/build` |
+| `rust-js-native` | `@rust-js/native` |
+| `rust-js-resources` | `@rust-js/resources` |
+| `rust-js-react-generator`, `rust-js-webapi-generator`, `rust-js-wasm-web` | `@rust-js/react-generator`, `@rust-js/webapi-generator`, `@rust-js/wasm-web` |
+| `rust-js`, the repository's root | `@rust-js/workspace` |
+| `pilot-web`, `vite-react`, the example apps | `@rust-js/example-pilot-web`, `@rust-js/example-vite-react` |
+
+A distribution's archives are named as the runtime's was, by the package's
+name in the scope: `build.tgz`, `vite-plugin.tgz`, `runtime.tgz`,
+`resources.tgz` and `native.tgz`. The root and the example apps, which
+nothing publishes, are in the scope too, so no name in the workspace is
+outside it. The Rust crates (`rust-js-react`,
+`rust-js-webapi`, `rust-js-js`) are Cargo's names, not npm's, and are
+unchanged.

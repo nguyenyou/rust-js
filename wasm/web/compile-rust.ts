@@ -1,6 +1,6 @@
 // Compile the playground's own Rust (./rust/lib.rs, and its components/) to JS, beside it, with
 // rust-js.wasm: the compiler the page runs, here under the same WASI shim.
-// vite.config.ts hands this to vite-plugin-rust-js, which calls it when Vite
+// vite.config.ts hands this to @rust-js/vite-plugin, which calls it when Vite
 // starts and on every save (ADR 0045).
 //
 //   /wasm/web/rust/...   the crate, and where lib.jsx and its maps go
@@ -15,8 +15,8 @@ import { join } from "node:path";
 import { ConsoleStdout, Directory, File, type Inode, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";
 
 import { buildReactCrate, sysrootDir, sysrootFiles, wasmPath } from "./site.ts";
-import { publishArtifacts } from "rust-js-build/publish";
-import { mapManifestPaths, parseManifest } from "rust-js-build/manifest";
+import { publishArtifacts } from "@rust-js/build/publish";
+import { mapManifestPaths, parseManifest } from "@rust-js/build/manifest";
 
 const rustDir = join(import.meta.dir, "rust");
 const cratesDir = join(import.meta.dir, "../../target/playground-crates");

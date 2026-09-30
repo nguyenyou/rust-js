@@ -28,12 +28,12 @@ mkdirSync(dirname(output), { recursive: true });
 const staging = mkdtempSync(join(dirname(output), ".rust-js-distribution-"));
 try {
   // @rust-js/runtime, what the JS the compiler writes imports (ADR 0103).
-  for (const [directory, file] of [["tooling", "rust-js-build.tgz"], ["vite-plugin", "vite-plugin-rust-js.tgz"], ["runtime", "runtime.tgz"]]) {
+  for (const [directory, file] of [["tooling", "build.tgz"], ["vite-plugin", "vite-plugin.tgz"], ["runtime", "runtime.tgz"]]) {
     run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", join(staging, file)], join(root, directory));
   }
   run([process.execPath, "scripts/package-resources.ts", join(staging, "resources.tgz")]);
   run([process.execPath, "scripts/package-compiler.ts", compiler, join(staging, "native.tgz")]);
-  const files = ["rust-js-build.tgz", "vite-plugin-rust-js.tgz", "runtime.tgz", "resources.tgz", "native.tgz"];
+  const files = ["build.tgz", "vite-plugin.tgz", "runtime.tgz", "resources.tgz", "native.tgz"];
   const sha256 = (file: string) => createHash("sha256").update(readFileSync(join(staging, file))).digest("hex");
   const artifacts = files.map(file => ({ file, sha256: sha256(file) }));
   writeFileSync(join(staging, "distribution.json"), JSON.stringify({

@@ -1,5 +1,5 @@
 {
-  "name": "rust-js",
+  "name": "@rust-js/workspace",
   "private": true,
   "type": "module",
   "description": "Compile Rust to readable JavaScript. Every task is a script here: `bun run` lists them.",

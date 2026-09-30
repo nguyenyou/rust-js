@@ -69,10 +69,10 @@ const text = (cmd: string[], cwd = root) => runSync(cmd, cwd, 60_000).stdout.tri
 
 // The distribution's packages, by the tarball each is installed from.
 const packages: [string, string][] = [
-  ["rust-js-build", "rust-js-build.tgz"],
-  ["vite-plugin-rust-js", "vite-plugin-rust-js.tgz"],
-  ["rust-js-resources", "resources.tgz"],
-  ["rust-js-native", "native.tgz"],
+  ["@rust-js/build", "build.tgz"],
+  ["@rust-js/vite-plugin", "vite-plugin.tgz"],
+  ["@rust-js/resources", "resources.tgz"],
+  ["@rust-js/native", "native.tgz"],
   ["@rust-js/runtime", "runtime.tgz"],
 ];
 
@@ -99,10 +99,10 @@ export function viteApp(dist: string, logs: string): Suite {
     const locked = (name: string) => JSON.parse(readFileSync(join(root, "node_modules", name, "package.json"), "utf8")).version as string;
     const dependencies: Record<string, string> = Object.fromEntries(packages.map(([name, file]) => [name, join(dist, file)]));
     for (const name of ["vite", "@vitejs/plugin-react", "react", "react-dom"]) dependencies[name] = locked(name);
-    writeFileSync(join(app, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: { "rust-js-build": join(dist, "rust-js-build.tgz") } }));
+    writeFileSync(join(app, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: { "@rust-js/build": join(dist, "build.tgz") } }));
     writeFileSync(
       join(app, "vite.config.js"),
-      'import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\nimport rustJs from "vite-plugin-rust-js";\n\nexport default defineConfig({ plugins: [rustJs({ crates: ["src/App.rs"], bindings: ["react"] }), react()] });\n',
+      'import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\nimport rustJs from "@rust-js/vite-plugin";\n\nexport default defineConfig({ plugins: [rustJs({ crates: ["src/App.rs"], bindings: ["react"] }), react()] });\n',
     );
     writeFileSync(join(app, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>\n');
     mkdirSync(join(app, "src"));
@@ -214,13 +214,13 @@ async function main() {
         private: true,
         type: "module",
         dependencies: {
-          "rust-js-build": dependency("rust-js-build.tgz"),
-          "vite-plugin-rust-js": dependency("vite-plugin-rust-js.tgz"),
-          "rust-js-resources": dependency("resources.tgz"),
-          "rust-js-native": dependency("native.tgz"),
+          "@rust-js/build": dependency("build.tgz"),
+          "@rust-js/vite-plugin": dependency("vite-plugin.tgz"),
+          "@rust-js/resources": dependency("resources.tgz"),
+          "@rust-js/native": dependency("native.tgz"),
           "@rust-js/runtime": dependency("runtime.tgz"),
         },
-        overrides: { "rust-js-build": dependency("rust-js-build.tgz") },
+        overrides: { "@rust-js/build": dependency("build.tgz") },
       }),
     );
     // With an empty cache, as a new machine has, so nothing but the
@@ -229,7 +229,7 @@ async function main() {
       BUN_INSTALL_CACHE_DIR: join(project, "bun-cache"),
     });
     const launcher = join(project, "node_modules", ".bin", "rust-js");
-    const binary = join(project, "node_modules", "rust-js-native", "bin", "compiler");
+    const binary = join(project, "node_modules", "@rust-js/native", "bin", "compiler");
     if (install.code !== 0 || !existsSync(launcher)) {
       problems.push(`the packages didn't install: ${stopped(install, installTimeout) ?? install.stderr.trim().split("\n").at(-1)}`);
     } else {

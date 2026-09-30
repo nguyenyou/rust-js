@@ -63,7 +63,7 @@ test("a component of a Cargo workspace using the react crate is the JS it is out
 // app's `node_modules`, are inside its workspace, whose members they are.
 test("the bindings installed inside a Cargo workspace are rustc's to check, as outside it", async () => {
   const dir = fixture("cargo-react-inside");
-  const resources = join(dir, "node_modules", "rust-js-resources");
+  const resources = join(dir, "node_modules", "@rust-js/resources");
   for (const file of bindingInputs.react) cpSync(join(root, file), join(resources, file));
   const manifest = withReact(dir, counter, join(resources, "react"));
   const { js } = await check(manifest, { packageName: "ui" });

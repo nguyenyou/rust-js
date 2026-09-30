@@ -74,4 +74,4 @@ Worked around here, for M3.4:
 - **`Result::as_ref`** isn't supported: the form uses `.ok()`.
 - **The bindings are a path into this repository** (`../../../react`) until
   the resources are published (M4); an app outside it would depend on its
-  installed `rust-js-resources/react`.
+  installed `@rust-js/resources/react`.

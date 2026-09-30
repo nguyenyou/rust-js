@@ -15,7 +15,7 @@ bun run build              # dist/
 ```
 
 ```
-save App.rs ─► vite-plugin-rust-js: rust-js ─► App.jsx ─► React Compiler ─► Vite HMR ─► Fast Refresh keeps state
+save App.rs ─► @rust-js/vite-plugin: rust-js ─► App.jsx ─► React Compiler ─► Vite HMR ─► Fast Refresh keeps state
             └─► Tailwind reads App.rs's classes ─► index.css updates in place
 ```
 
@@ -41,6 +41,6 @@ What changed from the template:
   a save refreshes the page instead of reloading it.
 - `src/index.css` starts with `@import "tailwindcss";`.
 - `src/main.jsx` imports `{ App }`, because rust-js exports by name.
-- `package.json` adds `vite-plugin-rust-js`, `tailwindcss` and `@tailwindcss/vite`,
+- `package.json` adds `@rust-js/vite-plugin`, `tailwindcss` and `@tailwindcss/vite`,
   and React Compiler's `babel-plugin-react-compiler`, `@rolldown/plugin-babel`
   and `@babel/core`.
