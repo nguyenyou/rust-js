@@ -20,6 +20,7 @@
     "pack:compiler": "bun scripts/package-compiler.ts",
     "pack:distribution": "bun scripts/package-distribution.ts",
     "pack:create": "bun scripts/package-create.ts",
+    "pack:crates": "bun scripts/package-crates.ts",
     "test": "cargo build --quiet && RUST_JS_COMPILER=\"$PWD/target/debug/rust-js\" bun test --parallel --timings=target/test-timings.json --update-timings",
     "test:serial": "cargo build --quiet && RUST_JS_COMPILER=\"$PWD/target/debug/rust-js\" bun test --timeout=60000",
     "test:rustc": "cargo build --release && bun scripts/rustc-suite.ts",

@@ -5,7 +5,13 @@
 name = "rust-js-react"
 version = "0.1.0"
 edition = "2024"
-publish = false
+description = "React for rust-js: components written in Rust, compiled to the JSX you'd write"
+license = "MIT"
+repository = "https://github.com/rust-js-lang/rust-js"
+readme = "README.md"
+# Its Rust, and what build.rs reads, not the repository's tools that build
+# or generate it.
+include = ["src", "build.rs", "versions.json", "README.md"]
 build = "build.rs"
 
 [lib]
@@ -13,8 +19,8 @@ name = "react"
 path = "src/lib.rs"
 
 [dependencies]
-js = { package = "rust-js-builtins", path = "../builtins" }
-webapi = { package = "rust-js-webapi", path = "../webapi" }
+js = { package = "rust-js-builtins", path = "../builtins", version = "0.1.0" }
+webapi = { package = "rust-js-webapi", path = "../webapi", version = "0.1.0" }
 
 # rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
 [lints.rust]

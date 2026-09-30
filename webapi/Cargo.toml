@@ -4,14 +4,19 @@
 name = "rust-js-webapi"
 version = "0.1.0"
 edition = "2024"
-publish = false
+description = "The web platform for rust-js programs: DOM bindings generated from WebIDL"
+license = "MIT"
+repository = "https://github.com/rust-js-lang/rust-js"
+readme = "README.md"
+# Its Rust, not the repository's tools that build or generate it.
+include = ["src", "README.md"]
 
 [lib]
 name = "webapi"
 path = "src/lib.rs"
 
 [dependencies]
-js = { package = "rust-js-builtins", path = "../builtins" }
+js = { package = "rust-js-builtins", path = "../builtins", version = "0.1.0" }
 
 # rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
 [lints.rust]

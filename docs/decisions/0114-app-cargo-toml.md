@@ -1,6 +1,8 @@
 # 0114. An app's Rust is a Cargo package, for editors
 
 Status: Accepted. Extends [0105](0105-create.md) and [0113](0113-plain-rustc.md).
+Extended by [0115](0115-binding-crates-on-crates-io.md): the crates are packaged
+for crates.io.
 
 ## Context
 

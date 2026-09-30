@@ -4,7 +4,12 @@
 name = "rust-js-builtins"
 version = "0.1.0"
 edition = "2024"
-publish = false
+description = "JS's language, as rust-js compiles Rust to it: promises, errors, regular expressions, JSON"
+license = "MIT"
+repository = "https://github.com/rust-js-lang/rust-js"
+readme = "README.md"
+# Its Rust, not the repository's tools that build or generate it.
+include = ["src", "README.md"]
 
 [lib]
 name = "js"
