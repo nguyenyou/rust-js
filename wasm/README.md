@@ -140,6 +140,7 @@ Small, and each only changes behavior on Wasm:
 | `0003-wasi-default-sysroot-fallback` | rustc computes a default sysroot even when `--sysroot` is given, and panics on WASI. Fall back to `/sysroot`. |
 | `0004-no-jobserver-helper-thread-without-threads` | The jobserver always starts a helper thread. It's only needed for extra compiler threads, which can't exist here. |
 | `0005-no-stack-switching-on-wasm` | `stacker` can't find the stack limit on Wasm, so it would allocate a new stack on every call. Use the fixed stack. *Its speed benefit wasn't measured separately.* |
+| `0006-hashbrown-of-its-own` | rustc and oxc both use `hashbrown` 0.17, so from crates.io they'd share one copy, and rustc's `nightly` feature, which it needs for `may_dangle`, would make oxc's use std's unstable `Allocator`, which oxc's arena isn't. rustc takes the same release from hashbrown's repository, a copy of its own. |
 
 Not a patch, but `build.sh` handles it: `psm` bundles a precompiled
 `wasm32.o` with `ar`, and Apple's `ar` silently produces an empty archive.

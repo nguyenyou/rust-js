@@ -75,9 +75,10 @@ nightly's. A stable release ships them too, in its `rustc-dev` component, and
 - **rustc's tests are the release's**: rustc renamed and took out some,
   so a bless of another rustc than the inventory's takes the new ones, and
   a known failure no longer a test goes with its diff.
-- **The playground's rustc and oxc share a `hashbrown`** now, 0.17: rustc's
-  `nightly` feature, for `may_dangle` in drop checks, makes it std's unstable
-  `Allocator`, which oxc's arena isn't, so the playground's rustc goes
-  without it, by a patch of its own.
+- **The playground's rustc and oxc would share a `hashbrown`** now, 0.17:
+  rustc's `nightly` feature, for `may_dangle` in drop checks, which rustc's
+  arenas need, would make oxc's std's unstable `Allocator`, which oxc's arena
+  isn't. So the playground's rustc takes the same release from hashbrown's
+  repository, `v0.17.0`, by a patch: to cargo, a package of its own.
 - **Still unstable**: rust-js's syntax, which a plain rustc refuses without
   `RUSTC_BOOTSTRAP`. Moving it to stable Rust is to come.

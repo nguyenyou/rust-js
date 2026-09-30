@@ -1,0 +1,16 @@
+diff --git a/compiler/rustc_data_structures/Cargo.toml b/compiler/rustc_data_structures/Cargo.toml
+index 6db3a624500a9c0f832078dcbec85ee676be8beb..807b13d04fad3798dd864737252045cd2c1c6e5a 100644
+--- a/compiler/rustc_data_structures/Cargo.toml
++++ b/compiler/rustc_data_structures/Cargo.toml
+@@ -35,6 +35,11 @@ tracing = "0.1"
+ # tidy-alphabetical-end
+ 
+ [dependencies.hashbrown]
++# The release's own, from its repository: from crates.io, it'd be oxc's too, in
++# one build with it, and `nightly` would make oxc's std's unstable `Allocator`,
++# which its arena isn't. (Patched in by rust-js.)
++git = "https://github.com/rust-lang/hashbrown"
++tag = "v0.17.0"
+ version = "0.17.0"
+ default-features = false
+ features = ["nightly"]   # for may_dangle
