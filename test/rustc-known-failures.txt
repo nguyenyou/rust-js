@@ -408,7 +408,6 @@ explicit-tail-calls/drop-order.rs	error: rust-js does not support calling `std::
 explicit-tail-calls/indexer.rs	error: rust-js does not support this expression yet
 explicit-tail-calls/recursion-etc.rs	error: rust-js does not support this expression yet
 expr/compound-assignment/eval-order.rs	error: rust-js does not support assigning to this place yet
-expr/early-return-in-binop.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 expr/weird-exprs.rs	error: rust-js does not support comparing `()`s yet
 extern/extern-prelude-core.rs	error: rust-js does not support calling `core::cmp::min` yet
 extern/extern-prelude-std.rs	error: rust-js does not support calling `std::cmp::min` yet
@@ -445,7 +444,6 @@ generic-associated-types/generic-associated-type-bounds.rs	error: rust-js does n
 generic-associated-types/issue-76826.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/iterable.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/streaming_iterator.rs	error: rust-js does not support generic associated types yet
-generics/generic-extern-mangle.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 half-open-range-patterns/slice_pattern_syntax_problem2.rs	error: rust-js does not support this pattern yet
 impl-trait/closure-in-impl-trait-arg.rs	error: rust-js does not support calling `std::iter::empty` yet
 impl-trait/closure-in-impl-trait.rs	error: rust-js does not support calling `std::iter::empty` yet
@@ -492,7 +490,7 @@ issues/issue-21033.rs	error: rust-js does not support this pattern yet
 issues/issue-21361.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = i32>` yet
 issues/issue-21384.rs	error: rust-js does not support cloning `std::ops::Range<i32>` yet
 issues/issue-22036.rs	error: rust-js does not support implementation evidence for `<I as DigitCollection>` yet
-issues/issue-22258.rs	error: rust-js does not support calling `std::ops::Add::add` yet
+issues/issue-22258.rs	error: rust-js does not support this literal yet
 issues/issue-22346.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
 issues/issue-23261.rs	error: rust-js does not support a `Foo<dyn Get>`, whose last field is a `dyn` yet
 issues/issue-23311.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
@@ -584,7 +582,6 @@ macros/macro-in-or-pattern.rs	error: rust-js does not support bindings inside `|
 macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 macros/try-macro.rs	error: rust-js does not support this literal yet
-macros/type-macros-hlist.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 marker_trait_attr/overlap-permitted-for-annotated-marker-traits.rs	error: rust-js: generated trait implementation name `tMyMarker` collides; put the implementations in separate modules
 match/issue-114691.rs	error: rust-js does not support values of type `f32` yet
 match/issue-42679.rs	error: rust-js does not support this pattern yet
@@ -787,7 +784,6 @@ specialization/specialization-default-methods.rs	error: rust-js: generated trait
 specialization/specialization-projection-alias.rs	error: rust-js does not support values of type `<bool as Id_>::Out` yet
 specialization/specialization-projection.rs	error: rust-js: generated trait implementation name `tBar` collides; put the implementations in separate modules
 specialization/specialization-translate-projections-with-lifetimes.rs	error: rust-js: generated trait implementation name `clonedIterator` collides; put the implementations in separate modules
-specialization/specialization-translate-projections.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 specialization/trait-specialization-default-methods-55380.rs	error: rust-js: generated trait implementation name `tFoo` collides; put the implementations in separate modules
 specialization/transmute-specialization.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
@@ -808,7 +804,6 @@ structs-enums/enum-univariant-repr.rs	error: rust-js does not support calling `s
 structs-enums/issue-38002.rs	error: rust-js does not support this pattern yet
 structs-enums/struct-partial-move-1.rs	error: rust-js does not support a struct update from a value with a destructor yet
 structs-enums/struct-partial-move-2.rs	error: rust-js does not support a struct update from a value with a destructor yet
-structs-enums/struct-path-self.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 structs-enums/tag-align-dyn-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-dyn-variants.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -846,7 +841,6 @@ traits/infer-from-object-issue-26952.rs	error: rust-js does not support implemen
 traits/inheritance/num2.rs	error: rust-js does not support this literal yet
 traits/inheritance/num3.rs	error: rust-js does not support this literal yet
 traits/inheritance/num5.rs	error: rust-js does not support values of type `f32` yet
-traits/inheritance/overloading.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 traits/inheritance/self-in-supertype.rs	error: rust-js does not support this literal yet
 traits/issue-18412.rs	error: rust-js does not support this expression yet
 traits/issue-23825.rs	error: rust-js does not support this literal yet
