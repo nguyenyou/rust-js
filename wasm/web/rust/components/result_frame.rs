@@ -6,7 +6,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use js::{object, set_timeout};
-use react::{Element, use_effect, use_ref};
+use react::{Element, jsx, use_effect, use_ref};
 use webapi::{
     Event, HtmlIFrameElement, abort_controller, abort_signal, element, html_i_frame_element, message_event, window,
 };

@@ -1478,6 +1478,22 @@ export const mutations: Mutation[] = [
     tests: ["test/cargo-react.test.ts"],
   },
   {
+    name: "rustc-mode-without-cfg",
+    breaks: "`rust-js --rustc` doesn't set `cfg(rust_js)`, and the binding crates' metadata leaves out every `#[rust_js::link_name]`",
+    file: "src/main.rs",
+    find: "        let ours = [\"rust-js\", \"--cfg=rust_js\", \"--check-cfg=cfg(rust_js)\"].map(String::from);\n",
+    replace: "        let ours = [\"rust-js\", \"--check-cfg=cfg(rust_js)\"].map(String::from);\n",
+    tests: ["test/snapshots.test.ts","-t","counter"],
+  },
+  {
+    name: "jsx-call-keeps-its-jsx",
+    breaks: "an expression's `jsx!` keeps its JSX, which react's macro makes its placeholder, not the element",
+    file: "src/jsx_syntax.rs",
+    find: "            mac.args.tokens = arm(rust, span);\n",
+    replace: "",
+    tests: ["test/jsx.test.ts","-t","JSX supports components across modules"],
+  },
+  {
     name: "tuple-part-through-box",
     breaks: "`assert_eq!(*o, 3)` of a boxed `&mut i32` compares the box, `o`, not `o.value`",
     file: "src/lower/patterns.rs",

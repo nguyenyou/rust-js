@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use react::event::Keyboard;
-use react::{Element, Ref, use_effect, use_ref};
+use react::{Element, Ref, jsx, use_effect, use_ref};
 
 use crate::codemirror::{EditorState, EditorView, destroy, open_view, set_theme, show};
 use crate::dark_mode::use_dark_mode;

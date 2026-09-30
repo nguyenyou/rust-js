@@ -82,7 +82,7 @@ test("a Cargo build's JS in source is beside each module's Rust, and follows the
   expect(run([node ?? "node", "--input-type=module", "--eval", `console.log((await import(${JSON.stringify(js)})).value());`]).trim()).toBe("8");
   // The module gone, its JS goes; and the root, with JSX now, is `lib.jsx`.
   rmSync(join(app, "extra.rs"));
-  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\n\npub fn value() -> u32 {\n    shared::seven()\n}\n\npub fn View() -> react::Element {\n    jsx! { <b /> }\n}\n");
+  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\n\nuse react::jsx;\n\npub fn value() -> u32 {\n    shared::seven()\n}\n\npub fn View() -> react::Element {\n    jsx! { <b /> }\n}\n");
   writeFileSync(join(dir, "app", "Cargo.toml"), readFileSync(join(dir, "app", "Cargo.toml"), "utf8") + `react = { package = "rust-js-react", path = ${JSON.stringify(join(root, "react"))} }\n`);
   const again = await inSource();
   expect(again.js).toBe(join(app, "lib.jsx"));

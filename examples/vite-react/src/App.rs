@@ -6,7 +6,7 @@
 
 js::import!("./App.css");
 
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 unsafe extern "Rust" {
     #[link_name = "./assets/hero.png#default"]

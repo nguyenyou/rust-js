@@ -31,7 +31,7 @@ unsafe extern "Rust" {
 /// Sucrase's options: JSX as `react/jsx-runtime`'s calls, as a bundler writes it.
 pub struct TransformOptions {
     pub transforms: Vec<&'static str>,
-    #[rust_js::name = "jsxRuntime"]
+    #[cfg_attr(rust_js, rust_js::name = "jsxRuntime")]
     pub jsx_runtime: &'static str,
     pub production: bool,
 }
@@ -42,7 +42,7 @@ pub struct Transformed {
 
 /// [Sucrase](https://github.com/alangpierce/sucrase): the JSX rust-js writes,
 /// as the JS the frame can run, which has no bundler.
-#[rust_js::link_name = "sucrase#transform"]
+#[cfg_attr(rust_js, rust_js::link_name = "sucrase#transform")]
 #[allow(unused_variables)]
 fn transform(code: &str, options: TransformOptions) -> Transformed {
     unreachable!()

@@ -54,7 +54,7 @@ test("JSX preparation preserves evaluation order, conditional execution and text
   const dir = fixture("jsx-semantics");
   const input = join(dir, "lib.rs");
   await Bun.write(input, `#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 unsafe extern "Rust" {
     #[link_name = "globalThis.record"]
     safe fn record(n: i32) -> i32;
@@ -212,7 +212,7 @@ const _: () = ();
 
 mod people;
 
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 pub fn greet(first_name: &str) -> String {
     people::full_name(&people::make_person(first_name))

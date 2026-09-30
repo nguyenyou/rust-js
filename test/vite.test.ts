@@ -19,7 +19,7 @@ test("Vite builds and refreshes affected crates, recovers from errors and module
   writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
   writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   const source = `#![allow(non_snake_case)]
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 mod text;
 #[derive(serde::Deserialize)]
 pub struct Saved { pub count: i32 }
@@ -132,7 +132,7 @@ test("Tailwind and React Compiler keep Fast Refresh's state", async () => {
   writeFileSync(join(dir, "src/index.css"), '@import "tailwindcss";\n@source "./App.rs";\n');
   writeFileSync(join(dir, "src/main.jsx"), 'import "./index.css"; import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   const app = (classes: string) => `#![allow(non_snake_case)]
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
     jsx! {
@@ -185,7 +185,7 @@ test("Without rust-js, a build uses the committed JSX", async () => {
   writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
   writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
   writeFileSync(join(dir, "src/App.rs"), `#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 pub fn App() -> Element {
     jsx! {
         <p>{"Committed"}</p>
@@ -239,7 +239,7 @@ thread_local! {
 }
 `);
   const app = (label: string) => `#![allow(non_snake_case)]
-use react::{Element, Memo, memo, use_context, use_state};
+use react::{Element, Memo, jsx, memo, use_context, use_state};
 mod theme;
 use theme::THEME;
 thread_local! {
@@ -317,7 +317,7 @@ test("Vite builds a Cargo workspace's package and refreshes it when a crate it u
   writeFileSync(join(dir, "ui/Cargo.toml"), `[package]\nname = "ui"\nversion = "0.1.0"\nedition = "2024"\n\n[dependencies]\nmodels = { path = "../models" }\nreact = { package = "rust-js-react", path = ${JSON.stringify(join(root, "react"))} }\n`);
   const ui = join(dir, "ui/src/lib.rs");
   const source = `#![allow(non_snake_case)]
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 #[rust_js::link_name = "widget#greeting"]
 fn greeting() -> &'static str {

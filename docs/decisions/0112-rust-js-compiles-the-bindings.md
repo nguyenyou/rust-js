@@ -45,5 +45,5 @@ own: it writes what rustc writes, their metadata.
   what's unstable is rust-js's own build, which links rustc's internals
   (ADR 0109). The test `the binding crates are stable Rust, which rust-js
   compiles` builds them with no `RUSTC_BOOTSTRAP`.
-- **A plain rustc, a user's own `cargo check`, still doesn't know the tool**,
-  or `jsx!`: only rust-js does.
+- **A plain rustc, a user's own `cargo check`, still didn't know the tool**,
+  or `jsx!`: ADR 0113 makes a program, and the crates, compile there too.

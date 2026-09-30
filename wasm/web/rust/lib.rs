@@ -26,6 +26,7 @@ use react::dom::client::create_root;
 use webapi::document;
 
 use components::app::App;
+use react::jsx;
 
 /// Render the page into `#app`.
 pub fn start() {

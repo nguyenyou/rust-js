@@ -6408,15 +6408,15 @@ pub struct AddEventListenerOptions<'a> {
 /// The [`CheckVisibilityOptions`](https://developer.mozilla.org/docs/Web/API/CheckVisibilityOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct CheckVisibilityOptions {
-    #[rust_js::name = "checkOpacity"]
+    #[cfg_attr(rust_js, rust_js::name = "checkOpacity")]
     pub check_opacity: Option<bool>,
-    #[rust_js::name = "checkVisibilityCSS"]
+    #[cfg_attr(rust_js, rust_js::name = "checkVisibilityCSS")]
     pub check_visibility_css: Option<bool>,
-    #[rust_js::name = "contentVisibilityAuto"]
+    #[cfg_attr(rust_js, rust_js::name = "contentVisibilityAuto")]
     pub content_visibility_auto: Option<bool>,
-    #[rust_js::name = "opacityProperty"]
+    #[cfg_attr(rust_js, rust_js::name = "opacityProperty")]
     pub opacity_property: Option<bool>,
-    #[rust_js::name = "visibilityProperty"]
+    #[cfg_attr(rust_js, rust_js::name = "visibilityProperty")]
     pub visibility_property: Option<bool>,
 }
 
@@ -6466,23 +6466,23 @@ pub struct FocusEventInit<'a> {
     pub composed: Option<bool>,
     pub view: Option<&'a Window>,
     pub detail: Option<i32>,
-    #[rust_js::name = "relatedTarget"]
+    #[cfg_attr(rust_js, rust_js::name = "relatedTarget")]
     pub related_target: Option<&'a EventTarget>,
 }
 
 /// The [`FocusOptions`](https://developer.mozilla.org/docs/Web/API/FocusOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct FocusOptions {
-    #[rust_js::name = "preventScroll"]
+    #[cfg_attr(rust_js, rust_js::name = "preventScroll")]
     pub prevent_scroll: Option<bool>,
-    #[rust_js::name = "focusVisible"]
+    #[cfg_attr(rust_js, rust_js::name = "focusVisible")]
     pub focus_visible: Option<bool>,
 }
 
 /// The [`GetHTMLOptions`](https://developer.mozilla.org/docs/Web/API/GetHTMLOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct GetHtmlOptions {
-    #[rust_js::name = "serializableShadowRoots"]
+    #[cfg_attr(rust_js, rust_js::name = "serializableShadowRoots")]
     pub serializable_shadow_roots: Option<bool>,
 }
 
@@ -6495,7 +6495,7 @@ pub struct GetRootNodeOptions {
 /// The [`ImportNodeOptions`](https://developer.mozilla.org/docs/Web/API/ImportNodeOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct ImportNodeOptions {
-    #[rust_js::name = "selfOnly"]
+    #[cfg_attr(rust_js, rust_js::name = "selfOnly")]
     pub self_only: Option<bool>,
 }
 
@@ -6508,9 +6508,9 @@ pub struct InputEventInit<'a> {
     pub view: Option<&'a Window>,
     pub detail: Option<i32>,
     pub data: Option<&'a str>,
-    #[rust_js::name = "isComposing"]
+    #[cfg_attr(rust_js, rust_js::name = "isComposing")]
     pub is_composing: Option<bool>,
-    #[rust_js::name = "inputType"]
+    #[cfg_attr(rust_js, rust_js::name = "inputType")]
     pub input_type: Option<&'a str>,
 }
 
@@ -6522,39 +6522,39 @@ pub struct KeyboardEventInit<'a> {
     pub composed: Option<bool>,
     pub view: Option<&'a Window>,
     pub detail: Option<i32>,
-    #[rust_js::name = "ctrlKey"]
+    #[cfg_attr(rust_js, rust_js::name = "ctrlKey")]
     pub ctrl_key: Option<bool>,
-    #[rust_js::name = "shiftKey"]
+    #[cfg_attr(rust_js, rust_js::name = "shiftKey")]
     pub shift_key: Option<bool>,
-    #[rust_js::name = "altKey"]
+    #[cfg_attr(rust_js, rust_js::name = "altKey")]
     pub alt_key: Option<bool>,
-    #[rust_js::name = "metaKey"]
+    #[cfg_attr(rust_js, rust_js::name = "metaKey")]
     pub meta_key: Option<bool>,
-    #[rust_js::name = "modifierAltGraph"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierAltGraph")]
     pub modifier_alt_graph: Option<bool>,
-    #[rust_js::name = "modifierCapsLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierCapsLock")]
     pub modifier_caps_lock: Option<bool>,
-    #[rust_js::name = "modifierFn"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierFn")]
     pub modifier_fn: Option<bool>,
-    #[rust_js::name = "modifierFnLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierFnLock")]
     pub modifier_fn_lock: Option<bool>,
-    #[rust_js::name = "modifierHyper"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierHyper")]
     pub modifier_hyper: Option<bool>,
-    #[rust_js::name = "modifierNumLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierNumLock")]
     pub modifier_num_lock: Option<bool>,
-    #[rust_js::name = "modifierScrollLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierScrollLock")]
     pub modifier_scroll_lock: Option<bool>,
-    #[rust_js::name = "modifierSuper"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSuper")]
     pub modifier_super: Option<bool>,
-    #[rust_js::name = "modifierSymbol"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSymbol")]
     pub modifier_symbol: Option<bool>,
-    #[rust_js::name = "modifierSymbolLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSymbolLock")]
     pub modifier_symbol_lock: Option<bool>,
     pub key: Option<&'a str>,
     pub code: Option<&'a str>,
     pub location: Option<u32>,
     pub repeat: Option<bool>,
-    #[rust_js::name = "isComposing"]
+    #[cfg_attr(rust_js, rust_js::name = "isComposing")]
     pub is_composing: Option<bool>,
 }
 
@@ -6581,7 +6581,7 @@ pub struct MessageEventInit<'a> {
     pub cancelable: Option<bool>,
     pub composed: Option<bool>,
     pub origin: Option<&'a str>,
-    #[rust_js::name = "lastEventId"]
+    #[cfg_attr(rust_js, rust_js::name = "lastEventId")]
     pub last_event_id: Option<&'a str>,
     pub source: Option<&'a Window>,
 }
@@ -6594,52 +6594,52 @@ pub struct MouseEventInit<'a> {
     pub composed: Option<bool>,
     pub view: Option<&'a Window>,
     pub detail: Option<i32>,
-    #[rust_js::name = "ctrlKey"]
+    #[cfg_attr(rust_js, rust_js::name = "ctrlKey")]
     pub ctrl_key: Option<bool>,
-    #[rust_js::name = "shiftKey"]
+    #[cfg_attr(rust_js, rust_js::name = "shiftKey")]
     pub shift_key: Option<bool>,
-    #[rust_js::name = "altKey"]
+    #[cfg_attr(rust_js, rust_js::name = "altKey")]
     pub alt_key: Option<bool>,
-    #[rust_js::name = "metaKey"]
+    #[cfg_attr(rust_js, rust_js::name = "metaKey")]
     pub meta_key: Option<bool>,
-    #[rust_js::name = "modifierAltGraph"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierAltGraph")]
     pub modifier_alt_graph: Option<bool>,
-    #[rust_js::name = "modifierCapsLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierCapsLock")]
     pub modifier_caps_lock: Option<bool>,
-    #[rust_js::name = "modifierFn"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierFn")]
     pub modifier_fn: Option<bool>,
-    #[rust_js::name = "modifierFnLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierFnLock")]
     pub modifier_fn_lock: Option<bool>,
-    #[rust_js::name = "modifierHyper"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierHyper")]
     pub modifier_hyper: Option<bool>,
-    #[rust_js::name = "modifierNumLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierNumLock")]
     pub modifier_num_lock: Option<bool>,
-    #[rust_js::name = "modifierScrollLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierScrollLock")]
     pub modifier_scroll_lock: Option<bool>,
-    #[rust_js::name = "modifierSuper"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSuper")]
     pub modifier_super: Option<bool>,
-    #[rust_js::name = "modifierSymbol"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSymbol")]
     pub modifier_symbol: Option<bool>,
-    #[rust_js::name = "modifierSymbolLock"]
+    #[cfg_attr(rust_js, rust_js::name = "modifierSymbolLock")]
     pub modifier_symbol_lock: Option<bool>,
-    #[rust_js::name = "screenX"]
+    #[cfg_attr(rust_js, rust_js::name = "screenX")]
     pub screen_x: Option<i32>,
-    #[rust_js::name = "screenY"]
+    #[cfg_attr(rust_js, rust_js::name = "screenY")]
     pub screen_y: Option<i32>,
-    #[rust_js::name = "clientX"]
+    #[cfg_attr(rust_js, rust_js::name = "clientX")]
     pub client_x: Option<i32>,
-    #[rust_js::name = "clientY"]
+    #[cfg_attr(rust_js, rust_js::name = "clientY")]
     pub client_y: Option<i32>,
     pub button: Option<i16>,
     pub buttons: Option<u16>,
-    #[rust_js::name = "relatedTarget"]
+    #[cfg_attr(rust_js, rust_js::name = "relatedTarget")]
     pub related_target: Option<&'a EventTarget>,
 }
 
 /// The [`QueuingStrategy`](https://developer.mozilla.org/docs/Web/API/QueuingStrategy) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct QueuingStrategy {
-    #[rust_js::name = "highWaterMark"]
+    #[cfg_attr(rust_js, rust_js::name = "highWaterMark")]
     pub high_water_mark: Option<f64>,
 }
 
@@ -6655,7 +6655,7 @@ pub struct RequestInit<'a> {
     pub headers: Option<&'a Headers>,
     pub body: Option<&'a str>,
     pub referrer: Option<&'a str>,
-    #[rust_js::name = "referrerPolicy"]
+    #[cfg_attr(rust_js, rust_js::name = "referrerPolicy")]
     pub referrer_policy: Option<&'a str>,
     pub mode: Option<&'a str>,
     pub credentials: Option<&'a str>,
@@ -6672,7 +6672,7 @@ pub struct RequestInit<'a> {
 #[derive(Default)]
 pub struct ResponseInit<'a> {
     pub status: Option<u16>,
-    #[rust_js::name = "statusText"]
+    #[cfg_attr(rust_js, rust_js::name = "statusText")]
     pub status_text: Option<&'a str>,
 }
 
@@ -6680,9 +6680,9 @@ pub struct ResponseInit<'a> {
 #[derive(Default)]
 pub struct SanitizerConfig {
     pub comments: Option<bool>,
-    #[rust_js::name = "dataAttributes"]
+    #[cfg_attr(rust_js, rust_js::name = "dataAttributes")]
     pub data_attributes: Option<bool>,
-    #[rust_js::name = "javascriptURLs"]
+    #[cfg_attr(rust_js, rust_js::name = "javascriptURLs")]
     pub javascript_ur_ls: Option<bool>,
 }
 
@@ -6713,17 +6713,17 @@ pub struct SetHtmlOptions<'a> {
 #[derive(Default)]
 pub struct SetHtmlUnsafeOptions<'a> {
     pub sanitizer: Option<&'a str>,
-    #[rust_js::name = "runScripts"]
+    #[cfg_attr(rust_js, rust_js::name = "runScripts")]
     pub run_scripts: Option<bool>,
 }
 
 /// The [`ShadowRootInit`](https://developer.mozilla.org/docs/Web/API/ShadowRootInit) dictionary: a JS object of these fields, a `None` one not given.
 pub struct ShadowRootInit<'a> {
     pub mode: &'a str,
-    #[rust_js::name = "delegatesFocus"]
+    #[cfg_attr(rust_js, rust_js::name = "delegatesFocus")]
     pub delegates_focus: Option<bool>,
     pub serializable: Option<bool>,
-    #[rust_js::name = "slotAssignment"]
+    #[cfg_attr(rust_js, rust_js::name = "slotAssignment")]
     pub slot_assignment: Option<&'a str>,
     pub clonable: Option<bool>,
 }
@@ -6737,11 +6737,11 @@ pub struct ShowPopoverOptions<'a> {
 /// The [`StreamPipeOptions`](https://developer.mozilla.org/docs/Web/API/StreamPipeOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct StreamPipeOptions<'a> {
-    #[rust_js::name = "preventClose"]
+    #[cfg_attr(rust_js, rust_js::name = "preventClose")]
     pub prevent_close: Option<bool>,
-    #[rust_js::name = "preventAbort"]
+    #[cfg_attr(rust_js, rust_js::name = "preventAbort")]
     pub prevent_abort: Option<bool>,
-    #[rust_js::name = "preventCancel"]
+    #[cfg_attr(rust_js, rust_js::name = "preventCancel")]
     pub prevent_cancel: Option<bool>,
     pub signal: Option<&'a AbortSignal>,
 }
@@ -6756,7 +6756,7 @@ pub struct TextDecodeOptions {
 #[derive(Default)]
 pub struct TextDecoderOptions {
     pub fatal: Option<bool>,
-    #[rust_js::name = "ignoreBOM"]
+    #[cfg_attr(rust_js, rust_js::name = "ignoreBOM")]
     pub ignore_bom: Option<bool>,
 }
 
@@ -6766,9 +6766,9 @@ pub struct ToggleEventInit<'a> {
     pub bubbles: Option<bool>,
     pub cancelable: Option<bool>,
     pub composed: Option<bool>,
-    #[rust_js::name = "oldState"]
+    #[cfg_attr(rust_js, rust_js::name = "oldState")]
     pub old_state: Option<&'a str>,
-    #[rust_js::name = "newState"]
+    #[cfg_attr(rust_js, rust_js::name = "newState")]
     pub new_state: Option<&'a str>,
     pub source: Option<&'a Element>,
 }
@@ -6784,23 +6784,23 @@ pub struct TogglePopoverOptions<'a> {
 pub struct TouchInit<'a> {
     pub identifier: i32,
     pub target: &'a EventTarget,
-    #[rust_js::name = "clientX"]
+    #[cfg_attr(rust_js, rust_js::name = "clientX")]
     pub client_x: Option<f64>,
-    #[rust_js::name = "clientY"]
+    #[cfg_attr(rust_js, rust_js::name = "clientY")]
     pub client_y: Option<f64>,
-    #[rust_js::name = "screenX"]
+    #[cfg_attr(rust_js, rust_js::name = "screenX")]
     pub screen_x: Option<f64>,
-    #[rust_js::name = "screenY"]
+    #[cfg_attr(rust_js, rust_js::name = "screenY")]
     pub screen_y: Option<f64>,
-    #[rust_js::name = "pageX"]
+    #[cfg_attr(rust_js, rust_js::name = "pageX")]
     pub page_x: Option<f64>,
-    #[rust_js::name = "pageY"]
+    #[cfg_attr(rust_js, rust_js::name = "pageY")]
     pub page_y: Option<f64>,
-    #[rust_js::name = "altitudeAngle"]
+    #[cfg_attr(rust_js, rust_js::name = "altitudeAngle")]
     pub altitude_angle: Option<f64>,
-    #[rust_js::name = "azimuthAngle"]
+    #[cfg_attr(rust_js, rust_js::name = "azimuthAngle")]
     pub azimuth_angle: Option<f64>,
-    #[rust_js::name = "touchType"]
+    #[cfg_attr(rust_js, rust_js::name = "touchType")]
     pub touch_type: Option<&'a str>,
 }
 
@@ -6817,6 +6817,6 @@ pub struct UiEventInit<'a> {
 /// The [`WebAssemblyCompileOptions`](https://developer.mozilla.org/docs/Web/API/WebAssemblyCompileOptions) dictionary: a JS object of these fields, a `None` one not given.
 #[derive(Default)]
 pub struct WebAssemblyCompileOptions<'a> {
-    #[rust_js::name = "importedStringConstants"]
+    #[cfg_attr(rust_js, rust_js::name = "importedStringConstants")]
     pub imported_string_constants: Option<&'a str>,
 }

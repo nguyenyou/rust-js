@@ -14,7 +14,7 @@ mod sonner;
 use detail::ContactPage;
 use form::NewContactForm;
 use list::ContactList;
-use react::Element;
+use react::{Element, jsx};
 use route::{Route, use_route};
 use sonner::Toaster;
 

@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 
-use react::Element;
 use react::event::Change;
+use react::{Element, jsx};
 
 use crate::compiler::Example;
 use crate::styles::CONTROL;

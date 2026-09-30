@@ -11,2409 +11,2409 @@ use super::*;
 #[doc(hidden)]
 impl Element {
     /// `about`
-    #[rust_js::link_name = "prop about"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop about")]
     pub fn about(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `accentHeight`
-    #[rust_js::link_name = "prop accentHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop accentHeight")]
     pub fn accent_height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `accept`
-    #[rust_js::link_name = "prop accept"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop accept")]
     pub fn accept(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `acceptCharset`
-    #[rust_js::link_name = "prop acceptCharset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop acceptCharset")]
     pub fn accept_charset(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `accessKey`
-    #[rust_js::link_name = "prop accessKey"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop accessKey")]
     pub fn access_key(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `accumulate`
-    #[rust_js::link_name = "prop accumulate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop accumulate")]
     pub fn accumulate(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `additive`
-    #[rust_js::link_name = "prop additive"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop additive")]
     pub fn additive(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `alignmentBaseline`
-    #[rust_js::link_name = "prop alignmentBaseline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alignmentBaseline")]
     pub fn alignment_baseline(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `allowFullScreen`
-    #[rust_js::link_name = "prop allowFullScreen"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop allowFullScreen")]
     pub fn allow_full_screen(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `allowReorder`
-    #[rust_js::link_name = "prop allowReorder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop allowReorder")]
     pub fn allow_reorder(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `alphabetic`
-    #[rust_js::link_name = "prop alphabetic"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alphabetic")]
     pub fn alphabetic(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `alt`
-    #[rust_js::link_name = "prop alt"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alt")]
     pub fn alt(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `amplitude`
-    #[rust_js::link_name = "prop amplitude"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop amplitude")]
     pub fn amplitude(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `arabicForm`
-    #[rust_js::link_name = "prop arabicForm"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop arabicForm")]
     pub fn arabic_form(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `as`
-    #[rust_js::link_name = "prop as"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop as")]
     pub fn r#as(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `ascent`
-    #[rust_js::link_name = "prop ascent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ascent")]
     pub fn ascent(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `async`
-    #[rust_js::link_name = "prop async"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop async")]
     pub fn r#async(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `attributeName`
-    #[rust_js::link_name = "prop attributeName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop attributeName")]
     pub fn attribute_name(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `attributeType`
-    #[rust_js::link_name = "prop attributeType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop attributeType")]
     pub fn attribute_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `autoCapitalize`
-    #[rust_js::link_name = "prop autoCapitalize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoCapitalize")]
     pub fn auto_capitalize(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `autoComplete`
-    #[rust_js::link_name = "prop autoComplete"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoComplete")]
     pub fn auto_complete(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `autoCorrect`
-    #[rust_js::link_name = "prop autoCorrect"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoCorrect")]
     pub fn auto_correct(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `autoFocus`
-    #[rust_js::link_name = "prop autoFocus"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoFocus")]
     pub fn auto_focus(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `autoPlay`
-    #[rust_js::link_name = "prop autoPlay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoPlay")]
     pub fn auto_play(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `autoReverse`
-    #[rust_js::link_name = "prop autoReverse"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoReverse")]
     pub fn auto_reverse(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `autoSave`
-    #[rust_js::link_name = "prop autoSave"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop autoSave")]
     pub fn auto_save(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `azimuth`
-    #[rust_js::link_name = "prop azimuth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop azimuth")]
     pub fn azimuth(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `baseFrequency`
-    #[rust_js::link_name = "prop baseFrequency"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop baseFrequency")]
     pub fn base_frequency(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `baseProfile`
-    #[rust_js::link_name = "prop baseProfile"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop baseProfile")]
     pub fn base_profile(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `baselineShift`
-    #[rust_js::link_name = "prop baselineShift"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop baselineShift")]
     pub fn baseline_shift(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `bbox`
-    #[rust_js::link_name = "prop bbox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bbox")]
     pub fn bbox(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `begin`
-    #[rust_js::link_name = "prop begin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop begin")]
     pub fn begin(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `bias`
-    #[rust_js::link_name = "prop bias"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bias")]
     pub fn bias(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `by`
-    #[rust_js::link_name = "prop by"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop by")]
     pub fn by(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `calcMode`
-    #[rust_js::link_name = "prop calcMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop calcMode")]
     pub fn calc_mode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `capHeight`
-    #[rust_js::link_name = "prop capHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop capHeight")]
     pub fn cap_height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `capture`
-    #[rust_js::link_name = "prop capture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop capture")]
     pub fn capture(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cellPadding`
-    #[rust_js::link_name = "prop cellPadding"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cellPadding")]
     pub fn cell_padding(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cellSpacing`
-    #[rust_js::link_name = "prop cellSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cellSpacing")]
     pub fn cell_spacing(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `challenge`
-    #[rust_js::link_name = "prop challenge"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop challenge")]
     pub fn challenge(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `charSet`
-    #[rust_js::link_name = "prop charSet"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop charSet")]
     pub fn char_set(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `checked`
-    #[rust_js::link_name = "prop checked"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop checked")]
     pub fn checked(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `cite`
-    #[rust_js::link_name = "prop cite"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cite")]
     pub fn cite(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `classID`
-    #[rust_js::link_name = "prop classID"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop classID")]
     pub fn class_id(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `className`
-    #[rust_js::link_name = "prop className"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop className")]
     pub fn class_name(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `clip`
-    #[rust_js::link_name = "prop clip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clip")]
     pub fn clip(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `clipPath`
-    #[rust_js::link_name = "prop clipPath"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clipPath")]
     pub fn clip_path(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `clipPathUnits`
-    #[rust_js::link_name = "prop clipPathUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clipPathUnits")]
     pub fn clip_path_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `clipRule`
-    #[rust_js::link_name = "prop clipRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clipRule")]
     pub fn clip_rule(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `colSpan`
-    #[rust_js::link_name = "prop colSpan"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colSpan")]
     pub fn col_span(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `color`
-    #[rust_js::link_name = "prop color"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop color")]
     pub fn color(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `colorInterpolation`
-    #[rust_js::link_name = "prop colorInterpolation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorInterpolation")]
     pub fn color_interpolation(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `colorInterpolationFilters`
-    #[rust_js::link_name = "prop colorInterpolationFilters"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorInterpolationFilters")]
     pub fn color_interpolation_filters(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `colorProfile`
-    #[rust_js::link_name = "prop colorProfile"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorProfile")]
     pub fn color_profile(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `colorRendering`
-    #[rust_js::link_name = "prop colorRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorRendering")]
     pub fn color_rendering(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cols`
-    #[rust_js::link_name = "prop cols"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cols")]
     pub fn cols(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `content`
-    #[rust_js::link_name = "prop content"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop content")]
     pub fn content(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `contentEditable`
-    #[rust_js::link_name = "prop contentEditable"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contentEditable")]
     pub fn content_editable(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `contentScriptType`
-    #[rust_js::link_name = "prop contentScriptType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contentScriptType")]
     pub fn content_script_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `contentStyleType`
-    #[rust_js::link_name = "prop contentStyleType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contentStyleType")]
     pub fn content_style_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `contextMenu`
-    #[rust_js::link_name = "prop contextMenu"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contextMenu")]
     pub fn context_menu(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `controls`
-    #[rust_js::link_name = "prop controls"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop controls")]
     pub fn controls(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `controlsList`
-    #[rust_js::link_name = "prop controlsList"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop controlsList")]
     pub fn controls_list(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `coords`
-    #[rust_js::link_name = "prop coords"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop coords")]
     pub fn coords(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `credentialless`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop credentialless"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop credentialless")]
     pub fn credentialless(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `crossOrigin`
-    #[rust_js::link_name = "prop crossOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop crossOrigin")]
     pub fn cross_origin(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cursor`
-    #[rust_js::link_name = "prop cursor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cursor")]
     pub fn cursor(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cx`
-    #[rust_js::link_name = "prop cx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cx")]
     pub fn cx(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `cy`
-    #[rust_js::link_name = "prop cy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cy")]
     pub fn cy(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `d`
-    #[rust_js::link_name = "prop d"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop d")]
     pub fn d(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `data`
-    #[rust_js::link_name = "prop data"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop data")]
     pub fn data(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `datatype`
-    #[rust_js::link_name = "prop datatype"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop datatype")]
     pub fn datatype(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dateTime`
-    #[rust_js::link_name = "prop dateTime"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dateTime")]
     pub fn date_time(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `decelerate`
-    #[rust_js::link_name = "prop decelerate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop decelerate")]
     pub fn decelerate(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `default`
-    #[rust_js::link_name = "prop default"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop default")]
     pub fn r#default(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `defaultChecked`
-    #[rust_js::link_name = "prop defaultChecked"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop defaultChecked")]
     pub fn default_checked(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `defaultValue`
-    #[rust_js::link_name = "prop defaultValue"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop defaultValue")]
     pub fn default_value(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `defer`
-    #[rust_js::link_name = "prop defer"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop defer")]
     pub fn defer(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `descent`
-    #[rust_js::link_name = "prop descent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop descent")]
     pub fn descent(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `diffuseConstant`
-    #[rust_js::link_name = "prop diffuseConstant"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop diffuseConstant")]
     pub fn diffuse_constant(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dir`
-    #[rust_js::link_name = "prop dir"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dir")]
     pub fn dir(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `direction`
-    #[rust_js::link_name = "prop direction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop direction")]
     pub fn direction(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `disablePictureInPicture`
-    #[rust_js::link_name = "prop disablePictureInPicture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop disablePictureInPicture")]
     pub fn disable_picture_in_picture(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `disableRemotePlayback`
-    #[rust_js::link_name = "prop disableRemotePlayback"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop disableRemotePlayback")]
     pub fn disable_remote_playback(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `disabled`
-    #[rust_js::link_name = "prop disabled"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop disabled")]
     pub fn disabled(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `display`
-    #[rust_js::link_name = "prop display"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop display")]
     pub fn display(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `divisor`
-    #[rust_js::link_name = "prop divisor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop divisor")]
     pub fn divisor(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dominantBaseline`
-    #[rust_js::link_name = "prop dominantBaseline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dominantBaseline")]
     pub fn dominant_baseline(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `download`
-    #[rust_js::link_name = "prop download"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop download")]
     pub fn download(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `draggable`
-    #[rust_js::link_name = "prop draggable"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop draggable")]
     pub fn draggable(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dur`
-    #[rust_js::link_name = "prop dur"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dur")]
     pub fn dur(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dx`
-    #[rust_js::link_name = "prop dx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dx")]
     pub fn dx(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `dy`
-    #[rust_js::link_name = "prop dy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dy")]
     pub fn dy(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `edgeMode`
-    #[rust_js::link_name = "prop edgeMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop edgeMode")]
     pub fn edge_mode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `elevation`
-    #[rust_js::link_name = "prop elevation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop elevation")]
     pub fn elevation(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `enableBackground`
-    #[rust_js::link_name = "prop enableBackground"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop enableBackground")]
     pub fn enable_background(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `encType`
-    #[rust_js::link_name = "prop encType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop encType")]
     pub fn enc_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `end`
-    #[rust_js::link_name = "prop end"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop end")]
     pub fn end(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `enterKeyHint`
-    #[rust_js::link_name = "prop enterKeyHint"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop enterKeyHint")]
     pub fn enter_key_hint(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `exponent`
-    #[rust_js::link_name = "prop exponent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop exponent")]
     pub fn exponent(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `externalResourcesRequired`
-    #[rust_js::link_name = "prop externalResourcesRequired"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop externalResourcesRequired")]
     pub fn external_resources_required(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fetchPriority`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop fetchPriority"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fetchPriority")]
     pub fn fetch_priority(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fill`
-    #[rust_js::link_name = "prop fill"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fill")]
     pub fn fill(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fillOpacity`
-    #[rust_js::link_name = "prop fillOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillOpacity")]
     pub fn fill_opacity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fillRule`
-    #[rust_js::link_name = "prop fillRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillRule")]
     pub fn fill_rule(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `filter`
-    #[rust_js::link_name = "prop filter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop filter")]
     pub fn filter(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `filterRes`
-    #[rust_js::link_name = "prop filterRes"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop filterRes")]
     pub fn filter_res(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `filterUnits`
-    #[rust_js::link_name = "prop filterUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop filterUnits")]
     pub fn filter_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `floodColor`
-    #[rust_js::link_name = "prop floodColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floodColor")]
     pub fn flood_color(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `floodOpacity`
-    #[rust_js::link_name = "prop floodOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floodOpacity")]
     pub fn flood_opacity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `focusable`
-    #[rust_js::link_name = "prop focusable"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop focusable")]
     pub fn focusable(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontFamily`
-    #[rust_js::link_name = "prop fontFamily"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontFamily")]
     pub fn font_family(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontSize`
-    #[rust_js::link_name = "prop fontSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSize")]
     pub fn font_size(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontSizeAdjust`
-    #[rust_js::link_name = "prop fontSizeAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSizeAdjust")]
     pub fn font_size_adjust(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontStretch`
-    #[rust_js::link_name = "prop fontStretch"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontStretch")]
     pub fn font_stretch(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontStyle`
-    #[rust_js::link_name = "prop fontStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontStyle")]
     pub fn font_style(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontVariant`
-    #[rust_js::link_name = "prop fontVariant"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariant")]
     pub fn font_variant(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fontWeight`
-    #[rust_js::link_name = "prop fontWeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontWeight")]
     pub fn font_weight(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `form`
-    #[rust_js::link_name = "prop form"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop form")]
     pub fn form(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `formEncType`
-    #[rust_js::link_name = "prop formEncType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop formEncType")]
     pub fn form_enc_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `formMethod`
-    #[rust_js::link_name = "prop formMethod"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop formMethod")]
     pub fn form_method(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `formNoValidate`
-    #[rust_js::link_name = "prop formNoValidate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop formNoValidate")]
     pub fn form_no_validate(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `formTarget`
-    #[rust_js::link_name = "prop formTarget"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop formTarget")]
     pub fn form_target(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `format`
-    #[rust_js::link_name = "prop format"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop format")]
     pub fn format(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `frameBorder`
-    #[rust_js::link_name = "prop frameBorder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop frameBorder")]
     pub fn frame_border(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `from`
-    #[rust_js::link_name = "prop from"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop from")]
     pub fn from(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fx`
-    #[rust_js::link_name = "prop fx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fx")]
     pub fn fx(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `fy`
-    #[rust_js::link_name = "prop fy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fy")]
     pub fn fy(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `g1`
-    #[rust_js::link_name = "prop g1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop g1")]
     pub fn g1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `g2`
-    #[rust_js::link_name = "prop g2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop g2")]
     pub fn g2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `glyphName`
-    #[rust_js::link_name = "prop glyphName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop glyphName")]
     pub fn glyph_name(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `glyphOrientationHorizontal`
-    #[rust_js::link_name = "prop glyphOrientationHorizontal"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop glyphOrientationHorizontal")]
     pub fn glyph_orientation_horizontal(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `glyphOrientationVertical`
-    #[rust_js::link_name = "prop glyphOrientationVertical"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop glyphOrientationVertical")]
     pub fn glyph_orientation_vertical(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `glyphRef`
-    #[rust_js::link_name = "prop glyphRef"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop glyphRef")]
     pub fn glyph_ref(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `gradientTransform`
-    #[rust_js::link_name = "prop gradientTransform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gradientTransform")]
     pub fn gradient_transform(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `gradientUnits`
-    #[rust_js::link_name = "prop gradientUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gradientUnits")]
     pub fn gradient_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `hanging`
-    #[rust_js::link_name = "prop hanging"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hanging")]
     pub fn hanging(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `headers`
-    #[rust_js::link_name = "prop headers"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop headers")]
     pub fn headers(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `height`
-    #[rust_js::link_name = "prop height"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop height")]
     pub fn height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `hidden`
-    #[rust_js::link_name = "prop hidden"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hidden")]
     pub fn hidden(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `high`
-    #[rust_js::link_name = "prop high"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop high")]
     pub fn high(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `horizAdvX`
-    #[rust_js::link_name = "prop horizAdvX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop horizAdvX")]
     pub fn horiz_adv_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `horizOriginX`
-    #[rust_js::link_name = "prop horizOriginX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop horizOriginX")]
     pub fn horiz_origin_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `href`
-    #[rust_js::link_name = "prop href"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop href")]
     pub fn href(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `hrefLang`
-    #[rust_js::link_name = "prop hrefLang"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hrefLang")]
     pub fn href_lang(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `htmlFor`
-    #[rust_js::link_name = "prop htmlFor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop htmlFor")]
     pub fn html_for(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `httpEquiv`
-    #[rust_js::link_name = "prop httpEquiv"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop httpEquiv")]
     pub fn http_equiv(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `icon`
-    #[rust_js::link_name = "prop icon"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop icon")]
     pub fn icon(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `id`
-    #[rust_js::link_name = "prop id"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop id")]
     pub fn id(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `ideographic`
-    #[rust_js::link_name = "prop ideographic"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ideographic")]
     pub fn ideographic(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `imageRendering`
-    #[rust_js::link_name = "prop imageRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageRendering")]
     pub fn image_rendering(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `imageSizes`
-    #[rust_js::link_name = "prop imageSizes"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageSizes")]
     pub fn image_sizes(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `imageSrcSet`
-    #[rust_js::link_name = "prop imageSrcSet"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageSrcSet")]
     pub fn image_src_set(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `in`
-    #[rust_js::link_name = "prop in"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop in")]
     pub fn r#in(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `in2`
-    #[rust_js::link_name = "prop in2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop in2")]
     pub fn in2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `inert`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop inert"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inert")]
     pub fn inert(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `inlist`
-    #[rust_js::link_name = "prop inlist"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inlist")]
     pub fn inlist(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `inputMode`
-    #[rust_js::link_name = "prop inputMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inputMode")]
     pub fn input_mode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `integrity`
-    #[rust_js::link_name = "prop integrity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop integrity")]
     pub fn integrity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `intercept`
-    #[rust_js::link_name = "prop intercept"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop intercept")]
     pub fn intercept(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `is`
-    #[rust_js::link_name = "prop is"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop is")]
     pub fn is(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `itemID`
-    #[rust_js::link_name = "prop itemID"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop itemID")]
     pub fn item_id(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `itemProp`
-    #[rust_js::link_name = "prop itemProp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop itemProp")]
     pub fn item_prop(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `itemRef`
-    #[rust_js::link_name = "prop itemRef"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop itemRef")]
     pub fn item_ref(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `itemScope`
-    #[rust_js::link_name = "prop itemScope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop itemScope")]
     pub fn item_scope(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `itemType`
-    #[rust_js::link_name = "prop itemType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop itemType")]
     pub fn item_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `k`
-    #[rust_js::link_name = "prop k"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop k")]
     pub fn k(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `k1`
-    #[rust_js::link_name = "prop k1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop k1")]
     pub fn k1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `k2`
-    #[rust_js::link_name = "prop k2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop k2")]
     pub fn k2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `k3`
-    #[rust_js::link_name = "prop k3"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop k3")]
     pub fn k3(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `k4`
-    #[rust_js::link_name = "prop k4"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop k4")]
     pub fn k4(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `kernelMatrix`
-    #[rust_js::link_name = "prop kernelMatrix"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop kernelMatrix")]
     pub fn kernel_matrix(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `kernelUnitLength`
-    #[rust_js::link_name = "prop kernelUnitLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop kernelUnitLength")]
     pub fn kernel_unit_length(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `kerning`
-    #[rust_js::link_name = "prop kerning"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop kerning")]
     pub fn kerning(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `keyParams`
-    #[rust_js::link_name = "prop keyParams"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop keyParams")]
     pub fn key_params(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `keyPoints`
-    #[rust_js::link_name = "prop keyPoints"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop keyPoints")]
     pub fn key_points(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `keySplines`
-    #[rust_js::link_name = "prop keySplines"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop keySplines")]
     pub fn key_splines(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `keyTimes`
-    #[rust_js::link_name = "prop keyTimes"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop keyTimes")]
     pub fn key_times(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `keyType`
-    #[rust_js::link_name = "prop keyType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop keyType")]
     pub fn key_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `kind`
-    #[rust_js::link_name = "prop kind"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop kind")]
     pub fn kind(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `label`
-    #[rust_js::link_name = "prop label"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop label")]
     pub fn label(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `lang`
-    #[rust_js::link_name = "prop lang"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lang")]
     pub fn lang(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `lengthAdjust`
-    #[rust_js::link_name = "prop lengthAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lengthAdjust")]
     pub fn length_adjust(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `letterSpacing`
-    #[rust_js::link_name = "prop letterSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop letterSpacing")]
     pub fn letter_spacing(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `lightingColor`
-    #[rust_js::link_name = "prop lightingColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lightingColor")]
     pub fn lighting_color(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `limitingConeAngle`
-    #[rust_js::link_name = "prop limitingConeAngle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop limitingConeAngle")]
     pub fn limiting_cone_angle(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `list`
-    #[rust_js::link_name = "prop list"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop list")]
     pub fn list(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `local`
-    #[rust_js::link_name = "prop local"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop local")]
     pub fn local(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `loop`
-    #[rust_js::link_name = "prop loop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop loop")]
     pub fn r#loop(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `low`
-    #[rust_js::link_name = "prop low"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop low")]
     pub fn low(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `manifest`
-    #[rust_js::link_name = "prop manifest"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop manifest")]
     pub fn manifest(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `marginHeight`
-    #[rust_js::link_name = "prop marginHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginHeight")]
     pub fn margin_height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `marginWidth`
-    #[rust_js::link_name = "prop marginWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginWidth")]
     pub fn margin_width(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerEnd`
-    #[rust_js::link_name = "prop markerEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerEnd")]
     pub fn marker_end(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerHeight`
-    #[rust_js::link_name = "prop markerHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerHeight")]
     pub fn marker_height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerMid`
-    #[rust_js::link_name = "prop markerMid"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerMid")]
     pub fn marker_mid(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerStart`
-    #[rust_js::link_name = "prop markerStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerStart")]
     pub fn marker_start(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerUnits`
-    #[rust_js::link_name = "prop markerUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerUnits")]
     pub fn marker_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `markerWidth`
-    #[rust_js::link_name = "prop markerWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerWidth")]
     pub fn marker_width(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `mask`
-    #[rust_js::link_name = "prop mask"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mask")]
     pub fn mask(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `maskContentUnits`
-    #[rust_js::link_name = "prop maskContentUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskContentUnits")]
     pub fn mask_content_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `maskType`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop maskType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskType")]
     pub fn mask_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `maskUnits`
-    #[rust_js::link_name = "prop maskUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskUnits")]
     pub fn mask_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `mathematical`
-    #[rust_js::link_name = "prop mathematical"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mathematical")]
     pub fn mathematical(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `max`
-    #[rust_js::link_name = "prop max"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop max")]
     pub fn max(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `maxLength`
-    #[rust_js::link_name = "prop maxLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxLength")]
     pub fn max_length(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `media`
-    #[rust_js::link_name = "prop media"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop media")]
     pub fn media(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `mediaGroup`
-    #[rust_js::link_name = "prop mediaGroup"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mediaGroup")]
     pub fn media_group(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `method`
-    #[rust_js::link_name = "prop method"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop method")]
     pub fn method(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `min`
-    #[rust_js::link_name = "prop min"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop min")]
     pub fn min(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `minLength`
-    #[rust_js::link_name = "prop minLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minLength")]
     pub fn min_length(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `mode`
-    #[rust_js::link_name = "prop mode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mode")]
     pub fn mode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `multiple`
-    #[rust_js::link_name = "prop multiple"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop multiple")]
     pub fn multiple(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `muted`
-    #[rust_js::link_name = "prop muted"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop muted")]
     pub fn muted(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `name`
-    #[rust_js::link_name = "prop name"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop name")]
     pub fn name(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `noModule`
-    #[rust_js::link_name = "prop noModule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop noModule")]
     pub fn no_module(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `noValidate`
-    #[rust_js::link_name = "prop noValidate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop noValidate")]
     pub fn no_validate(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `nonce`
-    #[rust_js::link_name = "prop nonce"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop nonce")]
     pub fn nonce(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `numOctaves`
-    #[rust_js::link_name = "prop numOctaves"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop numOctaves")]
     pub fn num_octaves(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `offset`
-    #[rust_js::link_name = "prop offset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offset")]
     pub fn offset(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `opacity`
-    #[rust_js::link_name = "prop opacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop opacity")]
     pub fn opacity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `open`
-    #[rust_js::link_name = "prop open"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop open")]
     pub fn open(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `operator`
-    #[rust_js::link_name = "prop operator"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop operator")]
     pub fn operator(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `optimum`
-    #[rust_js::link_name = "prop optimum"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop optimum")]
     pub fn optimum(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `order`
-    #[rust_js::link_name = "prop order"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop order")]
     pub fn order(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `orient`
-    #[rust_js::link_name = "prop orient"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop orient")]
     pub fn orient(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `orientation`
-    #[rust_js::link_name = "prop orientation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop orientation")]
     pub fn orientation(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `origin`
-    #[rust_js::link_name = "prop origin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop origin")]
     pub fn origin(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `overflow`
-    #[rust_js::link_name = "prop overflow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflow")]
     pub fn overflow(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `overlinePosition`
-    #[rust_js::link_name = "prop overlinePosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overlinePosition")]
     pub fn overline_position(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `overlineThickness`
-    #[rust_js::link_name = "prop overlineThickness"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overlineThickness")]
     pub fn overline_thickness(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `paintOrder`
-    #[rust_js::link_name = "prop paintOrder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paintOrder")]
     pub fn paint_order(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `panose1`
-    #[rust_js::link_name = "prop panose1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop panose1")]
     pub fn panose1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `pathLength`
-    #[rust_js::link_name = "prop pathLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pathLength")]
     pub fn path_length(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `pattern`
-    #[rust_js::link_name = "prop pattern"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pattern")]
     pub fn pattern(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `patternContentUnits`
-    #[rust_js::link_name = "prop patternContentUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop patternContentUnits")]
     pub fn pattern_content_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `patternTransform`
-    #[rust_js::link_name = "prop patternTransform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop patternTransform")]
     pub fn pattern_transform(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `patternUnits`
-    #[rust_js::link_name = "prop patternUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop patternUnits")]
     pub fn pattern_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `placeholder`
-    #[rust_js::link_name = "prop placeholder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop placeholder")]
     pub fn placeholder(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `playsInline`
-    #[rust_js::link_name = "prop playsInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop playsInline")]
     pub fn plays_inline(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `pointerEvents`
-    #[rust_js::link_name = "prop pointerEvents"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointerEvents")]
     pub fn pointer_events(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `points`
-    #[rust_js::link_name = "prop points"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop points")]
     pub fn points(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `pointsAtX`
-    #[rust_js::link_name = "prop pointsAtX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointsAtX")]
     pub fn points_at_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `pointsAtY`
-    #[rust_js::link_name = "prop pointsAtY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointsAtY")]
     pub fn points_at_y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `pointsAtZ`
-    #[rust_js::link_name = "prop pointsAtZ"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointsAtZ")]
     pub fn points_at_z(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `popover`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop popover"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop popover")]
     pub fn popover(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `popoverTarget`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop popoverTarget"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop popoverTarget")]
     pub fn popover_target(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `popoverTargetAction`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop popoverTargetAction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop popoverTargetAction")]
     pub fn popover_target_action(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `poster`
-    #[rust_js::link_name = "prop poster"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop poster")]
     pub fn poster(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `prefix`
-    #[rust_js::link_name = "prop prefix"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop prefix")]
     pub fn prefix(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `preload`
-    #[rust_js::link_name = "prop preload"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop preload")]
     pub fn preload(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `preserveAlpha`
-    #[rust_js::link_name = "prop preserveAlpha"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop preserveAlpha")]
     pub fn preserve_alpha(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `preserveAspectRatio`
-    #[rust_js::link_name = "prop preserveAspectRatio"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop preserveAspectRatio")]
     pub fn preserve_aspect_ratio(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `primitiveUnits`
-    #[rust_js::link_name = "prop primitiveUnits"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop primitiveUnits")]
     pub fn primitive_units(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `profile`
-    #[rust_js::link_name = "prop profile"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop profile")]
     pub fn profile(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `property`
-    #[rust_js::link_name = "prop property"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop property")]
     pub fn property(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `r`
-    #[rust_js::link_name = "prop r"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop r")]
     pub fn r(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `radioGroup`
-    #[rust_js::link_name = "prop radioGroup"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop radioGroup")]
     pub fn radio_group(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `radius`
-    #[rust_js::link_name = "prop radius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop radius")]
     pub fn radius(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `readOnly`
-    #[rust_js::link_name = "prop readOnly"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop readOnly")]
     pub fn read_only(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `refX`
-    #[rust_js::link_name = "prop refX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop refX")]
     pub fn ref_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `refY`
-    #[rust_js::link_name = "prop refY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop refY")]
     pub fn ref_y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `referrerPolicy`
-    #[rust_js::link_name = "prop referrerPolicy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop referrerPolicy")]
     pub fn referrer_policy(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `rel`
-    #[rust_js::link_name = "prop rel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rel")]
     pub fn rel(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `renderingIntent`
-    #[rust_js::link_name = "prop renderingIntent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop renderingIntent")]
     pub fn rendering_intent(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `repeatCount`
-    #[rust_js::link_name = "prop repeatCount"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop repeatCount")]
     pub fn repeat_count(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `repeatDur`
-    #[rust_js::link_name = "prop repeatDur"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop repeatDur")]
     pub fn repeat_dur(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `required`
-    #[rust_js::link_name = "prop required"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop required")]
     pub fn required(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `requiredExtensions`
-    #[rust_js::link_name = "prop requiredExtensions"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop requiredExtensions")]
     pub fn required_extensions(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `requiredFeatures`
-    #[rust_js::link_name = "prop requiredFeatures"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop requiredFeatures")]
     pub fn required_features(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `resource`
-    #[rust_js::link_name = "prop resource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop resource")]
     pub fn resource(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `restart`
-    #[rust_js::link_name = "prop restart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop restart")]
     pub fn restart(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `result`
-    #[rust_js::link_name = "prop result"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop result")]
     pub fn result(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `results`
-    #[rust_js::link_name = "prop results"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop results")]
     pub fn results(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `reversed`
-    #[rust_js::link_name = "prop reversed"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop reversed")]
     pub fn reversed(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `role`
-    #[rust_js::link_name = "prop role"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop role")]
     pub fn role(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `rotate`
-    #[rust_js::link_name = "prop rotate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rotate")]
     pub fn rotate(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `rowSpan`
-    #[rust_js::link_name = "prop rowSpan"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowSpan")]
     pub fn row_span(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `rows`
-    #[rust_js::link_name = "prop rows"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rows")]
     pub fn rows(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `rx`
-    #[rust_js::link_name = "prop rx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rx")]
     pub fn rx(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `ry`
-    #[rust_js::link_name = "prop ry"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ry")]
     pub fn ry(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `sandbox`
-    #[rust_js::link_name = "prop sandbox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop sandbox")]
     pub fn sandbox(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `scale`
-    #[rust_js::link_name = "prop scale"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scale")]
     pub fn scale(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `scope`
-    #[rust_js::link_name = "prop scope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scope")]
     pub fn scope(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `scoped`
-    #[rust_js::link_name = "prop scoped"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scoped")]
     pub fn scoped(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `scrolling`
-    #[rust_js::link_name = "prop scrolling"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrolling")]
     pub fn scrolling(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `seamless`
-    #[rust_js::link_name = "prop seamless"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop seamless")]
     pub fn seamless(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `security`
-    #[rust_js::link_name = "prop security"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop security")]
     pub fn security(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `seed`
-    #[rust_js::link_name = "prop seed"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop seed")]
     pub fn seed(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `selected`
-    #[rust_js::link_name = "prop selected"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop selected")]
     pub fn selected(self, value: bool) -> Element {
         unreachable!()
     }
 
     /// `shape`
-    #[rust_js::link_name = "prop shape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shape")]
     pub fn shape(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `shapeRendering`
-    #[rust_js::link_name = "prop shapeRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeRendering")]
     pub fn shape_rendering(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `size`
-    #[rust_js::link_name = "prop size"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop size")]
     pub fn size(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `sizes`
-    #[rust_js::link_name = "prop sizes"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop sizes")]
     pub fn sizes(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `slope`
-    #[rust_js::link_name = "prop slope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop slope")]
     pub fn slope(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `spacing`
-    #[rust_js::link_name = "prop spacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spacing")]
     pub fn spacing(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `span`
-    #[rust_js::link_name = "prop span"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop span")]
     pub fn span(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `specularConstant`
-    #[rust_js::link_name = "prop specularConstant"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop specularConstant")]
     pub fn specular_constant(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `specularExponent`
-    #[rust_js::link_name = "prop specularExponent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop specularExponent")]
     pub fn specular_exponent(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `speed`
-    #[rust_js::link_name = "prop speed"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop speed")]
     pub fn speed(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `spellCheck`
-    #[rust_js::link_name = "prop spellCheck"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spellCheck")]
     pub fn spell_check(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `spreadMethod`
-    #[rust_js::link_name = "prop spreadMethod"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spreadMethod")]
     pub fn spread_method(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `src`
-    #[rust_js::link_name = "prop src"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop src")]
     pub fn src(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `srcDoc`
-    #[rust_js::link_name = "prop srcDoc"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop srcDoc")]
     pub fn src_doc(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `srcLang`
-    #[rust_js::link_name = "prop srcLang"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop srcLang")]
     pub fn src_lang(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `srcSet`
-    #[rust_js::link_name = "prop srcSet"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop srcSet")]
     pub fn src_set(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `start`
-    #[rust_js::link_name = "prop start"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop start")]
     pub fn start(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `startOffset`
-    #[rust_js::link_name = "prop startOffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop startOffset")]
     pub fn start_offset(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stdDeviation`
-    #[rust_js::link_name = "prop stdDeviation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stdDeviation")]
     pub fn std_deviation(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stemh`
-    #[rust_js::link_name = "prop stemh"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stemh")]
     pub fn stemh(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stemv`
-    #[rust_js::link_name = "prop stemv"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stemv")]
     pub fn stemv(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `step`
-    #[rust_js::link_name = "prop step"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop step")]
     pub fn step(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stitchTiles`
-    #[rust_js::link_name = "prop stitchTiles"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stitchTiles")]
     pub fn stitch_tiles(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stopColor`
-    #[rust_js::link_name = "prop stopColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stopColor")]
     pub fn stop_color(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stopOpacity`
-    #[rust_js::link_name = "prop stopOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stopOpacity")]
     pub fn stop_opacity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strikethroughPosition`
-    #[rust_js::link_name = "prop strikethroughPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strikethroughPosition")]
     pub fn strikethrough_position(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strikethroughThickness`
-    #[rust_js::link_name = "prop strikethroughThickness"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strikethroughThickness")]
     pub fn strikethrough_thickness(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `string`
-    #[rust_js::link_name = "prop string"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop string")]
     pub fn string(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `stroke`
-    #[rust_js::link_name = "prop stroke"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stroke")]
     pub fn stroke(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeDasharray`
-    #[rust_js::link_name = "prop strokeDasharray"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDasharray")]
     pub fn stroke_dasharray(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeDashoffset`
-    #[rust_js::link_name = "prop strokeDashoffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashoffset")]
     pub fn stroke_dashoffset(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeLinecap`
-    #[rust_js::link_name = "prop strokeLinecap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeLinecap")]
     pub fn stroke_linecap(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeLinejoin`
-    #[rust_js::link_name = "prop strokeLinejoin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeLinejoin")]
     pub fn stroke_linejoin(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeMiterlimit`
-    #[rust_js::link_name = "prop strokeMiterlimit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeMiterlimit")]
     pub fn stroke_miterlimit(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeOpacity`
-    #[rust_js::link_name = "prop strokeOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeOpacity")]
     pub fn stroke_opacity(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `strokeWidth`
-    #[rust_js::link_name = "prop strokeWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeWidth")]
     pub fn stroke_width(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `summary`
-    #[rust_js::link_name = "prop summary"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop summary")]
     pub fn summary(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `suppressContentEditableWarning`
-    #[rust_js::link_name = "prop suppressContentEditableWarning"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop suppressContentEditableWarning")]
     pub fn suppress_content_editable_warning(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `suppressHydrationWarning`
-    #[rust_js::link_name = "prop suppressHydrationWarning"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop suppressHydrationWarning")]
     pub fn suppress_hydration_warning(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `surfaceScale`
-    #[rust_js::link_name = "prop surfaceScale"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop surfaceScale")]
     pub fn surface_scale(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `systemLanguage`
-    #[rust_js::link_name = "prop systemLanguage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop systemLanguage")]
     pub fn system_language(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `tabIndex`
-    #[rust_js::link_name = "prop tabIndex"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop tabIndex")]
     pub fn tab_index(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `tableValues`
-    #[rust_js::link_name = "prop tableValues"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop tableValues")]
     pub fn table_values(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `target`
-    #[rust_js::link_name = "prop target"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop target")]
     pub fn target(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `targetX`
-    #[rust_js::link_name = "prop targetX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop targetX")]
     pub fn target_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `targetY`
-    #[rust_js::link_name = "prop targetY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop targetY")]
     pub fn target_y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `textAnchor`
-    #[rust_js::link_name = "prop textAnchor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAnchor")]
     pub fn text_anchor(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `textDecoration`
-    #[rust_js::link_name = "prop textDecoration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecoration")]
     pub fn text_decoration(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `textLength`
-    #[rust_js::link_name = "prop textLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textLength")]
     pub fn text_length(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `textRendering`
-    #[rust_js::link_name = "prop textRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textRendering")]
     pub fn text_rendering(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `title`
-    #[rust_js::link_name = "prop title"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop title")]
     pub fn title(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `to`
-    #[rust_js::link_name = "prop to"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop to")]
     pub fn to(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `transform`
-    #[rust_js::link_name = "prop transform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transform")]
     pub fn transform(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `transformOrigin`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop transformOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transformOrigin")]
     pub fn transform_origin(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `type`
-    #[rust_js::link_name = "prop type"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop type")]
     pub fn r#type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `typeof`
-    #[rust_js::link_name = "prop typeof"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop typeof")]
     pub fn r#typeof(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `u1`
-    #[rust_js::link_name = "prop u1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop u1")]
     pub fn u1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `u2`
-    #[rust_js::link_name = "prop u2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop u2")]
     pub fn u2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `underlinePosition`
-    #[rust_js::link_name = "prop underlinePosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop underlinePosition")]
     pub fn underline_position(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `underlineThickness`
-    #[rust_js::link_name = "prop underlineThickness"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop underlineThickness")]
     pub fn underline_thickness(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `unicode`
-    #[rust_js::link_name = "prop unicode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unicode")]
     pub fn unicode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `unicodeBidi`
-    #[rust_js::link_name = "prop unicodeBidi"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unicodeBidi")]
     pub fn unicode_bidi(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `unicodeRange`
-    #[rust_js::link_name = "prop unicodeRange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unicodeRange")]
     pub fn unicode_range(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `unitsPerEm`
-    #[rust_js::link_name = "prop unitsPerEm"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unitsPerEm")]
     pub fn units_per_em(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `unselectable`
-    #[rust_js::link_name = "prop unselectable"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unselectable")]
     pub fn unselectable(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `useMap`
-    #[rust_js::link_name = "prop useMap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop useMap")]
     pub fn use_map(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vAlphabetic`
-    #[rust_js::link_name = "prop vAlphabetic"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vAlphabetic")]
     pub fn v_alphabetic(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vHanging`
-    #[rust_js::link_name = "prop vHanging"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vHanging")]
     pub fn v_hanging(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vIdeographic`
-    #[rust_js::link_name = "prop vIdeographic"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vIdeographic")]
     pub fn v_ideographic(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vMathematical`
-    #[rust_js::link_name = "prop vMathematical"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vMathematical")]
     pub fn v_mathematical(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `value`
-    #[rust_js::link_name = "prop value"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop value")]
     pub fn value(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `values`
-    #[rust_js::link_name = "prop values"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop values")]
     pub fn values(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vectorEffect`
-    #[rust_js::link_name = "prop vectorEffect"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vectorEffect")]
     pub fn vector_effect(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `version`
-    #[rust_js::link_name = "prop version"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop version")]
     pub fn version(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vertAdvY`
-    #[rust_js::link_name = "prop vertAdvY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vertAdvY")]
     pub fn vert_adv_y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vertOriginX`
-    #[rust_js::link_name = "prop vertOriginX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vertOriginX")]
     pub fn vert_origin_x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vertOriginY`
-    #[rust_js::link_name = "prop vertOriginY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vertOriginY")]
     pub fn vert_origin_y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `viewBox`
-    #[rust_js::link_name = "prop viewBox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewBox")]
     pub fn view_box(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `viewTarget`
-    #[rust_js::link_name = "prop viewTarget"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTarget")]
     pub fn view_target(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `visibility`
-    #[rust_js::link_name = "prop visibility"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop visibility")]
     pub fn visibility(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `vocab`
-    #[rust_js::link_name = "prop vocab"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vocab")]
     pub fn vocab(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `width`
-    #[rust_js::link_name = "prop width"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop width")]
     pub fn width(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `widths`
-    #[rust_js::link_name = "prop widths"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop widths")]
     pub fn widths(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `wmode`
-    #[rust_js::link_name = "prop wmode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wmode")]
     pub fn wmode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `wordSpacing`
-    #[rust_js::link_name = "prop wordSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wordSpacing")]
     pub fn word_spacing(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `wrap`
-    #[rust_js::link_name = "prop wrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrap")]
     pub fn wrap(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `writingMode`
-    #[rust_js::link_name = "prop writingMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop writingMode")]
     pub fn writing_mode(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `x`
-    #[rust_js::link_name = "prop x"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop x")]
     pub fn x(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `x1`
-    #[rust_js::link_name = "prop x1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop x1")]
     pub fn x1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `x2`
-    #[rust_js::link_name = "prop x2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop x2")]
     pub fn x2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xChannelSelector`
-    #[rust_js::link_name = "prop xChannelSelector"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xChannelSelector")]
     pub fn x_channel_selector(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xHeight`
-    #[rust_js::link_name = "prop xHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xHeight")]
     pub fn x_height(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkActuate`
-    #[rust_js::link_name = "prop xlinkActuate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkActuate")]
     pub fn xlink_actuate(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkArcrole`
-    #[rust_js::link_name = "prop xlinkArcrole"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkArcrole")]
     pub fn xlink_arcrole(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkHref`
-    #[rust_js::link_name = "prop xlinkHref"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkHref")]
     pub fn xlink_href(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkRole`
-    #[rust_js::link_name = "prop xlinkRole"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkRole")]
     pub fn xlink_role(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkShow`
-    #[rust_js::link_name = "prop xlinkShow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkShow")]
     pub fn xlink_show(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkTitle`
-    #[rust_js::link_name = "prop xlinkTitle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkTitle")]
     pub fn xlink_title(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xlinkType`
-    #[rust_js::link_name = "prop xlinkType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xlinkType")]
     pub fn xlink_type(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xmlBase`
-    #[rust_js::link_name = "prop xmlBase"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xmlBase")]
     pub fn xml_base(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xmlLang`
-    #[rust_js::link_name = "prop xmlLang"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xmlLang")]
     pub fn xml_lang(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xmlSpace`
-    #[rust_js::link_name = "prop xmlSpace"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xmlSpace")]
     pub fn xml_space(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xmlns`
-    #[rust_js::link_name = "prop xmlns"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xmlns")]
     pub fn xmlns(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `xmlnsXlink`
-    #[rust_js::link_name = "prop xmlnsXlink"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop xmlnsXlink")]
     pub fn xmlns_xlink(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `y`
-    #[rust_js::link_name = "prop y"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop y")]
     pub fn y(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `y1`
-    #[rust_js::link_name = "prop y1"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop y1")]
     pub fn y1(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `y2`
-    #[rust_js::link_name = "prop y2"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop y2")]
     pub fn y2(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `yChannelSelector`
-    #[rust_js::link_name = "prop yChannelSelector"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop yChannelSelector")]
     pub fn y_channel_selector(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `z`
-    #[rust_js::link_name = "prop z"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop z")]
     pub fn z(self, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// `zoomAndPan`
-    #[rust_js::link_name = "prop zoomAndPan"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop zoomAndPan")]
     pub fn zoom_and_pan(self, value: impl Value) -> Element {
         unreachable!()
     }
@@ -2425,1095 +2425,1095 @@ impl Element {
 #[doc(hidden)]
 impl Element {
     /// `onAbort`
-    #[rust_js::link_name = "prop onAbort"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAbort")]
     pub fn on_abort(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAbortCapture`
-    #[rust_js::link_name = "prop onAbortCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAbortCapture")]
     pub fn on_abort_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationEnd`
-    #[rust_js::link_name = "prop onAnimationEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationEnd")]
     pub fn on_animation_end(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationEndCapture`
-    #[rust_js::link_name = "prop onAnimationEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationEndCapture")]
     pub fn on_animation_end_capture(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationIteration`
-    #[rust_js::link_name = "prop onAnimationIteration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationIteration")]
     pub fn on_animation_iteration(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationIterationCapture`
-    #[rust_js::link_name = "prop onAnimationIterationCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationIterationCapture")]
     pub fn on_animation_iteration_capture(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationStart`
-    #[rust_js::link_name = "prop onAnimationStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationStart")]
     pub fn on_animation_start(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAnimationStartCapture`
-    #[rust_js::link_name = "prop onAnimationStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAnimationStartCapture")]
     pub fn on_animation_start_capture(self, handler: impl Fn(&event::Animation) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAuxClick`
-    #[rust_js::link_name = "prop onAuxClick"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAuxClick")]
     pub fn on_aux_click(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onAuxClickCapture`
-    #[rust_js::link_name = "prop onAuxClickCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onAuxClickCapture")]
     pub fn on_aux_click_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBeforeInput`
-    #[rust_js::link_name = "prop onBeforeInput"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBeforeInput")]
     pub fn on_before_input(self, handler: impl Fn(&event::Input) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBeforeInputCapture`
-    #[rust_js::link_name = "prop onBeforeInputCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBeforeInputCapture")]
     pub fn on_before_input_capture(self, handler: impl Fn(&event::Input) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBeforeToggle`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onBeforeToggle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBeforeToggle")]
     pub fn on_before_toggle(self, handler: impl Fn(&event::Toggle) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBeforeToggleCapture`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onBeforeToggleCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBeforeToggleCapture")]
     pub fn on_before_toggle_capture(self, handler: impl Fn(&event::Toggle) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBlur`
-    #[rust_js::link_name = "prop onBlur"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBlur")]
     pub fn on_blur(self, handler: impl Fn(&event::Focus) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onBlurCapture`
-    #[rust_js::link_name = "prop onBlurCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onBlurCapture")]
     pub fn on_blur_capture(self, handler: impl Fn(&event::Focus) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCanPlay`
-    #[rust_js::link_name = "prop onCanPlay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCanPlay")]
     pub fn on_can_play(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCanPlayCapture`
-    #[rust_js::link_name = "prop onCanPlayCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCanPlayCapture")]
     pub fn on_can_play_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCanPlayThrough`
-    #[rust_js::link_name = "prop onCanPlayThrough"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCanPlayThrough")]
     pub fn on_can_play_through(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCanPlayThroughCapture`
-    #[rust_js::link_name = "prop onCanPlayThroughCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCanPlayThroughCapture")]
     pub fn on_can_play_through_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCancel`
-    #[rust_js::link_name = "prop onCancel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCancel")]
     pub fn on_cancel(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCancelCapture`
-    #[rust_js::link_name = "prop onCancelCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCancelCapture")]
     pub fn on_cancel_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onChange`
-    #[rust_js::link_name = "prop onChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onChange")]
     pub fn on_change(self, handler: impl Fn(&event::Change) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onChangeCapture`
-    #[rust_js::link_name = "prop onChangeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onChangeCapture")]
     pub fn on_change_capture(self, handler: impl Fn(&event::Change) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onClick`
-    #[rust_js::link_name = "prop onClick"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onClick")]
     pub fn on_click(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onClickCapture`
-    #[rust_js::link_name = "prop onClickCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onClickCapture")]
     pub fn on_click_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onClose`
-    #[rust_js::link_name = "prop onClose"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onClose")]
     pub fn on_close(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCloseCapture`
-    #[rust_js::link_name = "prop onCloseCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCloseCapture")]
     pub fn on_close_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionEnd`
-    #[rust_js::link_name = "prop onCompositionEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionEnd")]
     pub fn on_composition_end(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionEndCapture`
-    #[rust_js::link_name = "prop onCompositionEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionEndCapture")]
     pub fn on_composition_end_capture(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionStart`
-    #[rust_js::link_name = "prop onCompositionStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionStart")]
     pub fn on_composition_start(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionStartCapture`
-    #[rust_js::link_name = "prop onCompositionStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionStartCapture")]
     pub fn on_composition_start_capture(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionUpdate`
-    #[rust_js::link_name = "prop onCompositionUpdate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionUpdate")]
     pub fn on_composition_update(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCompositionUpdateCapture`
-    #[rust_js::link_name = "prop onCompositionUpdateCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCompositionUpdateCapture")]
     pub fn on_composition_update_capture(self, handler: impl Fn(&event::Composition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onContextMenu`
-    #[rust_js::link_name = "prop onContextMenu"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onContextMenu")]
     pub fn on_context_menu(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onContextMenuCapture`
-    #[rust_js::link_name = "prop onContextMenuCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onContextMenuCapture")]
     pub fn on_context_menu_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCopy`
-    #[rust_js::link_name = "prop onCopy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCopy")]
     pub fn on_copy(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCopyCapture`
-    #[rust_js::link_name = "prop onCopyCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCopyCapture")]
     pub fn on_copy_capture(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCut`
-    #[rust_js::link_name = "prop onCut"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCut")]
     pub fn on_cut(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onCutCapture`
-    #[rust_js::link_name = "prop onCutCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onCutCapture")]
     pub fn on_cut_capture(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDoubleClick`
-    #[rust_js::link_name = "prop onDoubleClick"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDoubleClick")]
     pub fn on_double_click(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDoubleClickCapture`
-    #[rust_js::link_name = "prop onDoubleClickCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDoubleClickCapture")]
     pub fn on_double_click_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDrag`
-    #[rust_js::link_name = "prop onDrag"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDrag")]
     pub fn on_drag(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragCapture`
-    #[rust_js::link_name = "prop onDragCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragCapture")]
     pub fn on_drag_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragEnd`
-    #[rust_js::link_name = "prop onDragEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragEnd")]
     pub fn on_drag_end(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragEndCapture`
-    #[rust_js::link_name = "prop onDragEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragEndCapture")]
     pub fn on_drag_end_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragEnter`
-    #[rust_js::link_name = "prop onDragEnter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragEnter")]
     pub fn on_drag_enter(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragEnterCapture`
-    #[rust_js::link_name = "prop onDragEnterCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragEnterCapture")]
     pub fn on_drag_enter_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragExit`
-    #[rust_js::link_name = "prop onDragExit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragExit")]
     pub fn on_drag_exit(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragExitCapture`
-    #[rust_js::link_name = "prop onDragExitCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragExitCapture")]
     pub fn on_drag_exit_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragLeave`
-    #[rust_js::link_name = "prop onDragLeave"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragLeave")]
     pub fn on_drag_leave(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragLeaveCapture`
-    #[rust_js::link_name = "prop onDragLeaveCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragLeaveCapture")]
     pub fn on_drag_leave_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragOver`
-    #[rust_js::link_name = "prop onDragOver"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragOver")]
     pub fn on_drag_over(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragOverCapture`
-    #[rust_js::link_name = "prop onDragOverCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragOverCapture")]
     pub fn on_drag_over_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragStart`
-    #[rust_js::link_name = "prop onDragStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragStart")]
     pub fn on_drag_start(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDragStartCapture`
-    #[rust_js::link_name = "prop onDragStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDragStartCapture")]
     pub fn on_drag_start_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDrop`
-    #[rust_js::link_name = "prop onDrop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDrop")]
     pub fn on_drop(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDropCapture`
-    #[rust_js::link_name = "prop onDropCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDropCapture")]
     pub fn on_drop_capture(self, handler: impl Fn(&event::Drag) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDurationChange`
-    #[rust_js::link_name = "prop onDurationChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDurationChange")]
     pub fn on_duration_change(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onDurationChangeCapture`
-    #[rust_js::link_name = "prop onDurationChangeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onDurationChangeCapture")]
     pub fn on_duration_change_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEmptied`
-    #[rust_js::link_name = "prop onEmptied"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEmptied")]
     pub fn on_emptied(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEmptiedCapture`
-    #[rust_js::link_name = "prop onEmptiedCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEmptiedCapture")]
     pub fn on_emptied_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEncrypted`
-    #[rust_js::link_name = "prop onEncrypted"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEncrypted")]
     pub fn on_encrypted(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEncryptedCapture`
-    #[rust_js::link_name = "prop onEncryptedCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEncryptedCapture")]
     pub fn on_encrypted_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEnded`
-    #[rust_js::link_name = "prop onEnded"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEnded")]
     pub fn on_ended(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onEndedCapture`
-    #[rust_js::link_name = "prop onEndedCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onEndedCapture")]
     pub fn on_ended_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onError`
-    #[rust_js::link_name = "prop onError"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onError")]
     pub fn on_error(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onErrorCapture`
-    #[rust_js::link_name = "prop onErrorCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onErrorCapture")]
     pub fn on_error_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFocus`
-    #[rust_js::link_name = "prop onFocus"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFocus")]
     pub fn on_focus(self, handler: impl Fn(&event::Focus) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFocusCapture`
-    #[rust_js::link_name = "prop onFocusCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFocusCapture")]
     pub fn on_focus_capture(self, handler: impl Fn(&event::Focus) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFullscreenChange`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop onFullscreenChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFullscreenChange")]
     pub fn on_fullscreen_change(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFullscreenChangeCapture`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop onFullscreenChangeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFullscreenChangeCapture")]
     pub fn on_fullscreen_change_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFullscreenError`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop onFullscreenError"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFullscreenError")]
     pub fn on_fullscreen_error(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onFullscreenErrorCapture`
     #[cfg(react = "19.3")]
-    #[rust_js::link_name = "prop onFullscreenErrorCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onFullscreenErrorCapture")]
     pub fn on_fullscreen_error_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onGotPointerCapture`
-    #[rust_js::link_name = "prop onGotPointerCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onGotPointerCapture")]
     pub fn on_got_pointer_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onGotPointerCaptureCapture`
-    #[rust_js::link_name = "prop onGotPointerCaptureCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onGotPointerCaptureCapture")]
     pub fn on_got_pointer_capture_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onInput`
-    #[rust_js::link_name = "prop onInput"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onInput")]
     pub fn on_input(self, handler: impl Fn(&event::Change) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onInputCapture`
-    #[rust_js::link_name = "prop onInputCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onInputCapture")]
     pub fn on_input_capture(self, handler: impl Fn(&event::Change) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onInvalid`
-    #[rust_js::link_name = "prop onInvalid"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onInvalid")]
     pub fn on_invalid(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onInvalidCapture`
-    #[rust_js::link_name = "prop onInvalidCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onInvalidCapture")]
     pub fn on_invalid_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyDown`
-    #[rust_js::link_name = "prop onKeyDown"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyDown")]
     pub fn on_key_down(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyDownCapture`
-    #[rust_js::link_name = "prop onKeyDownCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyDownCapture")]
     pub fn on_key_down_capture(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyPress`
-    #[rust_js::link_name = "prop onKeyPress"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyPress")]
     pub fn on_key_press(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyPressCapture`
-    #[rust_js::link_name = "prop onKeyPressCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyPressCapture")]
     pub fn on_key_press_capture(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyUp`
-    #[rust_js::link_name = "prop onKeyUp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyUp")]
     pub fn on_key_up(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onKeyUpCapture`
-    #[rust_js::link_name = "prop onKeyUpCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onKeyUpCapture")]
     pub fn on_key_up_capture(self, handler: impl Fn(&event::Keyboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoad`
-    #[rust_js::link_name = "prop onLoad"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoad")]
     pub fn on_load(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadCapture`
-    #[rust_js::link_name = "prop onLoadCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadCapture")]
     pub fn on_load_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadStart`
-    #[rust_js::link_name = "prop onLoadStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadStart")]
     pub fn on_load_start(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadStartCapture`
-    #[rust_js::link_name = "prop onLoadStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadStartCapture")]
     pub fn on_load_start_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadedData`
-    #[rust_js::link_name = "prop onLoadedData"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadedData")]
     pub fn on_loaded_data(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadedDataCapture`
-    #[rust_js::link_name = "prop onLoadedDataCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadedDataCapture")]
     pub fn on_loaded_data_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadedMetadata`
-    #[rust_js::link_name = "prop onLoadedMetadata"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadedMetadata")]
     pub fn on_loaded_metadata(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLoadedMetadataCapture`
-    #[rust_js::link_name = "prop onLoadedMetadataCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLoadedMetadataCapture")]
     pub fn on_loaded_metadata_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLostPointerCapture`
-    #[rust_js::link_name = "prop onLostPointerCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLostPointerCapture")]
     pub fn on_lost_pointer_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onLostPointerCaptureCapture`
-    #[rust_js::link_name = "prop onLostPointerCaptureCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onLostPointerCaptureCapture")]
     pub fn on_lost_pointer_capture_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseDown`
-    #[rust_js::link_name = "prop onMouseDown"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseDown")]
     pub fn on_mouse_down(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseDownCapture`
-    #[rust_js::link_name = "prop onMouseDownCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseDownCapture")]
     pub fn on_mouse_down_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseEnter`
-    #[rust_js::link_name = "prop onMouseEnter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseEnter")]
     pub fn on_mouse_enter(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseLeave`
-    #[rust_js::link_name = "prop onMouseLeave"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseLeave")]
     pub fn on_mouse_leave(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseMove`
-    #[rust_js::link_name = "prop onMouseMove"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseMove")]
     pub fn on_mouse_move(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseMoveCapture`
-    #[rust_js::link_name = "prop onMouseMoveCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseMoveCapture")]
     pub fn on_mouse_move_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseOut`
-    #[rust_js::link_name = "prop onMouseOut"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseOut")]
     pub fn on_mouse_out(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseOutCapture`
-    #[rust_js::link_name = "prop onMouseOutCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseOutCapture")]
     pub fn on_mouse_out_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseOver`
-    #[rust_js::link_name = "prop onMouseOver"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseOver")]
     pub fn on_mouse_over(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseOverCapture`
-    #[rust_js::link_name = "prop onMouseOverCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseOverCapture")]
     pub fn on_mouse_over_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseUp`
-    #[rust_js::link_name = "prop onMouseUp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseUp")]
     pub fn on_mouse_up(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onMouseUpCapture`
-    #[rust_js::link_name = "prop onMouseUpCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onMouseUpCapture")]
     pub fn on_mouse_up_capture(self, handler: impl Fn(&event::Mouse) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPaste`
-    #[rust_js::link_name = "prop onPaste"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPaste")]
     pub fn on_paste(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPasteCapture`
-    #[rust_js::link_name = "prop onPasteCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPasteCapture")]
     pub fn on_paste_capture(self, handler: impl Fn(&event::Clipboard) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPause`
-    #[rust_js::link_name = "prop onPause"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPause")]
     pub fn on_pause(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPauseCapture`
-    #[rust_js::link_name = "prop onPauseCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPauseCapture")]
     pub fn on_pause_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPlay`
-    #[rust_js::link_name = "prop onPlay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPlay")]
     pub fn on_play(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPlayCapture`
-    #[rust_js::link_name = "prop onPlayCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPlayCapture")]
     pub fn on_play_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPlaying`
-    #[rust_js::link_name = "prop onPlaying"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPlaying")]
     pub fn on_playing(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPlayingCapture`
-    #[rust_js::link_name = "prop onPlayingCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPlayingCapture")]
     pub fn on_playing_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerCancel`
-    #[rust_js::link_name = "prop onPointerCancel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerCancel")]
     pub fn on_pointer_cancel(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerCancelCapture`
-    #[rust_js::link_name = "prop onPointerCancelCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerCancelCapture")]
     pub fn on_pointer_cancel_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerDown`
-    #[rust_js::link_name = "prop onPointerDown"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerDown")]
     pub fn on_pointer_down(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerDownCapture`
-    #[rust_js::link_name = "prop onPointerDownCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerDownCapture")]
     pub fn on_pointer_down_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerEnter`
-    #[rust_js::link_name = "prop onPointerEnter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerEnter")]
     pub fn on_pointer_enter(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerLeave`
-    #[rust_js::link_name = "prop onPointerLeave"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerLeave")]
     pub fn on_pointer_leave(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerMove`
-    #[rust_js::link_name = "prop onPointerMove"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerMove")]
     pub fn on_pointer_move(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerMoveCapture`
-    #[rust_js::link_name = "prop onPointerMoveCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerMoveCapture")]
     pub fn on_pointer_move_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerOut`
-    #[rust_js::link_name = "prop onPointerOut"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerOut")]
     pub fn on_pointer_out(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerOutCapture`
-    #[rust_js::link_name = "prop onPointerOutCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerOutCapture")]
     pub fn on_pointer_out_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerOver`
-    #[rust_js::link_name = "prop onPointerOver"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerOver")]
     pub fn on_pointer_over(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerOverCapture`
-    #[rust_js::link_name = "prop onPointerOverCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerOverCapture")]
     pub fn on_pointer_over_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerUp`
-    #[rust_js::link_name = "prop onPointerUp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerUp")]
     pub fn on_pointer_up(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onPointerUpCapture`
-    #[rust_js::link_name = "prop onPointerUpCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onPointerUpCapture")]
     pub fn on_pointer_up_capture(self, handler: impl Fn(&event::Pointer) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onProgress`
-    #[rust_js::link_name = "prop onProgress"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onProgress")]
     pub fn on_progress(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onProgressCapture`
-    #[rust_js::link_name = "prop onProgressCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onProgressCapture")]
     pub fn on_progress_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onRateChange`
-    #[rust_js::link_name = "prop onRateChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onRateChange")]
     pub fn on_rate_change(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onRateChangeCapture`
-    #[rust_js::link_name = "prop onRateChangeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onRateChangeCapture")]
     pub fn on_rate_change_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onReset`
-    #[rust_js::link_name = "prop onReset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onReset")]
     pub fn on_reset(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onResetCapture`
-    #[rust_js::link_name = "prop onResetCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onResetCapture")]
     pub fn on_reset_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onResize`
-    #[rust_js::link_name = "prop onResize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onResize")]
     pub fn on_resize(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onResizeCapture`
-    #[rust_js::link_name = "prop onResizeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onResizeCapture")]
     pub fn on_resize_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onScroll`
-    #[rust_js::link_name = "prop onScroll"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onScroll")]
     pub fn on_scroll(self, handler: impl Fn(&event::Ui) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onScrollCapture`
-    #[rust_js::link_name = "prop onScrollCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onScrollCapture")]
     pub fn on_scroll_capture(self, handler: impl Fn(&event::Ui) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onScrollEnd`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onScrollEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onScrollEnd")]
     pub fn on_scroll_end(self, handler: impl Fn(&event::Ui) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onScrollEndCapture`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onScrollEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onScrollEndCapture")]
     pub fn on_scroll_end_capture(self, handler: impl Fn(&event::Ui) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSeeked`
-    #[rust_js::link_name = "prop onSeeked"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSeeked")]
     pub fn on_seeked(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSeekedCapture`
-    #[rust_js::link_name = "prop onSeekedCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSeekedCapture")]
     pub fn on_seeked_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSeeking`
-    #[rust_js::link_name = "prop onSeeking"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSeeking")]
     pub fn on_seeking(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSeekingCapture`
-    #[rust_js::link_name = "prop onSeekingCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSeekingCapture")]
     pub fn on_seeking_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSelect`
-    #[rust_js::link_name = "prop onSelect"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSelect")]
     pub fn on_select(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSelectCapture`
-    #[rust_js::link_name = "prop onSelectCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSelectCapture")]
     pub fn on_select_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onStalled`
-    #[rust_js::link_name = "prop onStalled"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onStalled")]
     pub fn on_stalled(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onStalledCapture`
-    #[rust_js::link_name = "prop onStalledCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onStalledCapture")]
     pub fn on_stalled_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSubmit`
-    #[rust_js::link_name = "prop onSubmit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSubmit")]
     pub fn on_submit(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSubmitCapture`
-    #[rust_js::link_name = "prop onSubmitCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSubmitCapture")]
     pub fn on_submit_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSuspend`
-    #[rust_js::link_name = "prop onSuspend"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSuspend")]
     pub fn on_suspend(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onSuspendCapture`
-    #[rust_js::link_name = "prop onSuspendCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onSuspendCapture")]
     pub fn on_suspend_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTimeUpdate`
-    #[rust_js::link_name = "prop onTimeUpdate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTimeUpdate")]
     pub fn on_time_update(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTimeUpdateCapture`
-    #[rust_js::link_name = "prop onTimeUpdateCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTimeUpdateCapture")]
     pub fn on_time_update_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onToggle`
-    #[rust_js::link_name = "prop onToggle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onToggle")]
     pub fn on_toggle(self, handler: impl Fn(&event::Toggle) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onToggleCapture`
-    #[rust_js::link_name = "prop onToggleCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onToggleCapture")]
     pub fn on_toggle_capture(self, handler: impl Fn(&event::Toggle) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchCancel`
-    #[rust_js::link_name = "prop onTouchCancel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchCancel")]
     pub fn on_touch_cancel(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchCancelCapture`
-    #[rust_js::link_name = "prop onTouchCancelCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchCancelCapture")]
     pub fn on_touch_cancel_capture(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchEnd`
-    #[rust_js::link_name = "prop onTouchEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchEnd")]
     pub fn on_touch_end(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchEndCapture`
-    #[rust_js::link_name = "prop onTouchEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchEndCapture")]
     pub fn on_touch_end_capture(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchMove`
-    #[rust_js::link_name = "prop onTouchMove"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchMove")]
     pub fn on_touch_move(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchMoveCapture`
-    #[rust_js::link_name = "prop onTouchMoveCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchMoveCapture")]
     pub fn on_touch_move_capture(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchStart`
-    #[rust_js::link_name = "prop onTouchStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchStart")]
     pub fn on_touch_start(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTouchStartCapture`
-    #[rust_js::link_name = "prop onTouchStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTouchStartCapture")]
     pub fn on_touch_start_capture(self, handler: impl Fn(&event::Touch) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionCancel`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionCancel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionCancel")]
     pub fn on_transition_cancel(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionCancelCapture`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionCancelCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionCancelCapture")]
     pub fn on_transition_cancel_capture(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionEnd`
-    #[rust_js::link_name = "prop onTransitionEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionEnd")]
     pub fn on_transition_end(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionEndCapture`
-    #[rust_js::link_name = "prop onTransitionEndCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionEndCapture")]
     pub fn on_transition_end_capture(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionRun`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionRun"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionRun")]
     pub fn on_transition_run(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionRunCapture`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionRunCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionRunCapture")]
     pub fn on_transition_run_capture(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionStart`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionStart")]
     pub fn on_transition_start(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onTransitionStartCapture`
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop onTransitionStartCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onTransitionStartCapture")]
     pub fn on_transition_start_capture(self, handler: impl Fn(&event::Transition) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onVolumeChange`
-    #[rust_js::link_name = "prop onVolumeChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onVolumeChange")]
     pub fn on_volume_change(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onVolumeChangeCapture`
-    #[rust_js::link_name = "prop onVolumeChangeCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onVolumeChangeCapture")]
     pub fn on_volume_change_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onWaiting`
-    #[rust_js::link_name = "prop onWaiting"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onWaiting")]
     pub fn on_waiting(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onWaitingCapture`
-    #[rust_js::link_name = "prop onWaitingCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onWaitingCapture")]
     pub fn on_waiting_capture(self, handler: impl Fn(&event::Event) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onWheel`
-    #[rust_js::link_name = "prop onWheel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onWheel")]
     pub fn on_wheel(self, handler: impl Fn(&event::Wheel) + 'static) -> Element {
         unreachable!()
     }
 
     /// `onWheelCapture`
-    #[rust_js::link_name = "prop onWheelCapture"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop onWheelCapture")]
     pub fn on_wheel_capture(self, handler: impl Fn(&event::Wheel) + 'static) -> Element {
         unreachable!()
     }
@@ -4048,4507 +4048,4507 @@ pub mod html {
 /// pixels where CSS needs a unit, as React makes it.
 impl Style {
     /// `accent-color`
-    #[rust_js::link_name = "prop accentColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop accentColor")]
     pub fn accent_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `align-content`
-    #[rust_js::link_name = "prop alignContent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alignContent")]
     pub fn align_content(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `align-items`
-    #[rust_js::link_name = "prop alignItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alignItems")]
     pub fn align_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `align-self`
-    #[rust_js::link_name = "prop alignSelf"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alignSelf")]
     pub fn align_self(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `alignment-baseline`
-    #[rust_js::link_name = "prop alignmentBaseline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop alignmentBaseline")]
     pub fn alignment_baseline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `all`
-    #[rust_js::link_name = "prop all"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop all")]
     pub fn all(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `anchor-name`
-    #[rust_js::link_name = "prop anchorName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop anchorName")]
     pub fn anchor_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `anchor-scope`
-    #[rust_js::link_name = "prop anchorScope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop anchorScope")]
     pub fn anchor_scope(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation`
-    #[rust_js::link_name = "prop animation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animation")]
     pub fn animation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-composition`
-    #[rust_js::link_name = "prop animationComposition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationComposition")]
     pub fn animation_composition(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-delay`
-    #[rust_js::link_name = "prop animationDelay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationDelay")]
     pub fn animation_delay(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-delay-end`
-    #[rust_js::link_name = "prop animationDelayEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationDelayEnd")]
     pub fn animation_delay_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-delay-start`
-    #[rust_js::link_name = "prop animationDelayStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationDelayStart")]
     pub fn animation_delay_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-direction`
-    #[rust_js::link_name = "prop animationDirection"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationDirection")]
     pub fn animation_direction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-duration`
-    #[rust_js::link_name = "prop animationDuration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationDuration")]
     pub fn animation_duration(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-fill-mode`
-    #[rust_js::link_name = "prop animationFillMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationFillMode")]
     pub fn animation_fill_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-iteration-count`
-    #[rust_js::link_name = "prop animationIterationCount"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationIterationCount")]
     pub fn animation_iteration_count(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-name`
-    #[rust_js::link_name = "prop animationName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationName")]
     pub fn animation_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-play-state`
-    #[rust_js::link_name = "prop animationPlayState"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationPlayState")]
     pub fn animation_play_state(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-range`
-    #[rust_js::link_name = "prop animationRange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationRange")]
     pub fn animation_range(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-range-center`
-    #[rust_js::link_name = "prop animationRangeCenter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationRangeCenter")]
     pub fn animation_range_center(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-range-end`
-    #[rust_js::link_name = "prop animationRangeEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationRangeEnd")]
     pub fn animation_range_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-range-start`
-    #[rust_js::link_name = "prop animationRangeStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationRangeStart")]
     pub fn animation_range_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-timeline`
-    #[rust_js::link_name = "prop animationTimeline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationTimeline")]
     pub fn animation_timeline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-timing-function`
-    #[rust_js::link_name = "prop animationTimingFunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationTimingFunction")]
     pub fn animation_timing_function(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `animation-trigger`
-    #[rust_js::link_name = "prop animationTrigger"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop animationTrigger")]
     pub fn animation_trigger(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `appearance`
-    #[rust_js::link_name = "prop appearance"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop appearance")]
     pub fn appearance(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `aspect-ratio`
-    #[rust_js::link_name = "prop aspectRatio"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop aspectRatio")]
     pub fn aspect_ratio(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `backdrop-filter`
-    #[rust_js::link_name = "prop backdropFilter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backdropFilter")]
     pub fn backdrop_filter(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `backface-visibility`
-    #[rust_js::link_name = "prop backfaceVisibility"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backfaceVisibility")]
     pub fn backface_visibility(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background`
-    #[rust_js::link_name = "prop background"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop background")]
     pub fn background(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-attachment`
-    #[rust_js::link_name = "prop backgroundAttachment"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundAttachment")]
     pub fn background_attachment(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-blend-mode`
-    #[rust_js::link_name = "prop backgroundBlendMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundBlendMode")]
     pub fn background_blend_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-clip`
-    #[rust_js::link_name = "prop backgroundClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundClip")]
     pub fn background_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-color`
-    #[rust_js::link_name = "prop backgroundColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundColor")]
     pub fn background_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-image`
-    #[rust_js::link_name = "prop backgroundImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundImage")]
     pub fn background_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-origin`
-    #[rust_js::link_name = "prop backgroundOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundOrigin")]
     pub fn background_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-position`
-    #[rust_js::link_name = "prop backgroundPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundPosition")]
     pub fn background_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-position-block`
-    #[rust_js::link_name = "prop backgroundPositionBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundPositionBlock")]
     pub fn background_position_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-position-inline`
-    #[rust_js::link_name = "prop backgroundPositionInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundPositionInline")]
     pub fn background_position_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-position-x`
-    #[rust_js::link_name = "prop backgroundPositionX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundPositionX")]
     pub fn background_position_x(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-position-y`
-    #[rust_js::link_name = "prop backgroundPositionY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundPositionY")]
     pub fn background_position_y(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-repeat`
-    #[rust_js::link_name = "prop backgroundRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundRepeat")]
     pub fn background_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-repeat-block`
-    #[rust_js::link_name = "prop backgroundRepeatBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundRepeatBlock")]
     pub fn background_repeat_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-repeat-inline`
-    #[rust_js::link_name = "prop backgroundRepeatInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundRepeatInline")]
     pub fn background_repeat_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-repeat-x`
-    #[rust_js::link_name = "prop backgroundRepeatX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundRepeatX")]
     pub fn background_repeat_x(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-repeat-y`
-    #[rust_js::link_name = "prop backgroundRepeatY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundRepeatY")]
     pub fn background_repeat_y(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-size`
-    #[rust_js::link_name = "prop backgroundSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundSize")]
     pub fn background_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `background-tbd`
-    #[rust_js::link_name = "prop backgroundTbd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop backgroundTbd")]
     pub fn background_tbd(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `baseline-shift`
-    #[rust_js::link_name = "prop baselineShift"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop baselineShift")]
     pub fn baseline_shift(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `baseline-source`
-    #[rust_js::link_name = "prop baselineSource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop baselineSource")]
     pub fn baseline_source(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-ellipsis`
-    #[rust_js::link_name = "prop blockEllipsis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockEllipsis")]
     pub fn block_ellipsis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-size`
-    #[rust_js::link_name = "prop blockSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockSize")]
     pub fn block_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-step`
-    #[rust_js::link_name = "prop blockStep"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockStep")]
     pub fn block_step(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-step-align`
-    #[rust_js::link_name = "prop blockStepAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockStepAlign")]
     pub fn block_step_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-step-insert`
-    #[rust_js::link_name = "prop blockStepInsert"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockStepInsert")]
     pub fn block_step_insert(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-step-round`
-    #[rust_js::link_name = "prop blockStepRound"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockStepRound")]
     pub fn block_step_round(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `block-step-size`
-    #[rust_js::link_name = "prop blockStepSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop blockStepSize")]
     pub fn block_step_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `bookmark-label`
-    #[rust_js::link_name = "prop bookmarkLabel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bookmarkLabel")]
     pub fn bookmark_label(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `bookmark-level`
-    #[rust_js::link_name = "prop bookmarkLevel"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bookmarkLevel")]
     pub fn bookmark_level(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `bookmark-state`
-    #[rust_js::link_name = "prop bookmarkState"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bookmarkState")]
     pub fn bookmark_state(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border`
-    #[rust_js::link_name = "prop border"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop border")]
     pub fn border(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block`
-    #[rust_js::link_name = "prop borderBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlock")]
     pub fn border_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-clip`
-    #[rust_js::link_name = "prop borderBlockClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockClip")]
     pub fn border_block_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-color`
-    #[rust_js::link_name = "prop borderBlockColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockColor")]
     pub fn border_block_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end`
-    #[rust_js::link_name = "prop borderBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEnd")]
     pub fn border_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end-clip`
-    #[rust_js::link_name = "prop borderBlockEndClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEndClip")]
     pub fn border_block_end_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end-color`
-    #[rust_js::link_name = "prop borderBlockEndColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEndColor")]
     pub fn border_block_end_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end-radius`
-    #[rust_js::link_name = "prop borderBlockEndRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEndRadius")]
     pub fn border_block_end_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end-style`
-    #[rust_js::link_name = "prop borderBlockEndStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEndStyle")]
     pub fn border_block_end_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-end-width`
-    #[rust_js::link_name = "prop borderBlockEndWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockEndWidth")]
     pub fn border_block_end_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start`
-    #[rust_js::link_name = "prop borderBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStart")]
     pub fn border_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start-clip`
-    #[rust_js::link_name = "prop borderBlockStartClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStartClip")]
     pub fn border_block_start_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start-color`
-    #[rust_js::link_name = "prop borderBlockStartColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStartColor")]
     pub fn border_block_start_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start-radius`
-    #[rust_js::link_name = "prop borderBlockStartRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStartRadius")]
     pub fn border_block_start_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start-style`
-    #[rust_js::link_name = "prop borderBlockStartStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStartStyle")]
     pub fn border_block_start_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-start-width`
-    #[rust_js::link_name = "prop borderBlockStartWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStartWidth")]
     pub fn border_block_start_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-style`
-    #[rust_js::link_name = "prop borderBlockStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockStyle")]
     pub fn border_block_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-block-width`
-    #[rust_js::link_name = "prop borderBlockWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBlockWidth")]
     pub fn border_block_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom`
-    #[rust_js::link_name = "prop borderBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottom")]
     pub fn border_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-clip`
-    #[rust_js::link_name = "prop borderBottomClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomClip")]
     pub fn border_bottom_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-color`
-    #[rust_js::link_name = "prop borderBottomColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomColor")]
     pub fn border_bottom_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-left-radius`
-    #[rust_js::link_name = "prop borderBottomLeftRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomLeftRadius")]
     pub fn border_bottom_left_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-radius`
-    #[rust_js::link_name = "prop borderBottomRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomRadius")]
     pub fn border_bottom_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-right-radius`
-    #[rust_js::link_name = "prop borderBottomRightRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomRightRadius")]
     pub fn border_bottom_right_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-style`
-    #[rust_js::link_name = "prop borderBottomStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomStyle")]
     pub fn border_bottom_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-bottom-width`
-    #[rust_js::link_name = "prop borderBottomWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBottomWidth")]
     pub fn border_bottom_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-boundary`
-    #[rust_js::link_name = "prop borderBoundary"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderBoundary")]
     pub fn border_boundary(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-clip`
-    #[rust_js::link_name = "prop borderClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderClip")]
     pub fn border_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-collapse`
-    #[rust_js::link_name = "prop borderCollapse"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderCollapse")]
     pub fn border_collapse(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-color`
-    #[rust_js::link_name = "prop borderColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderColor")]
     pub fn border_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-end-end-radius`
-    #[rust_js::link_name = "prop borderEndEndRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderEndEndRadius")]
     pub fn border_end_end_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-end-start-radius`
-    #[rust_js::link_name = "prop borderEndStartRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderEndStartRadius")]
     pub fn border_end_start_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image`
-    #[rust_js::link_name = "prop borderImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImage")]
     pub fn border_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image-outset`
-    #[rust_js::link_name = "prop borderImageOutset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImageOutset")]
     pub fn border_image_outset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image-repeat`
-    #[rust_js::link_name = "prop borderImageRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImageRepeat")]
     pub fn border_image_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image-slice`
-    #[rust_js::link_name = "prop borderImageSlice"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImageSlice")]
     pub fn border_image_slice(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image-source`
-    #[rust_js::link_name = "prop borderImageSource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImageSource")]
     pub fn border_image_source(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-image-width`
-    #[rust_js::link_name = "prop borderImageWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderImageWidth")]
     pub fn border_image_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline`
-    #[rust_js::link_name = "prop borderInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInline")]
     pub fn border_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-clip`
-    #[rust_js::link_name = "prop borderInlineClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineClip")]
     pub fn border_inline_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-color`
-    #[rust_js::link_name = "prop borderInlineColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineColor")]
     pub fn border_inline_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end`
-    #[rust_js::link_name = "prop borderInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEnd")]
     pub fn border_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end-clip`
-    #[rust_js::link_name = "prop borderInlineEndClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEndClip")]
     pub fn border_inline_end_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end-color`
-    #[rust_js::link_name = "prop borderInlineEndColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEndColor")]
     pub fn border_inline_end_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end-radius`
-    #[rust_js::link_name = "prop borderInlineEndRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEndRadius")]
     pub fn border_inline_end_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end-style`
-    #[rust_js::link_name = "prop borderInlineEndStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEndStyle")]
     pub fn border_inline_end_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-end-width`
-    #[rust_js::link_name = "prop borderInlineEndWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineEndWidth")]
     pub fn border_inline_end_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start`
-    #[rust_js::link_name = "prop borderInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStart")]
     pub fn border_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start-clip`
-    #[rust_js::link_name = "prop borderInlineStartClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStartClip")]
     pub fn border_inline_start_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start-color`
-    #[rust_js::link_name = "prop borderInlineStartColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStartColor")]
     pub fn border_inline_start_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start-radius`
-    #[rust_js::link_name = "prop borderInlineStartRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStartRadius")]
     pub fn border_inline_start_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start-style`
-    #[rust_js::link_name = "prop borderInlineStartStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStartStyle")]
     pub fn border_inline_start_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-start-width`
-    #[rust_js::link_name = "prop borderInlineStartWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStartWidth")]
     pub fn border_inline_start_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-style`
-    #[rust_js::link_name = "prop borderInlineStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineStyle")]
     pub fn border_inline_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-inline-width`
-    #[rust_js::link_name = "prop borderInlineWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderInlineWidth")]
     pub fn border_inline_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left`
-    #[rust_js::link_name = "prop borderLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeft")]
     pub fn border_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left-clip`
-    #[rust_js::link_name = "prop borderLeftClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeftClip")]
     pub fn border_left_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left-color`
-    #[rust_js::link_name = "prop borderLeftColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeftColor")]
     pub fn border_left_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left-radius`
-    #[rust_js::link_name = "prop borderLeftRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeftRadius")]
     pub fn border_left_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left-style`
-    #[rust_js::link_name = "prop borderLeftStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeftStyle")]
     pub fn border_left_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-left-width`
-    #[rust_js::link_name = "prop borderLeftWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLeftWidth")]
     pub fn border_left_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-limit`
-    #[rust_js::link_name = "prop borderLimit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderLimit")]
     pub fn border_limit(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-radius`
-    #[rust_js::link_name = "prop borderRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRadius")]
     pub fn border_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right`
-    #[rust_js::link_name = "prop borderRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRight")]
     pub fn border_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right-clip`
-    #[rust_js::link_name = "prop borderRightClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRightClip")]
     pub fn border_right_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right-color`
-    #[rust_js::link_name = "prop borderRightColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRightColor")]
     pub fn border_right_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right-radius`
-    #[rust_js::link_name = "prop borderRightRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRightRadius")]
     pub fn border_right_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right-style`
-    #[rust_js::link_name = "prop borderRightStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRightStyle")]
     pub fn border_right_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-right-width`
-    #[rust_js::link_name = "prop borderRightWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderRightWidth")]
     pub fn border_right_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-shape`
-    #[rust_js::link_name = "prop borderShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderShape")]
     pub fn border_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-spacing`
-    #[rust_js::link_name = "prop borderSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderSpacing")]
     pub fn border_spacing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-start-end-radius`
-    #[rust_js::link_name = "prop borderStartEndRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderStartEndRadius")]
     pub fn border_start_end_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-start-start-radius`
-    #[rust_js::link_name = "prop borderStartStartRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderStartStartRadius")]
     pub fn border_start_start_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-style`
-    #[rust_js::link_name = "prop borderStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderStyle")]
     pub fn border_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top`
-    #[rust_js::link_name = "prop borderTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTop")]
     pub fn border_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-clip`
-    #[rust_js::link_name = "prop borderTopClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopClip")]
     pub fn border_top_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-color`
-    #[rust_js::link_name = "prop borderTopColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopColor")]
     pub fn border_top_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-left-radius`
-    #[rust_js::link_name = "prop borderTopLeftRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopLeftRadius")]
     pub fn border_top_left_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-radius`
-    #[rust_js::link_name = "prop borderTopRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopRadius")]
     pub fn border_top_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-right-radius`
-    #[rust_js::link_name = "prop borderTopRightRadius"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopRightRadius")]
     pub fn border_top_right_radius(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-style`
-    #[rust_js::link_name = "prop borderTopStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopStyle")]
     pub fn border_top_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-top-width`
-    #[rust_js::link_name = "prop borderTopWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderTopWidth")]
     pub fn border_top_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `border-width`
-    #[rust_js::link_name = "prop borderWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop borderWidth")]
     pub fn border_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `bottom`
-    #[rust_js::link_name = "prop bottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop bottom")]
     pub fn bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-decoration-break`
-    #[rust_js::link_name = "prop boxDecorationBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxDecorationBreak")]
     pub fn box_decoration_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow`
-    #[rust_js::link_name = "prop boxShadow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadow")]
     pub fn box_shadow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow-blur`
-    #[rust_js::link_name = "prop boxShadowBlur"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadowBlur")]
     pub fn box_shadow_blur(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow-color`
-    #[rust_js::link_name = "prop boxShadowColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadowColor")]
     pub fn box_shadow_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow-offset`
-    #[rust_js::link_name = "prop boxShadowOffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadowOffset")]
     pub fn box_shadow_offset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow-position`
-    #[rust_js::link_name = "prop boxShadowPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadowPosition")]
     pub fn box_shadow_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-shadow-spread`
-    #[rust_js::link_name = "prop boxShadowSpread"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxShadowSpread")]
     pub fn box_shadow_spread(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-sizing`
-    #[rust_js::link_name = "prop boxSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxSizing")]
     pub fn box_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `box-snap`
-    #[rust_js::link_name = "prop boxSnap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop boxSnap")]
     pub fn box_snap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `break-after`
-    #[rust_js::link_name = "prop breakAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop breakAfter")]
     pub fn break_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `break-before`
-    #[rust_js::link_name = "prop breakBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop breakBefore")]
     pub fn break_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `break-inside`
-    #[rust_js::link_name = "prop breakInside"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop breakInside")]
     pub fn break_inside(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `caption-side`
-    #[rust_js::link_name = "prop captionSide"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop captionSide")]
     pub fn caption_side(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `caret`
-    #[rust_js::link_name = "prop caret"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop caret")]
     pub fn caret(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `caret-animation`
-    #[rust_js::link_name = "prop caretAnimation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop caretAnimation")]
     pub fn caret_animation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `caret-color`
-    #[rust_js::link_name = "prop caretColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop caretColor")]
     pub fn caret_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `caret-shape`
-    #[rust_js::link_name = "prop caretShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop caretShape")]
     pub fn caret_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `clear`
-    #[rust_js::link_name = "prop clear"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clear")]
     pub fn clear(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `clip`
-    #[rust_js::link_name = "prop clip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clip")]
     pub fn clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `clip-path`
-    #[rust_js::link_name = "prop clipPath"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clipPath")]
     pub fn clip_path(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `clip-rule`
-    #[rust_js::link_name = "prop clipRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop clipRule")]
     pub fn clip_rule(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `color`
-    #[rust_js::link_name = "prop color"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop color")]
     pub fn color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `color-adjust`
-    #[rust_js::link_name = "prop colorAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorAdjust")]
     pub fn color_adjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `color-interpolation`
-    #[rust_js::link_name = "prop colorInterpolation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorInterpolation")]
     pub fn color_interpolation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `color-interpolation-filters`
-    #[rust_js::link_name = "prop colorInterpolationFilters"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorInterpolationFilters")]
     pub fn color_interpolation_filters(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `color-scheme`
-    #[rust_js::link_name = "prop colorScheme"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop colorScheme")]
     pub fn color_scheme(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-count`
-    #[rust_js::link_name = "prop columnCount"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnCount")]
     pub fn column_count(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-fill`
-    #[rust_js::link_name = "prop columnFill"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnFill")]
     pub fn column_fill(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-gap`
-    #[rust_js::link_name = "prop columnGap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnGap")]
     pub fn column_gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-height`
-    #[rust_js::link_name = "prop columnHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnHeight")]
     pub fn column_height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule`
-    #[rust_js::link_name = "prop columnRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRule")]
     pub fn column_rule(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-break`
-    #[rust_js::link_name = "prop columnRuleBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleBreak")]
     pub fn column_rule_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-color`
-    #[rust_js::link_name = "prop columnRuleColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleColor")]
     pub fn column_rule_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset`
-    #[rust_js::link_name = "prop columnRuleInset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInset")]
     pub fn column_rule_inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-cap`
-    #[rust_js::link_name = "prop columnRuleInsetCap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetCap")]
     pub fn column_rule_inset_cap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-cap-end`
-    #[rust_js::link_name = "prop columnRuleInsetCapEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetCapEnd")]
     pub fn column_rule_inset_cap_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-cap-start`
-    #[rust_js::link_name = "prop columnRuleInsetCapStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetCapStart")]
     pub fn column_rule_inset_cap_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-end`
-    #[rust_js::link_name = "prop columnRuleInsetEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetEnd")]
     pub fn column_rule_inset_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-junction`
-    #[rust_js::link_name = "prop columnRuleInsetJunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetJunction")]
     pub fn column_rule_inset_junction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-junction-end`
-    #[rust_js::link_name = "prop columnRuleInsetJunctionEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetJunctionEnd")]
     pub fn column_rule_inset_junction_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-junction-start`
-    #[rust_js::link_name = "prop columnRuleInsetJunctionStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetJunctionStart")]
     pub fn column_rule_inset_junction_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-inset-start`
-    #[rust_js::link_name = "prop columnRuleInsetStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleInsetStart")]
     pub fn column_rule_inset_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-style`
-    #[rust_js::link_name = "prop columnRuleStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleStyle")]
     pub fn column_rule_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-visibility-items`
-    #[rust_js::link_name = "prop columnRuleVisibilityItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleVisibilityItems")]
     pub fn column_rule_visibility_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-rule-width`
-    #[rust_js::link_name = "prop columnRuleWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnRuleWidth")]
     pub fn column_rule_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-span`
-    #[rust_js::link_name = "prop columnSpan"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnSpan")]
     pub fn column_span(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-width`
-    #[rust_js::link_name = "prop columnWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnWidth")]
     pub fn column_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `column-wrap`
-    #[rust_js::link_name = "prop columnWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columnWrap")]
     pub fn column_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `columns`
-    #[rust_js::link_name = "prop columns"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop columns")]
     pub fn columns(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain`
-    #[rust_js::link_name = "prop contain"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contain")]
     pub fn contain(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain-intrinsic-block-size`
-    #[rust_js::link_name = "prop containIntrinsicBlockSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containIntrinsicBlockSize")]
     pub fn contain_intrinsic_block_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain-intrinsic-height`
-    #[rust_js::link_name = "prop containIntrinsicHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containIntrinsicHeight")]
     pub fn contain_intrinsic_height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain-intrinsic-inline-size`
-    #[rust_js::link_name = "prop containIntrinsicInlineSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containIntrinsicInlineSize")]
     pub fn contain_intrinsic_inline_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain-intrinsic-size`
-    #[rust_js::link_name = "prop containIntrinsicSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containIntrinsicSize")]
     pub fn contain_intrinsic_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `contain-intrinsic-width`
-    #[rust_js::link_name = "prop containIntrinsicWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containIntrinsicWidth")]
     pub fn contain_intrinsic_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `container`
-    #[rust_js::link_name = "prop container"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop container")]
     pub fn container(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `container-name`
-    #[rust_js::link_name = "prop containerName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containerName")]
     pub fn container_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `container-type`
-    #[rust_js::link_name = "prop containerType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop containerType")]
     pub fn container_type(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `content`
-    #[rust_js::link_name = "prop content"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop content")]
     pub fn content(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `content-visibility`
-    #[rust_js::link_name = "prop contentVisibility"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop contentVisibility")]
     pub fn content_visibility(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `continue`
-    #[rust_js::link_name = "prop continue"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop continue")]
     pub fn r#continue(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `copy-into`
-    #[rust_js::link_name = "prop copyInto"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop copyInto")]
     pub fn copy_into(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner`
-    #[rust_js::link_name = "prop corner"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop corner")]
     pub fn corner(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-block-end`
-    #[rust_js::link_name = "prop cornerBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBlockEnd")]
     pub fn corner_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-block-end-shape`
-    #[rust_js::link_name = "prop cornerBlockEndShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBlockEndShape")]
     pub fn corner_block_end_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-block-start`
-    #[rust_js::link_name = "prop cornerBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBlockStart")]
     pub fn corner_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-block-start-shape`
-    #[rust_js::link_name = "prop cornerBlockStartShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBlockStartShape")]
     pub fn corner_block_start_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom`
-    #[rust_js::link_name = "prop cornerBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottom")]
     pub fn corner_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom-left`
-    #[rust_js::link_name = "prop cornerBottomLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottomLeft")]
     pub fn corner_bottom_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom-left-shape`
-    #[rust_js::link_name = "prop cornerBottomLeftShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottomLeftShape")]
     pub fn corner_bottom_left_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom-right`
-    #[rust_js::link_name = "prop cornerBottomRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottomRight")]
     pub fn corner_bottom_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom-right-shape`
-    #[rust_js::link_name = "prop cornerBottomRightShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottomRightShape")]
     pub fn corner_bottom_right_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-bottom-shape`
-    #[rust_js::link_name = "prop cornerBottomShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerBottomShape")]
     pub fn corner_bottom_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-end-end`
-    #[rust_js::link_name = "prop cornerEndEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerEndEnd")]
     pub fn corner_end_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-end-end-shape`
-    #[rust_js::link_name = "prop cornerEndEndShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerEndEndShape")]
     pub fn corner_end_end_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-end-start`
-    #[rust_js::link_name = "prop cornerEndStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerEndStart")]
     pub fn corner_end_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-end-start-shape`
-    #[rust_js::link_name = "prop cornerEndStartShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerEndStartShape")]
     pub fn corner_end_start_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-inline-end`
-    #[rust_js::link_name = "prop cornerInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerInlineEnd")]
     pub fn corner_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-inline-end-shape`
-    #[rust_js::link_name = "prop cornerInlineEndShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerInlineEndShape")]
     pub fn corner_inline_end_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-inline-start`
-    #[rust_js::link_name = "prop cornerInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerInlineStart")]
     pub fn corner_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-inline-start-shape`
-    #[rust_js::link_name = "prop cornerInlineStartShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerInlineStartShape")]
     pub fn corner_inline_start_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-left`
-    #[rust_js::link_name = "prop cornerLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerLeft")]
     pub fn corner_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-left-shape`
-    #[rust_js::link_name = "prop cornerLeftShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerLeftShape")]
     pub fn corner_left_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-right`
-    #[rust_js::link_name = "prop cornerRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerRight")]
     pub fn corner_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-right-shape`
-    #[rust_js::link_name = "prop cornerRightShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerRightShape")]
     pub fn corner_right_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-shape`
-    #[rust_js::link_name = "prop cornerShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerShape")]
     pub fn corner_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-start-end`
-    #[rust_js::link_name = "prop cornerStartEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerStartEnd")]
     pub fn corner_start_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-start-end-shape`
-    #[rust_js::link_name = "prop cornerStartEndShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerStartEndShape")]
     pub fn corner_start_end_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-start-start`
-    #[rust_js::link_name = "prop cornerStartStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerStartStart")]
     pub fn corner_start_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-start-start-shape`
-    #[rust_js::link_name = "prop cornerStartStartShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerStartStartShape")]
     pub fn corner_start_start_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top`
-    #[rust_js::link_name = "prop cornerTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTop")]
     pub fn corner_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top-left`
-    #[rust_js::link_name = "prop cornerTopLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTopLeft")]
     pub fn corner_top_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top-left-shape`
-    #[rust_js::link_name = "prop cornerTopLeftShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTopLeftShape")]
     pub fn corner_top_left_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top-right`
-    #[rust_js::link_name = "prop cornerTopRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTopRight")]
     pub fn corner_top_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top-right-shape`
-    #[rust_js::link_name = "prop cornerTopRightShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTopRightShape")]
     pub fn corner_top_right_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `corner-top-shape`
-    #[rust_js::link_name = "prop cornerTopShape"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cornerTopShape")]
     pub fn corner_top_shape(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `counter-increment`
-    #[rust_js::link_name = "prop counterIncrement"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop counterIncrement")]
     pub fn counter_increment(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `counter-reset`
-    #[rust_js::link_name = "prop counterReset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop counterReset")]
     pub fn counter_reset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `counter-set`
-    #[rust_js::link_name = "prop counterSet"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop counterSet")]
     pub fn counter_set(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cue`
-    #[rust_js::link_name = "prop cue"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cue")]
     pub fn cue(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cue-after`
-    #[rust_js::link_name = "prop cueAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cueAfter")]
     pub fn cue_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cue-before`
-    #[rust_js::link_name = "prop cueBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cueBefore")]
     pub fn cue_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cursor`
-    #[rust_js::link_name = "prop cursor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cursor")]
     pub fn cursor(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cx`
-    #[rust_js::link_name = "prop cx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cx")]
     pub fn cx(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `cy`
-    #[rust_js::link_name = "prop cy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop cy")]
     pub fn cy(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `d`
-    #[rust_js::link_name = "prop d"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop d")]
     pub fn d(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `direction`
-    #[rust_js::link_name = "prop direction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop direction")]
     pub fn direction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `display`
-    #[rust_js::link_name = "prop display"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop display")]
     pub fn display(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `dominant-baseline`
-    #[rust_js::link_name = "prop dominantBaseline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dominantBaseline")]
     pub fn dominant_baseline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `dynamic-range-limit`
-    #[rust_js::link_name = "prop dynamicRangeLimit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dynamicRangeLimit")]
     pub fn dynamic_range_limit(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `empty-cells`
-    #[rust_js::link_name = "prop emptyCells"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop emptyCells")]
     pub fn empty_cells(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `event-trigger`
-    #[rust_js::link_name = "prop eventTrigger"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop eventTrigger")]
     pub fn event_trigger(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `event-trigger-name`
-    #[rust_js::link_name = "prop eventTriggerName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop eventTriggerName")]
     pub fn event_trigger_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `event-trigger-source`
-    #[rust_js::link_name = "prop eventTriggerSource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop eventTriggerSource")]
     pub fn event_trigger_source(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `field-sizing`
-    #[rust_js::link_name = "prop fieldSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fieldSizing")]
     pub fn field_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill`
-    #[rust_js::link_name = "prop fill"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fill")]
     pub fn fill(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-break`
-    #[rust_js::link_name = "prop fillBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillBreak")]
     pub fn fill_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-color`
-    #[rust_js::link_name = "prop fillColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillColor")]
     pub fn fill_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-image`
-    #[rust_js::link_name = "prop fillImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillImage")]
     pub fn fill_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-opacity`
-    #[rust_js::link_name = "prop fillOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillOpacity")]
     pub fn fill_opacity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-origin`
-    #[rust_js::link_name = "prop fillOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillOrigin")]
     pub fn fill_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-position`
-    #[rust_js::link_name = "prop fillPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillPosition")]
     pub fn fill_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-repeat`
-    #[rust_js::link_name = "prop fillRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillRepeat")]
     pub fn fill_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-rule`
-    #[rust_js::link_name = "prop fillRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillRule")]
     pub fn fill_rule(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `fill-size`
-    #[rust_js::link_name = "prop fillSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fillSize")]
     pub fn fill_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `filter`
-    #[rust_js::link_name = "prop filter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop filter")]
     pub fn filter(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex`
-    #[rust_js::link_name = "prop flex"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flex")]
     pub fn flex(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-basis`
-    #[rust_js::link_name = "prop flexBasis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexBasis")]
     pub fn flex_basis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-direction`
-    #[rust_js::link_name = "prop flexDirection"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexDirection")]
     pub fn flex_direction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-flow`
-    #[rust_js::link_name = "prop flexFlow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexFlow")]
     pub fn flex_flow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-grow`
-    #[rust_js::link_name = "prop flexGrow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexGrow")]
     pub fn flex_grow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-line-count`
-    #[rust_js::link_name = "prop flexLineCount"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexLineCount")]
     pub fn flex_line_count(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-shrink`
-    #[rust_js::link_name = "prop flexShrink"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexShrink")]
     pub fn flex_shrink(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flex-wrap`
-    #[rust_js::link_name = "prop flexWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flexWrap")]
     pub fn flex_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `float`
-    #[rust_js::link_name = "prop float"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop float")]
     pub fn float(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `float-defer`
-    #[rust_js::link_name = "prop floatDefer"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floatDefer")]
     pub fn float_defer(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `float-offset`
-    #[rust_js::link_name = "prop floatOffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floatOffset")]
     pub fn float_offset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `float-reference`
-    #[rust_js::link_name = "prop floatReference"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floatReference")]
     pub fn float_reference(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flood-color`
-    #[rust_js::link_name = "prop floodColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floodColor")]
     pub fn flood_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flood-opacity`
-    #[rust_js::link_name = "prop floodOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop floodOpacity")]
     pub fn flood_opacity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flow-from`
-    #[rust_js::link_name = "prop flowFrom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flowFrom")]
     pub fn flow_from(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flow-into`
-    #[rust_js::link_name = "prop flowInto"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flowInto")]
     pub fn flow_into(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `flow-tolerance`
-    #[rust_js::link_name = "prop flowTolerance"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop flowTolerance")]
     pub fn flow_tolerance(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font`
-    #[rust_js::link_name = "prop font"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop font")]
     pub fn font(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-family`
-    #[rust_js::link_name = "prop fontFamily"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontFamily")]
     pub fn font_family(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-feature-settings`
-    #[rust_js::link_name = "prop fontFeatureSettings"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontFeatureSettings")]
     pub fn font_feature_settings(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-kerning`
-    #[rust_js::link_name = "prop fontKerning"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontKerning")]
     pub fn font_kerning(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-language-override`
-    #[rust_js::link_name = "prop fontLanguageOverride"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontLanguageOverride")]
     pub fn font_language_override(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-optical-sizing`
-    #[rust_js::link_name = "prop fontOpticalSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontOpticalSizing")]
     pub fn font_optical_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-palette`
-    #[rust_js::link_name = "prop fontPalette"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontPalette")]
     pub fn font_palette(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-size`
-    #[rust_js::link_name = "prop fontSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSize")]
     pub fn font_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-size-adjust`
-    #[rust_js::link_name = "prop fontSizeAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSizeAdjust")]
     pub fn font_size_adjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-stretch`
-    #[rust_js::link_name = "prop fontStretch"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontStretch")]
     pub fn font_stretch(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-style`
-    #[rust_js::link_name = "prop fontStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontStyle")]
     pub fn font_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-synthesis`
-    #[rust_js::link_name = "prop fontSynthesis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSynthesis")]
     pub fn font_synthesis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-synthesis-position`
-    #[rust_js::link_name = "prop fontSynthesisPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSynthesisPosition")]
     pub fn font_synthesis_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-synthesis-small-caps`
-    #[rust_js::link_name = "prop fontSynthesisSmallCaps"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSynthesisSmallCaps")]
     pub fn font_synthesis_small_caps(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-synthesis-style`
-    #[rust_js::link_name = "prop fontSynthesisStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSynthesisStyle")]
     pub fn font_synthesis_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-synthesis-weight`
-    #[rust_js::link_name = "prop fontSynthesisWeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontSynthesisWeight")]
     pub fn font_synthesis_weight(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant`
-    #[rust_js::link_name = "prop fontVariant"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariant")]
     pub fn font_variant(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-alternates`
-    #[rust_js::link_name = "prop fontVariantAlternates"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantAlternates")]
     pub fn font_variant_alternates(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-caps`
-    #[rust_js::link_name = "prop fontVariantCaps"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantCaps")]
     pub fn font_variant_caps(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-east-asian`
-    #[rust_js::link_name = "prop fontVariantEastAsian"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantEastAsian")]
     pub fn font_variant_east_asian(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-emoji`
-    #[rust_js::link_name = "prop fontVariantEmoji"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantEmoji")]
     pub fn font_variant_emoji(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-ligatures`
-    #[rust_js::link_name = "prop fontVariantLigatures"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantLigatures")]
     pub fn font_variant_ligatures(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-numeric`
-    #[rust_js::link_name = "prop fontVariantNumeric"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantNumeric")]
     pub fn font_variant_numeric(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variant-position`
-    #[rust_js::link_name = "prop fontVariantPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariantPosition")]
     pub fn font_variant_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-variation-settings`
-    #[rust_js::link_name = "prop fontVariationSettings"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontVariationSettings")]
     pub fn font_variation_settings(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-weight`
-    #[rust_js::link_name = "prop fontWeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontWeight")]
     pub fn font_weight(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `font-width`
-    #[rust_js::link_name = "prop fontWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop fontWidth")]
     pub fn font_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `footnote-display`
-    #[rust_js::link_name = "prop footnoteDisplay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop footnoteDisplay")]
     pub fn footnote_display(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `footnote-policy`
-    #[rust_js::link_name = "prop footnotePolicy"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop footnotePolicy")]
     pub fn footnote_policy(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `forced-color-adjust`
-    #[rust_js::link_name = "prop forcedColorAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop forcedColorAdjust")]
     pub fn forced_color_adjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `frame-sizing`
-    #[rust_js::link_name = "prop frameSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop frameSizing")]
     pub fn frame_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `gap`
-    #[rust_js::link_name = "prop gap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gap")]
     pub fn gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `glyph-orientation-vertical`
-    #[rust_js::link_name = "prop glyphOrientationVertical"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop glyphOrientationVertical")]
     pub fn glyph_orientation_vertical(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid`
-    #[rust_js::link_name = "prop grid"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop grid")]
     pub fn grid(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-area`
-    #[rust_js::link_name = "prop gridArea"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridArea")]
     pub fn grid_area(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-auto-columns`
-    #[rust_js::link_name = "prop gridAutoColumns"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridAutoColumns")]
     pub fn grid_auto_columns(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-auto-flow`
-    #[rust_js::link_name = "prop gridAutoFlow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridAutoFlow")]
     pub fn grid_auto_flow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-auto-rows`
-    #[rust_js::link_name = "prop gridAutoRows"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridAutoRows")]
     pub fn grid_auto_rows(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-column`
-    #[rust_js::link_name = "prop gridColumn"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridColumn")]
     pub fn grid_column(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-column-end`
-    #[rust_js::link_name = "prop gridColumnEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridColumnEnd")]
     pub fn grid_column_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-column-gap`
-    #[rust_js::link_name = "prop gridColumnGap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridColumnGap")]
     pub fn grid_column_gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-column-start`
-    #[rust_js::link_name = "prop gridColumnStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridColumnStart")]
     pub fn grid_column_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-gap`
-    #[rust_js::link_name = "prop gridGap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridGap")]
     pub fn grid_gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-row`
-    #[rust_js::link_name = "prop gridRow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridRow")]
     pub fn grid_row(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-row-end`
-    #[rust_js::link_name = "prop gridRowEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridRowEnd")]
     pub fn grid_row_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-row-gap`
-    #[rust_js::link_name = "prop gridRowGap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridRowGap")]
     pub fn grid_row_gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-row-start`
-    #[rust_js::link_name = "prop gridRowStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridRowStart")]
     pub fn grid_row_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-template`
-    #[rust_js::link_name = "prop gridTemplate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridTemplate")]
     pub fn grid_template(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-template-areas`
-    #[rust_js::link_name = "prop gridTemplateAreas"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridTemplateAreas")]
     pub fn grid_template_areas(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-template-columns`
-    #[rust_js::link_name = "prop gridTemplateColumns"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridTemplateColumns")]
     pub fn grid_template_columns(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `grid-template-rows`
-    #[rust_js::link_name = "prop gridTemplateRows"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop gridTemplateRows")]
     pub fn grid_template_rows(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hanging-punctuation`
-    #[rust_js::link_name = "prop hangingPunctuation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hangingPunctuation")]
     pub fn hanging_punctuation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `height`
-    #[rust_js::link_name = "prop height"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop height")]
     pub fn height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphenate-character`
-    #[rust_js::link_name = "prop hyphenateCharacter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphenateCharacter")]
     pub fn hyphenate_character(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphenate-limit-chars`
-    #[rust_js::link_name = "prop hyphenateLimitChars"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphenateLimitChars")]
     pub fn hyphenate_limit_chars(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphenate-limit-last`
-    #[rust_js::link_name = "prop hyphenateLimitLast"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphenateLimitLast")]
     pub fn hyphenate_limit_last(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphenate-limit-lines`
-    #[rust_js::link_name = "prop hyphenateLimitLines"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphenateLimitLines")]
     pub fn hyphenate_limit_lines(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphenate-limit-zone`
-    #[rust_js::link_name = "prop hyphenateLimitZone"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphenateLimitZone")]
     pub fn hyphenate_limit_zone(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `hyphens`
-    #[rust_js::link_name = "prop hyphens"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop hyphens")]
     pub fn hyphens(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `image-animation`
-    #[rust_js::link_name = "prop imageAnimation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageAnimation")]
     pub fn image_animation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `image-orientation`
-    #[rust_js::link_name = "prop imageOrientation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageOrientation")]
     pub fn image_orientation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `image-rendering`
-    #[rust_js::link_name = "prop imageRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageRendering")]
     pub fn image_rendering(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `image-resolution`
-    #[rust_js::link_name = "prop imageResolution"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop imageResolution")]
     pub fn image_resolution(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `initial-letter`
-    #[rust_js::link_name = "prop initialLetter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop initialLetter")]
     pub fn initial_letter(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `initial-letter-align`
-    #[rust_js::link_name = "prop initialLetterAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop initialLetterAlign")]
     pub fn initial_letter_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `initial-letter-wrap`
-    #[rust_js::link_name = "prop initialLetterWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop initialLetterWrap")]
     pub fn initial_letter_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inline-size`
-    #[rust_js::link_name = "prop inlineSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inlineSize")]
     pub fn inline_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inline-sizing`
-    #[rust_js::link_name = "prop inlineSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inlineSizing")]
     pub fn inline_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `input-security`
-    #[rust_js::link_name = "prop inputSecurity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inputSecurity")]
     pub fn input_security(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset`
-    #[rust_js::link_name = "prop inset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop inset")]
     pub fn inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-block`
-    #[rust_js::link_name = "prop insetBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetBlock")]
     pub fn inset_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-block-end`
-    #[rust_js::link_name = "prop insetBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetBlockEnd")]
     pub fn inset_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-block-start`
-    #[rust_js::link_name = "prop insetBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetBlockStart")]
     pub fn inset_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-inline`
-    #[rust_js::link_name = "prop insetInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetInline")]
     pub fn inset_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-inline-end`
-    #[rust_js::link_name = "prop insetInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetInlineEnd")]
     pub fn inset_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `inset-inline-start`
-    #[rust_js::link_name = "prop insetInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop insetInlineStart")]
     pub fn inset_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `interactivity`
-    #[rust_js::link_name = "prop interactivity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop interactivity")]
     pub fn interactivity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `interest-delay`
-    #[rust_js::link_name = "prop interestDelay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop interestDelay")]
     pub fn interest_delay(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `interest-delay-end`
-    #[rust_js::link_name = "prop interestDelayEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop interestDelayEnd")]
     pub fn interest_delay_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `interest-delay-start`
-    #[rust_js::link_name = "prop interestDelayStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop interestDelayStart")]
     pub fn interest_delay_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `interpolate-size`
-    #[rust_js::link_name = "prop interpolateSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop interpolateSize")]
     pub fn interpolate_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `isolation`
-    #[rust_js::link_name = "prop isolation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop isolation")]
     pub fn isolation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `justify-content`
-    #[rust_js::link_name = "prop justifyContent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop justifyContent")]
     pub fn justify_content(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `justify-items`
-    #[rust_js::link_name = "prop justifyItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop justifyItems")]
     pub fn justify_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `justify-self`
-    #[rust_js::link_name = "prop justifySelf"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop justifySelf")]
     pub fn justify_self(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `left`
-    #[rust_js::link_name = "prop left"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop left")]
     pub fn left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `letter-spacing`
-    #[rust_js::link_name = "prop letterSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop letterSpacing")]
     pub fn letter_spacing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `lighting-color`
-    #[rust_js::link_name = "prop lightingColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lightingColor")]
     pub fn lighting_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-break`
-    #[rust_js::link_name = "prop lineBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineBreak")]
     pub fn line_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-clamp`
-    #[rust_js::link_name = "prop lineClamp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineClamp")]
     pub fn line_clamp(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-fit-edge`
-    #[rust_js::link_name = "prop lineFitEdge"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineFitEdge")]
     pub fn line_fit_edge(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-grid`
-    #[rust_js::link_name = "prop lineGrid"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineGrid")]
     pub fn line_grid(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-height`
-    #[rust_js::link_name = "prop lineHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineHeight")]
     pub fn line_height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-height-step`
-    #[rust_js::link_name = "prop lineHeightStep"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineHeightStep")]
     pub fn line_height_step(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-padding`
-    #[rust_js::link_name = "prop linePadding"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop linePadding")]
     pub fn line_padding(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `line-snap`
-    #[rust_js::link_name = "prop lineSnap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop lineSnap")]
     pub fn line_snap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `link-parameters`
-    #[rust_js::link_name = "prop linkParameters"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop linkParameters")]
     pub fn link_parameters(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `list-style`
-    #[rust_js::link_name = "prop listStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop listStyle")]
     pub fn list_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `list-style-image`
-    #[rust_js::link_name = "prop listStyleImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop listStyleImage")]
     pub fn list_style_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `list-style-position`
-    #[rust_js::link_name = "prop listStylePosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop listStylePosition")]
     pub fn list_style_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `list-style-type`
-    #[rust_js::link_name = "prop listStyleType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop listStyleType")]
     pub fn list_style_type(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin`
-    #[rust_js::link_name = "prop margin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop margin")]
     pub fn margin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-block`
-    #[rust_js::link_name = "prop marginBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginBlock")]
     pub fn margin_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-block-end`
-    #[rust_js::link_name = "prop marginBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginBlockEnd")]
     pub fn margin_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-block-start`
-    #[rust_js::link_name = "prop marginBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginBlockStart")]
     pub fn margin_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-bottom`
-    #[rust_js::link_name = "prop marginBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginBottom")]
     pub fn margin_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-break`
-    #[rust_js::link_name = "prop marginBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginBreak")]
     pub fn margin_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-inline`
-    #[rust_js::link_name = "prop marginInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginInline")]
     pub fn margin_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-inline-end`
-    #[rust_js::link_name = "prop marginInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginInlineEnd")]
     pub fn margin_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-inline-start`
-    #[rust_js::link_name = "prop marginInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginInlineStart")]
     pub fn margin_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-left`
-    #[rust_js::link_name = "prop marginLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginLeft")]
     pub fn margin_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-right`
-    #[rust_js::link_name = "prop marginRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginRight")]
     pub fn margin_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-top`
-    #[rust_js::link_name = "prop marginTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginTop")]
     pub fn margin_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `margin-trim`
-    #[rust_js::link_name = "prop marginTrim"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marginTrim")]
     pub fn margin_trim(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `marker`
-    #[rust_js::link_name = "prop marker"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop marker")]
     pub fn marker(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `marker-end`
-    #[rust_js::link_name = "prop markerEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerEnd")]
     pub fn marker_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `marker-mid`
-    #[rust_js::link_name = "prop markerMid"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerMid")]
     pub fn marker_mid(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `marker-side`
-    #[rust_js::link_name = "prop markerSide"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerSide")]
     pub fn marker_side(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `marker-start`
-    #[rust_js::link_name = "prop markerStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop markerStart")]
     pub fn marker_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask`
-    #[rust_js::link_name = "prop mask"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mask")]
     pub fn mask(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border`
-    #[rust_js::link_name = "prop maskBorder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorder")]
     pub fn mask_border(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-mode`
-    #[rust_js::link_name = "prop maskBorderMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderMode")]
     pub fn mask_border_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-outset`
-    #[rust_js::link_name = "prop maskBorderOutset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderOutset")]
     pub fn mask_border_outset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-repeat`
-    #[rust_js::link_name = "prop maskBorderRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderRepeat")]
     pub fn mask_border_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-slice`
-    #[rust_js::link_name = "prop maskBorderSlice"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderSlice")]
     pub fn mask_border_slice(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-source`
-    #[rust_js::link_name = "prop maskBorderSource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderSource")]
     pub fn mask_border_source(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-border-width`
-    #[rust_js::link_name = "prop maskBorderWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskBorderWidth")]
     pub fn mask_border_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-clip`
-    #[rust_js::link_name = "prop maskClip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskClip")]
     pub fn mask_clip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-composite`
-    #[rust_js::link_name = "prop maskComposite"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskComposite")]
     pub fn mask_composite(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-image`
-    #[rust_js::link_name = "prop maskImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskImage")]
     pub fn mask_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-mode`
-    #[rust_js::link_name = "prop maskMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskMode")]
     pub fn mask_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-origin`
-    #[rust_js::link_name = "prop maskOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskOrigin")]
     pub fn mask_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-position`
-    #[rust_js::link_name = "prop maskPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskPosition")]
     pub fn mask_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-repeat`
-    #[rust_js::link_name = "prop maskRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskRepeat")]
     pub fn mask_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-size`
-    #[rust_js::link_name = "prop maskSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskSize")]
     pub fn mask_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mask-type`
-    #[rust_js::link_name = "prop maskType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maskType")]
     pub fn mask_type(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `math-depth`
-    #[rust_js::link_name = "prop mathDepth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mathDepth")]
     pub fn math_depth(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `math-shift`
-    #[rust_js::link_name = "prop mathShift"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mathShift")]
     pub fn math_shift(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `math-style`
-    #[rust_js::link_name = "prop mathStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mathStyle")]
     pub fn math_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-block-size`
-    #[rust_js::link_name = "prop maxBlockSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxBlockSize")]
     pub fn max_block_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-height`
-    #[rust_js::link_name = "prop maxHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxHeight")]
     pub fn max_height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-inline-size`
-    #[rust_js::link_name = "prop maxInlineSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxInlineSize")]
     pub fn max_inline_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-lines`
-    #[rust_js::link_name = "prop maxLines"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxLines")]
     pub fn max_lines(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-size`
-    #[rust_js::link_name = "prop maxSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxSize")]
     pub fn max_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `max-width`
-    #[rust_js::link_name = "prop maxWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop maxWidth")]
     pub fn max_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-block-size`
-    #[rust_js::link_name = "prop minBlockSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minBlockSize")]
     pub fn min_block_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-height`
-    #[rust_js::link_name = "prop minHeight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minHeight")]
     pub fn min_height(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-inline-size`
-    #[rust_js::link_name = "prop minInlineSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minInlineSize")]
     pub fn min_inline_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-intrinsic-sizing`
-    #[rust_js::link_name = "prop minIntrinsicSizing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minIntrinsicSizing")]
     pub fn min_intrinsic_sizing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-size`
-    #[rust_js::link_name = "prop minSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minSize")]
     pub fn min_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `min-width`
-    #[rust_js::link_name = "prop minWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop minWidth")]
     pub fn min_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `mix-blend-mode`
-    #[rust_js::link_name = "prop mixBlendMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop mixBlendMode")]
     pub fn mix_blend_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `nav-down`
-    #[rust_js::link_name = "prop navDown"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop navDown")]
     pub fn nav_down(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `nav-left`
-    #[rust_js::link_name = "prop navLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop navLeft")]
     pub fn nav_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `nav-right`
-    #[rust_js::link_name = "prop navRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop navRight")]
     pub fn nav_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `nav-up`
-    #[rust_js::link_name = "prop navUp"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop navUp")]
     pub fn nav_up(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `object-fit`
-    #[rust_js::link_name = "prop objectFit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop objectFit")]
     pub fn object_fit(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `object-position`
-    #[rust_js::link_name = "prop objectPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop objectPosition")]
     pub fn object_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `object-view-box`
-    #[rust_js::link_name = "prop objectViewBox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop objectViewBox")]
     pub fn object_view_box(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset`
-    #[rust_js::link_name = "prop offset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offset")]
     pub fn offset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset-anchor`
-    #[rust_js::link_name = "prop offsetAnchor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offsetAnchor")]
     pub fn offset_anchor(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset-distance`
-    #[rust_js::link_name = "prop offsetDistance"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offsetDistance")]
     pub fn offset_distance(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset-path`
-    #[rust_js::link_name = "prop offsetPath"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offsetPath")]
     pub fn offset_path(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset-position`
-    #[rust_js::link_name = "prop offsetPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offsetPosition")]
     pub fn offset_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `offset-rotate`
-    #[rust_js::link_name = "prop offsetRotate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop offsetRotate")]
     pub fn offset_rotate(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `opacity`
-    #[rust_js::link_name = "prop opacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop opacity")]
     pub fn opacity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `order`
-    #[rust_js::link_name = "prop order"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop order")]
     pub fn order(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `orphans`
-    #[rust_js::link_name = "prop orphans"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop orphans")]
     pub fn orphans(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `outline`
-    #[rust_js::link_name = "prop outline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop outline")]
     pub fn outline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `outline-color`
-    #[rust_js::link_name = "prop outlineColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop outlineColor")]
     pub fn outline_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `outline-offset`
-    #[rust_js::link_name = "prop outlineOffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop outlineOffset")]
     pub fn outline_offset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `outline-style`
-    #[rust_js::link_name = "prop outlineStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop outlineStyle")]
     pub fn outline_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `outline-width`
-    #[rust_js::link_name = "prop outlineWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop outlineWidth")]
     pub fn outline_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow`
-    #[rust_js::link_name = "prop overflow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflow")]
     pub fn overflow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-anchor`
-    #[rust_js::link_name = "prop overflowAnchor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowAnchor")]
     pub fn overflow_anchor(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-block`
-    #[rust_js::link_name = "prop overflowBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowBlock")]
     pub fn overflow_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin`
-    #[rust_js::link_name = "prop overflowClipMargin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMargin")]
     pub fn overflow_clip_margin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-block`
-    #[rust_js::link_name = "prop overflowClipMarginBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginBlock")]
     pub fn overflow_clip_margin_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-block-end`
-    #[rust_js::link_name = "prop overflowClipMarginBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginBlockEnd")]
     pub fn overflow_clip_margin_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-block-start`
-    #[rust_js::link_name = "prop overflowClipMarginBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginBlockStart")]
     pub fn overflow_clip_margin_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-bottom`
-    #[rust_js::link_name = "prop overflowClipMarginBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginBottom")]
     pub fn overflow_clip_margin_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-inline`
-    #[rust_js::link_name = "prop overflowClipMarginInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginInline")]
     pub fn overflow_clip_margin_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-inline-end`
-    #[rust_js::link_name = "prop overflowClipMarginInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginInlineEnd")]
     pub fn overflow_clip_margin_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-inline-start`
-    #[rust_js::link_name = "prop overflowClipMarginInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginInlineStart")]
     pub fn overflow_clip_margin_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-left`
-    #[rust_js::link_name = "prop overflowClipMarginLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginLeft")]
     pub fn overflow_clip_margin_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-right`
-    #[rust_js::link_name = "prop overflowClipMarginRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginRight")]
     pub fn overflow_clip_margin_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-clip-margin-top`
-    #[rust_js::link_name = "prop overflowClipMarginTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowClipMarginTop")]
     pub fn overflow_clip_margin_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-inline`
-    #[rust_js::link_name = "prop overflowInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowInline")]
     pub fn overflow_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-wrap`
-    #[rust_js::link_name = "prop overflowWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowWrap")]
     pub fn overflow_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-x`
-    #[rust_js::link_name = "prop overflowX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowX")]
     pub fn overflow_x(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overflow-y`
-    #[rust_js::link_name = "prop overflowY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overflowY")]
     pub fn overflow_y(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overlay`
-    #[rust_js::link_name = "prop overlay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overlay")]
     pub fn overlay(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overscroll-behavior`
-    #[rust_js::link_name = "prop overscrollBehavior"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overscrollBehavior")]
     pub fn overscroll_behavior(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overscroll-behavior-block`
-    #[rust_js::link_name = "prop overscrollBehaviorBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overscrollBehaviorBlock")]
     pub fn overscroll_behavior_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overscroll-behavior-inline`
-    #[rust_js::link_name = "prop overscrollBehaviorInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overscrollBehaviorInline")]
     pub fn overscroll_behavior_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overscroll-behavior-x`
-    #[rust_js::link_name = "prop overscrollBehaviorX"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overscrollBehaviorX")]
     pub fn overscroll_behavior_x(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `overscroll-behavior-y`
-    #[rust_js::link_name = "prop overscrollBehaviorY"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop overscrollBehaviorY")]
     pub fn overscroll_behavior_y(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding`
-    #[rust_js::link_name = "prop padding"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop padding")]
     pub fn padding(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-block`
-    #[rust_js::link_name = "prop paddingBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingBlock")]
     pub fn padding_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-block-end`
-    #[rust_js::link_name = "prop paddingBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingBlockEnd")]
     pub fn padding_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-block-start`
-    #[rust_js::link_name = "prop paddingBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingBlockStart")]
     pub fn padding_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-bottom`
-    #[rust_js::link_name = "prop paddingBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingBottom")]
     pub fn padding_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-inline`
-    #[rust_js::link_name = "prop paddingInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingInline")]
     pub fn padding_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-inline-end`
-    #[rust_js::link_name = "prop paddingInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingInlineEnd")]
     pub fn padding_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-inline-start`
-    #[rust_js::link_name = "prop paddingInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingInlineStart")]
     pub fn padding_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-left`
-    #[rust_js::link_name = "prop paddingLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingLeft")]
     pub fn padding_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-right`
-    #[rust_js::link_name = "prop paddingRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingRight")]
     pub fn padding_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `padding-top`
-    #[rust_js::link_name = "prop paddingTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paddingTop")]
     pub fn padding_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `page`
-    #[rust_js::link_name = "prop page"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop page")]
     pub fn page(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `page-break-after`
-    #[rust_js::link_name = "prop pageBreakAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pageBreakAfter")]
     pub fn page_break_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `page-break-before`
-    #[rust_js::link_name = "prop pageBreakBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pageBreakBefore")]
     pub fn page_break_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `page-break-inside`
-    #[rust_js::link_name = "prop pageBreakInside"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pageBreakInside")]
     pub fn page_break_inside(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `paint-order`
-    #[rust_js::link_name = "prop paintOrder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop paintOrder")]
     pub fn paint_order(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `path-length`
-    #[rust_js::link_name = "prop pathLength"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pathLength")]
     pub fn path_length(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pause`
-    #[rust_js::link_name = "prop pause"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pause")]
     pub fn pause(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pause-after`
-    #[rust_js::link_name = "prop pauseAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pauseAfter")]
     pub fn pause_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pause-before`
-    #[rust_js::link_name = "prop pauseBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pauseBefore")]
     pub fn pause_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `perspective`
-    #[rust_js::link_name = "prop perspective"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop perspective")]
     pub fn perspective(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `perspective-origin`
-    #[rust_js::link_name = "prop perspectiveOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop perspectiveOrigin")]
     pub fn perspective_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `place-content`
-    #[rust_js::link_name = "prop placeContent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop placeContent")]
     pub fn place_content(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `place-items`
-    #[rust_js::link_name = "prop placeItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop placeItems")]
     pub fn place_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `place-self`
-    #[rust_js::link_name = "prop placeSelf"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop placeSelf")]
     pub fn place_self(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pointer-events`
-    #[rust_js::link_name = "prop pointerEvents"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointerEvents")]
     pub fn pointer_events(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pointer-timeline`
-    #[rust_js::link_name = "prop pointerTimeline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointerTimeline")]
     pub fn pointer_timeline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pointer-timeline-axis`
-    #[rust_js::link_name = "prop pointerTimelineAxis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointerTimelineAxis")]
     pub fn pointer_timeline_axis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `pointer-timeline-name`
-    #[rust_js::link_name = "prop pointerTimelineName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop pointerTimelineName")]
     pub fn pointer_timeline_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position`
-    #[rust_js::link_name = "prop position"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop position")]
     pub fn position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-anchor`
-    #[rust_js::link_name = "prop positionAnchor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionAnchor")]
     pub fn position_anchor(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-area`
-    #[rust_js::link_name = "prop positionArea"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionArea")]
     pub fn position_area(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-try`
-    #[rust_js::link_name = "prop positionTry"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionTry")]
     pub fn position_try(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-try-fallbacks`
-    #[rust_js::link_name = "prop positionTryFallbacks"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionTryFallbacks")]
     pub fn position_try_fallbacks(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-try-order`
-    #[rust_js::link_name = "prop positionTryOrder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionTryOrder")]
     pub fn position_try_order(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `position-visibility`
-    #[rust_js::link_name = "prop positionVisibility"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop positionVisibility")]
     pub fn position_visibility(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `print-color-adjust`
-    #[rust_js::link_name = "prop printColorAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop printColorAdjust")]
     pub fn print_color_adjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `quotes`
-    #[rust_js::link_name = "prop quotes"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop quotes")]
     pub fn quotes(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `r`
-    #[rust_js::link_name = "prop r"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop r")]
     pub fn r(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `reading-flow`
-    #[rust_js::link_name = "prop readingFlow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop readingFlow")]
     pub fn reading_flow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `reading-order`
-    #[rust_js::link_name = "prop readingOrder"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop readingOrder")]
     pub fn reading_order(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `region-fragment`
-    #[rust_js::link_name = "prop regionFragment"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop regionFragment")]
     pub fn region_fragment(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `resize`
-    #[rust_js::link_name = "prop resize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop resize")]
     pub fn resize(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rest`
-    #[rust_js::link_name = "prop rest"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rest")]
     pub fn rest(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rest-after`
-    #[rust_js::link_name = "prop restAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop restAfter")]
     pub fn rest_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rest-before`
-    #[rust_js::link_name = "prop restBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop restBefore")]
     pub fn rest_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `right`
-    #[rust_js::link_name = "prop right"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop right")]
     pub fn right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rotate`
-    #[rust_js::link_name = "prop rotate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rotate")]
     pub fn rotate(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-gap`
-    #[rust_js::link_name = "prop rowGap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowGap")]
     pub fn row_gap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule`
-    #[rust_js::link_name = "prop rowRule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRule")]
     pub fn row_rule(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-break`
-    #[rust_js::link_name = "prop rowRuleBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleBreak")]
     pub fn row_rule_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-color`
-    #[rust_js::link_name = "prop rowRuleColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleColor")]
     pub fn row_rule_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset`
-    #[rust_js::link_name = "prop rowRuleInset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInset")]
     pub fn row_rule_inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-cap`
-    #[rust_js::link_name = "prop rowRuleInsetCap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetCap")]
     pub fn row_rule_inset_cap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-cap-end`
-    #[rust_js::link_name = "prop rowRuleInsetCapEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetCapEnd")]
     pub fn row_rule_inset_cap_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-cap-start`
-    #[rust_js::link_name = "prop rowRuleInsetCapStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetCapStart")]
     pub fn row_rule_inset_cap_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-end`
-    #[rust_js::link_name = "prop rowRuleInsetEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetEnd")]
     pub fn row_rule_inset_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-junction`
-    #[rust_js::link_name = "prop rowRuleInsetJunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetJunction")]
     pub fn row_rule_inset_junction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-junction-end`
-    #[rust_js::link_name = "prop rowRuleInsetJunctionEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetJunctionEnd")]
     pub fn row_rule_inset_junction_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-junction-start`
-    #[rust_js::link_name = "prop rowRuleInsetJunctionStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetJunctionStart")]
     pub fn row_rule_inset_junction_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-inset-start`
-    #[rust_js::link_name = "prop rowRuleInsetStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleInsetStart")]
     pub fn row_rule_inset_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-style`
-    #[rust_js::link_name = "prop rowRuleStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleStyle")]
     pub fn row_rule_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-visibility-items`
-    #[rust_js::link_name = "prop rowRuleVisibilityItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleVisibilityItems")]
     pub fn row_rule_visibility_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `row-rule-width`
-    #[rust_js::link_name = "prop rowRuleWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rowRuleWidth")]
     pub fn row_rule_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `ruby-align`
-    #[rust_js::link_name = "prop rubyAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rubyAlign")]
     pub fn ruby_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `ruby-merge`
-    #[rust_js::link_name = "prop rubyMerge"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rubyMerge")]
     pub fn ruby_merge(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `ruby-overhang`
-    #[rust_js::link_name = "prop rubyOverhang"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rubyOverhang")]
     pub fn ruby_overhang(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `ruby-position`
-    #[rust_js::link_name = "prop rubyPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rubyPosition")]
     pub fn ruby_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule`
-    #[rust_js::link_name = "prop rule"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rule")]
     pub fn rule(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-break`
-    #[rust_js::link_name = "prop ruleBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleBreak")]
     pub fn rule_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-color`
-    #[rust_js::link_name = "prop ruleColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleColor")]
     pub fn rule_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-inset`
-    #[rust_js::link_name = "prop ruleInset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleInset")]
     pub fn rule_inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-inset-cap`
-    #[rust_js::link_name = "prop ruleInsetCap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleInsetCap")]
     pub fn rule_inset_cap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-inset-end`
-    #[rust_js::link_name = "prop ruleInsetEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleInsetEnd")]
     pub fn rule_inset_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-inset-junction`
-    #[rust_js::link_name = "prop ruleInsetJunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleInsetJunction")]
     pub fn rule_inset_junction(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-inset-start`
-    #[rust_js::link_name = "prop ruleInsetStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleInsetStart")]
     pub fn rule_inset_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-overlap`
-    #[rust_js::link_name = "prop ruleOverlap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleOverlap")]
     pub fn rule_overlap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-style`
-    #[rust_js::link_name = "prop ruleStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleStyle")]
     pub fn rule_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-visibility-items`
-    #[rust_js::link_name = "prop ruleVisibilityItems"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleVisibilityItems")]
     pub fn rule_visibility_items(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rule-width`
-    #[rust_js::link_name = "prop ruleWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ruleWidth")]
     pub fn rule_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `rx`
-    #[rust_js::link_name = "prop rx"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop rx")]
     pub fn rx(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `ry`
-    #[rust_js::link_name = "prop ry"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ry")]
     pub fn ry(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scale`
-    #[rust_js::link_name = "prop scale"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scale")]
     pub fn scale(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-axis-lock`
-    #[rust_js::link_name = "prop scrollAxisLock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollAxisLock")]
     pub fn scroll_axis_lock(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-behavior`
-    #[rust_js::link_name = "prop scrollBehavior"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollBehavior")]
     pub fn scroll_behavior(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-initial-target`
-    #[rust_js::link_name = "prop scrollInitialTarget"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollInitialTarget")]
     pub fn scroll_initial_target(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin`
-    #[rust_js::link_name = "prop scrollMargin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMargin")]
     pub fn scroll_margin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-block`
-    #[rust_js::link_name = "prop scrollMarginBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginBlock")]
     pub fn scroll_margin_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-block-end`
-    #[rust_js::link_name = "prop scrollMarginBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginBlockEnd")]
     pub fn scroll_margin_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-block-start`
-    #[rust_js::link_name = "prop scrollMarginBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginBlockStart")]
     pub fn scroll_margin_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-bottom`
-    #[rust_js::link_name = "prop scrollMarginBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginBottom")]
     pub fn scroll_margin_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-inline`
-    #[rust_js::link_name = "prop scrollMarginInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginInline")]
     pub fn scroll_margin_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-inline-end`
-    #[rust_js::link_name = "prop scrollMarginInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginInlineEnd")]
     pub fn scroll_margin_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-inline-start`
-    #[rust_js::link_name = "prop scrollMarginInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginInlineStart")]
     pub fn scroll_margin_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-left`
-    #[rust_js::link_name = "prop scrollMarginLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginLeft")]
     pub fn scroll_margin_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-right`
-    #[rust_js::link_name = "prop scrollMarginRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginRight")]
     pub fn scroll_margin_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-margin-top`
-    #[rust_js::link_name = "prop scrollMarginTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarginTop")]
     pub fn scroll_margin_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-marker-group`
-    #[rust_js::link_name = "prop scrollMarkerGroup"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollMarkerGroup")]
     pub fn scroll_marker_group(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding`
-    #[rust_js::link_name = "prop scrollPadding"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPadding")]
     pub fn scroll_padding(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-block`
-    #[rust_js::link_name = "prop scrollPaddingBlock"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingBlock")]
     pub fn scroll_padding_block(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-block-end`
-    #[rust_js::link_name = "prop scrollPaddingBlockEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingBlockEnd")]
     pub fn scroll_padding_block_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-block-start`
-    #[rust_js::link_name = "prop scrollPaddingBlockStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingBlockStart")]
     pub fn scroll_padding_block_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-bottom`
-    #[rust_js::link_name = "prop scrollPaddingBottom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingBottom")]
     pub fn scroll_padding_bottom(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-inline`
-    #[rust_js::link_name = "prop scrollPaddingInline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingInline")]
     pub fn scroll_padding_inline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-inline-end`
-    #[rust_js::link_name = "prop scrollPaddingInlineEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingInlineEnd")]
     pub fn scroll_padding_inline_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-inline-start`
-    #[rust_js::link_name = "prop scrollPaddingInlineStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingInlineStart")]
     pub fn scroll_padding_inline_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-left`
-    #[rust_js::link_name = "prop scrollPaddingLeft"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingLeft")]
     pub fn scroll_padding_left(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-right`
-    #[rust_js::link_name = "prop scrollPaddingRight"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingRight")]
     pub fn scroll_padding_right(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-padding-top`
-    #[rust_js::link_name = "prop scrollPaddingTop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollPaddingTop")]
     pub fn scroll_padding_top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-snap-align`
-    #[rust_js::link_name = "prop scrollSnapAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollSnapAlign")]
     pub fn scroll_snap_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-snap-stop`
-    #[rust_js::link_name = "prop scrollSnapStop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollSnapStop")]
     pub fn scroll_snap_stop(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-snap-type`
-    #[rust_js::link_name = "prop scrollSnapType"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollSnapType")]
     pub fn scroll_snap_type(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-target-group`
-    #[rust_js::link_name = "prop scrollTargetGroup"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollTargetGroup")]
     pub fn scroll_target_group(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-timeline`
-    #[rust_js::link_name = "prop scrollTimeline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollTimeline")]
     pub fn scroll_timeline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-timeline-axis`
-    #[rust_js::link_name = "prop scrollTimelineAxis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollTimelineAxis")]
     pub fn scroll_timeline_axis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scroll-timeline-name`
-    #[rust_js::link_name = "prop scrollTimelineName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollTimelineName")]
     pub fn scroll_timeline_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scrollbar-color`
-    #[rust_js::link_name = "prop scrollbarColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollbarColor")]
     pub fn scrollbar_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scrollbar-gutter`
-    #[rust_js::link_name = "prop scrollbarGutter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollbarGutter")]
     pub fn scrollbar_gutter(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `scrollbar-width`
-    #[rust_js::link_name = "prop scrollbarWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop scrollbarWidth")]
     pub fn scrollbar_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-image-threshold`
-    #[rust_js::link_name = "prop shapeImageThreshold"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeImageThreshold")]
     pub fn shape_image_threshold(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-inside`
-    #[rust_js::link_name = "prop shapeInside"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeInside")]
     pub fn shape_inside(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-margin`
-    #[rust_js::link_name = "prop shapeMargin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeMargin")]
     pub fn shape_margin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-outside`
-    #[rust_js::link_name = "prop shapeOutside"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeOutside")]
     pub fn shape_outside(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-padding`
-    #[rust_js::link_name = "prop shapePadding"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapePadding")]
     pub fn shape_padding(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `shape-rendering`
-    #[rust_js::link_name = "prop shapeRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop shapeRendering")]
     pub fn shape_rendering(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `size`
-    #[rust_js::link_name = "prop size"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop size")]
     pub fn size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `slider-orientation`
-    #[rust_js::link_name = "prop sliderOrientation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop sliderOrientation")]
     pub fn slider_orientation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `spatial-navigation-action`
-    #[rust_js::link_name = "prop spatialNavigationAction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spatialNavigationAction")]
     pub fn spatial_navigation_action(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `spatial-navigation-contain`
-    #[rust_js::link_name = "prop spatialNavigationContain"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spatialNavigationContain")]
     pub fn spatial_navigation_contain(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `spatial-navigation-function`
-    #[rust_js::link_name = "prop spatialNavigationFunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop spatialNavigationFunction")]
     pub fn spatial_navigation_function(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `speak`
-    #[rust_js::link_name = "prop speak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop speak")]
     pub fn speak(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `speak-as`
-    #[rust_js::link_name = "prop speakAs"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop speakAs")]
     pub fn speak_as(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stop-color`
-    #[rust_js::link_name = "prop stopColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stopColor")]
     pub fn stop_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stop-opacity`
-    #[rust_js::link_name = "prop stopOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stopOpacity")]
     pub fn stop_opacity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `string-set`
-    #[rust_js::link_name = "prop stringSet"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stringSet")]
     pub fn string_set(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke`
-    #[rust_js::link_name = "prop stroke"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop stroke")]
     pub fn stroke(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-align`
-    #[rust_js::link_name = "prop strokeAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeAlign")]
     pub fn stroke_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-alignment`
-    #[rust_js::link_name = "prop strokeAlignment"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeAlignment")]
     pub fn stroke_alignment(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-break`
-    #[rust_js::link_name = "prop strokeBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeBreak")]
     pub fn stroke_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-color`
-    #[rust_js::link_name = "prop strokeColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeColor")]
     pub fn stroke_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dash-corner`
-    #[rust_js::link_name = "prop strokeDashCorner"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashCorner")]
     pub fn stroke_dash_corner(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dash-justify`
-    #[rust_js::link_name = "prop strokeDashJustify"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashJustify")]
     pub fn stroke_dash_justify(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dashadjust`
-    #[rust_js::link_name = "prop strokeDashadjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashadjust")]
     pub fn stroke_dashadjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dasharray`
-    #[rust_js::link_name = "prop strokeDasharray"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDasharray")]
     pub fn stroke_dasharray(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dashcorner`
-    #[rust_js::link_name = "prop strokeDashcorner"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashcorner")]
     pub fn stroke_dashcorner(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-dashoffset`
-    #[rust_js::link_name = "prop strokeDashoffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeDashoffset")]
     pub fn stroke_dashoffset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-image`
-    #[rust_js::link_name = "prop strokeImage"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeImage")]
     pub fn stroke_image(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-linecap`
-    #[rust_js::link_name = "prop strokeLinecap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeLinecap")]
     pub fn stroke_linecap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-linejoin`
-    #[rust_js::link_name = "prop strokeLinejoin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeLinejoin")]
     pub fn stroke_linejoin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-miterlimit`
-    #[rust_js::link_name = "prop strokeMiterlimit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeMiterlimit")]
     pub fn stroke_miterlimit(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-opacity`
-    #[rust_js::link_name = "prop strokeOpacity"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeOpacity")]
     pub fn stroke_opacity(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-origin`
-    #[rust_js::link_name = "prop strokeOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeOrigin")]
     pub fn stroke_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-position`
-    #[rust_js::link_name = "prop strokePosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokePosition")]
     pub fn stroke_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-repeat`
-    #[rust_js::link_name = "prop strokeRepeat"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeRepeat")]
     pub fn stroke_repeat(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-size`
-    #[rust_js::link_name = "prop strokeSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeSize")]
     pub fn stroke_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `stroke-width`
-    #[rust_js::link_name = "prop strokeWidth"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop strokeWidth")]
     pub fn stroke_width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `tab-size`
-    #[rust_js::link_name = "prop tabSize"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop tabSize")]
     pub fn tab_size(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `table-layout`
-    #[rust_js::link_name = "prop tableLayout"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop tableLayout")]
     pub fn table_layout(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-align`
-    #[rust_js::link_name = "prop textAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAlign")]
     pub fn text_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-align-all`
-    #[rust_js::link_name = "prop textAlignAll"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAlignAll")]
     pub fn text_align_all(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-align-last`
-    #[rust_js::link_name = "prop textAlignLast"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAlignLast")]
     pub fn text_align_last(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-anchor`
-    #[rust_js::link_name = "prop textAnchor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAnchor")]
     pub fn text_anchor(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-autospace`
-    #[rust_js::link_name = "prop textAutospace"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textAutospace")]
     pub fn text_autospace(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-box`
-    #[rust_js::link_name = "prop textBox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textBox")]
     pub fn text_box(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-box-edge`
-    #[rust_js::link_name = "prop textBoxEdge"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textBoxEdge")]
     pub fn text_box_edge(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-box-trim`
-    #[rust_js::link_name = "prop textBoxTrim"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textBoxTrim")]
     pub fn text_box_trim(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-combine-upright`
-    #[rust_js::link_name = "prop textCombineUpright"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textCombineUpright")]
     pub fn text_combine_upright(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration`
-    #[rust_js::link_name = "prop textDecoration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecoration")]
     pub fn text_decoration(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-color`
-    #[rust_js::link_name = "prop textDecorationColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationColor")]
     pub fn text_decoration_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-inset`
-    #[rust_js::link_name = "prop textDecorationInset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationInset")]
     pub fn text_decoration_inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-line`
-    #[rust_js::link_name = "prop textDecorationLine"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationLine")]
     pub fn text_decoration_line(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-skip`
-    #[rust_js::link_name = "prop textDecorationSkip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationSkip")]
     pub fn text_decoration_skip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-skip-box`
-    #[rust_js::link_name = "prop textDecorationSkipBox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationSkipBox")]
     pub fn text_decoration_skip_box(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-skip-ink`
-    #[rust_js::link_name = "prop textDecorationSkipInk"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationSkipInk")]
     pub fn text_decoration_skip_ink(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-skip-self`
-    #[rust_js::link_name = "prop textDecorationSkipSelf"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationSkipSelf")]
     pub fn text_decoration_skip_self(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-skip-spaces`
-    #[rust_js::link_name = "prop textDecorationSkipSpaces"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationSkipSpaces")]
     pub fn text_decoration_skip_spaces(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-style`
-    #[rust_js::link_name = "prop textDecorationStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationStyle")]
     pub fn text_decoration_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-decoration-thickness`
-    #[rust_js::link_name = "prop textDecorationThickness"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textDecorationThickness")]
     pub fn text_decoration_thickness(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-emphasis`
-    #[rust_js::link_name = "prop textEmphasis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textEmphasis")]
     pub fn text_emphasis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-emphasis-color`
-    #[rust_js::link_name = "prop textEmphasisColor"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textEmphasisColor")]
     pub fn text_emphasis_color(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-emphasis-position`
-    #[rust_js::link_name = "prop textEmphasisPosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textEmphasisPosition")]
     pub fn text_emphasis_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-emphasis-skip`
-    #[rust_js::link_name = "prop textEmphasisSkip"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textEmphasisSkip")]
     pub fn text_emphasis_skip(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-emphasis-style`
-    #[rust_js::link_name = "prop textEmphasisStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textEmphasisStyle")]
     pub fn text_emphasis_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-fit`
-    #[rust_js::link_name = "prop textFit"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textFit")]
     pub fn text_fit(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-group-align`
-    #[rust_js::link_name = "prop textGroupAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textGroupAlign")]
     pub fn text_group_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-indent`
-    #[rust_js::link_name = "prop textIndent"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textIndent")]
     pub fn text_indent(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-justify`
-    #[rust_js::link_name = "prop textJustify"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textJustify")]
     pub fn text_justify(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-orientation`
-    #[rust_js::link_name = "prop textOrientation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textOrientation")]
     pub fn text_orientation(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-overflow`
-    #[rust_js::link_name = "prop textOverflow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textOverflow")]
     pub fn text_overflow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-rendering`
-    #[rust_js::link_name = "prop textRendering"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textRendering")]
     pub fn text_rendering(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-shadow`
-    #[rust_js::link_name = "prop textShadow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textShadow")]
     pub fn text_shadow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-size-adjust`
-    #[rust_js::link_name = "prop textSizeAdjust"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textSizeAdjust")]
     pub fn text_size_adjust(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-spacing`
-    #[rust_js::link_name = "prop textSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textSpacing")]
     pub fn text_spacing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-spacing-trim`
-    #[rust_js::link_name = "prop textSpacingTrim"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textSpacingTrim")]
     pub fn text_spacing_trim(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-transform`
-    #[rust_js::link_name = "prop textTransform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textTransform")]
     pub fn text_transform(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-underline-offset`
-    #[rust_js::link_name = "prop textUnderlineOffset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textUnderlineOffset")]
     pub fn text_underline_offset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-underline-position`
-    #[rust_js::link_name = "prop textUnderlinePosition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textUnderlinePosition")]
     pub fn text_underline_position(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-wrap`
-    #[rust_js::link_name = "prop textWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textWrap")]
     pub fn text_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-wrap-mode`
-    #[rust_js::link_name = "prop textWrapMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textWrapMode")]
     pub fn text_wrap_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `text-wrap-style`
-    #[rust_js::link_name = "prop textWrapStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop textWrapStyle")]
     pub fn text_wrap_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-scope`
-    #[rust_js::link_name = "prop timelineScope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineScope")]
     pub fn timeline_scope(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger`
-    #[rust_js::link_name = "prop timelineTrigger"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTrigger")]
     pub fn timeline_trigger(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-activation-range`
-    #[rust_js::link_name = "prop timelineTriggerActivationRange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActivationRange")]
     pub fn timeline_trigger_activation_range(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-activation-range-end`
-    #[rust_js::link_name = "prop timelineTriggerActivationRangeEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActivationRangeEnd")]
     pub fn timeline_trigger_activation_range_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-activation-range-start`
-    #[rust_js::link_name = "prop timelineTriggerActivationRangeStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActivationRangeStart")]
     pub fn timeline_trigger_activation_range_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-active-range`
-    #[rust_js::link_name = "prop timelineTriggerActiveRange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActiveRange")]
     pub fn timeline_trigger_active_range(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-active-range-end`
-    #[rust_js::link_name = "prop timelineTriggerActiveRangeEnd"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActiveRangeEnd")]
     pub fn timeline_trigger_active_range_end(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-active-range-start`
-    #[rust_js::link_name = "prop timelineTriggerActiveRangeStart"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerActiveRangeStart")]
     pub fn timeline_trigger_active_range_start(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-name`
-    #[rust_js::link_name = "prop timelineTriggerName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerName")]
     pub fn timeline_trigger_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `timeline-trigger-source`
-    #[rust_js::link_name = "prop timelineTriggerSource"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop timelineTriggerSource")]
     pub fn timeline_trigger_source(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `top`
-    #[rust_js::link_name = "prop top"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop top")]
     pub fn top(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `touch-action`
-    #[rust_js::link_name = "prop touchAction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop touchAction")]
     pub fn touch_action(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transform`
-    #[rust_js::link_name = "prop transform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transform")]
     pub fn transform(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transform-box`
-    #[rust_js::link_name = "prop transformBox"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transformBox")]
     pub fn transform_box(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transform-origin`
-    #[rust_js::link_name = "prop transformOrigin"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transformOrigin")]
     pub fn transform_origin(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transform-style`
-    #[rust_js::link_name = "prop transformStyle"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transformStyle")]
     pub fn transform_style(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition`
-    #[rust_js::link_name = "prop transition"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transition")]
     pub fn transition(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition-behavior`
-    #[rust_js::link_name = "prop transitionBehavior"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transitionBehavior")]
     pub fn transition_behavior(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition-delay`
-    #[rust_js::link_name = "prop transitionDelay"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transitionDelay")]
     pub fn transition_delay(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition-duration`
-    #[rust_js::link_name = "prop transitionDuration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transitionDuration")]
     pub fn transition_duration(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition-property`
-    #[rust_js::link_name = "prop transitionProperty"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transitionProperty")]
     pub fn transition_property(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `transition-timing-function`
-    #[rust_js::link_name = "prop transitionTimingFunction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop transitionTimingFunction")]
     pub fn transition_timing_function(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `translate`
-    #[rust_js::link_name = "prop translate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop translate")]
     pub fn translate(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `trigger-scope`
-    #[rust_js::link_name = "prop triggerScope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop triggerScope")]
     pub fn trigger_scope(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `unicode-bidi`
-    #[rust_js::link_name = "prop unicodeBidi"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop unicodeBidi")]
     pub fn unicode_bidi(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `user-select`
-    #[rust_js::link_name = "prop userSelect"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop userSelect")]
     pub fn user_select(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `vector-effect`
-    #[rust_js::link_name = "prop vectorEffect"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop vectorEffect")]
     pub fn vector_effect(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `vertical-align`
-    #[rust_js::link_name = "prop verticalAlign"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop verticalAlign")]
     pub fn vertical_align(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-timeline`
-    #[rust_js::link_name = "prop viewTimeline"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTimeline")]
     pub fn view_timeline(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-timeline-axis`
-    #[rust_js::link_name = "prop viewTimelineAxis"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTimelineAxis")]
     pub fn view_timeline_axis(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-timeline-inset`
-    #[rust_js::link_name = "prop viewTimelineInset"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTimelineInset")]
     pub fn view_timeline_inset(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-timeline-name`
-    #[rust_js::link_name = "prop viewTimelineName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTimelineName")]
     pub fn view_timeline_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-transition-class`
-    #[rust_js::link_name = "prop viewTransitionClass"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTransitionClass")]
     pub fn view_transition_class(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-transition-group`
-    #[rust_js::link_name = "prop viewTransitionGroup"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTransitionGroup")]
     pub fn view_transition_group(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-transition-name`
-    #[rust_js::link_name = "prop viewTransitionName"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTransitionName")]
     pub fn view_transition_name(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `view-transition-scope`
-    #[rust_js::link_name = "prop viewTransitionScope"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop viewTransitionScope")]
     pub fn view_transition_scope(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `visibility`
-    #[rust_js::link_name = "prop visibility"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop visibility")]
     pub fn visibility(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-balance`
-    #[rust_js::link_name = "prop voiceBalance"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceBalance")]
     pub fn voice_balance(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-duration`
-    #[rust_js::link_name = "prop voiceDuration"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceDuration")]
     pub fn voice_duration(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-family`
-    #[rust_js::link_name = "prop voiceFamily"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceFamily")]
     pub fn voice_family(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-pitch`
-    #[rust_js::link_name = "prop voicePitch"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voicePitch")]
     pub fn voice_pitch(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-range`
-    #[rust_js::link_name = "prop voiceRange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceRange")]
     pub fn voice_range(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-rate`
-    #[rust_js::link_name = "prop voiceRate"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceRate")]
     pub fn voice_rate(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-stress`
-    #[rust_js::link_name = "prop voiceStress"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceStress")]
     pub fn voice_stress(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `voice-volume`
-    #[rust_js::link_name = "prop voiceVolume"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop voiceVolume")]
     pub fn voice_volume(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `white-space`
-    #[rust_js::link_name = "prop whiteSpace"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop whiteSpace")]
     pub fn white_space(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `white-space-collapse`
-    #[rust_js::link_name = "prop whiteSpaceCollapse"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop whiteSpaceCollapse")]
     pub fn white_space_collapse(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `white-space-trim`
-    #[rust_js::link_name = "prop whiteSpaceTrim"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop whiteSpaceTrim")]
     pub fn white_space_trim(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `widows`
-    #[rust_js::link_name = "prop widows"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop widows")]
     pub fn widows(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `width`
-    #[rust_js::link_name = "prop width"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop width")]
     pub fn width(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `will-change`
-    #[rust_js::link_name = "prop willChange"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop willChange")]
     pub fn will_change(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `window-drag`
-    #[rust_js::link_name = "prop windowDrag"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop windowDrag")]
     pub fn window_drag(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `word-break`
-    #[rust_js::link_name = "prop wordBreak"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wordBreak")]
     pub fn word_break(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `word-space-transform`
-    #[rust_js::link_name = "prop wordSpaceTransform"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wordSpaceTransform")]
     pub fn word_space_transform(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `word-spacing`
-    #[rust_js::link_name = "prop wordSpacing"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wordSpacing")]
     pub fn word_spacing(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `word-wrap`
-    #[rust_js::link_name = "prop wordWrap"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wordWrap")]
     pub fn word_wrap(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `wrap-after`
-    #[rust_js::link_name = "prop wrapAfter"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrapAfter")]
     pub fn wrap_after(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `wrap-before`
-    #[rust_js::link_name = "prop wrapBefore"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrapBefore")]
     pub fn wrap_before(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `wrap-flow`
-    #[rust_js::link_name = "prop wrapFlow"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrapFlow")]
     pub fn wrap_flow(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `wrap-inside`
-    #[rust_js::link_name = "prop wrapInside"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrapInside")]
     pub fn wrap_inside(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `wrap-through`
-    #[rust_js::link_name = "prop wrapThrough"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop wrapThrough")]
     pub fn wrap_through(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `writing-mode`
-    #[rust_js::link_name = "prop writingMode"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop writingMode")]
     pub fn writing_mode(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `x`
-    #[rust_js::link_name = "prop x"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop x")]
     pub fn x(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `y`
-    #[rust_js::link_name = "prop y"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop y")]
     pub fn y(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `z-index`
-    #[rust_js::link_name = "prop zIndex"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop zIndex")]
     pub fn z_index(self, value: impl Value) -> Style {
         unreachable!()
     }
 
     /// `zoom`
-    #[rust_js::link_name = "prop zoom"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop zoom")]
     pub fn zoom(self, value: impl Value) -> Style {
         unreachable!()
     }

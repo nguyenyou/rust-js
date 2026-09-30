@@ -83,7 +83,7 @@ test("root and child output collisions leave no partial artifacts", async () => 
   for (const jsx of [false, true]) {
     const dir = fixture("collision");
     const input = join(dir, "lib.rs"), output = join(dir, "same.js");
-    const body = jsx ? 'pub fn f() -> react::Element { jsx! { <div /> } }' : 'pub fn f() -> i32 { 1 }';
+    const body = jsx ? 'use react::jsx; pub fn f() -> react::Element { jsx! { <div /> } }' : 'pub fn f() -> i32 { 1 }';
     writeFileSync(input, `${body}\npub mod same { ${body} }`);
     const p = Bun.spawnSync([compiler, input, "-o", output, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);
     expect(p.exitCode).not.toBe(0);
@@ -99,7 +99,7 @@ test("manifest owns artifacts and records even modules that emit no code", async
   const dir = fixture("manifest");
   const input = join(dir, "lib.rs"), output = join(dir, "lib.js"), manifest = join(dir, "manifest.json");
   writeFileSync(join(dir, "types.rs"), "pub struct Props { pub x: i32 }");
-  writeFileSync(input, 'mod types; pub fn f() -> react::Element { jsx! { <div /> } }');
+  writeFileSync(input, 'mod types; use react::jsx; pub fn f() -> react::Element { jsx! { <div /> } }');
   const args = [compiler, input, "-o", output, "--manifest", manifest, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target];
   run(args);
   const first = await Bun.file(manifest).json();
@@ -111,7 +111,7 @@ test("manifest owns artifacts and records even modules that emit no code", async
   expect(existsSync(join(dir, "lib.jsx.map"))).toBe(false);
   expect(existsSync(output)).toBe(true);
   writeFileSync(output, "user edited this file");
-  writeFileSync(input, 'pub fn f() -> react::Element { jsx! { <div /> } }');
+  writeFileSync(input, 'use react::jsx; pub fn f() -> react::Element { jsx! { <div /> } }');
   run(args);
   expect(await Bun.file(output).text()).toBe("user edited this file");
 });
@@ -120,7 +120,7 @@ test("mixed JS and JSX modules use their final paths in imports and the manifest
   const { fixture, compiler } = await import("./support");
   const dir = fixture("mixed-modules");
   await Bun.write(join(dir, "lib.rs"), `mod view; mod plain; pub fn f() -> (react::Element, i32) { (view::render(), plain::value()) }`);
-  await Bun.write(join(dir, "view.rs"), 'pub fn render() -> react::Element { jsx! { <div /> } }');
+  await Bun.write(join(dir, "view.rs"), 'use react::jsx; pub fn render() -> react::Element { jsx! { <div /> } }');
   await Bun.write(join(dir, "plain.rs"), 'pub fn value() -> i32 { 1 }');
   const manifest = join(dir, "manifest.json");
   run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--manifest", manifest, "--", "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target]);

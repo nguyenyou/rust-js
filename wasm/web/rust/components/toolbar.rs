@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use react::Element;
+use react::{Element, jsx};
 
 use super::example_picker::ExamplePicker;
 use super::status_line::{Status, StatusLine};

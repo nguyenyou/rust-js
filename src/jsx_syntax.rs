@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 
 use rustc_ast::ast_traits::{HasAttrs, HasTokens};
 use rustc_ast::mut_visit::{self, MutVisitor};
-use rustc_ast::token::TokenKind;
-use rustc_ast::tokenstream::{LazyAttrTokenStream, TokenStream, TokenTree};
+use rustc_ast::token::{IdentIsRaw, TokenKind};
+use rustc_ast::tokenstream::{DelimSpacing, LazyAttrTokenStream, Spacing, TokenStream, TokenTree};
 use rustc_ast::{self as ast, ExprKind, Inline, ItemKind, ModKind};
 use rustc_data_structures::stable_hash::{
     RawDefId, RawDefPathHash, RawSpan, StableHashControls, StableHashCtxt, StableHasher,
@@ -41,9 +41,20 @@ fn rust_expression(sess: &Session, tokens: TokenStream) -> Result<TokenStream, E
     }
     impl Calls<'_> {
         fn mac(&mut self, mac: &ast::MacCall, needs_semicolon: bool) {
-            if mac.path.segments.len() == 1 && mac.path.segments[0].ident.as_str() == "jsx" {
+            if mac.path.segments.len() == 1
+                && mac.path.segments[0].ident.as_str() == "jsx"
+                && !expanded_already(&mac.args.tokens)
+            {
                 match parser::jsx(self.sess, mac.args.tokens.clone(), mac.span()) {
-                    Ok(mut tokens) => {
+                    Ok(rust) => {
+                        // The call itself, `jsx! { @rust_js .. }` (ADR 0113).
+                        let path = mac.path.segments[0].ident;
+                        let spacing = DelimSpacing::new(Spacing::Alone, Spacing::Alone);
+                        let mut tokens = TokenStream::new(vec![
+                            TokenTree::token_alone(TokenKind::Ident(path.name, IdentIsRaw::No), path.span),
+                            TokenTree::token_alone(TokenKind::Bang, path.span),
+                            TokenTree::Delimited(mac.args.dspan, spacing, mac.args.delim, arm(rust, mac.span())),
+                        ]);
                         if needs_semicolon {
                             tokens = TokenStream::new(
                                 tokens
@@ -89,8 +100,8 @@ fn rust_expression(sess: &Session, tokens: TokenStream) -> Result<TokenStream, E
         fn visit_block(&mut self, block: &mut ast::Block) {
             for (i, stmt) in block.stmts.iter().enumerate() {
                 if let ast::StmtKind::MacCall(mac) = &stmt.kind {
-                    // A braced macro statement can omit `;`, but its expanded
-                    // function call cannot. Keep the block's last value intact.
+                    // A braced macro statement can omit `;`, but what it expands
+                    // to, a function call, can't. Keep the block's last value intact.
                     self.mac(
                         &mac.mac,
                         mac.style == ast::MacStmtStyle::Braces && i + 1 < block.stmts.len(),
@@ -275,25 +286,14 @@ impl Expand<'_> {
 
 impl Expand<'_> {
     fn statement(&mut self, stmt: &mut ast::Stmt) {
-        if let ast::StmtKind::MacCall(mac) = &stmt.kind
+        let span = stmt.span;
+        if let ast::StmtKind::MacCall(mac) = &mut stmt.kind
             && mac.mac.path.segments.len() == 1
             && mac.mac.path.segments[0].ident.as_str() == "jsx"
-            && let Ok(tokens) = parser::jsx(self.sess, mac.mac.args.tokens.clone(), stmt.span)
+            && !expanded_already(&mac.mac.args.tokens)
+            && let Ok(rust) = parser::jsx(self.sess, mac.mac.args.tokens.clone(), span)
         {
-            let mut p = Parser::new(&self.sess.psess, tokens, Some("jsx"));
-            match p.parse_expr() {
-                Ok(mut expr) => {
-                    expr.attrs.extend(mac.attrs.clone());
-                    stmt.kind = if mac.style == ast::MacStmtStyle::Semicolon {
-                        ast::StmtKind::Semi(expr)
-                    } else {
-                        ast::StmtKind::Expr(expr)
-                    };
-                }
-                Err(e) => {
-                    e.emit();
-                }
-            }
+            mac.mac.args.tokens = arm(rust, span);
         }
     }
 }
@@ -322,21 +322,14 @@ impl MutVisitor for Expand<'_> {
     }
 
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
-        if let ExprKind::MacCall(mac) = &expr.kind
+        let span = expr.span;
+        if let ExprKind::MacCall(mac) = &mut expr.kind
             && mac.path.segments.len() == 1
             && mac.path.segments[0].ident.as_str() == "jsx"
-            && let Ok(tokens) = parser::jsx(self.sess, mac.args.tokens.clone(), expr.span)
+            && !expanded_already(&mac.args.tokens)
+            && let Ok(rust) = parser::jsx(self.sess, mac.args.tokens.clone(), span)
         {
-            let mut p = Parser::new(&self.sess.psess, tokens, Some("jsx"));
-            match p.parse_expr() {
-                Ok(mut value) => {
-                    value.attrs.extend(expr.attrs.clone());
-                    *expr = *value;
-                }
-                Err(e) => {
-                    e.emit();
-                }
-            }
+            mac.args.tokens = arm(rust, span);
         }
         mut_visit::walk_expr(self, expr);
     }
@@ -377,6 +370,25 @@ pub fn configured_attrs(sess: &Session, attrs: &ast::AttrVec) -> Option<ast::Att
     .map(|attrs| attrs.0);
     sess.psess.buffered_lints.with_lock(|lints| lints.truncate(raised));
     configured
+}
+
+/// `@rust_js ..`: a `jsx!` call's JSX, as the Rust rust-js writes for it,
+/// which react's `jsx!` passes on as it is, where a plain rustc's is its
+/// placeholder (ADR 0113). The call stays, so `use react::jsx;` is used, and
+/// the macro is found as a plain rustc finds it.
+fn arm(rust: TokenStream, span: Span) -> TokenStream {
+    let marker = [
+        TokenTree::token_alone(TokenKind::At, span),
+        TokenTree::token_alone(TokenKind::Ident(Symbol::intern("rust_js"), IdentIsRaw::No), span),
+    ];
+    TokenStream::new(marker.into_iter().chain(rust.iter().cloned()).collect())
+}
+
+/// Is it a `jsx!` rust-js has expanded, `jsx! { @rust_js .. }`?
+fn expanded_already(tokens: &TokenStream) -> bool {
+    let mut trees = tokens.iter();
+    matches!(trees.next(), Some(TokenTree::Token(t, _)) if t.kind == TokenKind::At)
+        && matches!(trees.next(), Some(TokenTree::Token(t, _)) if matches!(t.kind, TokenKind::Ident(name, _) if name.as_str() == "rust_js"))
 }
 
 /// The span of code JSX expands to, which may use what it needs of rustc's

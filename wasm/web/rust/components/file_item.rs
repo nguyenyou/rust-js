@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use react::{Element, Style};
+use react::{Element, Style, jsx};
 
 use crate::styles::ROW;
 

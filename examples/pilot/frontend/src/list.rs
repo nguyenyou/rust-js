@@ -5,7 +5,7 @@ use crate::api::{self, Failure};
 use js::spawn;
 use models::Contact;
 use react::event::Change;
-use react::{Element, use_effect, use_state};
+use react::{Element, jsx, use_effect, use_state};
 use webapi::abort_controller;
 
 #[derive(Clone)]

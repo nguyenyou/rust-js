@@ -9,7 +9,7 @@ whichever React from 18.0 on your project has installed
 ```rust
 #![allow(non_snake_case)]
 
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
@@ -34,7 +34,8 @@ export function App() {
 It's all bindings: rustc checks the types, and nothing of this crate ends up
 in the JS.
 
-`jsx!` is built into rust-js, in both the native and browser compilers.
+`jsx!` is built into rust-js, in both the native and browser compilers, and
+imported as any macro is, `use react::jsx;`.
 Tags and attributes look like JSX; expressions inside braces are Rust.
 Text is quoted (`{"Hello"}`), and handlers are Rust closures. See the
 [syntax guide](../docs/jsx.md) for components, spreads and current limits.

@@ -11,13 +11,13 @@ pub struct ToasterProps {
 }
 
 /// Where the toasts show; one per app.
-#[rust_js::link_name = "sonner#Toaster"]
+#[cfg_attr(rust_js, rust_js::link_name = "sonner#Toaster")]
 pub fn Toaster(props: ToasterProps) -> Element {
     unreachable!()
 }
 
 /// A toast with `message`.
-#[rust_js::link_name = "sonner#toast"]
+#[cfg_attr(rust_js, rust_js::link_name = "sonner#toast")]
 pub fn toast(message: &str) {
     unreachable!()
 }

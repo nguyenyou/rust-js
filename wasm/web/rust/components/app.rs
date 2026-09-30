@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use js::{Promise, reg_exp, spawn};
-use react::{Element, use_effect, use_memo, use_ref, use_state, use_transition};
+use react::{Element, jsx, use_effect, use_memo, use_ref, use_state, use_transition};
 use webapi::window;
 
 use super::editor::Editor;

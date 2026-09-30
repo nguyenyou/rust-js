@@ -1,11 +1,14 @@
 # JSX in Rust
 
 `jsx!` accepts familiar tags, with Rust expressions inside braces. It is built
-into rust-js: no import, procedural macro, or generated Rust file is needed.
-The native compiler and the browser playground use the same parser.
+into rust-js: no procedural macro or generated Rust file is needed. A file
+with JSX imports it, `use react::jsx;`: to a plain rustc, an editor's or a
+`cargo check`, react's `jsx!` is an `Element` it doesn't look inside, so the
+rest of the crate type-checks there too (ADR 0113). The native compiler and
+the browser playground use the same parser.
 
 ```rust
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 pub fn Counter() -> Element {
     let (count, set_count) = use_state(0);

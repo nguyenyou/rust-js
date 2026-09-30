@@ -3,7 +3,7 @@
 
 use crate::model::{Action, Todo};
 use react::event::{Change, Keyboard};
-use react::{Dispatch, Element, use_ref, use_state};
+use react::{Dispatch, Element, jsx, use_ref, use_state};
 
 pub struct TodoItemProps {
     pub todo: Todo,

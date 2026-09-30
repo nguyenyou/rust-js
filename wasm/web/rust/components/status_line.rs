@@ -1,6 +1,6 @@
 // The line beside the buttons: what the page is doing, or how it went.
 
-use react::Element;
+use react::{Element, jsx};
 
 pub enum Tone {
     Plain,

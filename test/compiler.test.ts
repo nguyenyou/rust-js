@@ -1167,3 +1167,25 @@ test("the binding crates are stable Rust, which rust-js compiles", () => {
   expect(p.exitCode).toBe(0);
   for (const name of ["libjs.rmeta", "libwebapi.rmeta", "libreact.rmeta"]) expect(Bun.file(join(dir, name)).size).toBeGreaterThan(0);
 });
+
+// A program is plain stable Rust too, for a user's own `cargo check` and
+// editor (ADR 0113): a plain rustc compiles the crates it uses, which leave
+// out rust-js's attributes, `cfg_attr(rust_js, ..)`, and the vite-react app,
+// to which `jsx!` is react's placeholder, and `js::import!` nothing.
+test("a plain stable rustc compiles the template's app and the crates it uses", () => {
+  const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+  const dir = fixture("plain-rustc");
+  const repo = join(import.meta.dir, "..");
+  const rustc = (source: string, name: string, externs: string[]) => {
+    const p = Bun.spawnSync([
+      "rustc", "--edition=2024", "--crate-type=lib", "--emit=metadata", "--target=wasm32-unknown-unknown", `--crate-name=${name}`,
+      join(repo, source), "-o", join(dir, `lib${name}.rmeta`), "-L", dir,
+      ...externs.flatMap((e) => ["--extern", `${e}=${join(dir, `lib${e}.rmeta`)}`]),
+    ], { cwd: repo, env });
+    return [name, p.exitCode, p.stderr.toString().split("\n").filter((line) => line.startsWith("error")).slice(0, 3)];
+  };
+  expect(rustc("builtins/src/lib.rs", "js", [])).toEqual(["js", 0, []]);
+  expect(rustc("webapi/src/lib.rs", "webapi", ["js"])).toEqual(["webapi", 0, []]);
+  expect(rustc("react/src/lib.rs", "react", ["js", "webapi"])).toEqual(["react", 0, []]);
+  expect(rustc("examples/vite-react/src/App.rs", "app", ["js", "webapi", "react"])).toEqual(["app", 0, []]);
+});

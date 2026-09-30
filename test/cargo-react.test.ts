@@ -22,7 +22,7 @@ function withReact(dir: string, source: string, react = join(root, "react")): st
   return join(dir, "Cargo.toml");
 }
 const counter = `#![allow(non_snake_case)]
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 pub fn Counter() -> Element {
     let (count, set_count) = use_state(0);
@@ -33,7 +33,7 @@ pub fn Counter() -> Element {
 `;
 // What only React 19.2 has: gated out of 18.2's API.
 const usesUseEffectEvent = `#![allow(non_snake_case)]
-use react::{Element, use_effect_event, use_state};
+use react::{Element, jsx, use_effect_event, use_state};
 
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);

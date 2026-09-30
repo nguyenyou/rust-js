@@ -160,6 +160,7 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
   buildReact();
   const dir = fixture("trait-jsx");
   writeFileSync(join(dir, "lib.rs"), `pub mod contracts {
+    use react::jsx;
     pub trait View { fn render(&self) -> react::Element { jsx! { <div /> } } }
   }
   pub mod implementations { pub struct Page; impl super::contracts::View for Page {} }

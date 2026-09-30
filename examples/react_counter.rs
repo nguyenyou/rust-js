@@ -5,7 +5,7 @@
 #![allow(non_snake_case)]
 
 use react::dom::client::create_root;
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 use webapi::document;
 
 pub fn Counter() -> Element {

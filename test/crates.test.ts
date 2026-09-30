@@ -231,8 +231,8 @@ test("a component of another crate is a JSX tag, on a stable release", () => {
   const ui = join(dir, "ui"), app = join(dir, "app");
   mkdirSync(ui, { recursive: true });
   mkdirSync(app, { recursive: true });
-  writeFileSync(join(ui, "lib.rs"), "#![allow(non_snake_case)]\nuse react::Element;\npub struct Props {\n    pub label: &'static str,\n}\npub fn Button(p: Props) -> Element {\n    jsx! { <button>{p.label}</button> }\n}\n");
-  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\nuse react::Element;\npub fn App() -> Element {\n    jsx! { <div><ui::Button label=\"go\" /></div> }\n}\n");
+  writeFileSync(join(ui, "lib.rs"), "#![allow(non_snake_case)]\nuse react::{Element, jsx};\npub struct Props {\n    pub label: &'static str,\n}\npub fn Button(p: Props) -> Element {\n    jsx! { <button>{p.label}</button> }\n}\n");
+  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\nuse react::{Element, jsx};\npub fn App() -> Element {\n    jsx! { <div><ui::Button label=\"go\" /></div> }\n}\n");
   const built = (args: string[]) => {
     const p = Bun.spawnSync([compiler, ...args], { env });
     expect(p.stderr.toString()).toBe("");

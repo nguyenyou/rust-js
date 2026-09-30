@@ -7,7 +7,7 @@ use crate::sonner::toast;
 use js::spawn;
 use models::{FieldError, NewContact, validate};
 use react::event::{Change, Event};
-use react::{Element, use_state};
+use react::{Element, jsx, use_state};
 
 /// The message for `field`, if one of `errors` is about it.
 fn message(errors: &[FieldError], field: &str) -> Option<String> {

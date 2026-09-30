@@ -4,6 +4,7 @@
 #![allow(non_snake_case)]
 
 use react::event::{Change, Keyboard};
+use react::jsx;
 use react::{
     Context, Element, Memo, create_context, memo, memo_with, use_context, use_effect, use_id, use_memo,
     use_reducer, use_ref, use_state,

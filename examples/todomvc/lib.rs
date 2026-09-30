@@ -15,7 +15,7 @@ use item::TodoItem;
 use model::{Action, Filter, load, reduce, save};
 use react::dom::client::create_root;
 use react::event::{Change, Keyboard};
-use react::{Element, use_effect, use_reducer_with, use_state};
+use react::{Element, jsx, use_effect, use_reducer_with, use_state};
 use webapi::{AddEventListenerOptions, abort_controller, document, event_target, location, window};
 
 /// The route's filter, and a render each time the hash changes.

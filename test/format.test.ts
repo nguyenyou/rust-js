@@ -101,7 +101,7 @@ test("formatter check is read-only and invalid input prevents selected-file writ
 test("formatting preserves generated JSX and maps handlers to the formatted source", () => {
   const dir = fixture("format-map");
   const file = join(dir, "lib.rs");
-  const source = `use react::Element;
+  const source = `use react::{Element, jsx};
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32); }
 pub fn view() -> Element {
     jsx! {

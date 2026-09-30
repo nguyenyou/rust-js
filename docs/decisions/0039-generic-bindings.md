@@ -3,6 +3,8 @@
 Status: Accepted. Revisits the tool attribute that ADRs 0021 and 0028
 rejected. Amended by [0110](0110-stable-syntax.md): `rust_js` is a tool rustc
 knows, with no `register_tool`, and an import is `js::import!("./App.css");`.
+Amended by [0113](0113-plain-rustc.md): the attribute is
+`#[cfg_attr(rust_js, rust_js::link_name = "..")]`, which a plain rustc leaves out.
 
 ## Context
 

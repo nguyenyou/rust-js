@@ -1,6 +1,6 @@
 // One side of the page: a heading, and a file explorer beside an editor.
 
-use react::Element;
+use react::{Element, jsx};
 
 use crate::styles::HEADING;
 

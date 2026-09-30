@@ -542,9 +542,6 @@ line(`// Many Rust functions call the same JS name: an overload per union member
 // (\`before\`, \`before_with_str\`), and methods of the same name on different
 // interfaces. rustc warns because in native code they would be one symbol.`);
 line(`#![allow(clashing_extern_declarations)]`);
-line(`// \`#[rust_js::name]\` on a dictionary's field that JS names otherwise.`);
-line(`#![feature(register_tool)]`);
-line(`#![register_tool(rust_js)]`);
 line();
 line(`use core::marker::PhantomData;`);
 line(`use core::ops::Deref;`);
@@ -623,7 +620,7 @@ for (const [name, { fields, borrows }] of [...paramDictionaries].sort(([a], [b])
   if (fields.every((f) => f.optional)) line(`#[derive(Default)]`);
   line(`pub struct ${typeName(name)}${borrows ? "<'a>" : ""} {`);
   for (const f of fields) {
-    if (f.rust !== f.js) line(`    #[rust_js::name = ${JSON.stringify(f.js)}]`);
+    if (f.rust !== f.js) line(`    #[cfg_attr(rust_js, rust_js::name = ${JSON.stringify(f.js)})]`);
     line(`    pub ${f.rust}: ${f.optional ? `Option<${f.type}>` : f.type},`);
   }
   line(`}`);

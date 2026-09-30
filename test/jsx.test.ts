@@ -32,7 +32,7 @@ test("JSX supports components across modules, fragments, lists, conditions and s
 #![allow(non_snake_case)]
 #[rust_js::camel_case]
 const _: () = ();
-use react::Element;
+use react::{Element, jsx};
 #[cfg(any())] mod missing;
 #[cfg_attr(all(), path = "ui/card.rs")] mod card;
 use card::Card as Panel;
@@ -58,7 +58,7 @@ pub fn Override() -> Element {
     jsx! { <Panel {...card::Props { title: "new", ..props }} /> }
 }
 `;
-  const card = `use react::Element;
+  const card = `use react::{Element, jsx};
 pub struct Props { pub title: &'static str, pub children: Element }
 pub(crate) fn Card(p: Props) -> Element {
     jsx! { <section><h1>{p.title}</h1>{p.children}</section> }
@@ -84,7 +84,7 @@ pub(crate) fn Card(p: Props) -> Element {
 // a value, called with just its arguments. Found by the pilot.
 test("a component a JS module exports is a JSX tag, and a binding is a value", async () => {
   const source = `#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 use react::webapi::{abort_controller, abort_signal};
 
 pub struct BadgeProps {
@@ -130,7 +130,7 @@ pub fn values() -> (Vec<String>, Vec<f64>, Vec<bool>) {
 
 test("named component imports avoid local functions, nested parameters and duplicate exports", async () => {
   const source = `#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 mod first;
 mod second;
 pub fn Card() -> Element { jsx! { <b>{"local"}</b> } }
@@ -146,8 +146,8 @@ pub fn View() -> Element {
 }
 `;
   const { dir, args } = compile(source, {
-    "first.rs": 'use react::Element; pub fn Card() -> Element { jsx! { <b>{"first"}</b> } }',
-    "second.rs": 'use react::Element; pub fn Card() -> Element { jsx! { <b>{"second"}</b> } }',
+    "first.rs": 'use react::{Element, jsx}; pub fn Card() -> Element { jsx! { <b>{"first"}</b> } }',
+    "second.rs": 'use react::{Element, jsx}; pub fn Card() -> Element { jsx! { <b>{"second"}</b> } }',
   });
   run(args);
   snapshot(dir, "import-collisions");
@@ -172,7 +172,7 @@ pub fn View() -> Element {
 
 test("JSX preserves evaluation order and maps tags and handler statements to their original lines", async () => {
   const source = `#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 unsafe extern "Rust" {
     #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32;
 }
@@ -220,7 +220,7 @@ test("nested component JSX stays readable, contextually typed and mapped to the 
 #![allow(non_snake_case)]
 #[rust_js::camel_case]
 const _: () = ();
-use react::Element;
+use react::{Element, jsx};
 use std::rc::Rc;
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32); }
 pub struct Props { pub title: &'static str, pub content: Element, pub on_submit: Option<Rc<dyn Fn()>> }
@@ -294,7 +294,7 @@ pub fn Tokens() -> Element {
 });
 
 test("JSX children have no twelve-sibling tuple limit", async () => {
-  const {dir, args} = compile('use react::Element; pub fn View() -> Element { jsx! { <div>' + Array.from({length: 40}, (_, i) => `<span>{${i}}</span>`).join('') + '</div> } }');
+  const {dir, args} = compile('use react::{Element, jsx}; pub fn View() -> Element { jsx! { <div>' + Array.from({length: 40}, (_, i) => `<span>{${i}}</span>`).join('') + '</div> } }');
   run(args);
   snapshot(dir, "many-children");
   const result = await import(join(dir, "lib.jsx"));
@@ -302,7 +302,7 @@ test("JSX children have no twelve-sibling tuple limit", async () => {
 });
 
 test("JSX uses SVG's tag and attribute spelling", async () => {
-  const { dir, args } = compile(`use react::Element;
+  const { dir, args } = compile(`use react::{Element, jsx};
 pub fn View() -> Element {
     jsx! { <svg viewBox="0 0 10 10"><defs><linearGradient id="paint" /></defs></svg> }
 }
@@ -315,7 +315,7 @@ pub fn View() -> Element {
 
 test("component props, keys and children evaluate in source order without capturing names", async () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32; }
 pub struct Props { pub title: i32, pub children: i32 }
 pub(crate) fn Card(p: Props) -> Element { jsx! { <div>{p.title}{p.children}</div> } }
@@ -343,15 +343,15 @@ test("JSX loads nested modules using Rust's directory and cfg rules", async () =
 mod outer;
 pub fn App() -> Element { outer::view() }
 `, {
-    "outer.rs": `use react::Element;
+    "outer.rs": `use react::{Element, jsx};
 mod inner;
 mod inline { pub mod leaf; }
 #[cfg_attr(all(), path = "alternate.rs")] mod alternate;
 pub fn view() -> Element { jsx! { <>{inner::view()}{inline::leaf::view()}{alternate::view()}</> } }
 `,
-    "outer/inner.rs": 'use react::Element; pub fn view() -> Element { jsx! { <b>{"one"}</b> } }',
-    "outer/inline/leaf.rs": 'use react::Element; pub fn view() -> Element { jsx! { <i>{"two"}</i> } }',
-    "alternate.rs": 'use react::Element; pub fn view() -> Element { jsx! { <p>{"three"}</p> } }',
+    "outer/inner.rs": 'use react::{Element, jsx}; pub fn view() -> Element { jsx! { <b>{"one"}</b> } }',
+    "outer/inline/leaf.rs": 'use react::{Element, jsx}; pub fn view() -> Element { jsx! { <i>{"two"}</i> } }',
+    "alternate.rs": 'use react::{Element, jsx}; pub fn view() -> Element { jsx! { <p>{"three"}</p> } }',
   });
   run(args);
   snapshot(dir, "module-resolution");
@@ -390,7 +390,7 @@ for (const [name, body, message] of [
   ["bare text", '<p>Hello world</p>', 'literal or a Rust expression'],
 ] as const) {
   test(`JSX ${name} reports the original source and preserves existing output`, () => {
-    const {dir, args} = compile(`#![allow(non_snake_case)]\nuse react::Element;\npub struct Props { pub title: &'static str }\npub fn Card(p: Props) -> Element { jsx! { <div>{p.title}</div> } }\npub fn App() -> Element {\n    jsx! { ${body} }\n}`);
+    const {dir, args} = compile(`#![allow(non_snake_case)]\nuse react::{Element, jsx};\npub struct Props { pub title: &'static str }\npub fn Card(p: Props) -> Element { jsx! { <div>{p.title}</div> } }\npub fn App() -> Element {\n    jsx! { ${body} }\n}`);
     const output = join(dir, "lib.jsx");
     writeFileSync(output, "previous output");
     const result = Bun.spawnSync(args, { cwd: dir });
@@ -407,7 +407,7 @@ for (const [name, body, message] of [
 test("JSX covers generic functions, memo/lazy/forward-ref values and context providers", async () => {
   const { dir, args } = compile(`#![deny(warnings)]
 #![allow(non_snake_case)]
-use react::{Element, Node};
+use react::{Element, Node, jsx};
 mod wrapped;
 use wrapped::{MEMO as Cached, THEME as Theme};
 pub struct Props<T> { pub value: T }
@@ -437,7 +437,7 @@ pub fn App() -> Element {
     }
 }
 `, {
-    "wrapped.rs": `use react::{Context, Element, Memo, Lazy, ForwardRef, Ref, create_context, memo, lazy, import_module, forward_ref};
+    "wrapped.rs": `use react::{Context, Element, ForwardRef, Lazy, Memo, Ref, create_context, forward_ref, import_module, jsx, lazy, memo};
 pub struct Props { pub label: &'static str }
 pub fn Card(p: Props) -> Element { jsx! { <b>{p.label}</b> } }
 pub fn Provider() -> Element { jsx! { <i /> } }
@@ -474,7 +474,7 @@ thread_local! {
 
 test("JSX built-ins finish as elements and use one spelling for ref and form actions", () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::{Element, Style, use_ref, webapi};
+use react::{Element, Style, jsx, use_ref, webapi};
 pub fn App() -> Element {
     let object = use_ref(None::<&'static webapi::Element>);
     jsx! {
@@ -517,7 +517,7 @@ for (const [name, body] of [
 ] as const) {
   test(`direct element builder ${name} is rejected without replacing output`, () => {
     const { dir, args } = compile(`#![allow(non_snake_case, dead_code)]
-use react::Element;
+use react::{Element, jsx};
 pub fn Card() -> Element { jsx! { <div /> } }
 pub struct Props { pub content: Element }
 pub fn Wrapper(p: Props) -> Element { p.content }
@@ -535,7 +535,7 @@ fn unused() -> Element { ${body} }
 test("JSX context providers and refs work on React 18 while newer APIs stay gated", () => {
   const { dir, args } = compile(`#![deny(warnings)]
 #![allow(non_snake_case)]
-use react::{Context, Element, create_context, webapi};
+use react::{Context, Element, create_context, jsx, webapi};
 thread_local! { static THEME: Context<&'static str> = create_context("light"); }
 pub fn App() -> Element {
     jsx! {
@@ -569,7 +569,7 @@ pub fn App() -> Element {
 
 test("forwarded refs keep their handle type, evaluation order and handwritten JSX", async () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::{Element, ForwardRef, Ref, forward_ref, webapi};
+use react::{Element, ForwardRef, Ref, forward_ref, jsx, webapi};
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32) -> i32; }
 pub struct Props { pub label: i32 }
 pub fn Input(p: Props, reference: Ref<Option<&'static webapi::Element>>) -> Element {
@@ -620,7 +620,7 @@ pub fn Ordinary(reference: Ref<Option<&'static webapi::Element>>) -> Element {
 // API-specific behavior (hooks, mounting, async actions) stays in react.test.ts.
 test("JSX grammar: literals, empty forms, Rust children and attribute expressions", async () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-use react::{Element, Style, inner_html};
+use react::{Element, Style, inner_html, jsx};
 pub fn Empty() -> Element { jsx! { <></> } }
 pub fn Literals() -> Element {
     jsx! {
@@ -679,7 +679,7 @@ test("JSX grammar: spread precedence, children overrides, component paths and ke
   const { dir, args } = compile(`#![allow(non_snake_case)]
 #[rust_js::camel_case]
 const _: () = ();
-use react::Element;
+use react::{Element, jsx};
 mod ui;
 use ui::Card as Panel;
 pub struct Attrs { pub title: &'static str, pub class_name: &'static str }
@@ -698,7 +698,7 @@ pub fn App() -> Element {
     }
 }
 `, {
-    "ui.rs": `use react::Element;
+    "ui.rs": `use react::{Element, jsx};
 pub struct Props { pub title: &'static str, pub children: Element }
 pub fn Card(p: Props) -> Element { jsx! { <section title={p.title}>{p.children}</section> } }
 pub fn Empty() -> Element { jsx! { <hr /> } }

@@ -87,7 +87,7 @@ pub fn answer() -> u32 {
 `);
     writeFileSync(join(root, "App.rs"), `
 #![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 pub fn App() -> Element { jsx! { <main><span>{"Packaged"}</span></main> } }
 `);
     writeFileSync(join(root, "check.js"), `

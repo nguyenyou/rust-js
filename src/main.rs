@@ -212,9 +212,11 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     if args.first().is_some_and(|arg| arg == "--rustc") {
-        let rustc_args: Vec<String> = std::iter::once("rust-js".to_string())
-            .chain(args[1..].iter().cloned())
-            .collect();
+        // `cfg(rust_js)` says it's rust-js, as it says to a program: the crates'
+        // attributes of its tool are `cfg_attr(rust_js, ..)`, which a plain
+        // rustc, a user's own `cargo check`, leaves out (ADR 0113).
+        let ours = ["rust-js", "--cfg=rust_js", "--check-cfg=cfg(rust_js)"].map(String::from);
+        let rustc_args: Vec<String> = ours.into_iter().chain(args[1..].iter().cloned()).collect();
         return rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut Syntax));
     }
     if args.first().is_some_and(|arg| arg == "--format-jsx") {

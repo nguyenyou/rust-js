@@ -16,7 +16,7 @@ use core::marker::PhantomData;
 #[macro_export]
 macro_rules! import {
     ($path:literal) => {
-        #[rust_js::import = $path]
+        #[cfg_attr(rust_js, rust_js::import = $path)]
         const _: () = ();
     };
 }
@@ -26,7 +26,7 @@ macro_rules! import {
 #[macro_export]
 macro_rules! camel_case {
     () => {
-        #[rust_js::camel_case]
+        #[cfg_attr(rust_js, rust_js::camel_case)]
         const _: () = ();
     };
 }
@@ -36,7 +36,7 @@ macro_rules! camel_case {
 /// own: `pub struct EditorView(PhantomData<JsObject>);` (ADR 0111). A program
 /// never has one by value, only a reference a binding gives: its field is
 /// private, so nothing makes one, and it's neither `Send` nor `Sync`.
-#[rust_js::js_object]
+#[cfg_attr(rust_js, rust_js::js_object)]
 pub struct JsObject(PhantomData<*mut ()>);
 
 /// A JS [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)
@@ -57,7 +57,7 @@ impl<T> core::future::Future for Promise<T> {
 /// promise itself would throw. For a promise of the webapi crate's, as
 /// `settle(window::fetch(window, url)).await` is a network error's `Err`
 /// (ADR 0035).
-#[rust_js::link_name = "this"]
+#[cfg_attr(rust_js, rust_js::link_name = "this")]
 #[allow(unused_variables)]
 pub fn settle<T>(this: Promise<T>) -> Promise<Result<T, &'static JsError>> {
     unreachable!()
@@ -210,7 +210,7 @@ pub mod object {
     /// [`Object.fromEntries(entries)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries):
     /// a JS object of these keys and values, as an API that takes a
     /// dictionary of them wants: `{ "aria-label": "Rust source" }`.
-    #[rust_js::link_name = "Object.fromEntries"]
+    #[cfg_attr(rust_js, rust_js::link_name = "Object.fromEntries")]
     #[allow(unused_variables)]
     pub fn from_entries<T>(entries: Vec<(String, T)>) -> &'static JsObject {
         unreachable!()
@@ -221,7 +221,7 @@ pub mod object {
     /// isn't `-0`. Of JS objects, whether they're one: `std::ptr::eq` isn't
     /// rust-js's. Of two Rust types too, since a JS object may be seen as
     /// either: a message's sender, an object, and a frame's `Window`.
-    #[rust_js::link_name = "Object.is"]
+    #[cfg_attr(rust_js, rust_js::link_name = "Object.is")]
     #[allow(unused_variables)]
     pub fn is<A: ?Sized, B: ?Sized>(a: &A, b: &B) -> bool {
         unreachable!()

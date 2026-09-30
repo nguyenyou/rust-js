@@ -231,7 +231,7 @@ for (const [name, entry] of Object.entries<Since>(versions.attributes)) {
   const ty = BOOLEAN.has(name) ? "bool" : "impl Value";
   lines.push(
     `    /// \`${name}\``,
-    `${gate(entry)}    #[rust_js::link_name = "prop ${name}"]`,
+    `${gate(entry)}    #[cfg_attr(rust_js, rust_js::link_name = "prop ${name}")]`,
     `    pub fn ${method}(self, value: ${ty}) -> Element {`,
     "        unreachable!()",
     "    }",
@@ -248,7 +248,7 @@ for (const [name, entry] of Object.entries<Since>(versions.events)) {
   methods.add(method);
   lines.push(
     `    /// \`${name}\``,
-    `${gate(entry)}    #[rust_js::link_name = "prop ${name}"]`,
+    `${gate(entry)}    #[cfg_attr(rust_js, rust_js::link_name = "prop ${name}")]`,
     `    pub fn ${method}(self, handler: impl Fn(&event::${type}) + 'static) -> Element {`,
     "        unreachable!()",
     "    }",
@@ -287,7 +287,7 @@ for (const property of properties) {
   styleMethods.add(method);
   lines.push(
     `    /// \`${property}\``,
-    `    #[rust_js::link_name = "prop ${camel}"]`,
+    `    #[cfg_attr(rust_js, rust_js::link_name = "prop ${camel}")]`,
     `    pub fn ${method}(self, value: impl Value) -> Style {`,
     "        unreachable!()",
     "    }",

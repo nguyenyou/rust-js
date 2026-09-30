@@ -1,6 +1,6 @@
 // Under the editors: how long loading took, and each compile.
 
-use react::Element;
+use react::{Element, jsx};
 
 pub struct StatsTableProps {
     /// What was measured, and how it went.

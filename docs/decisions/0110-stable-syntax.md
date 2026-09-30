@@ -59,5 +59,5 @@ and rustc refuses one it asks for, `#![feature]`, as the release does, unless
   of a `JsObject`, stable Rust.
 - **The binding crates still used `register_tool`** for their own attributes,
   which plain rustc built them with: ADR 0112 has rust-js compile them.
-- **A plain rustc, a user's own `cargo check`, doesn't know the `rust_js`
-  tool**: only rust-js does.
+- **A plain rustc, a user's own `cargo check`, didn't know the `rust_js`
+  tool**: ADR 0113 writes its attributes as `cfg_attr(rust_js, ..)`.

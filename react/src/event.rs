@@ -13,23 +13,23 @@ pub struct Event(PhantomData<JsObject>);
 
 impl Event {
     /// Stop the browser's default action, like submitting a form.
-    #[rust_js::link_name = "preventDefault"]
+    #[cfg_attr(rust_js, rust_js::link_name = "preventDefault")]
     pub fn prevent_default(&self) {
         unreachable!()
     }
 
     /// Stop parents' handlers seeing it.
-    #[rust_js::link_name = "stopPropagation"]
+    #[cfg_attr(rust_js, rust_js::link_name = "stopPropagation")]
     pub fn stop_propagation(&self) {
         unreachable!()
     }
 
-    #[rust_js::link_name = "isDefaultPrevented"]
+    #[cfg_attr(rust_js, rust_js::link_name = "isDefaultPrevented")]
     pub fn is_default_prevented(&self) -> bool {
         unreachable!()
     }
 
-    #[rust_js::link_name = "isPropagationStopped"]
+    #[cfg_attr(rust_js, rust_js::link_name = "isPropagationStopped")]
     pub fn is_propagation_stopped(&self) -> bool {
         unreachable!()
     }
@@ -41,7 +41,7 @@ macro_rules! fields {
         impl $type {
             $(
                 $(#[doc = $doc])*
-                #[rust_js::link_name = concat!("get ", $js)]
+                #[cfg_attr(rust_js, rust_js::link_name = concat!("get ", $js))]
                 pub fn $method(&self) -> $ty {
                     unreachable!()
                 }
@@ -224,14 +224,14 @@ events! {
 
 impl Mouse {
     /// Whether a modifier key, like `"Shift"` or `"CapsLock"`, is down.
-    #[rust_js::link_name = "getModifierState"]
+    #[cfg_attr(rust_js, rust_js::link_name = "getModifierState")]
     pub fn get_modifier_state(&self, key: &str) -> bool {
         unreachable!()
     }
 }
 
 impl Keyboard {
-    #[rust_js::link_name = "getModifierState"]
+    #[cfg_attr(rust_js, rust_js::link_name = "getModifierState")]
     pub fn get_modifier_state(&self, key: &str) -> bool {
         unreachable!()
     }

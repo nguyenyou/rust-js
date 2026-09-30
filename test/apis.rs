@@ -8,7 +8,7 @@ use react::dom::server::{
     RenderStream, StreamOptions, StringOptions, render_to_readable_stream, render_to_string_with,
 };
 use react::dom::{create_portal, flush_sync, use_form_status};
-use react::js;
+use react::{js, jsx};
 use react::webapi;
 use react::{
     Activity, ActivityMode, Element, Lazy, Module, Phase, Ref, Style, import_module, inner_html, lazy, use_,

@@ -193,6 +193,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0110 rust-js's syntax is stable Rust's](decisions/0110-stable-syntax.md)
 - [0111 A JS type is a struct of a `JsObject`](decisions/0111-js-types-as-structs.md)
 - [0112 rust-js compiles the binding crates](decisions/0112-rust-js-compiles-the-bindings.md)
+- [0113 A plain rustc compiles a program too](decisions/0113-plain-rustc.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

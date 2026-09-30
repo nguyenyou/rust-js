@@ -65,8 +65,18 @@ pub use webapi;
 
 /// A React element: what a component returns, and what goes in children.
 /// Construct it with `jsx! { <Tag ... /> }`.
-#[rust_js::jsx_element]
+#[cfg_attr(rust_js, rust_js::jsx_element)]
 pub struct Element(PhantomData<JsObject>);
+
+/// JSX, `jsx! { <h1>{"Hi"}</h1> }`, which rust-js compiles itself (ADR 0040):
+/// to rust-js, the Rust it writes for it, which it gives as `@rust_js ..`; to
+/// a plain rustc, a user's own `cargo check`, an `Element` it doesn't look
+/// inside (ADR 0113). A file with JSX imports it, `use react::jsx;`.
+#[macro_export]
+macro_rules! jsx {
+    (@rust_js $($rust:tt)*) => { $($rust)* };
+    ($($jsx:tt)*) => { $crate::Element::__jsx() };
+}
 
 /// What React renders as a child: elements, text and numbers, and tuples,
 /// `Vec`s and `Option`s of them. A tuple is several children, `("Count is ",
@@ -134,14 +144,14 @@ impl<T: Key + ?Sized> Key for &T {}
 pub struct Style(PhantomData<JsObject>);
 
 impl Style {
-    #[rust_js::link_name = "{}"]
+    #[cfg_attr(rust_js, rust_js::link_name = "{}")]
     pub fn new() -> Style {
         unreachable!()
     }
 
     /// Any property, like a custom one: `.set("--accent", "red")`. The name
     /// is a string literal.
-    #[rust_js::link_name = "prop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop")]
     pub fn set(self, name: &'static str, value: impl Value) -> Style {
         unreachable!()
     }
@@ -150,63 +160,70 @@ impl Style {
 /// `{ __html }`, for [`dangerously_set_inner_html`](Element::dangerously_set_inner_html).
 pub struct InnerHtml(PhantomData<JsObject>);
 
-#[rust_js::link_name = "{__html}"]
+#[cfg_attr(rust_js, rust_js::link_name = "{__html}")]
 pub fn inner_html(html: impl Value) -> InnerHtml {
     unreachable!()
 }
 
 #[doc(hidden)]
 impl Element {
+    /// What `jsx!` is to a plain rustc, which doesn't compile JSX: named so
+    /// no prop is, as a prop is a method.
+    #[doc(hidden)]
+    pub fn __jsx() -> Element {
+        unreachable!()
+    }
+
     /// Spread a props struct into this element. Fields keep the JS names of
     /// their Rust struct (including the crate's camel_case setting).
-    #[rust_js::link_name = "prop ..."]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ...")]
     pub fn props<P>(self, props: P) -> Element {
         unreachable!()
     }
 
     /// Its children: one [`Node`], or several as a tuple.
-    #[rust_js::link_name = "prop children"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop children")]
     pub fn children(self, children: impl Node) -> Element {
         unreachable!()
     }
 
     /// Tells React which item of a list this is, across renders.
-    #[rust_js::link_name = "prop key"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop key")]
     pub fn key(self, key: impl Key) -> Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "prop ref"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop ref")]
     pub fn r#ref<H, M>(self, value: impl RefValue<H, M>) -> Element {
         unreachable!()
     }
 
     /// Any attribute, by its name in JSX, which must be a string literal:
     /// `.attr("aria-hidden", "true")`, `.attr("data-id", id)`.
-    #[rust_js::link_name = "prop"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop")]
     pub fn attr(self, name: &'static str, value: impl Value) -> Element {
         unreachable!()
     }
 
     /// [`style`](https://react.dev/reference/react-dom/components/common#applying-css-styles):
     /// `.style(Style::new().color("red"))` is `style={{ color: "red" }}`.
-    #[rust_js::link_name = "prop style"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop style")]
     pub fn style(self, style: Style) -> Element {
         unreachable!()
     }
 
     /// `dangerouslySetInnerHTML={{ __html }}`: HTML that React doesn't escape.
-    #[rust_js::link_name = "prop dangerouslySetInnerHTML"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop dangerouslySetInnerHTML")]
     pub fn dangerously_set_inner_html(self, html: InnerHtml) -> Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "prop action"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop action")]
     pub fn action<M>(self, value: impl FormAction<M>) -> Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "prop formAction"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop formAction")]
     pub fn form_action<M>(self, value: impl FormAction<M>) -> Element {
         unreachable!()
     }
@@ -214,7 +231,7 @@ impl Element {
     /// A stylesheet's or style's place among others, which React orders and
     /// hoists into `<head>`.
     #[cfg(react = "19.0")]
-    #[rust_js::link_name = "prop precedence"]
+    #[cfg_attr(rust_js, rust_js::link_name = "prop precedence")]
     pub fn precedence(self, value: impl Value) -> Element {
         unreachable!()
     }
@@ -286,13 +303,13 @@ macro_rules! handle {
 /// [`useState`](https://react.dev/reference/react/useState): the state, and
 /// what sets it. `let (count, set_count) = use_state(0);` is
 /// `const [count, setCount] = useState(0);`.
-#[rust_js::link_name = "react#useState"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useState")]
 pub fn use_state<T>(initial: T) -> (&'static T, SetState<T>) {
     unreachable!()
 }
 
 /// `useState(() => initial())`: the first value, computed on the first render only.
-#[rust_js::link_name = "react#useState"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useState")]
 pub fn use_state_with<T>(initial: impl Fn() -> T + 'static) -> (&'static T, SetState<T>) {
     unreachable!()
 }
@@ -304,14 +321,14 @@ handle! {
 
 impl<T> SetState<T> {
     /// `setCount(value)`.
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn set(&self, value: T) {
         unreachable!()
     }
 
     /// `setCount((count) => count + 1)`: a new state from the latest one,
     /// which it only reads.
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn update(&self, f: impl Fn(&T) -> T + 'static) {
         unreachable!()
     }
@@ -319,14 +336,14 @@ impl<T> SetState<T> {
 
 /// [`useReducer`](https://react.dev/reference/react/useReducer): the state,
 /// and what sends it actions, which `reducer` turns into the next state.
-#[rust_js::link_name = "react#useReducer"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useReducer")]
 pub fn use_reducer<S, A>(reducer: impl Fn(&S, A) -> S + 'static, initial: S) -> (&'static S, Dispatch<A>) {
     unreachable!()
 }
 
 /// `useReducer(reducer, arg, init)`: the first state is `init(arg)`, computed
 /// on the first render only.
-#[rust_js::link_name = "react#useReducer"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useReducer")]
 pub fn use_reducer_with<S, A, I>(
     reducer: impl Fn(&S, A) -> S + 'static,
     arg: I,
@@ -343,7 +360,7 @@ handle! {
 
 impl<A> Dispatch<A> {
     /// `dispatch(action)`.
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn dispatch(&self, action: A) {
         unreachable!()
     }
@@ -354,7 +371,7 @@ impl<A> Dispatch<A> {
 /// payload, and whether one is pending. Give the action to a form with
 /// [`Element::action_dispatch`], or call it in a Transition.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#useActionState"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useActionState")]
 pub fn use_action_state<S, P>(
     action: impl Fn(&S, P) -> S + 'static,
     initial: S,
@@ -365,7 +382,7 @@ pub fn use_action_state<S, P>(
 /// [`use_action_state`] with an `async` action: the state is what its
 /// future gives, and it's pending until then.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#useActionState"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useActionState")]
 pub fn use_async_action_state<S, P, F: Future<Output = S>>(
     action: impl Fn(&S, P) -> F + 'static,
     initial: S,
@@ -376,7 +393,7 @@ pub fn use_async_action_state<S, P, F: Future<Output = S>>(
 /// [`useOptimistic`](https://react.dev/reference/react/useOptimistic):
 /// `value`, or what [`SetOptimistic`] set while an action is pending.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#useOptimistic"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useOptimistic")]
 pub fn use_optimistic<S>(value: S) -> (&'static S, SetOptimistic<S>) {
     unreachable!()
 }
@@ -384,7 +401,7 @@ pub fn use_optimistic<S>(value: S) -> (&'static S, SetOptimistic<S>) {
 /// `useOptimistic(value, reducer)`: the optimistic state is `reducer`'s,
 /// from the actions sent to it.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#useOptimistic"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useOptimistic")]
 pub fn use_optimistic_with<S, A>(value: S, reducer: impl Fn(&S, A) -> S + 'static) -> (&'static S, Dispatch<A>) {
     unreachable!()
 }
@@ -396,12 +413,12 @@ handle! {
 
 #[cfg(react = "19.0")]
 impl<S> SetOptimistic<S> {
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn set(&self, value: S) {
         unreachable!()
     }
 
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn update(&self, f: impl Fn(&S) -> S + 'static) {
         unreachable!()
     }
@@ -411,7 +428,7 @@ impl<S> SetOptimistic<S> {
 
 /// [`useContext`](https://react.dev/reference/react/useContext): the value of
 /// the nearest provider above, or the context's default.
-#[rust_js::link_name = "react#useContext"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useContext")]
 pub fn use_context<T>(context: &'static LocalKey<Context<T>>) -> &'static T {
     unreachable!()
 }
@@ -419,7 +436,7 @@ pub fn use_context<T>(context: &'static LocalKey<Context<T>>) -> &'static T {
 /// [`useRef`](https://react.dev/reference/react/useRef): a box that keeps its
 /// value across renders, without rendering again when it changes. For a DOM
 /// element, start it with `None` and give it to [`Element::ref`].
-#[rust_js::link_name = "react#useRef"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useRef")]
 pub fn use_ref<T>(initial: T) -> Ref<T> {
     unreachable!()
 }
@@ -431,13 +448,13 @@ handle! {
 
 impl<T> Ref<T> {
     /// `ref.current`.
-    #[rust_js::link_name = "get current"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get current")]
     pub fn current(&self) -> T {
         unreachable!()
     }
 
     /// `ref.current = value`.
-    #[rust_js::link_name = "set current"]
+    #[cfg_attr(rust_js, rust_js::link_name = "set current")]
     pub fn set_current(&self, value: T) {
         unreachable!()
     }
@@ -445,7 +462,7 @@ impl<T> Ref<T> {
 
 /// [`useImperativeHandle`](https://react.dev/reference/react/useImperativeHandle):
 /// what a parent's ref to this component gets, made by `create`.
-#[rust_js::link_name = "react#useImperativeHandle"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useImperativeHandle")]
 pub fn use_imperative_handle<H>(r: Ref<Option<H>>, create: impl Fn() -> H + 'static, deps: impl Deps) {
     unreachable!()
 }
@@ -467,39 +484,39 @@ impl<F: FnOnce() + 'static> Cleanup for F {}
 
 /// [`useEffect`](https://react.dev/reference/react/useEffect): run `effect`
 /// after a render in which `deps` changed.
-#[rust_js::link_name = "react#useEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useEffect")]
 pub fn use_effect<C: Cleanup>(effect: impl Fn() -> C + 'static, deps: impl Deps) {
     unreachable!()
 }
 
 /// `useEffect(effect)`: after every render.
-#[rust_js::link_name = "react#useEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useEffect")]
 pub fn use_effect_on_every_render<C: Cleanup>(effect: impl Fn() -> C + 'static) {
     unreachable!()
 }
 
 /// [`useLayoutEffect`](https://react.dev/reference/react/useLayoutEffect):
 /// [`use_effect`], before the browser paints.
-#[rust_js::link_name = "react#useLayoutEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useLayoutEffect")]
 pub fn use_layout_effect<C: Cleanup>(effect: impl Fn() -> C + 'static, deps: impl Deps) {
     unreachable!()
 }
 
 /// `useLayoutEffect(effect)`: after every render, before the browser paints.
-#[rust_js::link_name = "react#useLayoutEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useLayoutEffect")]
 pub fn use_layout_effect_on_every_render<C: Cleanup>(effect: impl Fn() -> C + 'static) {
     unreachable!()
 }
 
 /// [`useInsertionEffect`](https://react.dev/reference/react/useInsertionEffect):
 /// before layout effects, for CSS-in-JS libraries to insert styles.
-#[rust_js::link_name = "react#useInsertionEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useInsertionEffect")]
 pub fn use_insertion_effect<C: Cleanup>(effect: impl Fn() -> C + 'static, deps: impl Deps) {
     unreachable!()
 }
 
 /// `useInsertionEffect(effect)`: after every render.
-#[rust_js::link_name = "react#useInsertionEffect"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useInsertionEffect")]
 pub fn use_insertion_effect_on_every_render<C: Cleanup>(effect: impl Fn() -> C + 'static) {
     unreachable!()
 }
@@ -508,7 +525,7 @@ pub fn use_insertion_effect_on_every_render<C: Cleanup>(effect: impl Fn() -> C +
 /// which an effect can call and always see the latest props and state, without
 /// being one of its dependencies. Call it only from effects.
 #[cfg(react = "19.2")]
-#[rust_js::link_name = "react#useEffectEvent"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useEffectEvent")]
 pub fn use_effect_event<F: 'static>(f: F) -> &'static F {
     unreachable!()
 }
@@ -517,21 +534,21 @@ pub fn use_effect_event<F: 'static>(f: F) -> &'static F {
 
 /// [`useMemo`](https://react.dev/reference/react/useMemo): `f`'s value, computed
 /// again only when `deps` change.
-#[rust_js::link_name = "react#useMemo"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useMemo")]
 pub fn use_memo<T>(f: impl Fn() -> T + 'static, deps: impl Deps) -> &'static T {
     unreachable!()
 }
 
 /// [`useCallback`](https://react.dev/reference/react/useCallback): the same
 /// function across renders, until `deps` change.
-#[rust_js::link_name = "react#useCallback"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useCallback")]
 pub fn use_callback<F: 'static>(f: F, deps: impl Deps) -> &'static F {
     unreachable!()
 }
 
 /// [`useTransition`](https://react.dev/reference/react/useTransition): whether
 /// a Transition is pending, and what starts one.
-#[rust_js::link_name = "react#useTransition"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useTransition")]
 pub fn use_transition() -> (bool, StartTransition) {
     unreachable!()
 }
@@ -550,7 +567,7 @@ impl Copy for StartTransition {}
 impl StartTransition {
     /// `startTransition(action)`: the updates in `action` render without
     /// blocking the page. From React 19, `action` can be `async`.
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn start<R: ActionResult<M>, M>(&self, action: impl FnOnce() -> R + 'static) {
         unreachable!()
     }
@@ -558,14 +575,14 @@ impl StartTransition {
 
 /// [`useDeferredValue`](https://react.dev/reference/react/useDeferredValue):
 /// `value`, which lags behind while more urgent updates render.
-#[rust_js::link_name = "react#useDeferredValue"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useDeferredValue")]
 pub fn use_deferred_value<T>(value: T) -> &'static T {
     unreachable!()
 }
 
 /// `useDeferredValue(value, initialValue)`: `initial` on the first render.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#useDeferredValue"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useDeferredValue")]
 pub fn use_deferred_value_with<T>(value: T, initial: T) -> &'static T {
     unreachable!()
 }
@@ -574,7 +591,7 @@ pub fn use_deferred_value_with<T>(value: T, initial: T) -> &'static T {
 
 /// [`useId`](https://react.dev/reference/react/useId): an id unique to this
 /// component, the same on every render, for `id` and `html_for`.
-#[rust_js::link_name = "react#useId"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useId")]
 pub fn use_id() -> String {
     unreachable!()
 }
@@ -592,7 +609,7 @@ impl Clone for Notify {
 impl Copy for Notify {}
 
 impl Notify {
-    #[rust_js::link_name = "this()"]
+    #[cfg_attr(rust_js, rust_js::link_name = "this()")]
     pub fn call(&self) {
         unreachable!()
     }
@@ -601,7 +618,7 @@ impl Notify {
 /// [`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore):
 /// a value from outside React. `subscribe` gets a [`Notify`] to call on each
 /// change, and returns what unsubscribes; `snapshot` reads the value.
-#[rust_js::link_name = "react#useSyncExternalStore"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useSyncExternalStore")]
 pub fn use_sync_external_store<T, U: Cleanup>(
     subscribe: impl Fn(Notify) -> U + 'static,
     snapshot: impl Fn() -> T + 'static,
@@ -611,7 +628,7 @@ pub fn use_sync_external_store<T, U: Cleanup>(
 
 /// `useSyncExternalStore(subscribe, snapshot, serverSnapshot)`: on the server
 /// and while hydrating, the value is `server_snapshot`'s.
-#[rust_js::link_name = "react#useSyncExternalStore"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useSyncExternalStore")]
 pub fn use_sync_external_store_with_server<T, U: Cleanup>(
     subscribe: impl Fn(Notify) -> U + 'static,
     snapshot: impl Fn() -> T + 'static,
@@ -622,13 +639,13 @@ pub fn use_sync_external_store_with_server<T, U: Cleanup>(
 
 /// [`useDebugValue`](https://react.dev/reference/react/useDebugValue): a label
 /// for a custom hook in React DevTools.
-#[rust_js::link_name = "react#useDebugValue"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useDebugValue")]
 pub fn use_debug_value<T>(value: T) {
     unreachable!()
 }
 
 /// `useDebugValue(value, format)`: formatted only when DevTools shows it.
-#[rust_js::link_name = "react#useDebugValue"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#useDebugValue")]
 pub fn use_debug_value_with<T>(value: T, format: impl Fn(&T) -> String + 'static) {
     unreachable!()
 }
@@ -640,7 +657,7 @@ pub fn use_debug_value_with<T>(value: T, format: impl Fn(&T) -> String + 'static
 /// field, if it has one, is the element's children; `()` for a component that
 /// takes none, `component(App, ())`. A component's name starts with an
 /// uppercase letter, as JSX and Fast Refresh need.
-#[rust_js::link_name = "<*>"]
+#[cfg_attr(rust_js, rust_js::link_name = "<*>")]
 #[doc(hidden)]
 pub fn component<P, M>(component: impl Component<P, M>, props: P) -> Element {
     unreachable!()
@@ -658,14 +675,14 @@ impl<F: Fn() -> Element> Component<(), NoProps> for F {}
 impl<P, F: Fn(P) -> Element> Component<P, WithProps> for F {}
 
 /// Children with nothing around them: `<>..</>`.
-#[rust_js::link_name = "<>"]
+#[cfg_attr(rust_js, rust_js::link_name = "<>")]
 #[doc(hidden)]
 pub fn fragment(children: impl Node) -> Element {
     unreachable!()
 }
 
 /// [`<StrictMode>`](https://react.dev/reference/react/StrictMode).
-#[rust_js::link_name = "<react#StrictMode>"]
+#[cfg_attr(rust_js, rust_js::link_name = "<react#StrictMode>")]
 #[doc(hidden)]
 pub fn strict_mode(children: impl Node) -> Element {
     unreachable!()
@@ -677,13 +694,13 @@ macro_rules! built_in {
     ($(#[doc = $doc:literal])* $(#[cfg($cfg:meta)])? $name:ident = $make:ident $tag:literal { $($(#[doc = $pdoc:literal])* $prop:ident: $ty:ty = $js:literal;)* }) => {
         $(#[doc = $doc])*
         $(#[cfg($cfg)])?
-        #[rust_js::jsx_element]
+        #[cfg_attr(rust_js, rust_js::jsx_element)]
         #[doc(hidden)]
         pub struct $name(PhantomData<JsObject>);
 
         #[doc = concat!("`<", $tag, ">`: set its props, then its children.")]
         $(#[cfg($cfg)])?
-        #[rust_js::link_name = concat!("<react#", $tag, ">")]
+        #[cfg_attr(rust_js, rust_js::link_name = concat!("<react#", $tag, ">"))]
         #[doc(hidden)]
         pub fn $make() -> $name {
             unreachable!()
@@ -695,26 +712,26 @@ macro_rules! built_in {
         $(#[cfg($cfg)])?
         #[doc(hidden)]
         impl $name {
-            #[rust_js::link_name = "prop key"]
+            #[cfg_attr(rust_js, rust_js::link_name = "prop key")]
             pub fn key(self, value: impl Key) -> $name {
                 unreachable!()
             }
 
-            #[rust_js::link_name = "prop ..."]
+            #[cfg_attr(rust_js, rust_js::link_name = "prop ...")]
             pub fn props<P>(self, value: P) -> $name {
                 unreachable!()
             }
 
             $(
                 $(#[doc = $pdoc])*
-                #[rust_js::link_name = concat!("prop ", $js)]
+                #[cfg_attr(rust_js, rust_js::link_name = concat!("prop ", $js))]
                 pub fn $prop(self, value: $ty) -> $name {
                     unreachable!()
                 }
             )*
 
             /// Its children, which finish the element.
-            #[rust_js::link_name = "prop children"]
+            #[cfg_attr(rust_js, rust_js::link_name = "prop children")]
             pub fn children(self, children: impl Node) -> Element {
                 unreachable!()
             }
@@ -750,11 +767,11 @@ built_in! {
 
 /// A [`Profiler`]'s render: the first, a later one, or one its effects caused.
 pub enum Phase {
-    #[rust_js::name = "mount"]
+    #[cfg_attr(rust_js, rust_js::name = "mount")]
     Mount,
-    #[rust_js::name = "update"]
+    #[cfg_attr(rust_js, rust_js::name = "update")]
     Update,
-    #[rust_js::name = "nested-update"]
+    #[cfg_attr(rust_js, rust_js::name = "nested-update")]
     NestedUpdate,
 }
 
@@ -770,9 +787,9 @@ built_in! {
 /// Whether an [`Activity`]'s children show.
 #[cfg(react = "19.2")]
 pub enum ActivityMode {
-    #[rust_js::name = "visible"]
+    #[cfg_attr(rust_js, rust_js::name = "visible")]
     Visible,
-    #[rust_js::name = "hidden"]
+    #[cfg_attr(rust_js, rust_js::name = "hidden")]
     Hidden,
 }
 
@@ -803,28 +820,28 @@ pub struct ViewTransitionInstance(PhantomData<JsObject>);
 
 #[cfg(react = "19.3")]
 impl ViewTransitionInstance {
-    #[rust_js::link_name = "get name"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get name")]
     pub fn name(&self) -> String {
         unreachable!()
     }
 
     /// `::view-transition-old`, `new`, `group` and `image-pair`.
-    #[rust_js::link_name = "get old"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get old")]
     pub fn old(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "get new"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get new")]
     pub fn new(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "get group"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get group")]
     pub fn group(&self) -> &'static webapi::Element {
         unreachable!()
     }
 
-    #[rust_js::link_name = "get imagePair"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get imagePair")]
     pub fn image_pair(&self) -> &'static webapi::Element {
         unreachable!()
     }
@@ -852,7 +869,7 @@ impl ViewTransitionInstance {
 pub struct Context<T>(PhantomData<JsObject>, PhantomData<T>);
 
 /// [`createContext`](https://react.dev/reference/react/createContext), in a `thread_local!`.
-#[rust_js::link_name = "react#createContext"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#createContext")]
 pub fn create_context<T>(default: T) -> Context<T> {
     unreachable!()
 }
@@ -871,7 +888,7 @@ impl<T> Component<Provider<T>, ProvidesContext> for &'static LocalKey<Context<T>
 
 /// `THEME.Provider`, a context's provider in every React version:
 /// Used by `<THEME.Provider value={value}>{children}</THEME.Provider>`.
-#[rust_js::link_name = "get Provider"]
+#[cfg_attr(rust_js, rust_js::link_name = "get Provider")]
 #[doc(hidden)]
 pub fn provider<T>(this: &'static LocalKey<Context<T>>) -> ContextProvider<T> {
     unreachable!()
@@ -887,13 +904,13 @@ pub struct Memo<P>(PhantomData<JsObject>, PhantomData<P>);
 
 /// [`memo`](https://react.dev/reference/react/memo), in a `thread_local!`.
 /// Props are the same when each field is (`Object.is`).
-#[rust_js::link_name = "react#memo"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#memo")]
 pub fn memo<P, M>(component: impl Component<P, M>) -> Memo<P> {
     unreachable!()
 }
 
 /// `memo(component, arePropsEqual)`: the props are the same when `are_equal` says so.
-#[rust_js::link_name = "react#memo"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#memo")]
 pub fn memo_with<P, M>(component: impl Component<P, M>, are_equal: impl Fn(&P, &P) -> bool + 'static) -> Memo<P> {
     unreachable!()
 }
@@ -912,14 +929,14 @@ pub struct Module<P>(PhantomData<JsObject>, PhantomData<P>);
 /// [`lazy`](https://react.dev/reference/react/lazy), in a `thread_local!`:
 /// `lazy(|| import_module("./Chart.jsx"))`. It suspends while it loads, so
 /// render it inside `<Suspense fallback={...}>...</Suspense>`.
-#[rust_js::link_name = "react#lazy"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#lazy")]
 pub fn lazy<P>(load: impl Fn() -> Promise<Module<P>> + 'static) -> Lazy<P> {
     unreachable!()
 }
 
 /// `import(specifier)`: a module, loaded when it's first needed. The
 /// specifier names the JS file, as the bundler sees it.
-#[rust_js::link_name = "import"]
+#[cfg_attr(rust_js, rust_js::link_name = "import")]
 pub fn import_module<P>(specifier: &'static str) -> Promise<Module<P>> {
     unreachable!()
 }
@@ -934,7 +951,7 @@ pub struct ForwardRef<P, H>(PhantomData<JsObject>, PhantomData<(P, H)>);
 /// [`forwardRef`](https://react.dev/reference/react/forwardRef), in a
 /// `thread_local!`: `render` gets the props and the parent's ref. From React
 /// 19 a component can take `ref` as a prop instead.
-#[rust_js::link_name = "react#forwardRef"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#forwardRef")]
 pub fn forward_ref<P, H>(render: impl Fn(P, Ref<Option<H>>) -> Element + 'static) -> ForwardRef<P, H> {
     unreachable!()
 }
@@ -945,7 +962,7 @@ impl<P, H> Component<P, Forwarded> for &'static LocalKey<ForwardRef<P, H>> {}
 
 /// Check the handle type of a forwarded JSX ref without emitting a runtime call.
 #[doc(hidden)]
-#[rust_js::link_name = "this"]
+#[cfg_attr(rust_js, rust_js::link_name = "this")]
 pub fn checked_ref<H, M, R: RefValue<H, M>>(this: R) -> R {
     unreachable!()
 }
@@ -955,7 +972,7 @@ pub fn checked_ref<H, M, R: RefValue<H, M>>(this: R) -> R {
 /// [`startTransition`](https://react.dev/reference/react/startTransition):
 /// the state updates in `action` render without blocking the page. From
 /// React 19, `action` can be `async`.
-#[rust_js::link_name = "react#startTransition"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#startTransition")]
 pub fn start_transition<R: ActionResult<M>, M>(action: impl FnOnce() -> R + 'static) {
     unreachable!()
 }
@@ -963,7 +980,7 @@ pub fn start_transition<R: ActionResult<M>, M>(action: impl FnOnce() -> R + 'sta
 /// [`addTransitionType`](https://react.dev/reference/react/addTransitionType):
 /// names what the current Transition is, for [`ViewTransition`]'s classes.
 #[cfg(react = "19.3")]
-#[rust_js::link_name = "react#addTransitionType"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#addTransitionType")]
 pub fn add_transition_type(name: &str) {
     unreachable!()
 }
@@ -971,7 +988,7 @@ pub fn add_transition_type(name: &str) {
 /// [`act`](https://react.dev/reference/react/act): in a test, apply every
 /// update `f` causes before it returns. Development builds only.
 #[cfg(react = "18.3")]
-#[rust_js::link_name = "react#act"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#act")]
 pub fn act<R: ActionResult<M>, M>(f: impl FnOnce() -> R + 'static) -> Promise<()> {
     unreachable!()
 }
@@ -979,7 +996,7 @@ pub fn act<R: ActionResult<M>, M>(f: impl FnOnce() -> R + 'static) -> Promise<()
 /// [`cache`](https://react.dev/reference/react/cache): `f`, remembering its
 /// results. For React Server Components only.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#cache"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#cache")]
 pub fn cache<F: 'static>(f: F) -> F {
     unreachable!()
 }
@@ -988,7 +1005,7 @@ pub fn cache<F: 'static>(f: F) -> F {
 /// when the render that [`cache`] belongs to is done. Server Components only;
 /// `None` elsewhere.
 #[cfg(react = "19.2")]
-#[rust_js::link_name = "react#cacheSignal"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#cacheSignal")]
 pub fn cache_signal() -> Option<&'static webapi::AbortSignal> {
     unreachable!()
 }
@@ -996,7 +1013,7 @@ pub fn cache_signal() -> Option<&'static webapi::AbortSignal> {
 /// [`captureOwnerStack`](https://react.dev/reference/react/captureOwnerStack):
 /// which components rendered the current one, in development only.
 #[cfg(react = "19.1")]
-#[rust_js::link_name = "react#captureOwnerStack"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#captureOwnerStack")]
 pub fn capture_owner_stack() -> Option<String> {
     unreachable!()
 }
@@ -1028,7 +1045,7 @@ impl<T: 'static> Usable for &'static LocalKey<Context<T>> {
 /// suspending until it resolves, or a context's. Unlike a hook, it can be
 /// called in a condition or a loop. `use` is a Rust keyword, hence the name.
 #[cfg(react = "19.0")]
-#[rust_js::link_name = "react#use"]
+#[cfg_attr(rust_js, rust_js::link_name = "react#use")]
 pub fn use_<U: Usable>(value: U) -> U::Output {
     unreachable!()
 }
@@ -1038,7 +1055,7 @@ pub struct ErrorInfo(PhantomData<JsObject>);
 
 impl ErrorInfo {
     /// The components the error went through, as text.
-    #[rust_js::link_name = "get componentStack"]
+    #[cfg_attr(rust_js, rust_js::link_name = "get componentStack")]
     pub fn component_stack(&self) -> Option<String> {
         unreachable!()
     }

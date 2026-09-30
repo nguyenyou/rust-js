@@ -52,6 +52,8 @@ function bindings(release: string): Set<string> {
     // rustdoc's JSON is a nightly's, as the tests have it: so is registering the
     // tool that rust-js knows itself, for the crate's attributes (ADR 0112).
     "-Zcrate-attr=feature(register_tool)", "-Zcrate-attr=register_tool(rust_js)",
+    // Its attributes are `cfg_attr(rust_js, ..)`, as rust-js reads them (ADR 0113).
+    "--cfg=rust_js", "--check-cfg=cfg(rust_js)",
     // As rust-js checks it, for its target (ADR 0090).
     "--target=wasm32-unknown-unknown",
     "react/src/lib.rs", "--extern", `webapi=${join(out, "libwebapi.rmeta")}`, "--extern", `js=${join(out, "libjs.rmeta")}`, "-L", out, ...cfgFlags(release).flags, "-o", out,
@@ -140,7 +142,7 @@ test("elements.rs is what react/generate.ts makes of versions.json", () => {
 // A program for React 18.2 can't use what React 19.2 added: it's a compile
 // error, which names the release it needs, not a crash in the browser.
 const usesUseEffectEvent = `#![allow(non_snake_case)]
-use react::{Element, use_effect_event, use_state};
+use react::{Element, jsx, use_effect_event, use_state};
 pub fn App() -> Element {
     let (count, set_count) = use_state(0);
     let log = use_effect_event(move || set_count.set(*count));

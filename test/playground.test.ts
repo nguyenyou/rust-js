@@ -103,7 +103,7 @@ mod right { pub fn step(n: u32) -> u32 { if n == 0 { 2 } else { super::left::ste
     // Paste the full source so editor auto-closing does not turn a Rust
     // lifetime's apostrophe into a character literal while typing it.
     await page.keyboard.insertText(`#![allow(non_snake_case)]
-use react::Element;
+use react::{Element, jsx};
 pub struct Props { pub text: &'static str }
 pub fn Tile(p: Props) -> Element {
     jsx! {
