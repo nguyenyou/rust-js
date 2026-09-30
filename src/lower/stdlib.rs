@@ -379,7 +379,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .expect("`Iterator` has `next`");
         let args = self.args_of(iterator, ty.peel_refs());
         // A generic `next` boxes a `Some` that looks like `None` (ADR 0051).
-        let boxed = ty::Instance::try_resolve(self.tcx, self.typing_env, next, args)?.is_some_and(|instance| {
+        let boxed = self.resolve_instance(next, args)?.is_some_and(|instance| {
             let id = instance.def_id();
             let output = self.tcx.fn_sig(id).instantiate_identity().skip_binder().output();
             let output = self

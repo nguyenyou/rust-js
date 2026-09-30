@@ -47,7 +47,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
     ) -> R<Expr> {
         let args = self.tcx.erase_and_anonymize_regions(args);
-        let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args)?
+        let instance = self
+            .resolve_instance(method, args)?
             .filter(|i| self.is_rust_fn(i.def_id()))
             .ok_or_else(|| self.unsupported(span, "this implementation"))?;
         values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
@@ -156,7 +157,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !self.needs_clone(ty) {
             return Ok(place);
         }
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, self.clone_trait(), [ty]);
             if let Some(dictionary) = self.evidence_for(tr) {
                 return Ok(Expr::call(Expr::member(dictionary, "clone"), vec![place]));
@@ -383,7 +384,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .get_diagnostic_item(Symbol::intern("Default"))
             .expect("std has `Default`");
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, default, [ty]);
             return match self.evidence_for(tr) {
                 Some(dictionary) => Ok(Expr::call(Expr::member(dictionary, "default"), Vec::new())),
@@ -471,7 +472,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         seen.push(ty);
         let custom = match ty.kind() {
-            ty::Param(_) => true,
+            _ if self.is_unknown(ty) => true,
             ty::Tuple(tys) => tys.iter().any(|t| self.custom_eq_in(t, seen)),
             ty::Array(item, _) | ty::Slice(item) => self.custom_eq_in(*item, seen),
             ty::Adt(..) if self.has_user_impl(self.partial_eq_trait(), ty) => true,
@@ -494,7 +495,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_primitive_eq(ty) {
             return Ok(Expr::bin(Op::Eq, a, b));
         }
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let tr = ty::TraitRef::new_from_args(
                 self.tcx,
                 self.partial_eq_trait(),

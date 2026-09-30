@@ -6,6 +6,7 @@ use super::traits;
 use super::{Body, FnInfo, TestFn, camel_case, fresh_in, module_path, strip};
 use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, find_attr};
+use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
@@ -282,8 +283,33 @@ fn reject_unsupported(
     markers: &[(LocalDefId, Symbol)],
 ) -> bool {
     let mut valid = true;
+    // What the crate exports by a symbol of its own, `#[no_mangle]` or
+    // `#[export_name]`: an `extern` declaration of one is a JS binding
+    // naming a global no JS has, and the function is the crate's, by its path.
+    let exported: HashSet<Symbol> = tcx
+        .hir_crate_items(())
+        .definitions()
+        .filter(|&id| matches!(tcx.def_kind(id), DefKind::Fn | DefKind::AssocFn) && !tcx.is_foreign_item(id))
+        .filter_map(|id| {
+            let attrs = tcx.codegen_fn_attrs(id);
+            match attrs.flags.contains(CodegenFnAttrFlags::NO_MANGLE) {
+                true => Some(attrs.symbol_name.unwrap_or_else(|| tcx.item_name(id.to_def_id()))),
+                false => attrs.symbol_name,
+            }
+        })
+        .collect();
     for def_id in tcx.hir_crate_items(()).definitions() {
         let what = match tcx.def_kind(def_id) {
+            DefKind::Fn
+                if tcx.is_foreign_item(def_id)
+                    && exported.contains(
+                        &tcx.codegen_fn_attrs(def_id)
+                            .symbol_name
+                            .unwrap_or_else(|| tcx.item_name(def_id.to_def_id())),
+                    ) =>
+            {
+                "an `extern` declaration of this crate's own `#[no_mangle]` function"
+            }
             _ if markers.iter().any(|&(marker, _)| marker == def_id) => continue,
             _ if from_serde_derive(tcx, def_id) => continue,
             // std's storage for a thread-local: JS needs none.
@@ -313,7 +339,10 @@ fn reject_unsupported(
             {
                 continue;
             }
-            DefKind::AssocTy => "associated types",
+            // A trait's own, a type only a caller knows in generic code, as a
+            // type parameter is (ADR 0106). Not one with parameters of its own.
+            DefKind::AssocTy if tcx.generics_of(def_id).own_params.is_empty() => continue,
+            DefKind::AssocTy => "generic associated types",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())
                     && !traits::implementable(

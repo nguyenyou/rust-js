@@ -1,7 +1,7 @@
 # 0106. A trait's type parameters, associated types and generic methods
 
-Status: Accepted in part: a trait's type parameters. Associated types and a
-trait's generic methods are to come. Extends [0049](0049-traits-and-generics.md)
+Status: Accepted in part: a trait's type parameters and associated types. A
+trait's generic methods, and generic associated types, are to come. Extends [0049](0049-traits-and-generics.md)
 and [0051](0051-generic-options.md).
 
 ## Context
@@ -45,8 +45,27 @@ of its own, `metersFromF64`, and a function's evidence is named apart.
   left: `count(&mut Stack { list: vec![None, None, Some(1)] })` is 3.
 
 **An associated type is a type only a caller knows, as a type parameter
-is**, and **a trait's generic method is given its own evidence where it's
-called**, after the dictionary's: these are to come.
+is:** `<S as Source>::Item` in generic code, and std's, `I::Item` of an
+`Iterator`. Where rustc can say what it is, `<Count as Source>::Item` in
+an impl's signature, it's that type.
+
+- **What a type parameter's dictionaries are for, its are:** showing,
+  comparing, cloning and defaulting one, and boxing an `Option` of it
+  (ADR 0051). A bound on one is evidence as a type parameter's is,
+  `shown(s, SSource, SItemDebug)` of `where S::Item: Debug`, given of the
+  type rustc makes it for the caller, `String`'s `Debug`.
+- **A bound the trait declares on one, `type Label: Display`, is in the
+  trait's dictionary**, as a supertrait is, keyed by the type's name and the
+  bound's, `LabelDisplay`: rustc proves `<L as Labeled>::Label: Display`
+  from the trait, so generic code finds it in `L`'s `Labeled`.
+- **A `dyn` of a trait with one says what it is**, `dyn Source<Item = u32>`.
+- **A value of one has nothing to drop only where nothing does**, the
+  crate's own types and a library's: no drop function is given for one, as
+  a type parameter's is (ADR 0098). Elsewhere it's an error.
+- **Not one with parameters of its own**, `type Item<'a>`: an error.
+
+**A trait's generic method is given its own evidence where it's called**,
+after the dictionary's: this is to come.
 
 ## Why
 
@@ -66,5 +85,15 @@ called**, after the dictionary's: these are to come.
   50 pass, none giving another answer; 26 stop at associated types and 15
   at generic methods. Found by them: two supertraits of one trait collided,
   and a higher-ranked one crashed rustc's trait selection.
+- **Associated types are in** (`associated_types`): the crate's, a
+  function's `Vec<S::Item>` for two impls, an equality bound, a `where`
+  bound, a bound the trait declares, std's `I::Item`, and a `dyn` of one;
+  and the diagnostics test's refusals, of a value with a destructor and a
+  generic associated type. Of the 109 rustc tests stopping at associated
+  types, 61 pass; of all 1,139 known failures, 129, none giving another
+  answer. Found by them, as they got further: rustc's instance resolution
+  panics on arguments it can't normalize, so they're normalized first, or
+  not resolved; and an `extern` declaration of the crate's own
+  `#[no_mangle]` function was a JS global no JS has, which is refused.
 - A trait's default method copied into a generic impl, `impl<T> .. for
   Stack<T>`, still stops at ADR 0098's destructors: `T` might have one.

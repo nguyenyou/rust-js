@@ -202,7 +202,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .trait_of_assoc(def_id)
             .is_some_and(|id| super::traits::operational(self.tcx, self.krate.foreign, id))
             || (self.tcx.trait_of_assoc(def_id).is_some()
-                && ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, generic_args)?
+                && self
+                    .resolve_instance(def_id, generic_args)?
                     .is_some_and(|i| self.is_rust_fn(i.def_id())))
         {
             let mut pending = Vec::new();
@@ -1082,6 +1083,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// `Instance::try_resolve` of `def_id` with `args`, normalized first, as
+    /// it requires, or `None` where they can't be here: an associated type
+    /// only a caller knows isn't one to resolve with (ADR 0106).
+    pub(super) fn resolve_instance(
+        &self,
+        def_id: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
+        let Ok(args) = self.tcx.try_normalize_erasing_regions(self.typing_env, args) else {
+            return Ok(None);
+        };
+        ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, args)
+    }
+
     /// The crate's own impl method a trait method call resolves to, if it
     /// does: in a copied default, `Self` is the impl's type (ADR 0049).
     pub(super) fn impl_method(
@@ -1093,7 +1108,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
             None => generic_args,
         };
-        Ok(ty::Instance::try_resolve(self.tcx, self.typing_env, id, generic_args)?
+        Ok(self
+            .resolve_instance(id, generic_args)?
             .filter(|instance| {
                 self.is_rust_fn(instance.def_id()) && self.tcx.trait_of_assoc(instance.def_id()).is_none()
             })

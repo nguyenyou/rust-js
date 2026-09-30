@@ -1522,6 +1522,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             .find(|item| item.is_fn())?
             .def_id;
         let args = self.tcx.mk_args(&[args[1], args[0]]);
+        let args = self.tcx.try_normalize_erasing_regions(self.typing_env, args).ok()?;
         let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
         Some((method, args, instance.def_id()))
     }

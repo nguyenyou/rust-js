@@ -85,8 +85,8 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
             }
             for item in tcx.associated_items(id).in_definition_order() {
                 // The type rustc makes of an `async fn`'s future has no name,
-                // and no place in a dictionary.
-                if item.is_impl_trait_in_trait() {
+                // and no place in a dictionary; nor has an associated type.
+                if item.is_impl_trait_in_trait() || tcx.def_kind(item.def_id) == DefKind::AssocTy {
                     continue;
                 }
                 let name = bindings::fn_name(tcx, item.def_id);
@@ -95,6 +95,13 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
                         tcx.def_span(item.def_id),
                         "rust-js: trait dictionary names collide or use reserved `__proto__`",
                     );
+                    valid = false;
+                }
+            }
+            for (name, _) in item_bounds(tcx, id.to_def_id(), identity) {
+                if !names.insert(name) {
+                    tcx.dcx()
+                        .span_err(tcx.def_span(id), "rust-js: trait dictionary names collide");
                     valid = false;
                 }
             }
@@ -187,6 +194,56 @@ pub(super) fn supertraits<'tcx>(
         .collect()
 }
 
+/// The bounds a trait declares on its associated types, as its dictionary
+/// has them: each one's key, the type's name and the bound's as the trait
+/// declares it, `LabelDisplay` of `type Label: Display`, and the bound with
+/// `args`, the trait's. Generic code finds `<L as Labeled>::Label: Display`
+/// in `L`'s `Labeled`, as rustc proves it from the trait (ADR 0106).
+pub(super) fn item_bounds<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    trait_id: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+) -> Vec<(String, ty::TraitRef<'tcx>)> {
+    let mut found = Vec::new();
+    for item in tcx.associated_items(trait_id).in_definition_order() {
+        // A generic associated type's are its own parameters' too: those are
+        // refused (`validate`).
+        if tcx.def_kind(item.def_id) != DefKind::AssocTy
+            || item.is_impl_trait_in_trait()
+            || !tcx.generics_of(item.def_id).own_params.is_empty()
+        {
+            continue;
+        }
+        let bounds = tcx.explicit_item_bounds(item.def_id);
+        for ((declared, _), (instantiated, _)) in bounds
+            .iter_identity_copied()
+            .zip(bounds.iter_instantiated_copied(tcx, args))
+        {
+            let ty::ClauseKind::Trait(declared) = declared.kind().skip_binder() else {
+                continue;
+            };
+            let ty::ClauseKind::Trait(instantiated) = tcx.instantiate_bound_regions_with_erased(instantiated.kind())
+            else {
+                continue;
+            };
+            let name = format!("{}{}", tcx.item_name(item.def_id), trait_word(tcx, declared.trait_ref));
+            found.push((name, instantiated.trait_ref));
+        }
+    }
+    found
+}
+
+/// A type as a word of an evidence name: a type parameter's, `T`, or an
+/// associated type's of one, `SItem` of `<S as Source>::Item`.
+fn evidence_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
+    match ty.kind() {
+        ty::Alias(ty::Projection, alias) => {
+            format!("{}{}", evidence_word(tcx, alias.self_ty()), tcx.item_name(alias.def_id))
+        }
+        _ => ty.to_string(),
+    }
+}
+
 /// A type as a word of a JS name: an ADT's own name, `Meters` of
 /// `Meters<T>`.
 fn type_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
@@ -232,7 +289,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Some(true) => format!("write{}", tr.self_ty()),
                     Some(false) => format!("read{}", tr.self_ty()),
                     // `XConvertF64` and `XConvertString`, of two impls of one trait.
-                    None => format!("{}{}", tr.self_ty(), trait_word(self.tcx, tr)),
+                    None => format!("{}{}", evidence_word(self.tcx, tr.self_ty()), trait_word(self.tcx, tr)),
                 };
                 let name = self.fresh(&js_word(&name));
                 self.evidence.push((tr, Expr::var(&name)));
@@ -273,9 +330,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.evidence
             .iter()
             .find_map(|(bound, value)| self.super_evidence(*bound, tr, value.clone()))
+            .or_else(|| self.item_evidence(tr))
+    }
+
+    /// `<L as Labeled>::Label: Display`, which the trait declares, from `L`'s
+    /// `Labeled`: its `LabelDisplay`, or a supertrait's of it (ADR 0106).
+    fn item_evidence(&self, tr: ty::TraitRef<'tcx>) -> Option<Expr> {
+        let ty::Alias(ty::Projection, alias) = *tr.self_ty().kind() else {
+            return None;
+        };
+        let owner = alias.trait_ref(self.tcx);
+        let dictionary = self.evidence_for(owner)?;
+        item_bounds(self.tcx, owner.def_id, owner.args)
+            .into_iter()
+            .find_map(|(name, bound)| {
+                let found = Expr::call(Expr::member(dictionary.clone(), name), Vec::new());
+                self.super_evidence(bound, tr, found)
+            })
     }
 
     pub(super) fn dictionary(&mut self, tr: ty::TraitRef<'tcx>, span: Span) -> R<Expr> {
+        // `<Words as Source>::Item: Debug` of a bound instantiated: `String: Debug`.
+        let tr = self
+            .tcx
+            .try_normalize_erasing_regions(self.typing_env, tr)
+            .unwrap_or(tr);
         // serde's: the function that writes or reads the type (ADR 0081).
         match super::serde::serde_trait(self.tcx, tr.def_id) {
             Some(true) => return self.json_writer(tr.self_ty(), span),
@@ -332,7 +411,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.tcx.is_lang_item(tr.def_id, LangItem::Copy) {
             let ty = tr.self_ty();
-            if matches!(ty.kind(), ty::Param(..)) {
+            if self.is_unknown(ty) {
                 return Err(self.unsupported(span, "Copy without representation evidence"));
             }
             let copy = self.copy(Expr::var("value"), ty);
@@ -433,7 +512,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 values,
             )));
         }
-        if let Some(instance) = ty::Instance::try_resolve(self.tcx, self.typing_env, id, generic_args)?
+        if let Some(instance) = self.resolve_instance(id, generic_args)?
             && self.is_rust_fn(instance.def_id())
             && self.tcx.trait_of_assoc(instance.def_id()).is_none()
         {
@@ -632,6 +711,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ));
             }
         }
+        // And each bound its trait declares on an associated type, the impl's:
+        // `LabelDisplay` of `type Label = u32` is `u32`'s `Display`.
+        for (name, bound) in item_bounds(self.tcx, tr.def_id, tr.args) {
+            if operational(self.tcx, self.krate.foreign, bound.def_id) {
+                let dictionary = self.dictionary(bound, span)?;
+                props.push(Prop::Field(
+                    name,
+                    Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(dictionary)).at(js::Span::NONE)]),
+                ));
+            }
+        }
         for item in self.tcx.associated_items(tr.def_id).in_definition_order() {
             if self.tcx.def_kind(item.def_id) != DefKind::AssocFn {
                 continue;
@@ -655,7 +745,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let args = tr
                 .args
                 .extend_to(self.tcx, item.def_id, |_, _| self.tcx.lifetimes.re_erased.into());
-            let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, item.def_id, args)?
+            let instance = self
+                .resolve_instance(item.def_id, args)?
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
             let method = instance.def_id();
             // A library's trait's default, whose body is the library's (ADR 0100).
@@ -842,7 +933,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.tcx
             .associated_items(id)
             .in_definition_order()
-            .all(|item| self.tcx.def_kind(item.def_id) == DefKind::AssocFn)
+            .all(|item| match self.tcx.def_kind(item.def_id) {
+                DefKind::AssocFn => true,
+                // A `dyn Source<Item = u32>` says what it is (ADR 0106).
+                DefKind::AssocTy => self.tcx.generics_of(item.def_id).own_params.is_empty(),
+                _ => false,
+            })
             && self
                 .tcx
                 .explicit_super_predicates_of(id)

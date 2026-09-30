@@ -230,7 +230,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$displayF64"), vec![value]));
         }
         let display = self.display_trait();
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, display, [ty]);
             let dictionary = self
                 .evidence_for(tr)
@@ -326,7 +326,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::index(names, Expr::bin(Op::Add, value, Expr::int(1))));
         }
         let debug = self.debug_trait();
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, debug, [ty]);
             let dictionary = self
                 .evidence_for(tr)
@@ -487,7 +487,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `Result` and a tuple are shown by their parts.
     pub(super) fn debug_reads_parts(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        if self.is_dyn_debug(ty) || matches!(ty.kind(), ty::Param(_)) || self.has_user_impl(self.debug_trait(), ty) {
+        if self.is_dyn_debug(ty) || self.is_unknown(ty) || self.has_user_impl(self.debug_trait(), ty) {
             return false;
         }
         match ty.kind() {

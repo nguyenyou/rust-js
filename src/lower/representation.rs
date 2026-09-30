@@ -108,10 +108,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// A type only a caller knows: a type parameter, or an associated type of
+    /// one, `<S as Source>::Item`, that isn't a type here (ADR 0106). Its
+    /// dictionaries are the ones a function is given. One that is a type here,
+    /// `<Count as Source>::Item` in an impl's signature, is that type.
+    pub(super) fn is_unknown(&self, ty: Ty<'tcx>) -> bool {
+        match ty.kind() {
+            ty::Param(_) => true,
+            ty::Alias(ty::Projection, _) => self
+                .tcx
+                .try_normalize_erasing_regions(self.typing_env, ty)
+                .map_or(true, |known| {
+                    matches!(known.kind(), ty::Param(_) | ty::Alias(ty::Projection, _))
+                }),
+            _ => false,
+        }
+    }
+
     /// An `Option<T>` whose `T` might look like `None` only because it's a
     /// type parameter: `Some` of it is boxed when it does (ADR 0051).
     pub(super) fn boxed_payload(&self, ty: Ty<'tcx>) -> bool {
-        matches!(self.payload(ty).kind(), ty::Param(_))
+        self.is_unknown(self.payload(ty))
     }
 
     /// Can a `T` be `undefined` or `null` in JS? Then `Option<T>` can't be
@@ -152,7 +169,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// isn't a JS object, as a `String`, a number or a fieldless enum is.
     pub(super) fn is_boxable(&self, ty: Ty<'tcx>) -> bool {
         !ty.is_ref()
-            && !matches!(ty.kind(), ty::Param(_))
+            && !self.is_unknown(ty)
             && !self.is_object(ty)
             // A `&mut dyn FnMut()` is the function (ADR 0099).
             && !self.is_callable(ty)
@@ -165,7 +182,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// function or a JS iterator already: a closure, whose `&mut` is the
     /// closure, or an iterator (ADR 0061).
     pub(super) fn is_generic_boxed(&self, ty: Ty<'tcx>, param_env: ty::ParamEnv<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Param(_))
+        self.is_unknown(ty)
             && !self.bound_by(ty, param_env, |id| {
                 self.tcx.fn_trait_kind_from_def_id(id).is_some()
                     || self.tcx.is_diagnostic_item(sym::Iterator, id)
@@ -191,7 +208,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Closure(..) | ty::FnDef(..) | ty::FnPtr(..) => true,
             ty::Dynamic(predicates, ..) => predicates.principal_def_id().is_some_and(fn_trait),
-            ty::Param(_) => self.bound_by(ty, self.typing_env.param_env, fn_trait),
+            _ if self.is_unknown(ty) => self.bound_by(ty, self.typing_env.param_env, fn_trait),
             _ => false,
         }
     }
@@ -366,7 +383,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn contains_mutated_uncached(&self, ty: Ty<'tcx>) -> bool {
-        matches!(ty.kind(), ty::Param(_))
+        self.is_unknown(ty)
             || self.mutated_itself(ty)
             || match self.shape(ty) {
                 Shape::Object(fields) => fields.iter().any(|&(_, t)| self.contains_mutated(t)),
@@ -435,7 +452,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// matter.
     fn instance_of(&self, ty: Ty<'tcx>, general: Ty<'tcx>) -> bool {
         match (ty.kind(), general.kind()) {
-            (_, ty::Param(_)) => true,
+            _ if self.is_unknown(general) => true,
             (ty::Adt(adt, args), ty::Adt(general_adt, general_args)) => {
                 adt.did() == general_adt.did()
                     && args.iter().zip(general_args.iter()).all(|(arg, general)| {
@@ -458,7 +475,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.
     /// A field that also contains mutated types is copied in turn.
     pub(super) fn copy(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
-        if matches!(ty.kind(), ty::Param(_))
+        if self.is_unknown(ty)
             && let Some((_, dictionary)) = self
                 .evidence
                 .iter()
@@ -607,7 +624,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return None;
         }
         match ty.kind() {
-            ty::Param(_) => return None,
+            _ if self.is_unknown(ty) => return None,
             ty::Dynamic(predicates, ..)
                 if predicates
                     .principal_def_id()
@@ -894,6 +911,7 @@ pub(super) fn eval_const<'tcx>(
     args: ty::GenericArgsRef<'tcx>,
     span: Span,
 ) -> Option<ty::Value<'tcx>> {
+    let args = tcx.try_normalize_erasing_regions(typing_env, args).ok()?;
     let instance = ty::Instance::try_resolve(tcx, typing_env, def_id, args).ok()??;
     // The query itself, not `const_eval_global_id_for_typeck`, which
     // reports a constant too large for a value tree as rustc's own error

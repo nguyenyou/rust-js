@@ -231,6 +231,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Param(param) if let Some(&(t, what)) = self.drop_state.unsupported_params.get(&param.index) => {
                 Drops::Unsupported(t, what)
             }
+            // An associated type only a caller knows, `<S as Source>::Item` (ADR
+            // 0106): no drop function is given for one, so it has nothing to
+            // drop only where nothing does, the crate's own types and a
+            // library's.
+            ty::Alias(ty::Projection, _) if self.is_unknown(ty) => {
+                let drop_trait = self.tcx.lang_items().drop_trait();
+                let own = drop_trait.is_some_and(|id| self.tcx.all_local_trait_impls(()).contains_key(&id));
+                match own || self.krate.foreign.any() {
+                    true => Drops::Unsupported(ty, "a value of an associated type, where a type may have a destructor"),
+                    false => Drops::Nothing,
+                }
+            }
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {

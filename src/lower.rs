@@ -1486,7 +1486,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let method = self.tcx.associated_item_def_ids(from_trait)[0];
         let args = self.tcx.mk_args(&[to.into(), from.into()]);
-        let Some(instance) = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args)? else {
+        let Some(instance) = self.resolve_instance(method, args)? else {
             return Ok(None);
         };
         if !self.krate.fns.contains_key(&instance.def_id()) {

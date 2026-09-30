@@ -74,7 +74,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$cmp"), vec![a, b]));
         }
         let (ord, partial_ord) = (self.ord_trait(), self.partial_ord_trait());
-        if let ty::Param(_) = ty.kind() {
+        if self.is_unknown(ty) {
             let total = ty::TraitRef::new(self.tcx, ord, [ty]);
             if let Some(dictionary) = self.evidence_for(total) {
                 return Ok(Expr::call(Expr::member(dictionary, "cmp"), vec![a, b]));
