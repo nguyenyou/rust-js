@@ -1,8 +1,19 @@
 diff --git a/compiler/rustc_metadata/src/host_dylib.rs b/compiler/rustc_metadata/src/host_dylib.rs
-index 9bd2a57fcd285aefed0663fd12e8d0578982e425..9c62fb42fe52459f20c5ebf6cf534b83b61e529e 100644
+index 9bd2a57fcd285aefed0663fd12e8d0578982e425..50172a1fd0518ab8915ad7b30c56039d9c40281e 100644
 --- a/compiler/rustc_metadata/src/host_dylib.rs
 +++ b/compiler/rustc_metadata/src/host_dylib.rs
-@@ -9,10 +9,12 @@
+@@ -1,7 +1,10 @@
++#[cfg(not(target_family = "wasm"))]
+ use std::error::Error;
+ use std::path::Path;
++#[cfg(not(target_family = "wasm"))]
+ use std::time::Duration;
+ 
++#[cfg(not(target_family = "wasm"))]
+ use rustc_fs_util::try_canonicalize;
+ use rustc_proc_macro::bridge::client::Client as ProcMacroClient;
+ use rustc_session::StableCrateId;
+@@ -9,10 +12,12 @@
  
  use crate::locator::CrateError;
  
@@ -15,7 +26,7 @@ index 9bd2a57fcd285aefed0663fd12e8d0578982e425..9c62fb42fe52459f20c5ebf6cf534b83
  fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Error> {
      #[cfg(target_os = "aix")]
      if let Some(ext) = path.extension()
-@@ -36,6 +38,7 @@ fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Er
+@@ -36,6 +41,7 @@ fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Er
      unsafe { libloading::Library::new(&path) }
  }
  
@@ -23,7 +34,7 @@ index 9bd2a57fcd285aefed0663fd12e8d0578982e425..9c62fb42fe52459f20c5ebf6cf534b83
  // On Windows the compiler would sometimes intermittently fail to open the
  // proc-macro DLL with `Error::LoadLibraryExW`. It is suspected that something in the
  // system still holds a lock on the file, so we retry a few times before calling it
-@@ -103,6 +106,7 @@ fn from(err: DylibError) -> CrateError {
+@@ -103,6 +109,7 @@ fn from(err: DylibError) -> CrateError {
      }
  }
  
@@ -31,7 +42,7 @@ index 9bd2a57fcd285aefed0663fd12e8d0578982e425..9c62fb42fe52459f20c5ebf6cf534b83
  pub unsafe fn load_symbol_from_dylib<T: Copy>(
      path: &Path,
      sym_name: &str,
-@@ -123,6 +127,17 @@ pub unsafe fn load_symbol_from_dylib<T: Copy>(
+@@ -123,6 +130,17 @@ pub unsafe fn load_symbol_from_dylib<T: Copy>(
      Ok(*sym)
  }
  
@@ -49,3 +60,17 @@ index 9bd2a57fcd285aefed0663fd12e8d0578982e425..9c62fb42fe52459f20c5ebf6cf534b83
  pub(crate) fn dlsym_proc_macros(
      path: &Path,
      stable_crate_id: StableCrateId,
+diff --git a/compiler/rustc_metadata/src/lib.rs b/compiler/rustc_metadata/src/lib.rs
+index 9ef9422a9e5a014253e2e9151451a0e1076e281f..f3af32e94c0c7547e4c0ef4eb1dee3f1d61df28c 100644
+--- a/compiler/rustc_metadata/src/lib.rs
++++ b/compiler/rustc_metadata/src/lib.rs
+@@ -2,7 +2,8 @@
+ #![allow(internal_features)]
+ #![cfg_attr(bootstrap, feature(result_option_map_or_default))]
+ #![cfg_attr(bootstrap, feature(strip_circumfix))]
+-#![feature(error_iter)]
++// For the dynamic libraries Wasm has none of. (Patched in by rust-js.)
++#![cfg_attr(not(target_family = "wasm"), feature(error_iter))]
+ #![feature(file_buffered)]
+ #![feature(gen_blocks)]
+ #![feature(macro_metavar_expr)]

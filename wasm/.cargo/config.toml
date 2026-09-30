@@ -6,7 +6,13 @@ target = "wasm32-wasip1"
 [target.wasm32-wasip1]
 # rustc expects an 8 MB stack, which it normally gets on a spawned thread.
 # Without threads the main stack is fixed at link time: give it 32 MB.
-rustflags = ["-C", "link-arg=-zstack-size=33554432"]
+rustflags = [
+    "-C", "link-arg=-zstack-size=33554432",
+    # rustc's crates branch on `cfg(bootstrap)`, true only when an older release
+    # builds them, which its own build system declares: here it's unset, as
+    # the release's own compiler builds its source.
+    "--check-cfg=cfg(bootstrap)",
+]
 
 # rustc's own build system (bootstrap) normally sets these.
 [env]
