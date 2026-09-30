@@ -64,8 +64,11 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
             && params
                 .iter()
                 .any(|p| !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
+            && may_have_destructors(tcx, foreign)
         {
-            Some("generic trait methods")
+            // Called through a dictionary, it's given no drop function for its
+            // own type parameters (ADR 0106).
+            Some("generic trait methods, where a type may have a destructor")
         } else {
             None
         };
@@ -123,23 +126,65 @@ pub(super) fn bounds<'tcx>(
         result.push(ty::TraitRef::identity(tcx, trait_id));
     }
     for (clause, _) in tcx.predicates_of(id).instantiate_identity(tcx) {
-        // A higher-ranked bound, `for<'a> T: Foo<'a>`, is one dictionary:
-        // lifetimes aren't in the JS, so its own are erased, not left bound.
-        let ty::ClauseKind::Trait(predicate) = tcx.instantiate_bound_regions_with_erased(clause.kind()) else {
-            continue;
-        };
-        let mut tr = predicate.trait_ref;
-        // `Eq` promises more than `PartialEq`, but it's `PartialEq`'s `eq`
-        // that's called.
-        if tcx.is_diagnostic_item(sym::Eq, tr.def_id) {
-            let partial_eq = tcx.require_lang_item(LangItem::PartialEq, tcx.def_span(id));
-            tr = ty::TraitRef::new(tcx, partial_eq, [tr.self_ty(), tr.self_ty()]);
-        }
-        if operational(tcx, foreign, tr.def_id) && !result.contains(&tr) {
+        if let Some(tr) = bound_of(tcx, foreign, clause, id)
+            && !result.contains(&tr)
+        {
             result.push(tr);
         }
     }
     result
+}
+
+/// Might any value have a destructor: has the crate a `Drop` impl of its own,
+/// or a library, whose types might? Where it hasn't, what a caller gives
+/// generic code without a drop function has nothing to drop (ADR 0106).
+pub(super) fn may_have_destructors(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_>) -> bool {
+    let drop_trait = tcx.lang_items().drop_trait();
+    drop_trait.is_some_and(|id| tcx.all_local_trait_impls(()).contains_key(&id)) || foreign.any()
+}
+
+/// A clause of a function's, as its evidence is for it, if it's given one.
+fn bound_of<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    foreign: &super::library::Foreign<'_, 'tcx>,
+    clause: ty::Clause<'tcx>,
+    id: DefId,
+) -> Option<ty::TraitRef<'tcx>> {
+    // A higher-ranked bound, `for<'a> T: Foo<'a>`, is one dictionary:
+    // lifetimes aren't in the JS, so its own are erased, not left bound.
+    let ty::ClauseKind::Trait(predicate) = tcx.instantiate_bound_regions_with_erased(clause.kind()) else {
+        return None;
+    };
+    let mut tr = predicate.trait_ref;
+    // `Eq` promises more than `PartialEq`, but it's `PartialEq`'s `eq`
+    // that's called.
+    if tcx.is_diagnostic_item(sym::Eq, tr.def_id) {
+        let partial_eq = tcx.require_lang_item(LangItem::PartialEq, tcx.def_span(id));
+        tr = ty::TraitRef::new(tcx, partial_eq, [tr.self_ty(), tr.self_ty()]);
+    }
+    operational(tcx, foreign, tr.def_id).then_some(tr)
+}
+
+/// The bounds of a function's own type parameters, which end its `bounds`:
+/// a trait's generic method's, `T: Display` of `describe<T: Display>`, which
+/// a caller through a dictionary gives where it calls, after its arguments,
+/// in the trait's order, where an impl's are given when its dictionary is
+/// made (ADR 0106).
+pub(super) fn own_bounds<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    foreign: &super::library::Foreign<'_, 'tcx>,
+    id: DefId,
+) -> Vec<ty::TraitRef<'tcx>> {
+    let own: Vec<_> = tcx
+        .predicates_of(id)
+        .predicates
+        .iter()
+        .filter_map(|&(clause, _)| bound_of(tcx, foreign, clause, id))
+        .collect();
+    bounds(tcx, foreign, id)
+        .into_iter()
+        .filter(|tr| own.contains(tr))
+        .collect()
 }
 
 /// The type, then the trait, then the trait's arguments other than their
@@ -507,6 +552,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => Expr::member(pair, "value"),
             };
             values.insert(0, this);
+            values.extend(self.own_evidence(id, generic_args, span)?);
             return Ok(Some(Expr::call(
                 Expr::member(dictionary, bindings::fn_name(self.tcx, id)),
                 values,
@@ -561,12 +607,66 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if operational(self.tcx, self.krate.foreign, trait_id) {
             let dictionary = self.dictionary(tr, span)?;
+            let mut values = values;
+            values.extend(self.own_evidence(id, generic_args, span)?);
             return Ok(Some(Expr::call(
                 Expr::member(dictionary, bindings::fn_name(self.tcx, id)),
                 values,
             )));
         }
         Ok(None)
+    }
+
+    /// What a trait's generic method is given where it's called through a
+    /// dictionary, after its arguments: its own bounds' evidence, for this call
+    /// (ADR 0106). None for one that isn't generic.
+    fn own_evidence(&mut self, id: DefId, generic_args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
+        own_bounds(self.tcx, self.krate.foreign, id)
+            .into_iter()
+            .map(|bound| self.dictionary(ty::EarlyBinder::bind(bound).instantiate(self.tcx, generic_args), span))
+            .collect()
+    }
+
+    /// `evidence_args` of an impl's generic method, for its dictionary's entry:
+    /// its own bounds' evidence is the entry's caller's, `names`, given for the
+    /// trait's, `declared`, each passed on as the impl's bound it is, which may
+    /// be in another order; the impl's own are this dictionary's (ADR 0106).
+    fn method_evidence(
+        &mut self,
+        method: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+        declared: &[ty::TraitRef<'tcx>],
+        names: &[String],
+        span: Span,
+    ) -> R<Vec<Expr>> {
+        let own = own_bounds(self.tcx, self.krate.foreign, method);
+        let mut values = Vec::new();
+        for bound in bounds(self.tcx, self.krate.foreign, method) {
+            let here = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
+            let here = self.tcx.erase_and_anonymize_regions(here);
+            if own.contains(&bound) {
+                let at = declared
+                    .iter()
+                    .position(|&d| self.tcx.erase_and_anonymize_regions(d) == here)
+                    .ok_or_else(|| {
+                        self.unsupported(span, "a generic method whose bound isn't one its trait declares")
+                    })?;
+                values.push(Expr::var(&names[at]));
+            } else {
+                values.push(self.dictionary(here, span)?);
+            }
+        }
+        // Its drops are the impl's type parameters' (ADR 0098): its own, a
+        // caller through a dictionary gives none of, are refused (`validate`).
+        let mut drops = Vec::new();
+        for &index in self.krate.drop_params.get(&method).map_or(&[][..], Vec::as_slice) {
+            drops.push(self.drop_function(args.type_at(index as usize), span)?);
+        }
+        while matches!(drops.last(), Some(None)) {
+            drops.pop();
+        }
+        values.extend(drops.into_iter().map(|drop| drop.unwrap_or_else(Expr::undefined)));
+        Ok(values)
     }
 
     /// A trait rust-js compiled: the crate's own, or a library's (ADR 0100).
@@ -731,20 +831,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if !self.is_rust_trait(tr.def_id) && self.tcx.defaultness(item.def_id).has_value() {
                 continue;
             }
-            if self
-                .tcx
-                .generics_of(item.def_id)
-                .own_params
-                .iter()
-                .any(|p| !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-            {
-                return Err(self.unsupported(self.tcx.def_span(item.def_id), "generic trait methods"));
-            }
-            // The method's own parameters, which are lifetimes, `fn bar<'b>`,
-            // are erased: they aren't in the JS, but rustc resolves with them.
-            let args = tr
-                .args
-                .extend_to(self.tcx, item.def_id, |_, _| self.tcx.lifetimes.re_erased.into());
+            // The method's own parameters: lifetimes, `fn bar<'b>`, are erased,
+            // as they aren't in the JS, but rustc resolves with them; a type,
+            // `describe<T>`, is its caller's, the trait method's own (ADR 0106).
+            let args = tr.args.extend_to(self.tcx, item.def_id, |param, _| match param.kind {
+                ty::GenericParamDefKind::Lifetime => self.tcx.lifetimes.re_erased.into(),
+                _ => self.tcx.mk_param_from_def(param),
+            });
             let instance = self
                 .resolve_instance(item.def_id, args)?
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
@@ -775,28 +868,48 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .inputs()
                 .len()
                 - usize::from(self.formatter_param(method).is_some());
-            let args: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
-            let mut values: Vec<Expr> = args.iter().map(|name| Expr::var(name)).collect();
+            let mut params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
+            let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
+            // A generic method's own evidence is its caller's, after the arguments.
+            let declared: Vec<_> = own_bounds(self.tcx, self.krate.foreign, item.def_id)
+                .into_iter()
+                .map(|bound| ty::EarlyBinder::bind(bound).instantiate(self.tcx, args))
+                .collect();
+            let names: Vec<String> = declared
+                .iter()
+                .map(|&d| {
+                    let word = format!("{}{}", evidence_word(self.tcx, d.self_ty()), trait_word(self.tcx, d));
+                    self.fresh(&js_word(&word))
+                })
+                .collect();
             // A `&mut self` its caller through the dictionary gives in a box,
             // as a generic `&mut Self` is (ADR 0099), to a method that takes the
             // object itself: what's in it.
-            let mut unboxed = false;
             for (i, value) in values.iter_mut().enumerate() {
                 if self.param_is_box(item.def_id, i) && !self.param_is_box(method, i) {
                     *value = Expr::member(std::mem::replace(value, Expr::undefined()), "value");
-                    unboxed = true;
                 }
             }
             // Everything the method takes that its caller through the dictionary
             // doesn't give: its dictionaries, then its drops (ADR 0098), which
             // are this impl's own.
-            let evidence = self.evidence_args(method, instance.args, span)?;
-            let value = if evidence.is_empty() && !unboxed {
+            let evidence = match declared.is_empty() {
+                true => self.evidence_args(method, instance.args, span)?,
+                false => self.method_evidence(method, instance.args, &declared, &names, span)?,
+            };
+            params.extend(names);
+            values.extend(evidence);
+            // One that passes on just what it's given, in order, is the method.
+            let passed = values.len() == params.len()
+                && values
+                    .iter()
+                    .zip(&params)
+                    .all(|(value, param)| matches!(&value.kind, js::ExprKind::Var(v) if v == param));
+            let value = if passed {
                 callee
             } else {
-                values.extend(evidence);
                 Expr::arrow(
-                    args.into_iter().map(Into::into).collect(),
+                    params.into_iter().map(Into::into).collect(),
                     vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js::Span::NONE)],
                 )
             };
@@ -862,7 +975,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn default_method(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>) -> R<Expr> {
         let span = self.tcx.def_span(id);
         let mut specialized = Vec::new();
+        // A generic default's own evidence is its caller's, after its
+        // arguments (ADR 0106); the rest is the impl's, made here.
+        let own = own_bounds(self.tcx, self.krate.foreign, id);
+        let mut own_params = Vec::new();
         for bound in bounds(self.tcx, self.krate.foreign, id) {
+            if own.contains(&bound) {
+                let word = format!(
+                    "{}{}",
+                    evidence_word(self.tcx, bound.self_ty()),
+                    trait_word(self.tcx, bound)
+                );
+                let name = self.fresh(&js_word(&word));
+                specialized.push((bound, Expr::var(&name)));
+                own_params.push(name);
+                continue;
+            }
             let concrete = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
             specialized.push((bound, self.dictionary(concrete, span)?));
         }
@@ -909,7 +1037,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let enclosing = self.enter_body(body, id, nested)?;
         let mut rest = Vec::new();
-        let (params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest)?;
+        let (mut params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest)?;
+        params.extend(own_params.into_iter().map(Into::into));
         // Only the drops it uses: most defaults drop nothing of their `Self`.
         let used = self.used_drops();
         self.leave_body(enclosing)?;

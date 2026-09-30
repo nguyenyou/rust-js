@@ -1,7 +1,7 @@
 # 0106. A trait's type parameters, associated types and generic methods
 
-Status: Accepted in part: a trait's type parameters and associated types. A
-trait's generic methods, and generic associated types, are to come. Extends [0049](0049-traits-and-generics.md)
+Status: Accepted: a trait's type parameters, associated types and generic
+methods. Generic associated types are to come. Extends [0049](0049-traits-and-generics.md)
 and [0051](0051-generic-options.md).
 
 ## Context
@@ -64,8 +64,21 @@ an impl's signature, it's that type.
   a type parameter's is (ADR 0098). Elsewhere it's an error.
 - **Not one with parameters of its own**, `type Item<'a>`: an error.
 
-**A trait's generic method is given its own evidence where it's called**,
-after the dictionary's: this is to come.
+**A trait's generic method is given its own evidence where it's called,**
+`describe<T: Display>`'s `TDisplay`:
+
+- **Called where the impl is known, it's the impl's method**, given all of
+  its evidence, as any generic function is.
+- **Called through a dictionary, its own evidence comes after its
+  arguments, in the order the trait declares it**: `SShape.describe(s, 7,
+  { fmt: String })`. The dictionary's entry passes each on as the impl's
+  bound it is, which may be in another order, `Square`'s `A: Debug +
+  Clone`, with the impl's own evidence, made with the dictionary; and one
+  that passes on just what it's given, in order, is the method itself.
+- **A default copied into an impl takes it too**, after its arguments.
+- **Where a type may have a destructor, it's an error:** called through a
+  dictionary, it's given no drop function for its own type parameters, as
+  an associated type isn't.
 
 ## Why
 
@@ -95,5 +108,11 @@ after the dictionary's: this is to come.
   panics on arguments it can't normalize, so they're normalized first, or
   not resolved; and an `extern` declaration of the crate's own
   `#[no_mangle]` function was a JS global no JS has, which is refused.
+- **Generic methods are in** (`generic_trait_methods`): a default, one
+  bounded by a closure, one with two bounds an impl orders the other way,
+  called on a known type and from generic code, and the diagnostics test's
+  refusal where a type has a destructor. Of the 20 rustc tests stopping at
+  them, 11 pass; of all 1,139 known failures, 154, none giving another
+  answer.
 - A trait's default method copied into a generic impl, `impl<T> .. for
   Stack<T>`, still stops at ADR 0098's destructors: `T` might have one.

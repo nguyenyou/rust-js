@@ -170,6 +170,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// What dropping a `ty` runs.
+    /// `traits::may_have_destructors`, of this crate.
+    pub(super) fn may_have_destructors(&self) -> bool {
+        super::traits::may_have_destructors(self.tcx, self.krate.foreign)
+    }
+
     pub(super) fn drops(&self, ty: Ty<'tcx>) -> Drops<'tcx> {
         self.drops_in(
             ty,
@@ -235,14 +240,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // 0106): no drop function is given for one, so it has nothing to
             // drop only where nothing does, the crate's own types and a
             // library's.
-            ty::Alias(ty::Projection, _) if self.is_unknown(ty) => {
-                let drop_trait = self.tcx.lang_items().drop_trait();
-                let own = drop_trait.is_some_and(|id| self.tcx.all_local_trait_impls(()).contains_key(&id));
-                match own || self.krate.foreign.any() {
-                    true => Drops::Unsupported(ty, "a value of an associated type, where a type may have a destructor"),
-                    false => Drops::Nothing,
-                }
-            }
+            ty::Alias(ty::Projection, _) if self.is_unknown(ty) => match self.may_have_destructors() {
+                true => Drops::Unsupported(ty, "a value of an associated type, where a type may have a destructor"),
+                false => Drops::Nothing,
+            },
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {

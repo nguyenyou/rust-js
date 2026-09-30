@@ -170,7 +170,6 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 });
 
 for (const [name, source, diagnostic] of [
-  ["generic method", `pub trait Shape { fn f<T>(&self, value: T); }`, "generic trait methods"],
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   ["const generic", `pub fn f<const N: usize>() -> usize { N }`, "const generics"],
