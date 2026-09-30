@@ -62,9 +62,9 @@ function checkRuntime(root, version) {
   if (installed !== version) throw new Error(`rust-js ${version} needs @rust-js/runtime ${version}, not the installed ${installed}`);
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: { ...process.env, RUST_JS_JS_RUNTIME: process.execPath }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, env: { ...process.env, RUST_JS_JS_RUNTIME: process.execPath, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     let errors = "";
     child.stdout.setEncoding("utf8").on("data", chunk => { output += chunk; });
@@ -118,7 +118,8 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
       const stamp = join(metadata, "complete");
       if (!existsSync(stamp) || ["libreact.rmeta", "libwebapi.rmeta", "libjs.rmeta"].some(file => !existsSync(join(metadata, file)))) {
         await mkdir(metadata, { recursive: true });
-        await run(join(repo, "react/build.sh"), ["-o", join(metadata, "libreact.rmeta"), ...(react ? ["--react", react] : [])], repo);
+        // The binding crates are this compiler's to compile (ADR 0112).
+        await run(join(repo, "react/build.sh"), ["-o", join(metadata, "libreact.rmeta"), ...(react ? ["--react", react] : [])], repo, { RUST_JS_COMPILER: compilerPath });
         await writeFile(stamp, key);
       }
       // React's crates, each a program's to name (ADR 0102): `use js::spawn`.

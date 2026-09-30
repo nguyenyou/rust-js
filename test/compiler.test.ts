@@ -1151,3 +1151,19 @@ test("js::import! imports a module where it's written, and writes nothing of its
   expect(top).not.toContain("const _");
   expect(panel).not.toContain("app.css");
 });
+
+// The crates a program depends on, js, webapi and react, are stable Rust too
+// (ADR 0112): rust-js compiles them, `--rustc`, with its tool registered, so
+// they need no `register_tool`, nor any feature, nor `RUSTC_BOOTSTRAP`.
+test("the binding crates are stable Rust, which rust-js compiles", () => {
+  for (const root of ["builtins/src/lib.rs", "webapi/src/lib.rs", "react/src/lib.rs"]) {
+    const source = readFileSync(join(import.meta.dir, "..", root), "utf8");
+    expect([root, /^#!\[(feature|register_tool)\b/m.test(source)]).toEqual([root, false]);
+  }
+  const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+  const dir = fixture("stable-bindings");
+  const p = Bun.spawnSync(["react/build.sh", "-o", join(dir, "libreact.rmeta")], { cwd: join(import.meta.dir, ".."), env: { ...env, RUST_JS_COMPILER: compiler } });
+  expect(p.stderr.toString()).not.toContain("error");
+  expect(p.exitCode).toBe(0);
+  for (const name of ["libjs.rmeta", "libwebapi.rmeta", "libreact.rmeta"]) expect(Bun.file(join(dir, name)).size).toBeGreaterThan(0);
+});

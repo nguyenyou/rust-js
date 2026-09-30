@@ -10,9 +10,6 @@
 // (`before`, `before_with_str`), and methods of the same name on different
 // interfaces. rustc warns because in native code they would be one symbol.
 #![allow(clashing_extern_declarations)]
-// `#[rust_js::name]` on a dictionary's field that JS names otherwise.
-#![feature(register_tool)]
-#![register_tool(rust_js)]
 
 use core::marker::PhantomData;
 use core::ops::Deref;

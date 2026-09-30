@@ -2,13 +2,27 @@
 // local-library planning before them (ADR 0085). Cargo owns resolution; this
 // adapter does not infer dependencies from source files or run build scripts.
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 import { fingerprint } from "./publish.js";
 
 const execute = promisify(execFile);
+
+/** Cargo's rustc, for every crate it compiles: rust-js's `--rustc`, rustc
+ * with rust-js's tool known (ADR 0112). The binding crates need it, which
+ * the workspace's wrapper runs for only when they're its members, and a
+ * plain rustc doesn't know the tool. The same pinned rustc, for the rest. */
+function rustcShim(compiler) {
+  const dir = join(tmpdir(), "rust-js", createHash("sha256").update(compiler).digest("hex").slice(0, 16));
+  const shim = join(dir, "rustc");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(shim, `#!/bin/sh\nexec ${JSON.stringify(compiler)} --rustc "$@"\n`, { mode: 0o755 });
+  return shim;
+}
 
 /** One exact toolchain: a release, `1.98.1`, or a dated nightly (ADR 0109). */
 const exactToolchain = toolchain => /^(\d+\.\d+\.\d+|nightly-\d{4}-\d{2}-\d{2})$/.test(toolchain ?? "");
@@ -86,7 +100,7 @@ export async function checkCargo({ manifestPath, toolchain, compiler, packageNam
   if (features.length) args.push("--features", features.join(","));
   if (noDefaultFeatures) args.push("--no-default-features");
   if (offline) args.push("--offline");
-  const env = { ...process.env, RUSTC_WORKSPACE_WRAPPER: resolve(compiler) };
+  const env = { ...process.env, RUSTC_WORKSPACE_WRAPPER: resolve(compiler), RUSTC: rustcShim(resolve(compiler)) };
   if (react) env.RUST_JS_REACT = react;
   else delete env.RUST_JS_REACT;
   const { stdout } = await execute("cargo", args, { cwd: dirname(manifest), env, maxBuffer: 64 * 1024 * 1024 }).catch((error) => {

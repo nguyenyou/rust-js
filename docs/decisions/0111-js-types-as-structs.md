@@ -38,8 +38,9 @@ that takes and gives it.
 
 ## Consequences
 
-- **The js crate uses no nightly feature but `register_tool`**, for its own
-  `#[rust_js::link_name]`s, which plain rustc builds it with.
+- **The js crate used no nightly feature but `register_tool`**, for its own
+  `#[rust_js::link_name]`s, which plain rustc built it with, and since ADR
+  0112, none.
 - **The playground's bindings are the struct form**, and its crate is stable
   Rust, compiled with no `RUSTC_BOOTSTRAP` (the test `the playground's own Rust
   is stable Rust`).

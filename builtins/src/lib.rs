@@ -7,10 +7,6 @@
 //! It holds declarations only, so it's never compiled to JS: a program calls
 //! what it declares, and the calls become plain JS.
 
-// `#[rust_js::link_name]` on a generic function, `settle` (ADR 0039).
-#![feature(register_tool)]
-#![register_tool(rust_js)]
-
 use core::marker::PhantomData;
 
 /// `import "./App.css";` in the module's JS, for what a module does when

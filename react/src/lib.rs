@@ -42,8 +42,6 @@
 //! records which release first has each export, event and attribute, read
 //! from the releases themselves.
 
-#![feature(register_tool)]
-#![register_tool(rust_js)]
 // The bodies are never compiled, so they don't use their parameters.
 #![allow(unused_variables)]
 

@@ -97,23 +97,47 @@ struct RustJs {
     pending: Option<(link::Linked, Vec<PathBuf>)>,
 }
 
-impl Callbacks for RustJs {
-    /// `rust_js` is a tool rustc knows, as it knows `rustfmt`: a program
-    /// writes `#[rust_js::link_name = ".."]` as stable Rust (ADR 0110).
+/// `rust_js` is a tool rustc knows, as it knows `rustfmt`: a program
+/// writes `#[rust_js::link_name = ".."]` as stable Rust (ADR 0110).
+fn register_tool(config: &mut rustc_interface::interface::Config) {
+    config.override_queries = Some(|_, providers| {
+        RUSTC_TOOLS.get_or_init(|| providers.queries.registered_tools);
+        providers.queries.registered_tools = |tcx, ()| {
+            let mut tools = RUSTC_TOOLS.get().expect("rustc's tools, kept first")(tcx, ());
+            tools.insert(Ident::with_dummy_span(Symbol::intern("rust_js")));
+            tools
+        };
+    });
+}
+
+/// rustc itself, with rust-js's tool and syntax and nothing else, `--rustc`:
+/// what the crates a program uses, js, webapi and react, are compiled with,
+/// for their metadata (ADR 0112).
+struct Syntax;
+
+impl Callbacks for Syntax {
     fn config(&mut self, config: &mut rustc_interface::interface::Config) {
-        config.override_queries = Some(|_, providers| {
-            RUSTC_TOOLS.get_or_init(|| providers.queries.registered_tools);
-            providers.queries.registered_tools = |tcx, ()| {
-                let mut tools = RUSTC_TOOLS.get().expect("rustc's tools, kept first")(tcx, ());
-                tools.insert(Ident::with_dummy_span(Symbol::intern("rust_js")));
-                tools
-            };
-        });
+        register_tool(config);
     }
 
     fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
         jsx_syntax::expand(&compiler.sess, krate, stable_crate_id(compiler, krate));
         Compilation::Continue
+    }
+
+    fn after_expansion<'tcx>(&mut self, _compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
+        jsx_syntax::check_crate_id(tcx.stable_crate_id(LOCAL_CRATE));
+        Compilation::Continue
+    }
+}
+
+impl Callbacks for RustJs {
+    fn config(&mut self, config: &mut rustc_interface::interface::Config) {
+        register_tool(config);
+    }
+
+    fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
+        Syntax.after_crate_root_parsing(compiler, krate)
     }
 
     fn after_expansion<'tcx>(&mut self, _compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
@@ -186,6 +210,12 @@ fn main() -> ExitCode {
             compiler.version, compiler.toolchain, compiler.abi
         );
         return ExitCode::SUCCESS;
+    }
+    if args.first().is_some_and(|arg| arg == "--rustc") {
+        let rustc_args: Vec<String> = std::iter::once("rust-js".to_string())
+            .chain(args[1..].iter().cloned())
+            .collect();
+        return rustc_driver::catch_with_exit_code(|| rustc_driver::run_compiler(&rustc_args, &mut Syntax));
     }
     if args.first().is_some_and(|arg| arg == "--format-jsx") {
         let input = match args.as_slice() {

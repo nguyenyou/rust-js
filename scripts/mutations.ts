@@ -1409,7 +1409,7 @@ export const mutations: Mutation[] = [
     name: "rust-js-tool-unregistered",
     breaks: "`#[rust_js::link_name]` names a tool rustc doesn't know, and a binding is an error",
     file: "src/main.rs",
-    find: "                tools.insert(Ident::with_dummy_span(Symbol::intern(\"rust_js\")));\n",
+    find: "            tools.insert(Ident::with_dummy_span(Symbol::intern(\"rust_js\")));\n",
     replace: "",
     tests: ["test/diagnostics.test.ts","-t","unstable feature rust-js"],
   },
@@ -1468,6 +1468,14 @@ export const mutations: Mutation[] = [
     find: "            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_)) || self.is_js_object_itself(t)))\n",
     replace: "            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))\n",
     tests: ["test/snapshots.test.ts","-t","counter"],
+  },
+  {
+    name: "rustc-mode-without-tool",
+    breaks: "`rust-js --rustc` is rustc without rust-js's tool, and the binding crates don't compile",
+    file: "src/main.rs",
+    find: "impl Callbacks for Syntax {\n    fn config(&mut self, config: &mut rustc_interface::interface::Config) {\n        register_tool(config);\n",
+    replace: "impl Callbacks for Syntax {\n    fn config(&mut self, _config: &mut rustc_interface::interface::Config) {\n",
+    tests: ["test/cargo-react.test.ts"],
   },
   {
     name: "tuple-part-through-box",

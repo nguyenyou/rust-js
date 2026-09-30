@@ -44,7 +44,7 @@ jobs:
         run: |
           TOOLCHAIN=$(bun scripts/toolchain.ts channel)
           rustup toolchain install "$TOOLCHAIN" --profile minimal \
-            --component llvm-tools \
+            --component llvm-tools --component rustc-dev \
             --target wasm32-wasip1 --target wasm32-unknown-unknown
 
       # Only compiler/ and library/proc_macro, and only this one commit.
@@ -77,6 +77,11 @@ jobs:
       - name: Stage the sysroot
         if: steps.prebuilt.outputs.found == 'true'
         run: wasm/stage-sysroot.sh
+
+      # The binding crates the page's Rust uses are rust-js's to compile, as
+      # rustc with its tool (ADR 0112): its native build, where they're made.
+      - name: Build rust-js
+        run: cargo build --quiet
 
       - name: Build the static site
         run: |

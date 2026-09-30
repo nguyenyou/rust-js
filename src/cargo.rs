@@ -46,7 +46,8 @@ pub fn translate(args: Vec<String>) -> Invocation {
         .any(|flag| flag == "-" || flag == "-vV" || flag.starts_with("--print"));
     // rust-js's bindings are metadata only (ADR 0024), rustc's to check, a
     // member of the workspace or not: installed under an app's
-    // `node_modules`, they're in its workspace.
+    // `node_modules`, they're in its workspace. rustc is rust-js's `--rustc`,
+    // with its tool known, as the tooling runs Cargo (ADR 0112).
     let bindings = std::env::var("CARGO_PKG_NAME").is_ok_and(|name| BINDINGS.contains(&name.as_str()));
     if probe || bindings || !library || values(&flags, "--target").next().as_deref() != Some(TARGET) {
         return rustc_itself(&rustc, given);

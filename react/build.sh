@@ -32,9 +32,13 @@ target=(--target=wasm32-unknown-unknown)
 for arg in "$@"; do
   case "$arg" in --target | --target=*) target=() ;; esac
 done
-# The crate uses rustc's unstable features, which a stable release lets only
-# the crates `RUSTC_BOOTSTRAP` names use (ADR 0109).
+# rust-js compiles it, as rustc with rust-js's tool, `rust_js`, known (ADR
+# 0112): $RUST_JS_COMPILER, or this repository's own build.
+compiler=${RUST_JS_COMPILER:-$PWD/../target/debug/rust-js}
+# A packaged one is a JS launcher, run by the JS runtime the build is.
+rust_js=("$compiler")
+case "$compiler" in *.js) rust_js=("${RUST_JS_JS_RUNTIME:-node}" "$compiler") ;; esac
 # The absolute path lets a program's errors quote this crate's source: a gated
 # item's `#[cfg(react = "..")]`.
-RUSTC_BOOTSTRAP=react exec rustc --edition=2024 --crate-type=lib --crate-name=react --emit=metadata ${target[@]+"${target[@]}"} "$PWD/src/lib.rs" \
+exec "${rust_js[@]}" --rustc --edition=2024 --crate-type=lib --crate-name=react --emit=metadata ${target[@]+"${target[@]}"} "$PWD/src/lib.rs" \
   --extern webapi="$dir/libwebapi.rmeta" --extern js="$dir/libjs.rmeta" "${cfg[@]}" -o "$dir/$(basename "$out")" "$@"

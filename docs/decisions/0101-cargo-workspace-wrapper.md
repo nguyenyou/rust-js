@@ -92,7 +92,8 @@ resources for now. They're rustc's crates to check, as `react/build.sh`
 checks them: rust-js knows their items by their `#[rust_js::link_name]`s,
 not by the crate. Installed under an app's `node_modules`, they're in its
 workspace, and so its members, which Cargo runs the wrapper for: the
-wrapper gives these two packages, by `CARGO_PKG_NAME`, to rustc. Neither
+wrapper gives these two packages, by `CARGO_PKG_NAME`, to rustc, which
+is rust-js's `--rustc`, with its tool known, since ADR 0112. Neither
 is a workspace of its own, or Cargo would find two roots. The React
 release's `cfg`s (ADR 0043) are the build script's, for the release
 `RUST_JS_REACT` names, which `checkCargo` sets from its `react`.

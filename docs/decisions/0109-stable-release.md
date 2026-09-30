@@ -33,7 +33,8 @@ nightly's. A stable release ships them too, in its `rustc-dev` component, and
   allows it, as for rustc. A crate may name rust-js's own features, which
   it turns on anyway.
 - **The binding crates are built so too**, each by its build script:
-  `RUSTC_BOOTSTRAP=js`, `webapi`, `react`.
+  `RUSTC_BOOTSTRAP=js`, `webapi`, `react`. Since ADR 0112, rust-js compiles
+  them, and they need none.
 - **The tests' programs, and rustc's**, which use rustc's features natively
   too, are built with `RUSTC_BOOTSTRAP=1`: `.env.test`, which `bun test`
   loads for every process it starts, and the rustc suite, as rustc's own CI

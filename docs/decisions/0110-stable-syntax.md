@@ -57,7 +57,7 @@ and rustc refuses one it asks for, `#![feature]`, as the release does, unless
 - **A binding's JS type was still a nightly feature**, an extern type,
   `unsafe extern "Rust" { pub type EditorView; }`: ADR 0111 makes it a struct
   of a `JsObject`, stable Rust.
-- **The binding crates still use `register_tool`** for their own attributes,
-  which plain rustc builds them with, each allowed it alone (ADR 0109).
+- **The binding crates still used `register_tool`** for their own attributes,
+  which plain rustc built them with: ADR 0112 has rust-js compile them.
 - **A plain rustc, a user's own `cargo check`, doesn't know the `rust_js`
   tool**: only rust-js does.

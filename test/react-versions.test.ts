@@ -49,6 +49,9 @@ function bindings(release: string): Set<string> {
   run(["webapi/build.sh", "-o", join(out, "libwebapi.rmeta")]);
   run([
     "rustdoc", "-Zunstable-options", "--document-hidden-items", "--output-format=json", "--edition=2024", "--crate-name=react",
+    // rustdoc's JSON is a nightly's, as the tests have it: so is registering the
+    // tool that rust-js knows itself, for the crate's attributes (ADR 0112).
+    "-Zcrate-attr=feature(register_tool)", "-Zcrate-attr=register_tool(rust_js)",
     // As rust-js checks it, for its target (ADR 0090).
     "--target=wasm32-unknown-unknown",
     "react/src/lib.rs", "--extern", `webapi=${join(out, "libwebapi.rmeta")}`, "--extern", `js=${join(out, "libjs.rmeta")}`, "-L", out, ...cfgFlags(release).flags, "-o", out,
