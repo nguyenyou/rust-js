@@ -467,6 +467,18 @@ test("the builtins crate's object and js_error functions are JS's", async () => 
   expect(await builtins.thrown()).toEqual([message, "not an Error"]);
 });
 
+// `toFixed` is JS's rounding: a tie away from zero, where `format!` rounds it
+// to even, as Rust does; `-0` without its sign, and `1e21` and up as
+// `String(x)`. Between ties they agree (ADR 0102).
+test("the builtins crate's number::to_fixed is JS's toFixed, not format!'s", () => {
+  expect(builtins.fixed(2.5, 0)).toEqual(["3", "2"]);
+  expect(builtins.fixed(1.25, 1)).toEqual(["1.3", "1.2"]);
+  expect(builtins.fixed(-2.5, 0)).toEqual(["-3", "-2"]);
+  expect(builtins.fixed(-0, 0)).toEqual(["0", "-0"]);
+  expect(builtins.fixed(1e21, 2)[0]).toBe("1e+21");
+  expect(builtins.fixed(1234.5678, 2)).toEqual(["1234.57", "1234.57"]);
+});
+
 test("a throwing JS call is a Result, and ? returns early", async () => {
   expect(throws.sum_json("[1, 2, 3]")).toEqual({ TAG: "Ok", _0: 6 });
   const bad = throws.sum_json("[1, 2,");

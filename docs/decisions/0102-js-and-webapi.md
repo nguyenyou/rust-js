@@ -143,12 +143,13 @@ its Rust type is its pattern's.
 The rest of what the playground declared of JS's own is here too:
 `object::from_entries`, a JS object of keys and values, `object::is`,
 whether two JS objects are one, which `std::ptr::eq` isn't in rust-js, and
-`js_error::is_error` and `js_error::message`, an `Error`'s. Not `JSON.parse`:
+`js_error::is_error` and `js_error::message`, an `Error`'s, and
+`number::to_fixed`, JS's `toFixed`, which rounds a tie away from zero, `2.5`
+to `"3"`, where `format!("{:.0}", x)` rounds it to even, as Rust does. Not
+`JSON.parse`:
 what it gives is whatever the text holds, so no Rust type is its, and
 serde's reader checks the text against one. What else it declared is a
 library's (CodeMirror, the WASI shim, Sucrase), the browser's (webapi has
 `addEventListener`'s options, not yet `performance`), or Rust's: a
-`HashMap` is a JS `Map`. Not `toFixed`, which the playground keeps: JS
-rounds a tie away from zero, `2.5` to `"3"`, and `format!("{:.0}", x)` to
-even, as Rust does. `test/builtins.rs`
+`HashMap` is a JS `Map`. `test/builtins.rs`
 checks each, and the playground uses them instead of its own.

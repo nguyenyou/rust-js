@@ -38,3 +38,8 @@ pub async fn thrown() -> (String, String) {
     let second = if js::js_error::is_error(rejected) { js::js_error::message(rejected) } else { "not an Error".to_string() };
     (first, second)
 }
+
+/// `x.toFixed(digits)`, as JS rounds, and `format!`'s, as Rust does.
+pub fn fixed(x: f64, digits: usize) -> (String, String) {
+    (js::number::to_fixed(x, digits as u32), format!("{x:.digits$}"))
+}

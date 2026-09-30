@@ -16,7 +16,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, uint8_array};
+use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, number, uint8_array};
 use webapi::{
     Response, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule, response, text_decoder, text_encoder,
     web_assembly, web_assembly_instance, web_assembly_memory, window,
@@ -33,9 +33,6 @@ unsafe extern "Rust" {
 
     #[link_name = "performance.now"]
     safe fn now() -> f64;
-    /// JS's rounding, a tie away from zero, where `format!`'s is to even.
-    #[link_name = "toFixed"]
-    safe fn to_fixed(this: f64, digits: u32) -> String;
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_file(data: &Uint8Array, options: &dyn std::any::Any) -> &'static WasiFile;
     #[link_name = "get data"]
@@ -151,11 +148,11 @@ struct FileOptions {
 }
 
 pub fn ms(t: f64) -> String {
-    format!("{} ms", to_fixed(t, 0))
+    format!("{} ms", number::to_fixed(t, 0))
 }
 
 pub fn mb(n: f64) -> String {
-    format!("{} MB", to_fixed(n / 1048576.0, 1))
+    format!("{} MB", number::to_fixed(n / 1048576.0, 1))
 }
 
 /// Download the compiler, the sysroot, the webapi and js crates and the examples,

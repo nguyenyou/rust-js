@@ -34,6 +34,8 @@ spawn(Box::new(async move {                            // runs, unawaited
 - `object::from_entries(entries)` is a JS object of keys and values, as an API
   taking a dictionary wants, and `object::is(a, b)` is `Object.is`: whether two
   JS objects are one.
+- `number::to_fixed(x, digits)` is `x.toFixed(digits)`, JS's rounding: a tie
+  away from zero, `2.5` to `"3"`, where `format!("{:.0}", 2.5)` is `"2"`.
 
 ```bash
 builtins/build.sh -o "$PWD/target/libjs.rmeta"

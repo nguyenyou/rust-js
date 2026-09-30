@@ -105,7 +105,9 @@ pub mod number {
         /// [`x.toFixed(digits)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed):
         /// `x` with `digits` decimals, as JS rounds, a tie away from zero:
         /// `2.5` is `"3"`, where `format!("{:.0}", 2.5)` is `"2"`, to even, as
-        /// Rust rounds it. Between ties they agree.
+        /// Rust rounds it. Between ties they agree. `-0` is `"0"`, `1e21` and up
+        /// is `String(x)`, `"1e+21"`, and `Infinity` is `"Infinity"`, where
+        /// `format!`'s is `"inf"`. `digits` is 0 to 100: more throws a `RangeError`.
         #[link_name = "toFixed"]
         pub safe fn to_fixed(this: f64, digits: u32) -> String;
     }
