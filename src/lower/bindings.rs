@@ -2,7 +2,7 @@
 
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::{FieldDef, TyCtxt, VariantDef};
-use rustc_span::def_id::{CRATE_DEF_ID, DefId};
+use rustc_span::def_id::{DefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
 
 /// Validate tool bindings even if no function calls them. A malformed binding
@@ -180,15 +180,35 @@ pub(super) fn variant_name(tcx: TyCtxt<'_>, variant: &VariantDef) -> String {
     given_name(tcx, variant.def_id).unwrap_or_else(|| variant.name.to_string())
 }
 
-/// `#![rust_js::camel_case]`: the crate's own functions and fields are
-/// camelCase in JS, as its variables are (ADR 0046).
+/// `js::camel_case!();` at the crate root: the crate's own functions and
+/// fields are camelCase in JS, as its variables are (ADRs 0046 and 0110).
 pub(super) fn camel_case_crate(tcx: TyCtxt<'_>) -> bool {
-    tcx.get_attrs_by_path(
-        CRATE_DEF_ID.to_def_id(),
-        &[Symbol::intern("rust_js"), Symbol::intern("camel_case")],
-    )
-    .next()
-    .is_some()
+    marks(tcx, LocalModDefId::CRATE_DEF_ID, "camel_case").next().is_some()
+}
+
+/// A module's `js::import!` and `js::camel_case!`: each a `const _` with
+/// the attribute of rust-js's tool its macro writes, `#[rust_js::import]`,
+/// as stable Rust has no inner one of a tool (ADR 0110).
+pub(super) fn marks<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    module: LocalModDefId,
+    name: &str,
+) -> impl Iterator<Item = &'tcx rustc_hir::Attribute> {
+    let path = [Symbol::intern("rust_js"), Symbol::intern(name)];
+    tcx.hir_module_free_items(module).flat_map(move |item| {
+        tcx.get_attrs_by_path(item.owner_id.to_def_id(), &path)
+            .collect::<Vec<_>>()
+    })
+}
+
+/// Is `def_id` a `js::import!`'s or `js::camel_case!`'s `const _`, which
+/// is rust-js's to read, and has nothing to write?
+pub(super) fn is_mark(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
+    ["import", "camel_case"].iter().any(|name| {
+        tcx.get_attrs_by_path(def_id, &[Symbol::intern("rust_js"), Symbol::intern(name)])
+            .next()
+            .is_some()
+    })
 }
 
 /// What an item of this crate is called in JS: its `#[rust_js::name]`, or

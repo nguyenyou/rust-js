@@ -190,6 +190,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0107 A const parameter is a value its caller gives](decisions/0107-const-generics.md)
 - [0108 Operators and `Into` in generic code are dictionaries](decisions/0108-generic-operators-and-into.md)
 - [0109 Pin a stable release: rust-js checks code as the Rust most people run does](decisions/0109-stable-release.md)
+- [0110 rust-js's syntax is stable Rust's](decisions/0110-stable-syntax.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

@@ -2,8 +2,9 @@
 // it to `App.jsx` beside it (@rust-js/vite-plugin does, on every save), and
 // Vite serves that with Fast Refresh, as it would the original.
 
-#![rust_js::import = "./App.css"]
 #![allow(non_snake_case)]
+
+js::import!("./App.css");
 
 use react::{Element, use_state};
 

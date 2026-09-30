@@ -4,7 +4,7 @@
 //                  └─rust-js───► fib.js ──► actual results ───┴─► must be equal
 
 import { beforeAll, expect, test } from "bun:test";
-import { copyFileSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { decode, expected, same, type Outcome } from "./oracle";
@@ -688,7 +688,8 @@ test("methods across modules, in a thread-local, and camelCase", async () => {
   const { fixture, compiler } = await import("./support");
   const { writeFileSync } = await import("node:fs");
   const dir = fixture("methods");
-  writeFileSync(join(dir, "lib.rs"), `#![rust_js::camel_case]
+  writeFileSync(join(dir, "lib.rs"), `#[rust_js::camel_case]
+const _: () = ();
 use std::cell::Cell;
 
 mod shapes;
@@ -1135,4 +1136,18 @@ test("generic iterators take arrays and JS iterators alike", async () => {
   expect(js).toContain("for (const x of items) {");
   // One of the crate's own, given where a generic one goes.
   expect(js).toContain("total($iterator({ n }, countdownIterator_next))");
+});
+
+// `js::import!("./app.css");` is `import "./app.css";` in its module's JS, at
+// the root and in a module (ADR 0110), where `#![rust_js::import]` was: stable
+// Rust has no inner attribute of a tool. Its `const _` writes nothing.
+test("js::import! imports a module where it's written, and writes nothing of its own", () => {
+  const dir = fixture("js-import");
+  writeFileSync(join(dir, "lib.rs"), 'js::import!("./app.css");\npub mod panel {\n    js::import!("./panel.css");\n    pub fn f() -> u32 {\n        1\n    }\n}\n#[rust_js::import = "./direct.css"]\nconst _: () = ();\n');
+  buildWebapi();
+  run([compiler, join(dir, "lib.rs"), "-o", join(dir, "lib.js"), "--", "--extern", `js=${join(target, "libjs.rmeta")}`, "-L", target]);
+  const top = readFileSync(join(dir, "lib.js"), "utf8"), panel = readFileSync(join(dir, "panel.js"), "utf8");
+  expect([top.includes('import "./app.css";'), top.includes('import "./direct.css";'), panel.includes('import "./panel.css";')]).toEqual([true, true, true]);
+  expect(top).not.toContain("const _");
+  expect(panel).not.toContain("app.css");
 });

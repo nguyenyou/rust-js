@@ -16,6 +16,28 @@
 
 use core::marker::PhantomData;
 
+/// `import "./App.css";` in the module's JS, for what a module does when
+/// it's loaded, as a bundler's CSS does (ADRs 0039 and 0110): written where
+/// it's needed, `js::import!("./App.css");`, as stable Rust has no inner
+/// attribute of a tool. It's a `const _` rust-js reads, and writes nothing of.
+#[macro_export]
+macro_rules! import {
+    ($path:literal) => {
+        #[rust_js::import = $path]
+        const _: () = ();
+    };
+}
+
+/// The crate's own functions, fields and props are camelCase in JS, as its
+/// variables are (ADRs 0046 and 0110): `js::camel_case!();` at the crate root.
+#[macro_export]
+macro_rules! camel_case {
+    () => {
+        #[rust_js::camel_case]
+        const _: () = ();
+    };
+}
+
 unsafe extern "Rust" {
     /// Any JS object. Every type here and in webapi holds a `PhantomData` of
     /// it, which is how rust-js knows it's a JS object.

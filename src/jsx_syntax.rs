@@ -8,19 +8,25 @@ mod parser;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use rustc_ast::ast_traits::{HasAttrs, HasTokens};
 use rustc_ast::mut_visit::{self, MutVisitor};
 use rustc_ast::token::TokenKind;
 use rustc_ast::tokenstream::{LazyAttrTokenStream, TokenStream, TokenTree};
 use rustc_ast::{self as ast, ExprKind, Inline, ItemKind, ModKind};
+use rustc_data_structures::stable_hash::{
+    RawDefId, RawDefPathHash, RawSpan, StableHashControls, StableHashCtxt, StableHasher,
+};
 use rustc_expand::config::StripUnconfigured;
 use rustc_expand::module::{DirOwnership, default_submod_path};
 use rustc_parse::lexer::StripTokens;
 use rustc_parse::parser::Parser;
 use rustc_parse::{exp, new_parser_from_file};
 use rustc_session::Session;
-use rustc_span::{BytePos, ErrorGuaranteed, FileName, Span, sym};
+use rustc_span::def_id::StableCrateId;
+use rustc_span::hygiene::{ExpnData, ExpnKind, LocalExpnId, MacroKind, Transparency};
+use rustc_span::{BytePos, ErrorGuaranteed, FileName, Span, Symbol, sym};
 
 /// Expand JSX within a Rust expression before placing it in a component's
 /// props macro. An AST visit selects real expression/statement macros, so
@@ -113,7 +119,10 @@ fn rust_expression(sess: &Session, tokens: TokenStream) -> Result<TokenStream, E
     })
 }
 
-pub fn expand(sess: &Session, krate: &mut ast::Crate) {
+/// `crate_id` is the crate's `StableCrateId`, which JSX's expansions are
+/// hashed with, as rustc hashes a macro's (ADR 0110).
+pub fn expand(sess: &Session, krate: &mut ast::Crate, crate_id: StableCrateId) {
+    *CRATE_ID.lock().expect("the crate's id") = Some(crate_id);
     if configured_attrs(sess, &krate.attrs).is_none() {
         return;
     }
@@ -370,7 +379,72 @@ pub fn configured_attrs(sess: &Session, attrs: &ast::AttrVec) -> Option<ast::Att
     configured
 }
 
+/// The span of code JSX expands to, which may use what it needs of rustc's
+/// unstable features, as std's macros do: attributes on expressions,
+/// `#[rust_js::jsx] f(..)`, and a component's props `macro`, which its own
+/// expansions may too. A program's own code may not (ADR 0110). Transparent,
+/// so names resolve as they're written.
+fn expanded(sess: &Session, span: Span) -> Span {
+    // Formatting JSX, `--format-jsx`, compiles no crate: its spans are only printed.
+    if CRATE_ID.lock().expect("the crate's id").is_none() {
+        return span;
+    }
+    let allowed: Arc<[Symbol]> = Arc::from([sym::stmt_expr_attributes, sym::decl_macro, sym::allow_internal_unstable]);
+    let kind = ExpnKind::Macro(MacroKind::Bang, Symbol::intern("jsx"));
+    let data = ExpnData::allow_unstable(kind, span, sess.edition(), allowed, None, None);
+    let expansion = LocalExpnId::fresh(data, ExpansionHash);
+    span.apply_mark(expansion.to_expn_id(), Transparency::Transparent)
+}
+
+/// The crate's `StableCrateId`, rustc's once it has the crate's context,
+/// which an expansion's hash starts with: a crate using this one's macros
+/// finds their spans' expansions by it.
+static CRATE_ID: Mutex<Option<StableCrateId>> = Mutex::new(None);
+
+/// Is `rustc`'s `StableCrateId` for the crate the one JSX's expansions were
+/// hashed with? A crate using its macros wouldn't find their spans otherwise.
+pub fn check_crate_id(rustc: StableCrateId) {
+    let ours = *CRATE_ID.lock().expect("the crate's id");
+    assert!(
+        ours.is_none_or(|ours| ours == rustc),
+        "rust-js: JSX's expansions were hashed with another crate id"
+    );
+}
+
+/// What a JSX expansion's data is hashed with: its span, as it names no item
+/// but the crate, whose id the expansion's hash starts with. The rest only
+/// tells expansions apart within the session, which rustc's disambiguator
+/// does too.
+struct ExpansionHash;
+
+impl StableHashCtxt for ExpansionHash {
+    fn stable_hash_span(&mut self, span: RawSpan, hasher: &mut StableHasher) {
+        hasher.write_u32(span.0);
+        hasher.write_u16(span.1);
+        hasher.write_u16(span.2);
+    }
+
+    /// The crate's own, whose crate half alone rustc reads.
+    fn def_path_hash(&self, def_id: RawDefId) -> RawDefPathHash {
+        assert!(
+            def_id.0 == 0 && def_id.1 == 0,
+            "a JSX expansion names no item but the crate"
+        );
+        let id = CRATE_ID.lock().expect("the crate's id").expect("set by `expand`");
+        let mut bytes = [0; 16];
+        bytes[..8].copy_from_slice(&id.as_u64().to_le_bytes());
+        RawDefPathHash(bytes)
+    }
+
+    fn stable_hash_controls(&self) -> StableHashControls {
+        StableHashControls { hash_spans: true }
+    }
+
+    fn assert_default_stable_hash_controls(&self, _: &str) {}
+}
+
 fn template(sess: &Session, source: String, span: Span) -> rustc_ast::tokenstream::TokenStream {
+    let span = expanded(sess, span);
     let mut hash = std::hash::DefaultHasher::new();
     source.hash(&mut hash);
     rustc_parse::source_str_to_stream(

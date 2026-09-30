@@ -297,7 +297,9 @@ test("rustc checks programs for rust-js's 32-bit usize", () => {
 });
 
 // Which features a crate enables itself is read as Rust reads it: spaces
-// anywhere, comments and strings aren't attributes. Found in review.
+// anywhere, comments and strings aren't attributes. Found in review. rust-js
+// enables none of its own for a crate (ADR 0110), and one a crate enables
+// needs `RUSTC_BOOTSTRAP`, as the tests have it.
 test("a crate's own features are read from its syntax, not its text", () => {
   const compiles = (name: string, source: string) => {
     const dir = fixture(`corpus-features-${name}`);
@@ -309,14 +311,15 @@ test("a crate's own features are read from its syntax, not its text", () => {
   expect(compiles("spaced", "#![feature (decl_macro)]\n")).toEqual(["spaced", "compiles"]);
   expect(compiles("lines", "#![feature(\n    decl_macro,\n    stmt_expr_attributes,\n)]\n")).toEqual(["lines", "compiles"]);
   expect(compiles("documented", "//! A crate.\n/* #![feature(nothing)] */\n#![allow(unused)]\n#![feature(decl_macro)]\n")).toEqual(["documented", "compiles"]);
-  // Only text: rust-js still enables what it needs.
-  expect(compiles("commented", "// Enable it with #![feature(decl_macro)] if you need it.\n")).toEqual(["commented", "compiles"]);
-  expect(compiles("quoted", 'pub const S: &str = "#![feature(decl_macro)]";\n')).toEqual(["quoted", "compiles"]);
+  // Only text: the crate doesn't enable it, so it isn't.
+  const unenabled = "error[E0658]: `macro` is experimental";
+  expect(compiles("commented", "// Enable it with #![feature(decl_macro)] if you need it.\n")).toEqual(["commented", unenabled]);
+  expect(compiles("quoted", 'pub const S: &str = "#![feature(decl_macro)]";\n')).toEqual(["quoted", unenabled]);
 });
 
 // What a crate root enables through a `cfg_attr` is enabled only when its
 // `cfg` holds, as rustc configures it, and a crate may register `rust_js`
-// itself. An unfinished attribute is rustc's syntax error. Found in review.
+// itself, which rust-js has as a tool anyway (ADR 0110). An unfinished attribute is rustc's syntax error. Found in review.
 test("a crate's own features and tools are as rustc configures them", () => {
   const compile = (name: string, source: string) => {
     const dir = fixture(`corpus-configured-${name}`);
@@ -327,10 +330,10 @@ test("a crate's own features and tools are as rustc configures them", () => {
   };
   const body = "macro double($x:expr) { $x * 2 }\npub fn f() -> i32 { #[rust_js::link_name = \"g\"] fn g() {} double!(3) }\n";
   expect(compile("enabled", "#![cfg_attr(all(), feature(decl_macro))]\n" + body)).toEqual(["enabled", "compiles"]);
-  expect(compile("disabled", "#![cfg_attr(any(), feature(decl_macro))]\n" + body)).toEqual(["disabled", "compiles"]);
-  expect(compile("several", "#![cfg_attr(all(), feature(register_tool, stmt_expr_attributes))]\n" + body)).toEqual(["several", "compiles"]);
-  expect(compile("tool", "#![feature(register_tool)]\n#![register_tool(rust_js)]\n" + body)).toEqual(["tool", "compiles"]);
-  expect(compile("tool-configured", "#![feature(register_tool)]\n#![cfg_attr(all(), register_tool(rust_js))]\n" + body)).toEqual(["tool-configured", "compiles"]);
+  expect(compile("disabled", "#![cfg_attr(any(), feature(decl_macro))]\n" + body)).toEqual(["disabled", "error[E0658]: `macro` is experimental"]);
+  expect(compile("several", "#![cfg_attr(all(), feature(register_tool, stmt_expr_attributes, decl_macro))]\n" + body)).toEqual(["several", "compiles"]);
+  expect(compile("tool", "#![feature(register_tool, decl_macro)]\n#![register_tool(rust_js)]\n" + body)).toEqual(["tool", "compiles"]);
+  expect(compile("tool-configured", "#![feature(register_tool, decl_macro)]\n#![cfg_attr(all(), register_tool(rust_js))]\n" + body)).toEqual(["tool-configured", "compiles"]);
   expect(compile("unfinished", "#![")).toEqual(["unfinished", "error: this file contains an unclosed delimiter"]);
 });
 

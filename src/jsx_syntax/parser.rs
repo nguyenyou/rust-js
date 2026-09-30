@@ -631,7 +631,12 @@ pub(super) fn component(sess: &Session, item: &ast::Item) -> Option<Box<ast::Ite
         }
     }
     let body = format!("{{ {} }}", arms.join(","));
-    let tokens = template(sess, format!("macro {ident} {body}"), item.span);
+    // Its expansion writes `#[rust_js::jsx]` on an expression too (ADR 0110).
+    let tokens = template(
+        sess,
+        format!("#[allow_internal_unstable(stmt_expr_attributes)] macro {ident} {body}"),
+        item.span,
+    );
     let mut parser = Parser::new(&sess.psess, tokens, Some("JSX component props"));
     match parser.parse_item(ForceCollect::No, AllowConstBlockItems::No) {
         Ok(Some(mut companion)) => {

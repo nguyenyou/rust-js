@@ -199,15 +199,16 @@ test("React's and React DOM's APIs are hand-written React, and they run", () => 
   expect([p.exitCode, output.match(/(\d+) pass/)?.[1]], output).toEqual([0, "7"]);
 }, 120_000);
 
-// ADR 0046: with `#![rust_js::camel_case]`, a crate's own functions and
+// ADR 0046: with `js::camel_case!()` (ADR 0110), a crate's own functions and
 // fields are camelCase in JS too, as its variables already are.
 test("a camel_case crate names its functions, fields and props the JS way", async () => {
   const { fixture, compiler } = await import("./support");
   const { mkdirSync, writeFileSync } = await import("node:fs");
   buildReact();
   const dir = fixture("camel-case");
-  writeFileSync(join(dir, "lib.rs"), `#![rust_js::camel_case]
-#![allow(non_snake_case)]
+  writeFileSync(join(dir, "lib.rs"), `#![allow(non_snake_case)]
+#[rust_js::camel_case]
+const _: () = ();
 
 mod people;
 

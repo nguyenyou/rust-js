@@ -65,7 +65,7 @@ zero parameters or one named struct parameter. The props type can have any
 name. Missing, unknown, and wrongly typed props are compile errors. Modules
 and aliases work: `<ui::Card />`, `<ui.Card />`, or `use ui::Card as Panel`.
 Camel-case attribute names select snake-case Rust fields; the crate's existing
-`#![rust_js::camel_case]` setting controls their emitted JavaScript names.
+`js::camel_case!();` setting controls their emitted JavaScript names.
 `children` must have the Rust type of the supplied child or tuple of children.
 
 For an existing props value, use `<Card {...props} />`. To override its fields,

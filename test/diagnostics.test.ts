@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCompiler, buildSerde, compiler, fixture } from "./support";
+import { buildCompiler, buildSerde, compiler, fixture, root } from "./support";
 
 beforeAll(buildCompiler, 600_000);
 
@@ -9,7 +9,7 @@ for (const [name, source, message, crate] of [
   ["type error", 'pub fn f() -> i32 { "wrong" }', "mismatched types"],
   ["borrow error", 'pub fn f() -> i32 { let mut x = 1; let r = &x; x = 2; *r }', "borrowed"],
   ["unsupported type", 'pub fn f(x: u128) -> u128 { x }', "does not support"],
-  ["camelCase fields that collide", '#![rust_js::camel_case]\n#![allow(non_snake_case)]\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
+  ["camelCase fields that collide", '#![allow(non_snake_case)]\n#[rust_js::camel_case]\nconst _: () = ();\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["#[thread_local] static", "#![feature(thread_local)]\n#[thread_local] static N: std::cell::Cell<u32> = std::cell::Cell::new(0);\npub fn f() -> u32 { N.get() }", "does not support `#[thread_local]` statics"],
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
   ["option of a reference to unit", "pub fn f(x: &()) -> bool { Some(x).is_some() }", "does not support values of type"],
@@ -61,7 +61,7 @@ for (const [name, source, message, crate] of [
   ["a &mut to an iterator of a type parameter", 'pub fn first<I: Iterator<Item = i32>>(it: &mut I) -> Option<i32> { it.next() }', "does not support values of type `&mut I`"],
   ["ref mut through a reference variable, replaced whole", 'pub struct P { pub x: u32 }\n#[allow(unused_mut)] pub fn f() -> u32 { let mut a = P { x: 1 }; let mut cur = &mut a; match *cur { ref mut n => *n = P { x: 2 } } a.x }', "assigning a whole value through a `&mut`"],
   ["{:.2e}", 'pub fn f(x: f64) -> String { format!("{:.2e}", x) }', "`{:.2e}` and the like"],
-  ["malformed import", '#![rust_js::import("./style.css")]\npub fn f() {}', "write it"],
+  ["malformed import", '#[rust_js::import("./style.css")]\nconst _: () = ();\npub fn f() {}', "write it"],
   ["malformed binding", '#[rust_js::link_name(123)] pub fn f() {}', "a binding needs"],
   ["handwritten JSX binding", '#[rust_js::link_name = "<div>"] fn div(a: i32, b: i32) -> i32 { unreachable!() }\npub fn f() -> i32 { div(1, 2) }', "element builders are compiler-only"],
   ["#[serde(with)]", 'mod m { pub fn serialize<S: serde::Serializer>(v: &u32, s: S) -> Result<S::Ok, S::Error> { s.serialize_u32(*v) } }\n#[derive(serde::Serialize)] pub struct W { #[serde(with = "m")] pub x: u32 }\npub fn f(w: &W) -> String { serde_json::to_string(w).unwrap() }', "`#[serde(with)]`", "serde"],
@@ -93,8 +93,8 @@ for (const [name, source, message, crate] of [
 
 // rust-js is a stable release's rustc (ADR 0109): a crate's own
 // `#![feature]` is refused, as that release refuses it, unless
-// `RUSTC_BOOTSTRAP=1`, as for rustc. rust-js's own features, its syntax,
-// aren't, even named by the crate.
+// `RUSTC_BOOTSTRAP=1`, as for rustc. rust-js has no feature of its own to
+// turn on (ADR 0110), so one it once used is refused too.
 test("a crate's own #![feature] is refused, as on a stable release", () => {
   const dir = fixture("stable-feature");
   const compile = (source: string, bootstrap?: string) => {
@@ -109,6 +109,38 @@ test("a crate's own #![feature] is refused, as on a stable release", () => {
   expect(refused.stderr.toString()).toContain("error[E0554]: `#![feature]` may not be used on the stable release channel");
   expect(refused.stderr.toString()).toContain("lib.rs:1:1");
   expect(compile(never, "1").exitCode).toBe(0);
-  expect(compile("#![feature(register_tool)]\n#![register_tool(rust_js)]\npub fn f() -> u32 { 1 }\n").exitCode).toBe(0);
+  expect(compile("#![feature(register_tool)]\n#![register_tool(rust_js)]\npub fn f() -> u32 { 1 }\n").exitCode).not.toBe(0);
   expect(compile("pub fn f() -> u32 { 1 }\n").exitCode).toBe(0);
+});
+
+// rust-js's syntax is stable Rust's (ADR 0110): what it turns on for itself
+// isn't a program's to use. Each of these is refused as stable 1.98.1
+// refuses it, which its rustc confirms; `rust_js`'s attributes are rust-js's.
+test("a program can use no unstable feature rust-js's syntax once used", () => {
+  const dir = fixture("stable-syntax");
+  const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+  const input = join(dir, "lib.rs");
+  const verdicts = (source: string) => {
+    writeFileSync(input, source);
+    const js = Bun.spawnSync([compiler, input, "-o", join(dir, "lib.js")], { env });
+    const rustc = Bun.spawnSync(["rustc", "--edition=2024", "--crate-type=lib", "--emit=metadata", input, "-o", join(dir, "lib.rmeta")], { env, cwd: root });
+    const first = (text: string) => text.split("\n").find((line) => line.startsWith("error")) ?? "";
+    return { rustJs: js.exitCode === 0, rustc: rustc.exitCode === 0, stderr: js.stderr.toString(), same: first(js.stderr.toString()) === first(rustc.stderr.toString()) };
+  };
+  for (const [feature, source] of [
+    ["stmt_expr_attributes", "pub fn f() -> u32 { let x = #[allow(unused)] 5; x }\n"],
+    ["decl_macro", "macro m() {}\npub fn f() {}\n"],
+    ["register_tool", "#![register_tool(foo)]\npub fn f() {}\n"],
+    ["custom_inner_attributes", "mod m {\n    #![rustfmt::skip]\n}\npub fn f() {}\n"],
+  ]) {
+    const v = verdicts(source);
+    expect([feature, v.rustc]).toEqual([feature, false]);
+    expect([feature, v.rustJs]).toEqual([feature, false]);
+    // The same error, rustc's own: a stable release names no feature to turn on.
+    expect([feature, v.same]).toEqual([feature, true]);
+  }
+  // A binding's attribute is rust-js's own tool's, which a program needs no
+  // feature to write.
+  const binding = verdicts('#[rust_js::link_name = "Date.now"]\npub fn now() -> f64 {\n    unreachable!()\n}\n');
+  expect([binding.rustJs, binding.stderr]).toEqual([true, ""]);
 });

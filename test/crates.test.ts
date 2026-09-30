@@ -10,7 +10,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCompiler, buildSerde, compiler, fixture, root, run } from "./support";
+import { buildCompiler, buildReact, buildSerde, compiler, fixture, root, run, target } from "./support";
 import { printed } from "./crates";
 
 beforeAll(buildCompiler, 600_000);
@@ -219,4 +219,28 @@ describe("a library's metadata is published with its JS, or neither is", () => {
     expect(() => build(data)).toThrow("output collision");
     expect(readFileSync(data, "utf8")).toBe(before);
   }, 300_000);
+});
+// A component another crate declares is JSX's too (ADR 0110): its props
+// `macro`, which the consumer expands, may write `#[rust_js::jsx]` on an
+// expression, as its own crate's does, on a stable release.
+test("a component of another crate is a JSX tag, on a stable release", () => {
+  buildReact();
+  const dir = fixture("cross-crate-jsx");
+  const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+  const react = ["--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target];
+  const ui = join(dir, "ui"), app = join(dir, "app");
+  mkdirSync(ui, { recursive: true });
+  mkdirSync(app, { recursive: true });
+  writeFileSync(join(ui, "lib.rs"), "#![allow(non_snake_case)]\nuse react::Element;\npub struct Props {\n    pub label: &'static str,\n}\npub fn Button(p: Props) -> Element {\n    jsx! { <button>{p.label}</button> }\n}\n");
+  writeFileSync(join(app, "lib.rs"), "#![allow(non_snake_case)]\nuse react::Element;\npub fn App() -> Element {\n    jsx! { <div><ui::Button label=\"go\" /></div> }\n}\n");
+  const built = (args: string[]) => {
+    const p = Bun.spawnSync([compiler, ...args], { env });
+    expect(p.stderr.toString()).toBe("");
+    expect(p.exitCode).toBe(0);
+  };
+  built([join(ui, "lib.rs"), "-o", join(ui, "js", "lib.jsx"), "--library", "--manifest", join(ui, "js", "lib.manifest.json"),
+    "--", "--crate-name", "ui", `--emit=metadata=${join(ui, "js", "libui.rmeta")}`, ...react]);
+  built([join(app, "lib.rs"), "-o", join(app, "js", "lib.jsx"), "--dependency", join(ui, "js", "lib.manifest.json"),
+    "--", "--crate-name", "app", "--extern", `ui=${join(ui, "js", "libui.rmeta")}`, ...react]);
+  expect(readFileSync(join(app, "js", "lib.jsx"), "utf8")).toContain('<Button label="go" />');
 });

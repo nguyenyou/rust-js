@@ -3,9 +3,10 @@
 //! its spec asks for. The todos are a reducer's (`model`), each one a
 //! component (`item`), and the route, `#/active` say, the URL's hash.
 
-#![rust_js::import = "todomvc-common/base.css"]
-#![rust_js::import = "todomvc-app-css/index.css"]
 #![allow(non_snake_case)]
+
+js::import!("todomvc-common/base.css");
+js::import!("todomvc-app-css/index.css");
 
 mod item;
 mod model;

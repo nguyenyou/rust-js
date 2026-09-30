@@ -1,6 +1,8 @@
 # 0046. `#![rust_js::camel_case]`: a crate's own names, the JS way
 
-Status: Accepted. Extends [0038](0038-js-names-and-destructuring.md).
+Status: Accepted. Extends [0038](0038-js-names-and-destructuring.md). Amended
+by [0110](0110-stable-syntax.md): it's written `js::camel_case!();`, as stable
+Rust has no inner attribute of a tool.
 
 ## Context
 

@@ -192,7 +192,12 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         .hir_crate_items(())
         .definitions()
         .filter(|&d| match tcx.def_kind(d) {
-            DefKind::Const { .. } => !markers.iter().any(|&(m, _)| m == d) && !from_serde_derive(tcx, d),
+            // Not a `js::import!`'s, which rust-js reads (ADR 0110).
+            DefKind::Const { .. } => {
+                !markers.iter().any(|&(m, _)| m == d)
+                    && !from_serde_derive(tcx, d)
+                    && !bindings::is_mark(tcx, d.to_def_id())
+            }
             // Not std's storage for a thread-local, which JS needs none of.
             DefKind::Static { .. } => !tcx.is_foreign_item(d) && in_thread_local(tcx, d).is_none(),
             _ => false,

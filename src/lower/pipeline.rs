@@ -9,7 +9,6 @@ use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::def_id::{DefId, LocalModDefId};
-use rustc_span::{Symbol, sym};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -368,12 +367,12 @@ pub fn lower_crate<'tcx>(
                 }
             }
             let mut packages: Vec<js::Package> = packages.into_values().collect();
-            // `#![rust_js::import = "./App.css"]`: `import "./App.css";`, for
-            // what a module does when loaded, as a bundler's CSS does.
-            for attr in tcx.get_attrs_by_path(module.to_def_id(), &[Symbol::intern("rust_js"), sym::import]) {
+            // `js::import!("./App.css");`: `import "./App.css";`, for what a
+            // module does when loaded, as a bundler's CSS does (ADR 0110).
+            for attr in super::bindings::marks(tcx, module, "import") {
                 let Some(from) = attr.value_str().map(|s| s.to_string()) else {
                     tcx.dcx()
-                        .span_err(attr.span(), "rust-js: write it `#![rust_js::import = \"./file.css\"]`");
+                        .span_err(attr.span(), "rust-js: write it `js::import!(\"./file.css\");`");
                     continue;
                 };
                 if !packages.iter().any(|p| p.from == from) {

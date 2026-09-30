@@ -20,11 +20,9 @@
 #![feature(rustc_private)]
 
 extern crate rustc_ast;
-extern crate rustc_builtin_macros;
+extern crate rustc_data_structures;
 extern crate rustc_driver;
-extern crate rustc_errors;
 extern crate rustc_expand;
-extern crate rustc_feature;
 extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_middle;
@@ -51,12 +49,41 @@ mod to_oxc;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::OnceLock;
 
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::Compiler;
+use rustc_middle::ty::RegisteredTools;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::Session;
-use rustc_span::{Symbol, sym};
+use rustc_session::config::CrateType;
+use rustc_span::def_id::{LOCAL_CRATE, StableCrateId};
+use rustc_span::{Ident, Symbol};
+
+/// The crate's `StableCrateId`, as rustc computes it once it has the crate's
+/// context, which is after JSX's expansions need it (ADR 0110). rustc's own
+/// helpers, in its order; `after_expansion` checks it's rustc's.
+fn stable_crate_id(compiler: &Compiler, krate: &rustc_ast::Crate) -> StableCrateId {
+    let sess = &compiler.sess;
+    let attrs = rustc_expand::config::pre_configure_attrs(sess, &krate.attrs);
+    let name = rustc_interface::passes::get_crate_name(sess, &attrs);
+    let backend = &compiler.codegen_backend;
+    let types = rustc_interface::passes::collect_crate_types(
+        sess,
+        &backend.supported_crate_types(sess),
+        backend.name(),
+        &attrs,
+        krate.spans.inner_span,
+    );
+    StableCrateId::new(
+        name,
+        types.contains(&CrateType::Executable),
+        sess.opts.cg.metadata.clone(),
+        sess.cfg_version,
+    )
+}
+
+/// rustc's own tools, `rustfmt` and the rest, which `rust_js` joins.
+static RUSTC_TOOLS: OnceLock<for<'tcx> fn(TyCtxt<'tcx>, ()) -> RegisteredTools> = OnceLock::new();
 
 struct RustJs {
     output: output::OutputPlan,
@@ -71,20 +98,26 @@ struct RustJs {
 }
 
 impl Callbacks for RustJs {
-    /// rust-js's syntax is rustc's unstable features, which a stable release
-    /// allows no crate (ADR 0109): its session allows them, and `enable_features`
-    /// refuses a crate's own, as a stable rustc does.
+    /// `rust_js` is a tool rustc knows, as it knows `rustfmt`: a program
+    /// writes `#[rust_js::link_name = ".."]` as stable Rust (ADR 0110).
     fn config(&mut self, config: &mut rustc_interface::interface::Config) {
-        config.opts.unstable_features = rustc_feature::UnstableFeatures::Cheat;
+        config.override_queries = Some(|_, providers| {
+            RUSTC_TOOLS.get_or_init(|| providers.queries.registered_tools);
+            providers.queries.registered_tools = |tcx, ()| {
+                let mut tools = RUSTC_TOOLS.get().expect("rustc's tools, kept first")(tcx, ());
+                tools.insert(Ident::with_dummy_span(Symbol::intern("rust_js")));
+                tools
+            };
+        });
     }
 
     fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
-        enable_features(&compiler.sess, krate);
-        jsx_syntax::expand(&compiler.sess, krate);
+        jsx_syntax::expand(&compiler.sess, krate, stable_crate_id(compiler, krate));
         Compilation::Continue
     }
 
     fn after_expansion<'tcx>(&mut self, _compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
+        jsx_syntax::check_crate_id(tcx.stable_crate_id(LOCAL_CRATE));
         // 0. `#[serde(..)]`, which only the expanded crate still has (ADR 0077).
         let serde_attrs = lower::serde_attributes(tcx);
         // 1. Copy each function's THIR. MIR building (for borrowck) steals it.
@@ -386,64 +419,3 @@ fn main() -> ExitCode {
 /// The target rustc checks programs for (ADR 0090): WebAssembly's, whose
 /// `usize` is 32 bits, as a JS one is here (ADR 0025). Nothing is made for it.
 const TARGET: &str = "wasm32-unknown-unknown";
-
-/// `#[rust_js::link_name]`, for bindings that are generic (ADR 0039), and
-/// `#![rust_js::import = "./App.css"]` inside a module need these features
-/// and the `rust_js` tool, which a program never asks for. What the crate
-/// root has already, itself or by a `cfg_attr` whose `cfg` holds, isn't
-/// added again, which rustc rejects: its attributes are read as rustc
-/// configures them, before rustc reads which features are on.
-fn enable_features(sess: &Session, krate: &mut rustc_ast::Crate) {
-    let attrs = jsx_syntax::configured_attrs(sess, &krate.attrs).unwrap_or_default();
-    let listed = |name: Symbol| -> Vec<Symbol> {
-        attrs
-            .iter()
-            .filter(|attr| attr.has_name(name))
-            .flat_map(|attr| attr.meta_item_list().unwrap_or_default())
-            .filter_map(|item| item.ident().map(|ident| ident.name))
-            .collect()
-    };
-    let (features, tools) = (listed(sym::feature), listed(sym::register_tool));
-    let ours = [
-        sym::register_tool,
-        sym::custom_inner_attributes,
-        sym::decl_macro,
-        sym::stmt_expr_attributes,
-    ];
-    // A crate's own `#![feature]`, which a stable release refuses, unless
-    // `RUSTC_BOOTSTRAP=1` says otherwise, as for rustc (ADR 0109). One of
-    // rust-js's own is its syntax, which it turns on anyway.
-    if !rustc_feature::UnstableFeatures::from_environment(None).is_nightly_build() {
-        let others = |attr: &&rustc_ast::Attribute| {
-            attr.has_name(sym::feature)
-                && attr
-                    .meta_item_list()
-                    .unwrap_or_default()
-                    .iter()
-                    .any(|item| item.ident().is_none_or(|ident| !ours.contains(&ident.name)))
-        };
-        for attr in attrs.iter().filter(others) {
-            sess.dcx()
-                .struct_span_err(
-                    attr.span(),
-                    "`#![feature]` may not be used on the stable release channel",
-                )
-                .with_code(rustc_errors::codes::E0554)
-                .emit();
-        }
-    }
-    let mut missing: Vec<String> = ours
-        .into_iter()
-        .filter(|feature| !features.contains(feature))
-        .map(|feature| format!("feature({feature})"))
-        .collect();
-    // Ones rust-js adds, the crate doesn't use: rustc says so when it goes on
-    // to write a library's metadata.
-    if !missing.is_empty() {
-        missing.push("allow(unused_features)".to_string());
-    }
-    if !tools.contains(&Symbol::intern("rust_js")) {
-        missing.push("register_tool(rust_js)".to_string());
-    }
-    rustc_builtin_macros::cmdline_attrs::inject(krate, &sess.psess, &missing);
-}

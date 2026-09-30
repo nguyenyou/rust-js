@@ -30,7 +30,8 @@ function snapshot(dir: string, name: string) {
 test("JSX supports components across modules, fragments, lists, conditions and spreads", async () => {
   const source = `#![deny(warnings)]
 #![allow(non_snake_case)]
-#![rust_js::camel_case]
+#[rust_js::camel_case]
+const _: () = ();
 use react::Element;
 #[cfg(any())] mod missing;
 #[cfg_attr(all(), path = "ui/card.rs")] mod card;
@@ -217,7 +218,8 @@ pub fn App() -> Element {
 test("nested component JSX stays readable, contextually typed and mapped to the original Rust", async () => {
   const source = `#![deny(warnings)]
 #![allow(non_snake_case)]
-#![rust_js::camel_case]
+#[rust_js::camel_case]
+const _: () = ();
 use react::Element;
 use std::rc::Rc;
 unsafe extern "Rust" { #[link_name = "globalThis.record"] safe fn record(n: i32); }
@@ -675,7 +677,8 @@ pub fn Attributes() -> Element {
 
 test("JSX grammar: spread precedence, children overrides, component paths and keyed fragments", async () => {
   const { dir, args } = compile(`#![allow(non_snake_case)]
-#![rust_js::camel_case]
+#[rust_js::camel_case]
+const _: () = ();
 use react::Element;
 mod ui;
 use ui::Card as Panel;

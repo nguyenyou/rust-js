@@ -77,8 +77,10 @@ export async function compileRust(job: { manifest?: string } = {}) {
     "--extern", "webapi=/crates/libwebapi.rmeta", "--extern", "js=/crates/libjs.rmeta", "--extern", "react=/crates/libreact.rmeta", "-L", "/crates",
   ];
   // RUSTC_ICE=0: don't name a crash-report file after the process id (WASI has none).
-  // Without options, the shim logs every call it handles.
-  const wasi = new WASI(args, ["RUSTC_ICE=0"], fds, { debug: false });
+  // RUSTC_BOOTSTRAP=1: the playground's own bindings declare JS types as extern
+  // types, a nightly feature, until bindings have a stable way (ADR 0110); this
+  // run compiles that one crate. Without options, the shim logs every call it handles.
+  const wasi = new WASI(args, ["RUSTC_ICE=0", "RUSTC_BOOTSTRAP=1"], fds, { debug: false });
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(readFileSync(wasmPath)), {
     wasi_snapshot_preview1: wasi.wasiImport,
   });
