@@ -304,6 +304,8 @@ struct FnCx<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+    /// Each const parameter the function is given, by its index: `N` (ADR 0107).
+    const_params: Vec<(u32, Expr)>,
     /// In a trait's default body copied into an impl (ADR 0049): the impl's
     /// arguments for the trait's parameters, `Self` among them.
     self_args: Option<ty::GenericArgsRef<'tcx>>,
@@ -743,8 +745,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Repeat { value, count } => {
                 let item_ty = self.thir[value].ty;
                 let count = self.tcx.normalize_erasing_regions(self.typing_env, count);
-                let Some(n) = count.try_to_target_usize(self.tcx) else {
-                    return Err(self.unsupported(span, "`[x; N]` of a generic length"));
+                // A caller's `N` (ADR 0107), or the number.
+                let n = count.try_to_target_usize(self.tcx);
+                let length = match n {
+                    Some(n) => Expr::int(n as i128),
+                    None => self.const_arg(count, span)?,
                 };
                 let item = self.expr(value, out)?;
                 // A `Copy` value's copies are copies of its bits, which a
@@ -758,10 +763,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     false
                 };
                 if !copied {
-                    if n <= 4 && item.is_constant() {
+                    if let Some(n) = n
+                        && n <= 4
+                        && item.is_constant()
+                    {
                         return Ok(Expr::array(vec![item; n as usize]));
                     }
-                    let array = Expr::new_(Expr::var("Array"), vec![Expr::int(n as i128)]);
+                    let array = Expr::new_(Expr::var("Array"), vec![length]);
                     return Ok(Expr::call(Expr::member(array, "fill"), vec![item]));
                 }
                 let item = if item.reads_same() {
@@ -770,7 +778,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     self.spill("item", item, out)
                 };
                 let copy = self.copy(item, item_ty);
-                let length = Expr::object(vec![Prop::Field("length".into(), Expr::int(n as i128))]);
+                let length = Expr::object(vec![Prop::Field("length".into(), length)]);
                 let from = Expr::member(Expr::var("Array"), "from");
                 Ok(Expr::call(
                     from,
@@ -935,6 +943,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.generic_result(fun, value, span)
             }
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
+            ExprKind::ConstParam { param, .. } => self.const_arg(ty::Const::new_param(self.tcx, param), span),
             ExprKind::Match { .. } if let Some(awaited) = self.body_query().as_await(e) => {
                 Ok(Expr::await_(self.expr(awaited, out)?))
             }

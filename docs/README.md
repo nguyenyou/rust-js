@@ -187,6 +187,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0104 The tests run side by side, each native program built once](decisions/0104-parallel-tests.md)
 - [0105 `bun create @rust-js` makes a Vite and React app in Rust](decisions/0105-create.md)
 - [0106 A trait's type parameters, associated types, generic methods and constants](decisions/0106-generic-traits.md)
+- [0107 A const parameter is a value its caller gives](decisions/0107-const-generics.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

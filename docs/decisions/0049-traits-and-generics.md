@@ -197,7 +197,8 @@ adds derived `Default`, `Clone` and `From`.
 
 Associated types and constants, type-generic traits, generic trait methods,
 const generics, and user implementations of other external/standard traits
-remain errors ([0052](0052-std-trait-impls.md) allows `Default`, `Clone` and `From`). A generic `Option<T>` boxes a `Some` that would look like
+remain errors (ADR 0106 later took in the traits', and ADR 0107 const
+generics; [0052](0052-std-trait-impls.md) allows `Default`, `Clone` and `From`). A generic `Option<T>` boxes a `Some` that would look like
 `None` ([0051](0051-generic-options.md)); that doesn't change the Option ABI
 of code that isn't generic. General writable references, runtime
 type reification, user destructors, and arbitrary standard-library traits

@@ -162,6 +162,7 @@ pub fn lower_crate<'tcx>(
             tcx,
             typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
             evidence: Vec::new(),
+            const_params: Vec::new(),
             self_args: None,
             krate: &crate_facts,
             dependencies: Default::default(),

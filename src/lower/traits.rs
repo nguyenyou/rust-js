@@ -55,11 +55,16 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
             continue;
         }
         let params = &tcx.generics_of(id).own_params;
+        // A function's and an impl's are given their values (ADR 0107). Not
+        // a trait's, or a trait method's own, which its dictionary would be
+        // given too.
         let reason = if params
             .iter()
             .any(|p| matches!(p.kind, ty::GenericParamDefKind::Const { .. }))
+            && (kind == DefKind::Trait
+                || (kind == DefKind::AssocFn && tcx.inherent_impl_of_assoc(id.to_def_id()).is_none()))
         {
-            Some("const generics")
+            Some("const generics of traits and their methods")
         } else if kind == DefKind::AssocFn
             && tcx.inherent_impl_of_assoc(id.to_def_id()).is_none()
             && params
@@ -112,6 +117,15 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
         }
     }
     valid
+}
+
+/// `id`'s const parameters, its parent's first, as rustc numbers them.
+fn const_params(tcx: TyCtxt<'_>, id: DefId) -> Vec<&ty::GenericParamDef> {
+    let generics = tcx.generics_of(id);
+    (0..generics.count())
+        .map(|index| generics.param_at(index, tcx))
+        .filter(|param| matches!(param.kind, ty::GenericParamDefKind::Const { .. }))
+        .collect()
 }
 
 /// Signature order, including parent impl bounds. Never depend on body usage.
@@ -327,21 +341,26 @@ fn js_word(text: &str) -> String {
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn evidence_params(&mut self, id: DefId) -> Vec<js::Pattern> {
-        let mut params: Vec<js::Pattern> = bounds(self.tcx, self.krate.foreign, id)
-            .into_iter()
-            .map(|tr| {
-                // `writeT` and `readT`, as a generic codec's (ADR 0081).
-                let name = match super::serde::serde_trait(self.tcx, tr.def_id) {
-                    Some(true) => format!("write{}", tr.self_ty()),
-                    Some(false) => format!("read{}", tr.self_ty()),
-                    // `XConvertF64` and `XConvertString`, of two impls of one trait.
-                    None => format!("{}{}", evidence_word(self.tcx, tr.self_ty()), trait_word(self.tcx, tr)),
-                };
-                let name = self.fresh(&js_word(&name));
-                self.evidence.push((tr, Expr::var(&name)));
-                name.into()
-            })
-            .collect();
+        // Each const parameter's value first, `N`, in the order they're
+        // declared, the impl's before the method's (ADR 0107).
+        let mut params: Vec<js::Pattern> = Vec::new();
+        for param in const_params(self.tcx, id) {
+            let name = self.fresh(param.name.as_str());
+            self.const_params.push((param.index, Expr::var(&name)));
+            params.push(name.into());
+        }
+        params.extend(bounds(self.tcx, self.krate.foreign, id).into_iter().map(|tr| {
+            // `writeT` and `readT`, as a generic codec's (ADR 0081).
+            let name = match super::serde::serde_trait(self.tcx, tr.def_id) {
+                Some(true) => format!("write{}", tr.self_ty()),
+                Some(false) => format!("read{}", tr.self_ty()),
+                // `XConvertF64` and `XConvertString`, of two impls of one trait.
+                None => format!("{}{}", evidence_word(self.tcx, tr.self_ty()), trait_word(self.tcx, tr)),
+            };
+            let name = self.fresh(&js_word(&name));
+            self.evidence.push((tr, Expr::var(&name)));
+            js::Pattern::from(name)
+        }));
         // Then a drop function for each type parameter a caller gives a value
         // with a destructor, `dropT` (ADR 0098).
         for &index in self.krate.drop_params.get(&id).into_iter().flatten() {
@@ -351,6 +370,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             params.push(name.into());
         }
         params
+    }
+
+    /// A const argument's value (ADR 0107): `3`, or the caller's own `N`.
+    pub(super) fn const_arg(&self, c: ty::Const<'tcx>, span: Span) -> R<Expr> {
+        let c = self.tcx.normalize_erasing_regions(self.typing_env, c);
+        let value = match c.kind() {
+            ty::ConstKind::Param(p) => self
+                .const_params
+                .iter()
+                .find(|&&(index, _)| index == p.index)
+                .map(|(_, value)| value.clone()),
+            _ => c.try_to_value().and_then(|value| const_js(self.tcx, value)),
+        };
+        value.ok_or_else(|| self.unsupported(span, "this const argument"))
     }
 
     fn super_evidence(&self, from: ty::TraitRef<'tcx>, to: ty::TraitRef<'tcx>, value: Expr) -> Option<Expr> {
@@ -482,13 +515,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn evidence_args(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
-        let mut values = bounds(self.tcx, self.krate.foreign, id)
+        let mut values = const_params(self.tcx, id)
             .into_iter()
-            .map(|bound| {
-                let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
-                self.dictionary(bound, span)
-            })
+            .map(|param| self.const_arg(args.const_at(param.index as usize), span))
             .collect::<R<Vec<_>>>()?;
+        for bound in bounds(self.tcx, self.krate.foreign, id) {
+            let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
+            values.push(self.dictionary(bound, span)?);
+        }
         // Each drop function it takes: a type's with nothing to drop is none,
         // left out at the end (ADR 0098).
         let mut drops = Vec::new();
@@ -954,24 +988,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             );
             body.push(StmtKind::Return(Some(Expr::var(cache))).at(js::Span::NONE));
         } else {
+            // Keyed by a const parameter's value first, a number, which only a
+            // `Map` holds (ADR 0107).
+            let map = if self.const_params.is_empty() { "WeakMap" } else { "Map" };
             body.push(
                 StmtKind::If(
                     undefined,
-                    vec![
-                        StmtKind::Assign(Expr::var(cache), Expr::new_(Expr::var("WeakMap"), Vec::new()))
-                            .at(js::Span::NONE),
-                    ],
+                    vec![StmtKind::Assign(Expr::var(cache), Expr::new_(Expr::var(map), Vec::new())).at(js::Span::NONE)],
                     None,
                 )
                 .at(js::Span::NONE),
             );
             self.runtime.insert(Helper::TraitImpl);
-            // One dictionary for each set of what it's given: its dictionaries,
-            // and its drops, which may be none.
+            // One dictionary for each set of what it's given: its const
+            // parameters' values, its dictionaries, and its drops, which may be
+            // none.
             let keys = Expr::array(
-                self.evidence
+                self.const_params
                     .iter()
                     .map(|(_, value)| value.clone())
+                    .chain(self.evidence.iter().map(|(_, value)| value.clone()))
                     .chain(self.given_drops().iter().map(|name| Expr::var(name)))
                     .collect(),
             );
