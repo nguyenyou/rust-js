@@ -11,12 +11,13 @@ use super::{FnCx, R, camel_case, global};
 use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
 use crate::runtime::Helper;
-use rustc_ast::LitKind;
+use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
+use std::collections::HashSet;
 
 /// How an argument is given to a function that takes boxes (`call_with_boxes`).
 enum ArgForm {
@@ -254,7 +255,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // rust-js can't follow, a `vec::IntoIter` of them say, might hold one.
         let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;
         let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
-            ty::Ref(_, inner, rustc_ast::Mutability::Mut) => holds_drops(inner),
+            ty::Ref(_, inner, Mutability::Mut) => holds_drops(inner),
             ty::Ref(..) => false,
             _ => holds_drops(self.thir[a].ty),
         });
@@ -393,10 +394,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let ExprKind::Borrow { arg: place, .. } = self.thir[self.strip(args[0])].kind else {
                 return Err(self.unsupported(span, "`push_str` on this"));
             };
-            let target = self.assignee(place)?;
             let value = self.expr(args[1], out)?;
             let js_span = self.js_span(span);
-            out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, value)).at(js_span));
+            // A place is written where it is: `t` can't change the `s` it's
+            // pushed to, which Rust has borrowed.
+            if self.slot_place(place).is_none() && self.map_slot(place).is_none() && self.place(place).is_some() {
+                let target = self.assignee(place)?;
+                out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, value)).at(js_span));
+                return Ok(Expr::undefined());
+            }
+            // Else where `+=` would write: a map's slot, or what a call's cell
+            // points at, `pick(&mut a, &mut b).push_str(t)` (ADR 0099).
+            let (target, value) = self.prepare_assignment_target(place, true, value, span, out)?;
+            let appended = Expr::bin(Op::Add, target.read(), value);
+            target.write(appended, js_span, out);
             return Ok(Expr::undefined());
         }
         if let Std::AssignOperator(op) = known {
@@ -468,6 +479,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // An `Rc` is the JS reference itself: the garbage collector does
             // its counting, so a clone is the same object.
             Std::Same => arg(),
+            Std::Pointee => self.through_refs(arg(), self.thir[args[0]].ty).0,
             Std::ToBig => Expr::call(Expr::var("BigInt"), vec![arg()]),
             Std::TryFromInt { into } => {
                 let target = if into {
@@ -1185,14 +1197,97 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty::FnDef(def_id, generic_args) = *self.thir[self.strip(fun)].ty.kind() else {
             return false;
         };
-        let (def_id, generic_args) = self
-            .resolve_into(def_id, generic_args)
-            .unwrap_or((def_id, generic_args));
+        let (def_id, generic_args) = self.callee(def_id, generic_args);
         if self.is_rust_fn(def_id) || self.makes_items(self.thir[e].ty, generic_args, args).is_none() {
             return false;
         }
         self.locals.item_calls.insert(fun);
         true
+    }
+
+    /// What a call of the crate's gives back, as its caller has it: a generic
+    /// `&mut T` it returns is a cell (ADR 0099), and of a `T` that's an object
+    /// here, the caller's own `&mut` to one is the object, what's in it. One
+    /// inside what it takes or returns, a `Vec<&mut T>`, isn't taken apart yet.
+    pub(super) fn generic_result(&self, fun: ExprId, value: Expr, span: Span) -> R<Expr> {
+        let ty::FnDef(def_id, generic_args) = *self.thir[self.strip(fun)].ty.kind() else {
+            return Ok(value);
+        };
+        let (def_id, generic_args) = self.callee(def_id, generic_args);
+        if !self.is_rust_fn(def_id) {
+            return Ok(value);
+        }
+        if let Some(here) = self.nested_mut_object(def_id, generic_args) {
+            let what = format!("a `{here}` inside a generic function's parameters or result");
+            return Err(self.unsupported(span, &what));
+        }
+        let declared = self.tcx.fn_sig(def_id).instantiate_identity().skip_binder().output();
+        Ok(match *declared.kind() {
+            ty::Ref(_, pointee, Mutability::Mut)
+                if self.is_generic_boxed(pointee, self.tcx.param_env(def_id))
+                    && !self.is_cell_pointee(self.instantiated(pointee, generic_args)) =>
+            {
+                Expr::member(value, "value")
+            }
+            _ => value,
+        })
+    }
+
+    /// `ty`, of a function's own generics, in a call of it, `generic_args`.
+    fn instantiated(&self, ty: Ty<'tcx>, generic_args: ty::GenericArgsRef<'tcx>) -> Ty<'tcx> {
+        let ty = ty::EarlyBinder::bind(ty).instantiate(self.tcx, generic_args);
+        self.tcx
+            .try_normalize_erasing_regions(self.typing_env, ty)
+            .unwrap_or(ty)
+    }
+
+    /// A `&mut` to one of `def_id`'s type parameters that's an object in a
+    /// call of it, `generic_args`, anywhere but a parameter or its result: in
+    /// a field of the crate's own type, an `Option` or a `Vec`, or a closure's
+    /// parameters. Generic code has a cell there (ADR 0099), and the caller
+    /// the object; a parameter is given a box, and the result's taken out.
+    fn nested_mut_object(&self, def_id: DefId, generic_args: ty::GenericArgsRef<'tcx>) -> Option<Ty<'tcx>> {
+        let sig = self.tcx.fn_sig(def_id).instantiate_identity().skip_binder();
+        let param_env = self.tcx.param_env(def_id);
+        let mut todo: Vec<Ty<'tcx>> = sig
+            .inputs_and_output
+            .iter()
+            .filter(|ty| !matches!(*ty.kind(), ty::Ref(_, pointee, Mutability::Mut) if self.is_generic_boxed(pointee, param_env)))
+            .collect();
+        for (clause, _) in self.tcx.predicates_of(def_id).instantiate_identity(self.tcx) {
+            if let Some(bound) = clause.as_trait_clause() {
+                todo.extend(bound.skip_binder().trait_ref.args.types());
+            }
+            if let Some(projection) = clause.as_projection_clause() {
+                let projection = projection.skip_binder();
+                todo.extend(projection.projection_term.args.types());
+                todo.extend(projection.term.as_type());
+            }
+        }
+        let mut seen = HashSet::new();
+        while let Some(ty) = todo.pop() {
+            for part in ty.walk().filter_map(|part| part.as_type()) {
+                if !seen.insert(part) {
+                    continue;
+                }
+                if let ty::Ref(_, pointee, Mutability::Mut) = *part.kind()
+                    && self.is_generic_boxed(pointee, param_env)
+                    && !self.is_cell_pointee(self.instantiated(pointee, generic_args))
+                {
+                    return Some(Ty::new_mut_ref(
+                        self.tcx,
+                        self.tcx.lifetimes.re_erased,
+                        self.instantiated(pointee, generic_args),
+                    ));
+                }
+                if let ty::Adt(adt, args) = *part.kind()
+                    && !self.is_std(adt.did())
+                {
+                    todo.extend(adt.all_fields().map(|field| field.ty(self.tcx, args)));
+                }
+            }
+        }
+        None
     }
 
     /// Can what `fn_id` returns hold the borrow its parameter `i` is given: does
@@ -1428,6 +1523,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, and
     /// `TryInto` as `TryFrom`, if that's a hand-written impl.
+    /// The function a call runs: the crate's impl a trait method resolves to,
+    /// or the `From` an `Into` does, else the one named.
+    fn callee(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> (DefId, ty::GenericArgsRef<'tcx>) {
+        self.impl_method(def_id, args)
+            .ok()
+            .flatten()
+            .or_else(|| self.resolve_into(def_id, args))
+            .unwrap_or((def_id, args))
+    }
+
     fn resolve_into(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(DefId, ty::GenericArgsRef<'tcx>)> {
         let (method, args, implementation) = self.recognition().resolve_into(def_id, args)?;
         self.is_rust_fn(implementation).then_some((method, args))

@@ -196,10 +196,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// What a `&mut` to is a cell: a value JS can't change in place, or a
+    /// type parameter, which may be one (ADR 0099).
+    pub(super) fn is_cell_pointee(&self, ty: Ty<'tcx>) -> bool {
+        self.is_boxable(ty) || self.is_generic_boxed(ty, self.typing_env.param_env)
+    }
+
+    /// Is a `&mut` made here, to a place of type `pointee`, a cell? In a trait's
+    /// default copied into an impl, `Self` is the impl's type: `&mut self` of
+    /// an object `Self` is the object, though a `&mut Self` parameter is the
+    /// dictionary's box (ADR 0099).
+    pub(super) fn makes_cell(&self, pointee: Ty<'tcx>) -> bool {
+        let pointee = match self.self_args {
+            Some(args) => ty::EarlyBinder::bind(pointee).instantiate(self.tcx, args),
+            None => pointee,
+        };
+        self.is_cell_pointee(pointee)
+    }
+
     /// A `&mut` to a value JS can't change in place, as a value: a cell, a box
     /// or a handle, whose `value` is the place it points at (ADR 0099).
     pub(super) fn is_cell(&self, ty: Ty<'tcx>) -> bool {
-        matches!(*ty.kind(), ty::Ref(_, inner, Mutability::Mut) if self.is_boxable(inner))
+        matches!(*ty.kind(), ty::Ref(_, inner, Mutability::Mut) if self.is_cell_pointee(inner))
     }
 
     /// A value of type `ty` seen through its references, as the code that
@@ -208,7 +226,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// is (ADR 0099), or the place of a `Handle` on one.
     pub(super) fn through_refs(&self, mut value: Expr, mut ty: Ty<'tcx>) -> (Expr, Ty<'tcx>) {
         while let ty::Ref(_, inner, mutability) = *ty.kind() {
-            if mutability == Mutability::Mut && self.is_boxable(inner) {
+            if mutability == Mutability::Mut && self.is_cell_pointee(inner) {
                 value = match value.kind {
                     js::ExprKind::Handle(place) => *place,
                     _ => Expr::member(value, "value"),
@@ -223,7 +241,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// value is an object, not what it points at (ADR 0099)?
     pub(super) fn has_cell_layer(&self, mut ty: Ty<'tcx>) -> bool {
         while let ty::Ref(_, inner, mutability) = *ty.kind() {
-            if mutability == Mutability::Mut && self.is_boxable(inner) {
+            if mutability == Mutability::Mut && self.is_cell_pointee(inner) {
                 return true;
             }
             ty = inner;
@@ -658,7 +676,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return self.unsupported_in(*inner, seen);
             }
             // A `&mut` to anything else is a cell (ADR 0099).
-            ty::Ref(_, inner, Mutability::Mut) if self.is_boxable(*inner) => return None,
+            ty::Ref(_, inner, Mutability::Mut) if self.is_cell_pointee(*inner) => return None,
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_in(*elem, seen),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
             // An `Option` is its value or `undefined` (ADR 0030), so the value

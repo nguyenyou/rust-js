@@ -474,7 +474,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     // Only this call's value goes nowhere, not its arguments'
                     // values, so a map's `insert` is `m.set(k, v)` (ADR 0059).
                     (Dest::Discard, _) if let ExprKind::Call { fun, ref args, .. } = expr.kind => {
-                        self.call(fun, args, true, expr.span, out)?.or_at(span)
+                        let value = self.call(fun, args, true, expr.span, out)?;
+                        self.generic_result(fun, value, expr.span)?.or_at(span)
                     }
                     // Returning a place of this function's own hands its value
                     // over without a copy: every local dies here, so nothing is
@@ -720,7 +721,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Borrow {
                 borrow_kind: BorrowKind::Mut { .. },
                 arg,
-            } if self.is_boxable(self.thir[arg].ty) => {
+            } if self.makes_cell(self.thir[arg].ty) => {
                 // `&mut *&mut v[0]`, a reborrow: of `v[0]`.
                 let place = self.mut_borrowed(e).unwrap_or(arg);
                 // `&mut 42`: a box of it, which nothing else sees.
@@ -928,7 +929,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if !from_hir_call {
                     self.locals.item_calls.insert(fun);
                 }
-                self.call(fun, args, false, span, out)
+                let value = self.call(fun, args, false, span, out)?;
+                self.generic_result(fun, value, span)
             }
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
             ExprKind::Match { .. } if let Some(awaited) = self.body_query().as_await(e) => {

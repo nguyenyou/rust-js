@@ -397,7 +397,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } = self.thir[self.strip(e)].kind
         {
             let cell = |place: Expr, this: &Self| {
-                if this.is_boxable(this.thir[arg].ty) {
+                if this.makes_cell(this.thir[arg].ty) {
                     Expr::handle(place)
                 } else {
                     place

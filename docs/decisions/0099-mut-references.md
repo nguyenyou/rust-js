@@ -1,9 +1,10 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
 Status: Accepted in part: a `&mut` in a variable, the index loop, a
-generic `&mut T` given as a parameter, a `&mut` to a closure, and handles
-of a `&mut` to a value JS can't change in place, and to a temporary. A generic `&mut T`
-returned or kept, and a handle to an object replaced whole, are to come. Extends
+generic `&mut T`, a `&mut` to a closure, and handles of a `&mut` to a
+value JS can't change in place, and to a temporary. A generic `&mut T` to
+an object inside what a generic function takes or gives, and a handle to
+an object replaced whole, are to come. Extends
 [0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
 
 ## Context
@@ -112,9 +113,13 @@ can see it.
 **A generic `&mut T` is a box or a handle whatever `T` is.** A generic
 function is compiled once, and its `T` might be a number, so `*r` is
 `r.value` in it. A caller whose `T` is an object gives it a box too, and
-takes the value back after. A `&mut T` that generic code returns or keeps,
-for a caller whose `T` is an object, is an error for now: the caller's own
-`&mut` to one is the object, not a handle.
+takes the value back after. Kept or returned, a generic `&mut T` is a cell
+too, as a `&mut` to a number is, and a caller whose `T` is a number has
+it as one. For a caller whose `T` is an object, whose own `&mut` to one is
+the object, a `&mut T` returned is what's in the cell, `pick(..).value`.
+One inside what a generic function takes or gives, a `Vec<&mut T>`, an
+`Option<&mut T>`, a field of the crate's own type or a closure's
+parameter, is an error for an object `T` for now: nothing converts it.
 
 - **A trait's `&mut self` method, through its dictionary, takes a box** (ADR
   0049), since generic code calls it with its `&mut T`: an object's impl's
@@ -252,8 +257,23 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
 - **A `&mut` to an object in a variable is still the object** (ADR 0025),
   and `*r = v` of one still an error: replacing an object whole through a
   `&mut` comes with handles.
-- **Anything else stays an error:** a generic `&mut T` returned or kept,
-  a handle to an object replaced whole, and `&mut dyn Trait`.
+- **A generic `&mut T` kept or returned is a cell** (`generic_mut_ref_kept`,
+  and the diagnostics test): `result.push(&mut list.value)` of rustc's
+  `nll/mutating_references.rs`, `pick(c, a, b)`, `&mut v[0]`, and a
+  `DerefMut` of the crate's. `pick(..).value` for a caller whose `T` is an
+  object; a `&mut T` to one inside a parameter or the result, found by
+  probing, is refused: a generic struct's field built by the caller, a
+  `Vec` or an `Option` of them, and a closure's, which generic code gave
+  a box of the object, and whose change went to the box, before this.
+  `o.as_ref()` and `o.as_mut()` of an `Option` are the `Option`, through
+  its cell, and `push_str` writes through a call's cell as `+=` does.
+  Found by rustc's tests once they compiled: a `DerefMut` resolved to the
+  crate's impl wasn't taken for the crate's, and a default copied into an
+  object's impl made `&mut self` a handle on its local, which is refused
+  again. Of the 12 tests stopping at a `&mut T`, 8 pass.
+- **Anything else stays an error:** a generic `&mut T` to an object inside
+  what a generic function takes or gives, a handle to an object replaced
+  whole, and `&mut dyn Trait`.
 - Most of the 37 tests of `&mut` to a value that isn't an object need the
   first two rules only, and those come first; handles, generic `&mut T`
   and closures follow, each with its corpus cases and mutations.

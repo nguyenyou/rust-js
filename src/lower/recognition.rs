@@ -35,6 +35,10 @@ pub(super) enum Std {
     /// `s.to_owned()`, `String::from(s)`, `v.iter()`, and `Deref` of
     /// `String`, `Rc`, `Vec`, `Ref`, `RefMut` and JS objects.
     Same,
+    /// `o.as_ref()` and `o.as_mut()` of an `Option`: the `Option` its
+    /// reference points at, whose items' references are the items (ADR 0023),
+    /// and whose `&mut`s to what isn't an object a std call's items (ADR 0099).
+    Pointee,
     /// `u64::from(x)` of a number that isn't a BigInt: `BigInt(x)` (ADR 0086).
     ToBig,
     /// `u8::try_from(x)` (`into: false`) or `x.try_into()` between
@@ -710,6 +714,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "join" if owner.is_slice() => Std::Method("join"),
             "push_str" | "push" if string => Std::PushStr,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
+            "as_ref" | "as_mut" if option => Std::Pointee,
             "is_some" if option => Std::IsSome,
             "copied" | "cloned" if option => Std::OptionCloned,
             "is_none" if option => Std::IsNone,

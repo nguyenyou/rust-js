@@ -296,7 +296,8 @@ tooling while preserving rust-js's own readable-output goals.
   `Option` in a variable names its place, and `for x in &mut v` of them is
   an index loop ([ADR 0099](docs/decisions/0099-mut-references.md)); a
   `&mut` kept elsewhere is a handle, and one to a temporary a `let` of its
-  own. A generic `&mut T` returned or kept, and `&mut dyn`, remain.
+  own; a generic `&mut T` kept or returned is a cell. One to an object
+  inside what a generic function takes or gives, and `&mut dyn`, remain.
 - [ ] **M7.3 — Complete reusable abstraction support.** Extend associated
   types/constants, generic traits and methods, const generics, trait objects,
   closures, macros, and async composition against the inventory. Test them
