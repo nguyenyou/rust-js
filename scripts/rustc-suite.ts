@@ -284,7 +284,10 @@ export function validate(
   if (missing.length > 0) problems.push(`tests with no result: ${some(missing)}`);
   if (twice.length > 0) problems.push(`tests with more than one result: ${some(twice)}`);
   if (extra.length > 0) problems.push(`results of tests there weren't: ${some(extra)}`);
-  if (stale.length > 0) problems.push(`known failures that aren't tests: ${some(stale)}`);
+  // Unless a bless is of another rustc, whose tests rustc renamed or took
+  // out: the new ones are the run's, and its diff shows what went (ADR 0109).
+  const upgrade = bless && authority !== undefined && first.toolchain !== authority.commit;
+  if (stale.length > 0 && !upgrade) problems.push(`known failures that aren't tests: ${some(stale)}`);
   return problems;
 }
 

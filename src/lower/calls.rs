@@ -942,9 +942,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if !of.is_sized(self.tcx, self.typing_env) {
                     return Err(self.unsupported(span, &format!("`{name}` of a value without one size")));
                 }
+                // Of a type without parameters, as codegen asks: 1.98 finds an
+                // `async fn`'s future too generic to lay out otherwise (ADR 0109).
                 let layout = self
                     .tcx
-                    .layout_of(self.typing_env.as_query_input(of))
+                    .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))
                     .map_err(|_| self.unsupported(span, &format!("`{name}` of this type")))?;
                 // What's measured still runs, if it does anything.
                 if matches!(known, Std::SizeOfVal) {

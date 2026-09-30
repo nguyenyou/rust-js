@@ -164,6 +164,12 @@ test("shards are checked as one whole run before their results are", () => {
   expect(validate([shard(1), shard(2)], known, "s1", undefined)).toEqual(["there's no test/rustc-inventory.txt to check the run against: bless one"]);
   // A bless writes the inventory anew, for its diff to be reviewed.
   expect(validate([short(1), short(2)], known, "s1", authority, { bless: true })).toEqual([]);
+  // A known failure that's no test is a run that isn't whole, a bless too,
+  // unless it's of another rustc, whose tests rustc renamed or took out: the
+  // new ones are the run's, and the bless's diff shows what went (ADR 0109).
+  const gone = new Map([...known, ["gone.rs", "x"]]);
+  expect(validate([shard(1), shard(2)], gone, "s1", authority, { bless: true })).toEqual(["known failures that aren't tests: 1, as gone.rs"]);
+  expect(validate([shard(1), shard(2)], gone, "s1", { commit: "t0", tests: inventory }, { bless: true })).toEqual([]);
 });
 
 // What native Rust gives no answer for is listed too: a test that passed and

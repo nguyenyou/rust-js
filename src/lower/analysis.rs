@@ -322,6 +322,12 @@ fn reject_unsupported(
             {
                 "an `extern` declaration of this crate's own `#[no_mangle]` function"
             }
+            // `#[eii] static HELLO: u64;`, which the linker makes another
+            // item: rust-js has none to link it to, and JS would read a name
+            // nothing defines (ADR 0109).
+            _ if find_attr!(tcx, def_id, EiiImpls(..) | EiiDeclaration(..) | RustcEiiForeignItem) => {
+                "externally implementable items"
+            }
             _ if markers.iter().any(|&(marker, _)| marker == def_id) => continue,
             _ if from_serde_derive(tcx, def_id) => continue,
             // std's storage for a thread-local: JS needs none.

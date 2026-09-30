@@ -1,0 +1,17 @@
+diff --git a/compiler/rustc_data_structures/Cargo.toml b/compiler/rustc_data_structures/Cargo.toml
+index 6db3a624500a9c0f832078dcbec85ee676be8beb..83ec9a0fccc69fadf662b42ca1965ddef314479e 100644
+--- a/compiler/rustc_data_structures/Cargo.toml
++++ b/compiler/rustc_data_structures/Cargo.toml
+@@ -37,7 +37,11 @@ tracing = "0.1"
+ [dependencies.hashbrown]
+ version = "0.17.0"
+ default-features = false
+-features = ["nightly"]   # for may_dangle
++# Not `nightly`, which makes hashbrown use std's unstable `Allocator`: in one
++# build with oxc, whose arena is `allocator-api2`'s, it's oxc's hashbrown too,
++# and oxc's doesn't build. `nightly` is for `may_dangle`, in drop checks.
++# (Patched in by rust-js.)
++features = []
+ 
+ [target.'cfg(windows)'.dependencies.windows]
+ version = "0.61.0"

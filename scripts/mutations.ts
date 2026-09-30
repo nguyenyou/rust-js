@@ -1390,6 +1390,22 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","generic_into"],
   },
   {
+    name: "layout-in-function-environment",
+    breaks: "`size_of_val` of a generic `async fn`'s future is laid out in the function's environment, where 1.98 finds it too generic, and is refused",
+    file: "src/lower/calls.rs",
+    find: "                    .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))\n",
+    replace: "                    .layout_of(self.typing_env.as_query_input(of))\n",
+    tests: ["test/corpus.test.ts","-t","future_sizes"],
+  },
+  {
+    name: "externally-implementable-accepted",
+    breaks: "`#[eii] static HELLO: u64;` is accepted, and its JS reads a `HELLO` nothing defines",
+    file: "src/lower/analysis.rs",
+    find: "            _ if find_attr!(tcx, def_id, EiiImpls(..) | EiiDeclaration(..) | RustcEiiForeignItem) => {\n",
+    replace: "            _ if false => {\n",
+    tests: ["test/diagnostics.test.ts","-t","externally implementable"],
+  },
+  {
     name: "tuple-part-through-box",
     breaks: "`assert_eq!(*o, 3)` of a boxed `&mut i32` compares the box, `o`, not `o.value`",
     file: "src/lower/patterns.rs",

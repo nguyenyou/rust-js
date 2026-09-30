@@ -61,5 +61,23 @@ nightly's. A stable release ships them too, in its `rustc-dev` component, and
   of a parse error, which its derived `PartialEq` compares by kind, is in.
 - **The playground's patch for dynamic libraries** moved with rustc's code,
   to `rustc_metadata/src/host_dylib.rs`.
+- **Found by rustc's tests at 1.98.1**, as the upgrade's own:
+  - `size_of_val` of a generic `async fn`'s future is laid out as codegen
+    lays it out, in a fully monomorphic environment: in the function's,
+    1.98 finds it too generic.
+  - An externally implementable item, 1.98's `#[eii] static HELLO: u64;`,
+    which the linker makes another item, is refused: its JS read a name
+    nothing defines.
+  - 1.98's `assert_eq!` has a block of its own, so a temporary of its
+    operands ends with that block, not the statement: one with a destructor,
+    `assert_eq!(BAR.0, 456)` of a `const BAR: A` with a `Drop`, is refused,
+    where rust-js drops only at a statement's end or a `let`'s.
+- **rustc's tests are the release's**: rustc renamed and took out some,
+  so a bless of another rustc than the inventory's takes the new ones, and
+  a known failure no longer a test goes with its diff.
+- **The playground's rustc and oxc share a `hashbrown`** now, 0.17: rustc's
+  `nightly` feature, for `may_dangle` in drop checks, makes it std's unstable
+  `Allocator`, which oxc's arena isn't, so the playground's rustc goes
+  without it, by a patch of its own.
 - **Still unstable**: rust-js's syntax, which a plain rustc refuses without
   `RUSTC_BOOTSTRAP`. Moving it to stable Rust is to come.
