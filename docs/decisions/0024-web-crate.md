@@ -72,7 +72,10 @@ holding an `unsafe extern "Rust"` block (ADR 0021). A first parameter named
 | `"instanceof C"` | `this instanceof C` | a checked cast's test, in bindings a program writes (`C` may be an import, ADR 0028) |
 
 Mixins (`Element includes ParentNode`) are copied into every interface that
-includes them. `document` and `window` are globals at the crate root.
+includes them. `document`, `window` and `performance` are globals at the
+crate root. A `WindowProxy`, the type of `frame.contentWindow`, `window.top`
+and `document.defaultView`, is a `Window`, as a script sees it, as
+TypeScript's DOM types have it.
 
 A **namespace** is a module of functions with no type, and each one calls a
 path from a global: `web_assembly::compile(bytes)` is
@@ -147,7 +150,10 @@ programs need more. The Fetch Standard's `Request`, `Response` and
 Encoding Standard's `TextEncoder` and `TextDecoder` with binary data, and the
 WebAssembly JS API (`WebAssembly`, `Module`, `Instance`, `Memory`) and its
 Web API (`compile_streaming`), and tables (`HTMLTableElement` and its rows
-and cells) for the playground (ADR 0032). It isn't
+and cells) for the playground (ADR 0032), and for its Result frame
+`MessageEvent`, whose `source`, a union of a window, a `MessagePort` and a
+`ServiceWorker`, is written by hand as an object, and High Resolution Time's
+`Performance`. It isn't
 the whole platform (334 specs).
 
 **Building:** `rustc --emit=metadata` produces `libwebapi.rmeta`, once per

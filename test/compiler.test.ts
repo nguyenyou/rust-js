@@ -662,6 +662,9 @@ test("the webapi crate's bindings become plain JS", async () => {
   // Optional arguments: `encode_with_input`, and a union member by type.
   expect(js).toContain('const bytes = new TextEncoder().encode(text);');
   expect(js).toContain('const back = new TextDecoder("utf-8").decode(bytes);');
+  // An iframe's window is a `Window` (a WindowProxy, in WebIDL); a message's
+  // sender, a union, an object; and `performance` of hr-time.
+  expect(js).toContain("const sender = e.source;\n  const windowOf = frame.contentWindow;\n  return [Object.is(sender, windowOf), window.performance.now()];");
   const { round_trip } = await import(join(target, "web_forms.js"));
   // "é" is two bytes in UTF-8.
   expect(round_trip("héllo")).toEqual([6, "héllo"]);

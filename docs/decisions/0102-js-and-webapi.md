@@ -164,5 +164,7 @@ crate follows, has them: a crate that isn't only a browser's can use them.
 What they give is opaque, `TimeoutId` and `IntervalId`: a number in a
 browser, an object in Node. The playground uses `set_timeout` instead of its
 own, and `object::is` instead of its own `Object.is` for a message's window.
-What else it declares is a library's, its own, or what webapi doesn't have
-yet: an iframe's `contentWindow`, `MessageEvent`, and `performance`.
+What else it declares is a library's or its own: webapi has an iframe's
+`contentWindow`, `MessageEvent` and `performance` now (ADR 0024), and
+`object::is` takes two types, since one JS object may be seen as either,
+a message's sender, an object, and a frame's `Window`.

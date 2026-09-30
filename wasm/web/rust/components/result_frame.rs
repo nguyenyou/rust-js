@@ -5,22 +5,18 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use js::{JsObject, object, set_timeout};
+use js::{object, set_timeout};
 use react::{Element, use_effect, use_ref};
-use webapi::{Event, HtmlIFrameElement, abort_controller, abort_signal, element, window};
+use webapi::{
+    Event, HtmlIFrameElement, abort_controller, abort_signal, element, html_i_frame_element, message_event, window,
+};
 
 use crate::listen::listen;
 use crate::programs::{Outcome, Program, Report, outcome};
 use crate::styles::HEADING;
 
-// What webapi doesn't have yet, an iframe's `contentWindow` and a message's
-// `source`, the window that sent it, and the frame's report, which
-// frame-report.js reads.
+// The frame's report, which frame-report.js reads.
 unsafe extern "Rust" {
-    #[link_name = "get contentWindow"]
-    safe fn content_window(this: &HtmlIFrameElement) -> Option<&'static JsObject>;
-    #[link_name = "get source"]
-    safe fn message_source(this: &Event) -> Option<&'static JsObject>;
     #[link_name = "../frame-report.js#readReport"]
     safe fn message_data(event: &Event) -> Option<Report>;
 }
@@ -51,7 +47,10 @@ pub fn ResultFrame(ResultFrameProps { program, on_outcome }: ResultFrameProps) -
                     "message",
                     Box::new(move |e| {
                         let from_frame = match frame.current() {
-                            Some(frame) => object::is(&message_source(e), &content_window(frame)),
+                            Some(frame) => object::is(
+                                &message_event::source(message_event::unchecked_from(e)),
+                                &html_i_frame_element::content_window(frame),
+                            ),
                             None => false,
                         };
                         let report = match message_data(e) {

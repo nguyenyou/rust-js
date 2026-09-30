@@ -21,4 +21,10 @@ export function round_trip(text) {
   const back = new TextDecoder("utf-8").decode(bytes);
   return [bytes.length, back];
 }
+
+export function from_frame(frame, e) {
+  const sender = e.source;
+  const windowOf = frame.contentWindow;
+  return [Object.is(sender, windowOf), window.performance.now()];
+}
 //# sourceMappingURL=web_forms.js.map

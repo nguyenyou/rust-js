@@ -11,7 +11,7 @@ import idl from "@webref/idl";
 import webref from "@webref/idl/package.json" with { type: "json" };
 
 // The specs to read. Partial interfaces and mixins from these are merged in.
-const SPECS = ["dom", "html", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api", "wasm-web-api", "xhr", "streams", "touch-events"];
+const SPECS = ["dom", "html", "hr-time", "uievents", "pointerevents", "cssom", "cssom-view", "geometry", "fetch", "encoding", "wasm-js-api", "wasm-web-api", "xhr", "streams", "touch-events"];
 
 // The everyday DOM. Members that use any other interface are skipped.
 const INTERFACES = [
@@ -24,7 +24,9 @@ const INTERFACES = [
   "HTMLOListElement", "HTMLOptionElement", "HTMLOutputElement", "HTMLParagraphElement",
   "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement", "HTMLUListElement",
   "HTMLTableElement", "HTMLTableSectionElement", "HTMLTableRowElement", "HTMLTableCellElement", "HTMLIFrameElement",
-  "Window", "Location", "History", "Storage", "DataTransfer", "ToggleEvent",
+  "Window", "Location", "History", "Storage", "DataTransfer", "ToggleEvent", "MessageEvent",
+  // hr-time: `window.performance`, the page's clock
+  "Performance",
   // uievents
   "UIEvent", "FocusEvent", "MouseEvent", "KeyboardEvent", "InputEvent",
   // cssom
@@ -45,6 +47,18 @@ const known = new Set(INTERFACES);
 // Members written by hand, for results the generator can't type: a union
 // with an interface it doesn't bind.
 const EXTRA: Record<string, Fn[]> = {
+  MessageEvent: [
+    {
+      name: "source",
+      jsName: "get source",
+      params: ["this: &MessageEvent"],
+      result: "Option<&'static JsObject>",
+      doc: [
+        "[MDN](https://developer.mozilla.org/docs/Web/API/MessageEvent/source): what sent it, a window,",
+        "a `MessagePort` or a `ServiceWorker`, as an object: `js::object::is` tells which.",
+      ],
+    },
+  ],
   FormData: [
     {
       name: "get",
@@ -88,8 +102,9 @@ const RENAMES: Record<string, string> = {
 // `HeadersInit` is a sequence or a record, and `fetch` takes a `Headers` too.
 const FIELD_TYPES: Record<string, string> = { "RequestInit.headers": "&'a Headers" };
 
-// The globals at the crate root: `document`, `window`.
-const GLOBALS: [string, string][] = [["document", "Document"], ["window", "Window"]];
+// The globals at the crate root: `document`, `window`, and `performance`,
+// which a worker has too.
+const GLOBALS: [string, string][] = [["document", "Document"], ["window", "Window"], ["performance", "Performance"]];
 
 // ── Reading the IDL ─────────────────────────────────────────────────────
 
@@ -226,6 +241,8 @@ function rustType(t: IdlType, at: Position): string | { skip: string } {
   // (webidl2 types are objects with getters: pass them on as they are.)
   if (aliased) return rustType(aliased, at);
   if (name === "undefined") return at === "result" ? "()" : { skip: "undefined parameter" };
+  // A `WindowProxy` is a `Window`, as a script sees it: `frame.contentWindow`.
+  if (name === "WindowProxy") return rustType({ ...t, idlType: "Window" }, at);
   if (NUMBERS[name]) return NUMBERS[name];
   if (STRINGS.has(name) || enums.has(name)) return at === "param" ? "&str" : "String";
   if (name === "EventListener" && at === "param") return "Box<dyn FnMut(&Event)>";

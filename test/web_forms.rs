@@ -24,3 +24,11 @@ pub fn round_trip(text: &str) -> (u32, String) {
     let back = text_decoder::decode_with_uint8_array(text_decoder::new_with_label("utf-8"), bytes);
     (uint8_array::length(bytes), back)
 }
+
+/// A frame's window, a message's sender, and the page's clock:
+/// `frame.contentWindow`, `e.source` and `window.performance.now()`.
+pub fn from_frame(frame: &webapi::HtmlIFrameElement, e: &Event) -> (bool, f64) {
+    let sender = webapi::message_event::source(webapi::message_event::unchecked_from(e));
+    let window_of = webapi::html_i_frame_element::content_window(frame);
+    (js::object::is(&sender, &window_of), webapi::performance::now(window::performance(window)))
+}

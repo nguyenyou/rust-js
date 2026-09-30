@@ -202,10 +202,11 @@ pub mod object {
     /// [`Object.is(a, b)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/is):
     /// the same object, or the same value, where `NaN` is itself and `0`
     /// isn't `-0`. Of JS objects, whether they're one: `std::ptr::eq` isn't
-    /// rust-js's.
+    /// rust-js's. Of two Rust types too, since a JS object may be seen as
+    /// either: a message's sender, an object, and a frame's `Window`.
     #[rust_js::link_name = "Object.is"]
     #[allow(unused_variables)]
-    pub fn is<T: core::marker::PointeeSized>(a: &T, b: &T) -> bool {
+    pub fn is<A: core::marker::PointeeSized, B: core::marker::PointeeSized>(a: &A, b: &B) -> bool {
         unreachable!()
     }
 }

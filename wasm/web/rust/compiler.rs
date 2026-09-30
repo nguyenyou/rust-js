@@ -18,8 +18,8 @@ use std::rc::Rc;
 
 use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, number, uint8_array};
 use webapi::{
-    Response, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule, response, text_decoder, text_encoder,
-    web_assembly, web_assembly_instance, web_assembly_memory, window,
+    Response, WebAssemblyInstance, WebAssemblyMemory, WebAssemblyModule, performance, response, text_decoder,
+    text_encoder, web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
 // Some JS functions are declared more than once, typed for each use (`json`
@@ -31,8 +31,6 @@ unsafe extern "Rust" {
     /// A file in the WASI shim's in-memory filesystem.
     pub type WasiFile;
 
-    #[link_name = "performance.now"]
-    safe fn now() -> f64;
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_file(data: &Uint8Array, options: &dyn std::any::Any) -> &'static WasiFile;
     #[link_name = "get data"]
@@ -158,7 +156,7 @@ pub fn mb(n: f64) -> String {
 /// Download the compiler, the sysroot, the webapi and js crates and the examples,
 /// giving `stat` each one's time as it arrives.
 pub async fn load(stat: Stat) -> Loaded {
-    let start = now();
+    let start = performance::now(performance);
     // All downloads start here, together: a JS promise runs as soon as it's made
     // (ADR 0029). Awaiting them one by one below only collects the results.
     let module = load_compiler(start, stat.clone());
@@ -179,13 +177,16 @@ pub async fn load(stat: Stat) -> Loaded {
         styles,
         examples: examples.await,
     };
-    stat("ready after".to_string(), ms(now() - start));
+    stat("ready after".to_string(), ms(performance::now(performance) - start));
     loaded
 }
 
 async fn load_compiler(start: f64, stat: Stat) -> &'static WebAssemblyModule {
     let module = web_assembly::compile_streaming(window::fetch(window, "./rust-js.wasm")).await;
-    stat("download + compile rust-js.wasm".to_string(), ms(now() - start));
+    stat(
+        "download + compile rust-js.wasm".to_string(),
+        ms(performance::now(performance) - start),
+    );
     module
 }
 
@@ -205,7 +206,12 @@ async fn load_sysroot(start: f64, stat: Stat) -> HashMap<String, &'static WasiFi
     }
     stat(
         "download sysroot".to_string(),
-        format!("{} ({} files, {})", ms(now() - start), entries.len(), mb(size as f64)),
+        format!(
+            "{} ({} files, {})",
+            ms(performance::now(performance) - start),
+            entries.len(),
+            mb(size as f64)
+        ),
     );
     entries.into_iter().collect()
 }
@@ -224,7 +230,10 @@ async fn load_packages(start: f64, stat: Stat) -> (Vec<(String, String)>, Vec<(S
     let mut modules = vec![("@rust-js/runtime".to_string(), runtime.await)];
     let packages = packages.await;
     modules.extend(text_fields(packages.modules));
-    stat("download runtime and packages".to_string(), ms(now() - start));
+    stat(
+        "download runtime and packages".to_string(),
+        ms(performance::now(performance) - start),
+    );
     (modules, text_fields(packages.styles))
 }
 
@@ -234,7 +243,7 @@ async fn load_binding_crate(name: &str, start: f64, stat: Stat) -> &'static Wasi
         format!("download {name} crate"),
         format!(
             "{} ({})",
-            ms(now() - start),
+            ms(performance::now(performance) - start),
             mb(array_buffer::byte_length(bytes) as f64)
         ),
     );
@@ -404,14 +413,14 @@ pub async fn compile(loaded: &Loaded, sources: &HashMap<String, String>, root_fi
         &WasiOptions { debug: false },
     );
 
-    let t0 = now();
+    let t0 = performance::now(performance);
     let imports = Imports {
         wasi_snapshot_preview1: wasi_import(wasi),
     };
     let instance = web_assembly::instantiate_with_web_assembly_module_and_import_object(loaded.module, &imports).await;
-    let t1 = now();
+    let t1 = performance::now(performance);
     let started = run_wasi(wasi, instance);
-    let t2 = now();
+    let t2 = performance::now(performance);
     let ok = matches!(started, Ok(0));
     let exit = match started {
         Ok(code) => code.to_string(),
