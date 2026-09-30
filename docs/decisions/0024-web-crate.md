@@ -49,7 +49,7 @@ element::append(app, b);                                  // app.append(b)
 **Types.** Each interface is a zero-sized struct, and inheritance is `Deref`:
 
 ```rust
-pub struct Element(PhantomData<JsObject>);         // `JsObject`: an extern type
+pub struct Element(PhantomData<JsObject>);         // `JsObject`: an extern type, a struct since ADR 0111
 impl Deref for Element { type Target = Node; .. }  // an Element is a Node
 ```
 

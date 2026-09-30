@@ -2,21 +2,23 @@
 // the `Editor` component does to its view. Both editors follow the system's
 // light or dark setting.
 
+use std::marker::PhantomData;
+
 use js::{JsObject, object};
 use webapi::Element;
 
+/// Anything CodeMirror takes as an extension, an array of them too.
+pub struct Extension(PhantomData<JsObject>);
+pub struct Compartment(PhantomData<JsObject>);
+/// A change to an editor's configuration: a compartment's new contents.
+pub struct Effect(PhantomData<JsObject>);
+pub struct EditorState(PhantomData<JsObject>);
+pub struct EditorView(PhantomData<JsObject>);
+/// A document's text.
+pub struct Text(PhantomData<JsObject>);
+
 #[allow(clashing_extern_declarations)]
 unsafe extern "Rust" {
-    /// Anything CodeMirror takes as an extension, an array of them too.
-    pub type Extension;
-    pub type Compartment;
-    /// A change to an editor's configuration: a compartment's new contents.
-    pub type Effect;
-    pub type EditorState;
-    pub type EditorView;
-    /// A document's text.
-    pub type Text;
-
     #[link_name = "codemirror#basicSetup"]
     safe static basic_setup: &'static Extension;
     #[link_name = "@codemirror/theme-one-dark#oneDark"]

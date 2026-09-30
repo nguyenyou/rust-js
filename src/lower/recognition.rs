@@ -799,8 +799,19 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let first = fields.next();
         first.is_some_and(|field| {
             matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
-            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))
+            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_)) || self.is_js_object_itself(t)))
         }) && fields.all(|field| matches!(field.kind(), ty::Adt(marker, _) if marker.is_phantom_data()))
+    }
+
+    /// The js crate's `JsObject`, `#[rust_js::js_object]`, a struct no one makes,
+    /// where it was an extern type, a nightly feature (ADR 0111): a struct of a
+    /// `PhantomData` of it is a JS object, as one of an extern type still is.
+    /// A program never has a `JsObject` itself, only a reference to one.
+    fn is_js_object_itself(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(adt, _) if self.tcx
+            .get_attrs_by_path(adt.did(), &[Symbol::intern("rust_js"), Symbol::intern("js_object")])
+            .next()
+            .is_some())
     }
 
     pub(super) fn is_map(&self, ty: Ty<'tcx>) -> bool {

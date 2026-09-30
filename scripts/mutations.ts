@@ -1462,6 +1462,14 @@ export const mutations: Mutation[] = [
     tests: ["test/jsx.test.ts","-t","JSX supports components across modules"],
   },
   {
+    name: "js-type-of-struct-unrecognized",
+    breaks: "`pub struct Element(PhantomData<JsObject>)` is a Rust struct to copy, not a JS object, now `JsObject` is a struct",
+    file: "src/lower/recognition.rs",
+    find: "            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_)) || self.is_js_object_itself(t)))\n",
+    replace: "            && marked.types().next().is_some_and(|t| matches!(t.kind(), ty::Foreign(_))))\n",
+    tests: ["test/snapshots.test.ts","-t","counter"],
+  },
+  {
     name: "tuple-part-through-box",
     breaks: "`assert_eq!(*o, 3)` of a boxed `&mut i32` compares the box, `o`, not `o.value`",
     file: "src/lower/patterns.rs",

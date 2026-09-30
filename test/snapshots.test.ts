@@ -3,7 +3,7 @@
 // its output fails here with the diff; `bun run bless` writes the new output
 // as the snapshot, so `git diff` shows what the change did to the JS.
 
-import { beforeAll, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { buildCompiler, buildReact, buildSerde, buildWebapi, compiler, expectSnapshot, root, run, target } from "./support";
@@ -79,3 +79,17 @@ for (const [name, input, crates] of cases) {
     expectSnapshot(out, join(root, "test/snapshots", name));
   });
 }
+
+// The playground's own bindings declare JS types as a program does, and a
+// program is stable Rust (ADRs 0110, 0111): a JS type is a struct of a
+// `JsObject`, not an extern type, a nightly feature. So it compiles with no
+// `RUSTC_BOOTSTRAP`, as a user's does.
+test("the playground's own Rust is stable Rust", () => {
+  const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+  const flags = ["--extern", `webapi=${join(target, "libwebapi.rmeta")}`, "--extern", `js=${join(target, "libjs.rmeta")}`,
+    "--extern", `react=${join(target, "libreact.rmeta")}`, "-L", target];
+  const out = join(target, "stable-playground");
+  const p = Bun.spawnSync([compiler, "wasm/web/rust/lib.rs", "-o", join(out, "lib.js"), "--", ...flags], { cwd: root, env });
+  expect(p.stderr.toString()).not.toContain("error");
+  expect(p.exitCode).toBe(0);
+});

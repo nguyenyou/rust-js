@@ -58,7 +58,7 @@ can't hide one: a local named `console` becomes `console$1`.
 - **`safe fn`** (Rust 2024) makes the calls usable without `unsafe` blocks
   in the program. The `unsafe extern` is the one place that says "I vouch
   for these signatures".
-- **Extern types** are exactly "a value you can only hold a reference to":
+- **Extern types** (a struct of a `JsObject` since [0111](0111-js-types-as-structs.md), as extern types are a nightly feature) are exactly "a value you can only hold a reference to":
   no size, no fields, and `&'static Element` is `Copy`, so a handle can be
   captured by several closures.
 - **`this` for methods** keeps the DOM's names and argument order visible,

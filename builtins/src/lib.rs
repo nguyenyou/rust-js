@@ -7,9 +7,6 @@
 //! It holds declarations only, so it's never compiled to JS: a program calls
 //! what it declares, and the calls become plain JS.
 
-#![feature(extern_types)]
-// `object::is` of an extern type, which is only `PointeeSized`.
-#![feature(sized_hierarchy)]
 // `#[rust_js::link_name]` on a generic function, `settle` (ADR 0039).
 #![feature(register_tool)]
 #![register_tool(rust_js)]
@@ -38,11 +35,13 @@ macro_rules! camel_case {
     };
 }
 
-unsafe extern "Rust" {
-    /// Any JS object. Every type here and in webapi holds a `PhantomData` of
-    /// it, which is how rust-js knows it's a JS object.
-    pub type JsObject;
-}
+/// Any JS object. Every type here and in webapi holds a `PhantomData` of
+/// it, which is how rust-js knows it's a JS object, and so may a program's
+/// own: `pub struct EditorView(PhantomData<JsObject>);` (ADR 0111). A program
+/// never has one by value, only a reference a binding gives: its field is
+/// private, so nothing makes one, and it's neither `Send` nor `Sync`.
+#[rust_js::js_object]
+pub struct JsObject(PhantomData<*mut ()>);
 
 /// A JS [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)
 /// of a `T`. `.await` on one is JS's `await`; a rejected one throws, like a
@@ -228,7 +227,7 @@ pub mod object {
     /// either: a message's sender, an object, and a frame's `Window`.
     #[rust_js::link_name = "Object.is"]
     #[allow(unused_variables)]
-    pub fn is<A: core::marker::PointeeSized, B: core::marker::PointeeSized>(a: &A, b: &B) -> bool {
+    pub fn is<A: ?Sized, B: ?Sized>(a: &A, b: &B) -> bool {
         unreachable!()
     }
 }

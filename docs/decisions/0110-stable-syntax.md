@@ -1,7 +1,7 @@
 # 0110. rust-js's syntax is stable Rust's
 
-Status: Accepted: a program's syntax. A binding's JS type, an extern type,
-is still a nightly feature, and is to come. Amends [0039](0039-generic-bindings.md),
+Status: Accepted: a program's syntax. A binding's JS type is a struct of a
+`JsObject` since [0111](0111-js-types-as-structs.md). Amends [0039](0039-generic-bindings.md),
 [0046](0046-camel-case-crates.md) and [0109](0109-stable-release.md).
 
 ## Context
@@ -54,11 +54,10 @@ and rustc refuses one it asks for, `#![feature]`, as the release does, unless
   error, which its rustc confirms, and a binding needs none; `js::import!` at
   the root, in a module, and written out as its attribute; and a component of
   another crate as a JSX tag, on a stable release.
-- **Still a nightly feature: a binding's JS type**, an extern type,
-  `unsafe extern "Rust" { pub type EditorView; }`, as the `js`, `webapi` and
-  `react` crates, and the playground's own bindings, declare them. The binding
-  crates' build scripts allow it for each crate alone (ADR 0109), and the
-  playground's compile allows it for its crate. A stable way to declare a JS
-  type is to come.
+- **A binding's JS type was still a nightly feature**, an extern type,
+  `unsafe extern "Rust" { pub type EditorView; }`: ADR 0111 makes it a struct
+  of a `JsObject`, stable Rust.
+- **The binding crates still use `register_tool`** for their own attributes,
+  which plain rustc builds them with, each allowed it alone (ADR 0109).
 - **A plain rustc, a user's own `cargo check`, doesn't know the `rust_js`
   tool**: only rust-js does.

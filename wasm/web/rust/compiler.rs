@@ -14,6 +14,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, number, uint8_array};
@@ -22,15 +23,22 @@ use webapi::{
     text_encoder, web_assembly, web_assembly_instance, web_assembly_memory, window,
 };
 
+/// A file in the WASI shim's in-memory filesystem.
+pub struct WasiFile(PhantomData<JsObject>);
+/// A file or a directory: what a directory's `Map` holds.
+pub struct Inode(PhantomData<JsObject>);
+pub struct WasiDirectory(PhantomData<JsObject>);
+pub struct PreopenDirectory(PhantomData<JsObject>);
+/// One of WASI's file descriptors: stdin, stdout, a preopened directory.
+pub struct Fd(PhantomData<JsObject>);
+pub struct Wasi(PhantomData<JsObject>);
+
 // Some JS functions are declared more than once, typed for each use (`json`
 // for each file it reads, `new Directory` for what it holds): rustc warns
 // that native code would see one symbol. A directory's contents are a JS
 // `Map`, which a `HashMap` is.
 #[allow(clashing_extern_declarations)]
 unsafe extern "Rust" {
-    /// A file in the WASI shim's in-memory filesystem.
-    pub type WasiFile;
-
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_file(data: &Uint8Array, options: &dyn std::any::Any) -> &'static WasiFile;
     #[link_name = "get data"]
@@ -46,14 +54,6 @@ unsafe extern "Rust" {
     safe fn text_fields(object: &JsObject) -> Vec<(String, String)>;
 
     // The rest of the WASI shim (@bjorn3/browser_wasi_shim), for `compile`.
-    /// A file or a directory: what a directory's `Map` holds.
-    pub type Inode;
-    pub type WasiDirectory;
-    pub type PreopenDirectory;
-    /// One of WASI's file descriptors: stdin, stdout, a preopened directory.
-    pub type Fd;
-    pub type Wasi;
-
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_empty_file(data: Vec<u8>) -> &'static WasiFile;
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
