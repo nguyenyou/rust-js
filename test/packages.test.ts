@@ -70,7 +70,13 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
     expect(JSON.parse(run([runtime, installedCompiler, "--version-json"]))).toEqual(JSON.parse(run([compiler, "--version-json"])));
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));
     expect(resourcePackage.version).toBe((Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version);
-    expect(readFileSync(join(resources, "rust-toolchain.toml"), "utf8")).toBe(readFileSync(join(repository, "rust-toolchain.toml"), "utf8"));
+    // Only what an app's build uses, which rustup installs as a directory's
+    // `rust-toolchain.toml` says: the pin, and the target rustc checks
+    // programs for (ADR 0105). Not this repository's `rustc-dev` and tools.
+    const pin = (Bun.TOML.parse(readFileSync(join(repository, "rust-toolchain.toml"), "utf8")) as { toolchain: { channel: string } }).toolchain.channel;
+    expect(Bun.TOML.parse(readFileSync(join(resources, "rust-toolchain.toml"), "utf8"))).toEqual({
+      toolchain: { channel: pin, targets: ["wasm32-unknown-unknown"] },
+    });
     writeFileSync(join(root, "lib.rs"), `
 #[derive(serde::Deserialize)]
 pub struct Message { pub count: u32 }

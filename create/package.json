@@ -1,0 +1,10 @@
+{
+  "name": "@rust-js/create",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "`bun create @rust-js my-app`: a Vite and React app written in Rust. See docs/decisions/0105-create.md.",
+  "bin": "index.js",
+  "files": ["index.js", "template"],
+  "rustJs": { "toolchain": "nightly-2026-03-25" }
+}

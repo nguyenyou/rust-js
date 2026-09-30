@@ -11,7 +11,7 @@ const { toolchain } = metadata.rustJs;
 try {
   const result = spawnSync("rustc", [`+${toolchain}`, "--print", "sysroot"], { encoding: "utf8" });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Install ${toolchain} with rustc-dev before running rust-js.\n${result.stderr}`);
+  if (result.status !== 0) throw new Error(`rust-js runs with Rust ${toolchain}; install it once:\n  rustup toolchain install ${toolchain} --profile minimal --target wasm32-unknown-unknown\n${result.stderr}`);
   const sysroot = result.stdout.toString().trim();
   const key = process.platform === "darwin" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
   const libraryPath = [join(sysroot, "lib"), process.env[key]].filter(Boolean).join(":");

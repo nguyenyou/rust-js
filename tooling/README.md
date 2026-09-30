@@ -51,7 +51,8 @@ bun run pack:compiler target/release/rust-js /absolute/artifacts/native.tgz
 
 The private `@rust-js/native` package contains the binary and a JavaScript launcher,
 with OS/architecture restrictions in its package manifest. Install the pinned
-Rust toolchain with `rustc-dev` on the destination machine first. The launcher
+Rust toolchain, its minimal profile and the `wasm32-unknown-unknown` target, on
+the destination machine first. The launcher
 asks that toolchain for its sysroot and sets the dynamic-library search path
 before forwarding arguments and exit status to the compiler. It does not install
 toolchains or modify global configuration. The adapter discovers this package

@@ -11,11 +11,20 @@ const output = resolve(destination);
 const staging = mkdtempSync(join(tmpdir(), "rust-js-resources-"));
 try {
   const version = (Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
+  // An app's build needs the pin and its target, not this repository's
+  // `rustc-dev` and tools, which rustup would install too: it installs what a
+  // directory's `rust-toolchain.toml` lists before it runs `rustc` there,
+  // as `react/build.sh` does (ADR 0105).
+  const { channel, targets } = (Bun.TOML.parse(readFileSync(join(root, "rust-toolchain.toml"), "utf8")) as {
+    toolchain: { channel: string; targets: string[] };
+  }).toolchain;
+  const toolchain = `# What an app's rust-js build runs (ADR 0105).\n[toolchain]\nchannel = ${JSON.stringify(channel)}\ntargets = ${JSON.stringify(targets)}\n`;
   const files = resourceInputs(Object.keys(bindingInputs));
   for (const file of files) {
     const target = join(staging, file);
     mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(join(root, file), target);
+    if (file === "rust-toolchain.toml") writeFileSync(target, toolchain);
+    else copyFileSync(join(root, file), target);
   }
   writeFileSync(join(staging, "package.json"), JSON.stringify({
     name: "@rust-js/resources", version, private: true, type: "module",
