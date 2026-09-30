@@ -11,7 +11,7 @@ use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, Mutability};
 use rustc_middle::traits::ImplSource;
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 use std::collections::HashMap;
@@ -300,6 +300,9 @@ fn evidence_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
         ty::Alias(ty::Projection, alias) => {
             format!("{}{}", evidence_word(tcx, alias.self_ty()), tcx.item_name(alias.def_id))
         }
+        // `name: impl Into<String>`'s, which rustc names as it's written: its
+        // trait's word alone, `IntoString`.
+        ty::Param(p) if p.name.as_str().starts_with("impl ") => String::new(),
         _ => ty.to_string(),
     }
 }
@@ -488,6 +491,70 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Ok(Expr::object(vec![Prop::Field("clone".into(), clone)]));
             }
         }
+        // A number's `+` or `-`, as `a + b` of one is (ADR 0108), of a
+        // number on each side: `impl Add<Meters> for f64` is the crate's.
+        let primitive =
+            |t: Ty<'tcx>| super::representation::Num::of(t.peel_refs()).is_some() || t.peel_refs().is_bool();
+        if let Some(op) = super::recognition::value_operator(self.tcx, tr.def_id)
+            && tr.args.types().all(primitive)
+        {
+            let ty = ty.peel_refs();
+            let (params, value) = match op {
+                Ok(op) => (
+                    vec!["a".into(), "b".into()],
+                    self.binary(op, Expr::var("a"), Expr::var("b"), None, ty, span)?,
+                ),
+                Err(op) => (vec!["value".into()], self.unary(op, Expr::var("value"), ty, span)?),
+            };
+            // Its method, `add`, after its `Output`.
+            let method = self
+                .tcx
+                .associated_items(tr.def_id)
+                .in_definition_order()
+                .find(|item| item.is_fn())
+                .expect("an operator trait has a method");
+            let name = bindings::fn_name(self.tcx, method.def_id);
+            return Ok(Expr::object(vec![Prop::Field(
+                name,
+                Expr::arrow(params, vec![StmtKind::Return(Some(value)).at(js::Span::NONE)]),
+            )]));
+        }
+        // `x.into()` of a `T: Into<U>` (ADR 0108): std's conversion, the
+        // crate's `From`, or of a `T` to itself, the value.
+        if self.tcx.is_diagnostic_item(sym::Into, tr.def_id) {
+            let into = self.tcx.associated_item_def_ids(tr.def_id)[0];
+            let target = tr.args.type_at(1);
+            let from = self.tcx.get_diagnostic_item(sym::From).expect("std has `From`");
+            let from = self.tcx.associated_item_def_ids(from)[0];
+            let from_args = self.tcx.mk_args(&[target.into(), ty.into()]);
+            let value = if let Some(known) = self.recognition().classify(into, tr.args)
+                && let Some(f) = self.std_fn_value(known, Ty::new_fn_def(self.tcx, into, tr.args), span)?
+            {
+                f
+            } else if let Some(instance) = self.resolve_instance(from, from_args)?
+                && self.is_rust_fn(instance.def_id())
+                && self.tcx.trait_of_assoc(instance.def_id()).is_none()
+            {
+                let callee = self.fn_ref(instance.def_id());
+                let mut values = vec![Expr::var("value")];
+                values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
+                match values.len() {
+                    1 => callee,
+                    _ => Expr::arrow(
+                        vec!["value".into()],
+                        vec![StmtKind::Return(Some(Expr::call(callee, values))).at(js::Span::NONE)],
+                    ),
+                }
+            } else if self.tcx.erase_and_anonymize_regions(ty) == self.tcx.erase_and_anonymize_regions(target) {
+                Expr::arrow(
+                    vec!["value".into()],
+                    vec![StmtKind::Return(Some(Expr::var("value"))).at(js::Span::NONE)],
+                )
+            } else {
+                return Err(self.unsupported(span, &format!("implementation evidence for `{tr}`")));
+            };
+            return Ok(Expr::object(vec![Prop::Field("into".into(), value)]));
+        }
         if self.tcx.is_lang_item(tr.def_id, LangItem::Copy) {
             let ty = tr.self_ty();
             if self.is_unknown(ty) {
@@ -630,6 +697,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Some(call));
         }
         if ordering && super::representation::Num::of(tr.self_ty().peel_refs()).is_some() {
+            return Ok(None);
+        }
+        // Where the types are known, `"paren".into()` and `a.add(b)` are std's,
+        // written in place, as ever: a dictionary is for generic code (ADR 0108).
+        if (super::recognition::value_operator(self.tcx, trait_id).is_some()
+            || self.tcx.is_diagnostic_item(sym::Into, trait_id))
+            && !tr.args.has_non_region_param()
+        {
             return Ok(None);
         }
         // A std trait's dictionary has only its required methods.

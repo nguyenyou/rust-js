@@ -53,8 +53,8 @@ differs is a helper with Rust's answer:**
   `Array.from({ length: 3 }, () => ({ ...cell }))`.
 - **An operator on the crate's own type calls its impl:** `a + b` is
   `vec2Add_add(a, b)`, `-a` is `vec2Neg_neg(a)`, and `c += b` is
-  `vec2AddAssign_add_assign(c, b)`. Like `From`, operators have no
-  dictionaries, so `T: Add` in generic code is still an error.
+  `vec2AddAssign_add_assign(c, b)`. Like `From`, operators had no
+  dictionaries, so `T: Add` in generic code was an error, until ADR 0108.
 - **A type's own `const`,** `Vec2::ZERO`, is its value where it's used, as
   Rust's is: `{ x: 0, y: 0 }`, and `Vec2::ZERO.y` is `0`. A trait's
   associated constants were still errors, until ADR 0106.

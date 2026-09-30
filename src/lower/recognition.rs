@@ -1408,6 +1408,25 @@ pub(super) fn operational(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_,
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
         // Its evidence is the writer or reader itself (ADR 0081).
         || serde_trait(tcx, id).is_some()
+        // `a + b` of a `T: Add`, and `x.into()` of a `T: Into<U>` (ADR 0108).
+        || value_operator(tcx, id).is_some()
+        || tcx.is_diagnostic_item(sym::Into, id)
+}
+
+/// An operator that makes a value, `a + b` or `-a`: what a number's is, as
+/// the operator of a MIR binary or unary operation.
+pub(super) fn value_operator(tcx: TyCtxt<'_>, id: DefId) -> Option<Result<BinOp, UnOp>> {
+    [
+        (LangItem::Add, Ok(BinOp::Add)),
+        (LangItem::Sub, Ok(BinOp::Sub)),
+        (LangItem::Mul, Ok(BinOp::Mul)),
+        (LangItem::Div, Ok(BinOp::Div)),
+        (LangItem::Rem, Ok(BinOp::Rem)),
+        (LangItem::Neg, Err(UnOp::Neg)),
+        (LangItem::Not, Err(UnOp::Not)),
+    ]
+    .into_iter()
+    .find_map(|(item, op)| tcx.is_lang_item(id, item).then_some(op))
 }
 
 pub(super) fn implementable(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_>, id: DefId) -> bool {

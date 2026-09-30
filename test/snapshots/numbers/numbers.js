@@ -21,6 +21,8 @@ import {
   $trailingZeros,
 } from "@rust-js/runtime";
 
+var $vec2Add, $vec2Sub, $vec2MulF64, $vec2Neg;
+
 export const Vec2 = {
   new(x, y) {
     return { x, y };
@@ -181,5 +183,33 @@ function vec2AddAssign_add_assign(vec2, o) {
 
 function cell2Debug_fmt(cell2) {
   return `Cell2 { hits: ${cell2.hits} }`;
+}
+
+export function vec2Add() {
+  if ($vec2Add === undefined) {
+    $vec2Add = { add: vec2Add_add };
+  }
+  return $vec2Add;
+}
+
+export function vec2Sub() {
+  if ($vec2Sub === undefined) {
+    $vec2Sub = { sub: vec2Sub_sub };
+  }
+  return $vec2Sub;
+}
+
+export function vec2MulF64() {
+  if ($vec2MulF64 === undefined) {
+    $vec2MulF64 = { mul: vec2MulF64_mul };
+  }
+  return $vec2MulF64;
+}
+
+export function vec2Neg() {
+  if ($vec2Neg === undefined) {
+    $vec2Neg = { neg: vec2Neg_neg };
+  }
+  return $vec2Neg;
 }
 //# sourceMappingURL=numbers.js.map
