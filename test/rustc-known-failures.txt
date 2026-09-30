@@ -854,7 +854,6 @@ raw-ref-op/raw-ref-op.rs	error: rust-js does not support values of type `*const 
 reachable/unreachable-code-diverging-expressions.rs	error: rust-js does not support this expression yet
 recursion/future-stream-buffer-unordered-40003.rs	error: rust-js does not support generic trait methods yet
 recursion/instantiable.rs	error: rust-js does not support values of type `*const foo` yet
-regions/issue-6157.rs	error: rust-js does not support values of type `&mut dyn OpInt` yet
 regions/rcvr-borrowed-to-region.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 regions/regions-assoc-type-region-bound.rs	error: rust-js does not support associated types yet
 regions/regions-assoc-type-static-bound.rs	error: rust-js does not support associated types yet
@@ -911,9 +910,9 @@ self/arbitrary_self_types_struct_receiver_trait.rs	error: rust-js does not suppo
 self/arbitrary_self_types_trait_receiver_trait.rs	error: rust-js does not support user implementations of this standard or external trait yet
 self/builtin-superkinds-self-type.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 self/dispatch_from_dyn_zst.rs	error: rust-js does not support user implementations of this standard or external trait yet
-self/dyn-compatibility-sized-self-by-value-self.rs	error: rust-js does not support values of type `&mut dyn Counter` yet
+self/dyn-compatibility-sized-self-by-value-self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/dyn-compatibility-sized-self-generic-method.rs	error: rust-js does not support generic trait methods yet
-self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support values of type `&mut dyn Counter` yet
+self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/self-impl-2.rs	error: rust-js does not support generic trait parameters yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 self/string-self-append.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
@@ -948,8 +947,6 @@ statics/static-recursive.rs	error: rust-js does not support statics of type `*co
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/nul-char-equivalence.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 structs-enums/align-struct.rs	error: rust-js does not support this expression yet
-structs-enums/class-cast-to-trait-multiple-types.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
-structs-enums/class-cast-to-trait.rs	error: rust-js does not support values of type `&mut dyn noisy` yet
 structs-enums/class-separate-impl.rs	error: rust-js does not support values of type `dyn std::string::ToString` yet
 structs-enums/enum-alignment.rs	error: rust-js does not support this expression yet
 structs-enums/enum-clike-ffi-as-int.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -1055,7 +1052,6 @@ traits/pointee-deduction.rs	error: rust-js does not support associated types yet
 traits/principal-less-objects.rs	error: rust-js does not support generic trait parameters yet
 traits/superdefault-generics.rs	error: rust-js does not support generic trait parameters yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
-traits/trait-object-mut-to-shared-coercion.rs	error: rust-js does not support values of type `&mut dyn Foo` yet
 traits/trait-upcasting/basic.rs	error: rust-js does not support values of type `dyn Baz` yet
 traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support generic trait parameters yet
 traits/trait-upcasting/diamond.rs	error: rust-js does not support values of type `dyn Baz` yet
