@@ -90,5 +90,5 @@ export function moved(dx) {
   pointer), no function pointers, no `dyn`. Those are an error that says so.
 - A type's own associated constants (`impl Foo { const N: u32 = 3; }`)
   are their value where they're used (ADR 0064).
-- Not yet: a trait's associated constants and `const` blocks. `static`s
-  came later (ADR 0096).
+- Not yet: `const` blocks. `static`s came later (ADR 0096), and a trait's
+  associated constants (ADR 0106).

@@ -58,6 +58,7 @@ pub fn lower_crate<'tcx>(
         mutated,
         changed_vecs,
         drop_params,
+        generic_consts,
     } = analyze_crate(tcx, all_bodies, dependencies, export_library)?;
     // A library exports what its consumers can reach (ADR 0100).
     if export_library {
@@ -116,6 +117,7 @@ pub fn lower_crate<'tcx>(
         library: export_library,
         sources: &sources,
         mutated: &mutated,
+        generic_consts: &generic_consts,
         changed_vecs: &changed_vecs,
         drop_params: &drop_params,
         closures: &closures,

@@ -57,7 +57,7 @@ differs is a helper with Rust's answer:**
   dictionaries, so `T: Add` in generic code is still an error.
 - **A type's own `const`,** `Vec2::ZERO`, is its value where it's used, as
   Rust's is: `{ x: 0, y: 0 }`, and `Vec2::ZERO.y` is `0`. A trait's
-  associated constants are still errors.
+  associated constants were still errors, until ADR 0106.
 - **Also here:**
   - a derived `Debug` of a fieldless enum is the value, its variant's name
     (ADR 0013), with no function;

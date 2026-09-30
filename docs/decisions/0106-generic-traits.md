@@ -1,7 +1,8 @@
-# 0106. A trait's type parameters, associated types and generic methods
+# 0106. A trait's type parameters, associated types, generic methods and constants
 
-Status: Accepted: a trait's type parameters, associated types and generic
-methods. Generic associated types are to come. Extends [0049](0049-traits-and-generics.md)
+Status: Accepted: a trait's type parameters, associated types, generic
+methods and constants. Generic associated types, and a generic impl's
+constant of its parameters, are to come. Extends [0049](0049-traits-and-generics.md)
 and [0051](0051-generic-options.md).
 
 ## Context
@@ -12,6 +13,7 @@ own. rustc's tests stop at the rest more than at anything else about traits:
 ```
 119  generic trait parameters     trait Convert<T> { fn convert(&self) -> T; }
 109  associated types             trait Source { type Item; }
+ 30  associated constants         trait Shape { const SIDES: u32; }
  20  generic trait methods        trait Shape { fn f<T>(&self, t: T); }
 ```
 
@@ -80,6 +82,28 @@ an impl's signature, it's that type.
   dictionary, it's given no drop function for its own type parameters, as
   an associated type isn't.
 
+**A trait's constant is its value where the type is known, and its
+dictionary's in generic code:**
+
+- **Where rustc can say which impl's it is**, `Square::SIDES` or
+  `<Square as Shape>::NAME`, it's the value rustc computed, written in
+  place, as a type's own constant is (ADR 0031): `4`, or `"shape"` of a
+  default.
+- **In generic code, `S::SIDES` is `SShape.SIDES`**: each impl's dictionary
+  has its value, the impl's or the trait's default, as rustc computed it
+  for that impl, `{ SIDES: 4, NAME: "square", area: .. }`.
+- **Of a type changed in place, it's a getter**, `get ZERO() { return { n:
+  0 }; }`: each use is a value of its own, as a Rust constant's is, so a
+  `bump` of one doesn't change the next. Of any other type, a value.
+- **A dictionary has only the constants generic code reads**, or all, of a
+  library, whose consumers may (ADR 0100): rustc evaluates only the
+  constants a program uses, and a default no one reads may not evaluate,
+  `360 / Self::SIDES` of a `Wrap` with none.
+- **Not yet: a generic impl's constant of its parameters**, `impl<T: Foo>
+  Foo for Proxy<T> { const X: i32 = T::X; }`, which rustc can't compute
+  for every `T` at once. An error, as are a constant with parameters of
+  its own, `const SIZE<T>`, and a `type const`.
+
 ## Why
 
 - **A dictionary per impl is what rustc resolves:** `x.convert()` of a
@@ -114,5 +138,13 @@ an impl's signature, it's that type.
   refusal where a type has a destructor. Of the 20 rustc tests stopping at
   them, 11 pass; of all 1,139 known failures, 154, none giving another
   answer.
+- **Associated constants are in** (`associated_consts`): known and generic
+  uses, a default, a generic impl's constant that doesn't need its
+  parameter, one of a type changed in place, and a default that would divide
+  by zero, unread; and the diagnostics test's refusals. Of the 30 rustc tests
+  stopping at them, 18 pass, none giving another answer. Found by them:
+  evaluating every constant for a dictionary made rustc report a default's
+  cycle and overflow that nothing used, and a `type const` crashed rustc's
+  type checking.
 - A trait's default method copied into a generic impl, `impl<T> .. for
   Stack<T>`, still stops at ADR 0098's destructors: `T` might have one.

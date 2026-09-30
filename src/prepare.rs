@@ -15,7 +15,7 @@ fn prints_on_lines(value: &Expr) -> bool {
         ExprKind::Object(props) => {
             props.len() > 1
                 || props.iter().any(|p| match p {
-                    Prop::Field(_, value) | Prop::Spread(value) => prints_on_lines(value),
+                    Prop::Field(_, value) | Prop::Getter(_, value) | Prop::Spread(value) => prints_on_lines(value),
                 })
         }
         ExprKind::Arrow(_, body) | ExprKind::AsyncArrow(_, body) => match body.as_slice() {
@@ -36,7 +36,7 @@ fn prints_on_lines(value: &Expr) -> bool {
         ExprKind::Template(_, values) => values.iter().any(prints_on_lines),
         ExprKind::Jsx(jsx) => {
             jsx.props.iter().any(|p| match p {
-                Prop::Field(_, value) | Prop::Spread(value) => prints_on_lines(value),
+                Prop::Field(_, value) | Prop::Getter(_, value) | Prop::Spread(value) => prints_on_lines(value),
             }) || jsx.children.iter().any(prints_on_lines)
         }
         ExprKind::Num(_)
@@ -311,7 +311,7 @@ impl Context {
                             }
                             prior |= effects;
                         }
-                        Prop::Spread(value) => {
+                        Prop::Getter(_, value) | Prop::Spread(value) => {
                             self.expr(value, out, prior);
                             prior |= may_run_code(value);
                         }
@@ -402,12 +402,12 @@ fn position_independent(e: &Expr) -> bool {
 
 fn prop_value(prop: &Prop) -> &Expr {
     match prop {
-        Prop::Field(_, e) | Prop::Spread(e) => e,
+        Prop::Field(_, e) | Prop::Getter(_, e) | Prop::Spread(e) => e,
     }
 }
 fn prop_value_mut(prop: &mut Prop) -> &mut Expr {
     match prop {
-        Prop::Field(_, e) | Prop::Spread(e) => e,
+        Prop::Field(_, e) | Prop::Getter(_, e) | Prop::Spread(e) => e,
     }
 }
 
@@ -421,7 +421,7 @@ fn may_run_code(e: &Expr) -> bool {
         ExprKind::Array(items) => items.iter().any(may_run_code),
         ExprKind::Object(props) => props.iter().any(|p| match p {
             Prop::Spread(_) => true,
-            Prop::Field(_, e) => may_run_code(e),
+            Prop::Field(_, e) | Prop::Getter(_, e) => may_run_code(e),
         }),
         ExprKind::Unary(_, e) => may_run_code(e),
         ExprKind::Binary(_, a, b) => may_run_code(a) || may_run_code(b),
@@ -430,7 +430,7 @@ fn may_run_code(e: &Expr) -> bool {
             matches!(&jsx.tag, JsxTag::Component(e) if may_run_code(e))
                 || jsx.props.iter().any(|p| match p {
                     Prop::Spread(_) => true,
-                    Prop::Field(_, e) => may_run_code(e),
+                    Prop::Field(_, e) | Prop::Getter(_, e) => may_run_code(e),
                 })
                 || jsx.children.iter().any(may_run_code)
         }

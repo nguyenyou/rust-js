@@ -21,7 +21,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 for prop in &mut jsx.props {
                     match prop {
-                        Prop::Field(name, value) => self.capture_jsx_input(&js_ident(name), value, out),
+                        Prop::Field(name, value) | Prop::Getter(name, value) => {
+                            self.capture_jsx_input(&js_ident(name), value, out)
+                        }
                         Prop::Spread(value) => {
                             // JSX spreads read properties now, not when the
                             // later element is built. Preserve getters too.
@@ -171,7 +173,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             for prop in &mut fields {
                 let (name, value) = match prop {
-                    Prop::Field(name, value) => (name.as_str(), value),
+                    Prop::Field(name, value) | Prop::Getter(name, value) => (name.as_str(), value),
                     Prop::Spread(value) => ("props", value),
                 };
                 if !value.is_constant() {
@@ -258,7 +260,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !self.is_simple(value) {
             for prop in fields.iter_mut() {
                 let (base, value) = match prop {
-                    Prop::Field(name, value) => (name.as_str(), value),
+                    Prop::Field(name, value) | Prop::Getter(name, value) => (name.as_str(), value),
                     Prop::Spread(value) => ("props", value),
                 };
                 if !value.is_constant() {
@@ -308,7 +310,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !self.is_simple(value) || (name != "children" && !jsx.children.is_empty()) {
             for prop in &mut jsx.props {
                 let (base, value) = match prop {
-                    Prop::Field(name, value) => (name.as_str(), value),
+                    Prop::Field(name, value) | Prop::Getter(name, value) => (name.as_str(), value),
                     Prop::Spread(value) => ("props", value),
                 };
                 if !value.is_constant() {

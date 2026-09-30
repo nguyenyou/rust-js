@@ -272,6 +272,9 @@ pub enum Prop {
     Field(String, Expr),
     /// `...value`: copy every field of `value`.
     Spread(Expr),
+    /// `get name() { .. }`, of an arrow that takes nothing: its body runs
+    /// on each read, as a Rust constant's value is a new one at each use.
+    Getter(String, Expr),
 }
 
 #[derive(Clone, Copy)]
@@ -493,7 +496,7 @@ impl Expr {
             ExprKind::Jsx(_) => true,
             ExprKind::Array(items) => items.iter().any(Expr::contains_jsx),
             ExprKind::Object(props) => props.iter().any(|p| match p {
-                Prop::Field(_, value) | Prop::Spread(value) => value.contains_jsx(),
+                Prop::Field(_, value) | Prop::Getter(_, value) | Prop::Spread(value) => value.contains_jsx(),
             }),
             ExprKind::Arrow(_, body) | ExprKind::AsyncArrow(_, body) => body.iter().any(|s| match &s.kind {
                 StmtKind::Return(Some(value)) | StmtKind::Expr(value) => value.contains_jsx(),
@@ -547,6 +550,7 @@ impl Expr {
                 .iter()
                 .map(|p| match p {
                     Prop::Field(name, value) => Some(Prop::Field(name.clone(), value.replace(with, callbacks)?)),
+                    Prop::Getter(name, value) => Some(Prop::Getter(name.clone(), value.replace(with, callbacks)?)),
                     Prop::Spread(value) => Some(Prop::Spread(value.replace(with, callbacks)?)),
                 })
                 .collect::<Option<Vec<_>>>()
@@ -694,7 +698,7 @@ impl Expr {
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
             ExprKind::Array(items) | ExprKind::Template(_, items) => items.iter().any(Expr::has_effects),
             ExprKind::Object(props) => props.iter().any(|p| match p {
-                Prop::Field(_, value) | Prop::Spread(value) => value.has_effects(),
+                Prop::Field(_, value) | Prop::Getter(_, value) | Prop::Spread(value) => value.has_effects(),
             }),
             ExprKind::Unary(_, a) => a.has_effects(),
             ExprKind::Binary(_, a, b) => a.has_effects() || b.has_effects(),
@@ -704,7 +708,7 @@ impl Expr {
             ExprKind::Jsx(jsx) => {
                 matches!(&jsx.tag, JsxTag::Component(c) if c.has_effects())
                     || jsx.props.iter().any(|p| match p {
-                        Prop::Field(_, value) | Prop::Spread(value) => value.has_effects(),
+                        Prop::Field(_, value) | Prop::Getter(_, value) | Prop::Spread(value) => value.has_effects(),
                     })
                     || jsx.children.iter().any(Expr::has_effects)
             }

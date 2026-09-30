@@ -10,7 +10,7 @@ use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
-use rustc_middle::ty::{Ty, TyCtxt};
+use rustc_middle::ty::{Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -91,6 +91,7 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
     /// Each generic function's type parameters it's given a drop function
     /// for (ADR 0098), by their indices.
     pub drop_params: HashMap<DefId, Vec<u32>>,
+    pub generic_consts: HashSet<DefId>,
 }
 
 pub(super) fn analyze_crate<'a, 'tcx>(
@@ -232,6 +233,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let mutated = mutated_types(all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
     let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
+    let generic_consts = generic_consts(tcx, all_bodies);
 
     Some(AnalyzedCrate {
         bodies,
@@ -253,6 +255,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         mutated,
         changed_vecs,
         drop_params,
+        generic_consts,
     })
 }
 
@@ -317,16 +320,13 @@ fn reject_unsupported(
             // Methods, trait impls' included (ADRs 0047, 0049). Derives like
             // `#[derive(Clone)]` write impls that are never called.
             DefKind::AssocFn => continue,
+            // A `type const`, of `min_generic_const_args`, has no body to type-check.
+            DefKind::AssocConst { is_type_const: true } => "type constants",
             // A type's own `const`, as `Vec2::ZERO`: its value where it's used,
-            // as rustc computed it (ADR 0031). A trait's are still errors.
-            DefKind::AssocConst { .. }
-                if tcx
-                    .opt_local_parent(def_id)
-                    .is_some_and(|p| matches!(tcx.def_kind(p), DefKind::Impl { of_trait: false })) =>
-            {
-                continue;
-            }
-            DefKind::AssocConst { .. } => "associated constants",
+            // as rustc computed it (ADR 0031). A trait's too, and in generic code
+            // its impl's dictionary's (ADR 0106). Not one with parameters of its own.
+            DefKind::AssocConst { .. } if tcx.generics_of(def_id).own_params.is_empty() => continue,
+            DefKind::AssocConst { .. } => "generic constants",
             // An `Iterator`'s `Item` (ADR 0055), an operator's `Output` (ADR
             // 0064) and a `TryFrom`'s `Error`: rustc works out what they are.
             DefKind::AssocTy
@@ -816,6 +816,24 @@ fn collect_tests<'tcx>(
         });
     }
     tests
+}
+
+/// The trait constants generic code reads, `S::SIDES` (ADR 0106): a
+/// dictionary has only these, as rustc evaluates only the constants a
+/// program uses, and a default no impl uses may not evaluate.
+fn generic_consts(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> HashSet<DefId> {
+    all_bodies
+        .iter()
+        .flat_map(|body| body.thir.exprs.iter())
+        .filter_map(|expr| match expr.kind {
+            ExprKind::NamedConst { def_id, args, .. }
+                if tcx.trait_of_assoc(def_id).is_some() && args.has_non_region_param() =>
+            {
+                Some(def_id)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The types whose JS objects get changed in place somewhere in the crate:

@@ -65,7 +65,8 @@ Counter.tick(counter);
   line.
 - **A `#![rust_js::camel_case]` crate** (ADR 0046) names methods like its
   functions: `side_length` is `sideLength`.
-- **Trait methods, and associated constants, are errors for now.** A trait
+- **Trait methods, and associated constants, are errors for now** (a
+  trait's constants came with ADR 0106). A trait
   method can be called through a generic or a `dyn`, which needs dispatch
   on the value's type. That's a design of its own.
 

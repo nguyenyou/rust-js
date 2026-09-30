@@ -826,7 +826,7 @@ impl<'a> Cx<'a> {
         let b = &self.b;
         let (name, value) = match prop {
             Prop::Spread(value) => return Some(JSXAttributeItem::new_spread_attribute(SPAN, self.expr(value), b)),
-            Prop::Field(name, value) => (name, value),
+            Prop::Field(name, value) | Prop::Getter(name, value) => (name, value),
         };
         let sp = span(value.span);
         let value = match &value.kind {
@@ -880,35 +880,17 @@ impl<'a> Cx<'a> {
         while place.mentions_var(&param) {
             param.push('_');
         }
-        let accessor = |kind: PropertyKind, params: Vec<js::Pattern>, body: Vec<js::Stmt>| {
-            let params = self.params(FormalParameterKind::FormalParameter, &params);
-            let body = FunctionBody::new(SPAN, ArenaVec::new_in(b), self.stmts(&body), b);
-            let value = Expression::new_function_expression(
-                SPAN,
-                FunctionType::FunctionExpression,
-                None,
-                false, // generator
-                false, // async
-                false, // declare
-                None,  // type parameters
-                None,  // this param
-                ArenaBox::new_in(params, b),
-                None, // return type
-                Some(ArenaBox::new_in(body, b)),
-                b,
-            );
-            let key = PropertyKey::new_static_identifier(SPAN, self.name("value"), b);
-            ObjectPropertyKind::new_object_property(SPAN, kind, key, value, false, false, false, b)
-        };
-        let get = accessor(
+        let get = self.accessor(
             PropertyKind::Get,
-            Vec::new(),
-            vec![js::StmtKind::Return(Some(place.clone())).at(place.span)],
+            "value",
+            &[],
+            &[js::StmtKind::Return(Some(place.clone())).at(place.span)],
         );
-        let set = accessor(
+        let set = self.accessor(
             PropertyKind::Set,
-            vec![js::Pattern::Name(param.clone())],
-            vec![js::StmtKind::Assign(place.clone(), js::Expr::var(&param)).at(place.span)],
+            "value",
+            &[js::Pattern::Name(param.clone())],
+            &[js::StmtKind::Assign(place.clone(), js::Expr::var(&param)).at(place.span)],
         );
         let dictionary = dictionary.map(|d| self.property(&Prop::Field("impl".into(), d.clone())));
         Expression::new_object_expression(
@@ -918,9 +900,47 @@ impl<'a> Cx<'a> {
         )
     }
 
+    /// `get name() { .. }` or `set name(value) { .. }`.
+    fn accessor(
+        &self,
+        kind: PropertyKind,
+        name: &str,
+        params: &[js::Pattern],
+        body: &[js::Stmt],
+    ) -> ObjectPropertyKind<'a> {
+        let b = &self.b;
+        let params = self.params(FormalParameterKind::FormalParameter, params);
+        let body = FunctionBody::new(SPAN, ArenaVec::new_in(b), self.stmts(body), b);
+        let value = Expression::new_function_expression(
+            SPAN,
+            FunctionType::FunctionExpression,
+            None,
+            false, // generator
+            false, // async
+            false, // declare
+            None,  // type parameters
+            None,  // this param
+            ArenaBox::new_in(params, b),
+            None, // return type
+            Some(ArenaBox::new_in(body, b)),
+            b,
+        );
+        let key = PropertyKey::new_static_identifier(SPAN, self.name(name), b);
+        ObjectPropertyKind::new_object_property(SPAN, kind, key, value, false, false, false, b)
+    }
+
     fn property(&self, prop: &Prop) -> ObjectPropertyKind<'a> {
         let b = &self.b;
         match prop {
+            Prop::Getter(name, value) => match &value.kind {
+                ExprKind::Arrow(params, body) => self.accessor(PropertyKind::Get, name, params, body),
+                _ => self.accessor(
+                    PropertyKind::Get,
+                    name,
+                    &[],
+                    &[js::StmtKind::Return(Some(value.clone())).at(value.span)],
+                ),
+            },
             Prop::Field(name, value) => {
                 let value = self.expr(value);
                 // `{ x: x }` reads better as `{ x }`.

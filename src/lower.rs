@@ -30,7 +30,7 @@ use rustc_middle::thir::{
     self as thir, AdtExprBase, BlockId, ExprId, ExprKind, LocalVarId, LogicalOp, Pat, PatKind, Thir,
 };
 use rustc_middle::ty::adjustment::PointerCoercion;
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_span::{ErrorGuaranteed, SourceFile, Span, sym};
 
@@ -271,6 +271,8 @@ struct ItemScope<'tcx> {
 struct CrateFacts<'a, 'tcx> {
     sources: &'a sources::CapturedSources,
     mutated: &'a HashSet<Ty<'tcx>>,
+    /// The trait constants generic code reads (ADR 0106).
+    generic_consts: &'a HashSet<DefId>,
     changed_vecs: &'a HashSet<Ty<'tcx>>,
     /// Each generic function's type parameters it's given a drop for (ADR 0098).
     drop_params: &'a HashMap<DefId, Vec<u32>>,
@@ -1378,8 +1380,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A `const` (ADR 0031). One of ours is its name, `SIZE` or `util.SIZE`,
     /// copied where a use might change it: each use is a value of its own.
-    /// Anyone else's, like `u32::MAX`, is its value, written in place.
-    fn named_const(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+    /// Anyone else's, like `u32::MAX`, is its value, written in place. A
+    /// trait's in generic code, `S::SIDES`, is its impl's dictionary's (ADR 0106).
+    fn named_const(&mut self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, ty: Ty<'tcx>, span: Span) -> R<Expr> {
         // One holding a `Cell`, which changes through a shared reference, is
         // its value, written in place: `{ value: 5 }` each time it's used.
         if self.krate.fns.contains_key(&def_id) && ty.is_freeze(self.tcx, self.typing_env) {
@@ -1391,9 +1394,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 place
             });
         }
-        eval_const(self.tcx, self.typing_env, def_id, args, span)
-            .and_then(|value| const_js(self.tcx, value))
-            .ok_or_else(|| self.unsupported(span, "this constant"))
+        if let Some(value) =
+            eval_const(self.tcx, self.typing_env, def_id, args, span).and_then(|value| const_js(self.tcx, value))
+        {
+            return Ok(value);
+        }
+        match self.tcx.trait_of_assoc(def_id) {
+            Some(trait_id) if args.has_non_region_param() => {
+                let dictionary = self.dictionary(ty::TraitRef::from_assoc(self.tcx, trait_id, args), span)?;
+                Ok(Expr::member(dictionary, bindings::fn_name(self.tcx, def_id)))
+            }
+            _ => Err(self.unsupported(span, "this constant")),
+        }
     }
 
     /// An integer `const`'s value: `x / SIZE` can't divide by zero.

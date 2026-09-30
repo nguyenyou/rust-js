@@ -4,6 +4,7 @@
 use super::bindings;
 use super::drops::Drops;
 use super::recognition::TraitCall;
+use super::representation::{const_js, eval_const};
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
 use crate::runtime::Helper;
@@ -823,6 +824,30 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         for item in self.tcx.associated_items(tr.def_id).in_definition_order() {
+            // A constant, the impl's or the trait's default, as rustc computed
+            // it: read on each use where it's of a type changed in place, so
+            // each is a value of its own, as ADR 0031's are.
+            if matches!(self.tcx.def_kind(item.def_id), DefKind::AssocConst { .. }) {
+                // Only one generic code reads, here or where a library's consumers
+                // may (ADR 0100).
+                if !self.krate.library && !self.krate.generic_consts.contains(&item.def_id) {
+                    continue;
+                }
+                let value = eval_const(self.tcx, self.typing_env, item.def_id, tr.args, span)
+                    .and_then(|value| const_js(self.tcx, value))
+                    .ok_or_else(|| self.unsupported(span, "a generic impl's constant of its parameters"))?;
+                let ty = self.tcx.type_of(item.def_id).instantiate(self.tcx, tr.args);
+                let ty = self.tcx.normalize_erasing_regions(self.typing_env, ty);
+                let name = bindings::fn_name(self.tcx, item.def_id);
+                props.push(match self.contains_mutated(ty) {
+                    true => Prop::Getter(
+                        name,
+                        Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(js::Span::NONE)]),
+                    ),
+                    false => Prop::Field(name, value),
+                });
+                continue;
+            }
             if self.tcx.def_kind(item.def_id) != DefKind::AssocFn {
                 continue;
             }
