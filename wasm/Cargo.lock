@@ -1742,6 +1742,7 @@ dependencies = [
  "oxc_ast_visit",
  "oxc_codegen",
  "oxc_formatter",
+ "oxc_formatter_core",
  "oxc_sourcemap",
  "oxc_span",
  "oxc_syntax",

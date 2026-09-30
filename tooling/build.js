@@ -62,7 +62,9 @@ function checkRuntime(root, version) {
   if (installed !== version) throw new Error(`rust-js ${version} needs @rust-js/runtime ${version}, not the installed ${installed}`);
 }
 
-function run(command, args, cwd, env = {}) {
+/** `command`'s stdout; what it says on stderr as it succeeds, its warnings,
+ * go to `warn`, if given. */
+function run(command, args, cwd, env = {}, warn) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: { ...process.env, RUST_JS_JS_RUNTIME: process.execPath, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
@@ -70,7 +72,11 @@ function run(command, args, cwd, env = {}) {
     child.stdout.setEncoding("utf8").on("data", chunk => { output += chunk; });
     child.stderr.setEncoding("utf8").on("data", chunk => { errors += chunk; });
     child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve(output) : reject(new Error(errors || `${command} exited with ${code}`)));
+    child.on("close", code => {
+      if (code !== 0) return reject(new Error(errors || `${command} exited with ${code}`));
+      if (warn && errors) warn(errors);
+      resolve(output);
+    });
   });
 }
 
@@ -168,12 +174,14 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
     },
     watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), ...compilerInputs, ...Object.values(externs)],
     prepare,
-    async compile({ crate, output, manifest }) {
+    /** `save` runs the crate's checks a save runs, not those only for a
+     * build (ADR 0117); `warn` is given what rust-js warns of as it succeeds. */
+    async compile({ crate, output, manifest, save = false, warn = undefined }) {
       const { flags, react } = await prepare();
       try {
-        await run(compilerCommand, [...compilerArgs, crate, "-o", output, "--manifest", manifest,
+        await run(compilerCommand, [...compilerArgs, crate, "-o", output, "--manifest", manifest, "--hooks", save ? "save" : "build",
           "--", ...flags,
-          ...Object.entries(externs).flatMap(([name, file]) => ["--extern", `${name}=${file}`, "-L", dirname(file)]), ...rustcFlags], root);
+          ...Object.entries(externs).flatMap(([name, file]) => ["--extern", `${name}=${file}`, "-L", dirname(file)]), ...rustcFlags], root, {}, warn);
       } catch (error) {
         if (react && error.message.includes("configured out")) {
           error.message += `\nnote: this project has React ${react}; an item gated \`react = "X.Y"\` needs React X.Y or later\n`;

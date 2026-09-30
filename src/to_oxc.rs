@@ -53,6 +53,9 @@ pub struct Output {
 /// and `js_file_name` is the output's file name, for `sourceMappingURL`.
 /// `path_of` names a source the map points into, asked only for those it
 /// does; `primary` is the module's own, which the map names first.
+/// `format` is the formatter's options, and `layout` what the crate's
+/// transforms make of the formatted text and its map (ADR 0117).
+#[allow(clippy::too_many_arguments)]
 pub fn emit(
     module: &Module,
     sources: &crate::program::Sources,
@@ -60,6 +63,8 @@ pub fn emit(
     primary: Option<usize>,
     source_path: &str,
     js_file_name: &str,
+    format: &crate::settings::Format,
+    layout: &dyn Fn(String, String) -> (String, String),
 ) -> Output {
     let rust_source = sources.text.as_str();
     let allocator = Allocator::default();
@@ -243,14 +248,17 @@ pub fn emit(
     let paths: std::collections::HashMap<usize, String> = used.into_iter().map(|i| (i, path_of(i))).collect();
     let map = restore_sources(&map, sources, &paths, primary);
     let mut map = shift_lines(&map, &places, js_file_name);
-    // Laid out as oxfmt lays it out, the map moved to match.
+    // Laid out as oxfmt lays it out, with the crate's options (ADR 0117), the
+    // map moved to match. They were checked as they were read.
     let shifted = SourceMap::from_json_string(&map).expect("the map just built");
+    let options = crate::format::options_of(format).expect("options checked as they were read");
     if let Some((formatted, formatted_map)) =
-        crate::format::formatted(&code, &shifted, js_file_name.ends_with(".jsx"), js_file_name)
+        crate::format::formatted(&code, &shifted, js_file_name.ends_with(".jsx"), js_file_name, &options)
     {
         code = formatted;
         map = formatted_map;
     }
+    (code, map) = layout(code, map);
     code.push_str(&format!("//# sourceMappingURL={js_file_name}.map\n"));
     Output { code, map }
 }

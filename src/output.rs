@@ -19,6 +19,10 @@ pub struct OutputPlan {
     /// Files of the build tool's published with the JS, as artifacts of this
     /// plan, and no part of the manifest: what Cargo is told (ADR 0101).
     pub extra: Vec<(PathBuf, Vec<u8>)>,
+    /// The crate's settings for the JS (ADR 0117).
+    pub settings: crate::settings::Settings,
+    /// The JS files the plan has, once planned, which a crate's checks read.
+    pub written: Vec<PathBuf>,
     jsx: HashSet<Vec<String>>,
 }
 
@@ -76,6 +80,9 @@ impl OutputPlan {
             let own = resolve(&rust_path);
             let path_of = |i: usize| relative_resolved(&dir, &resolved[i]);
             let js_file_name = js_path.file_name().unwrap_or_default().to_string_lossy();
+            let file = absolute(&js_path)?;
+            let jsx = js_file_name.ends_with(".jsx");
+            let layout = |code, map| crate::hooks::transform(&self.settings, &file, jsx, &js_file_name, code, map);
             let output = to_oxc::emit(
                 &js_module,
                 sources,
@@ -83,6 +90,8 @@ impl OutputPlan {
                 resolved.iter().position(|source| *source == own),
                 &relative_resolved(&dir, &own),
                 &js_file_name,
+                &self.settings.format,
+                &layout,
             );
             let map_path = PathBuf::from(format!("{}.map", js_path.display()));
             for (path, text) in [(&js_path, &output.code), (&map_path, &output.map)] {
@@ -286,6 +295,8 @@ impl OutputPlan {
             manifest,
             metadata: None,
             extra: Vec::new(),
+            settings: crate::settings::Settings::default(),
+            written: Vec::new(),
             jsx: HashSet::new(),
         }
     }
@@ -374,6 +385,11 @@ impl OutputPlan {
         for artifact in &mut artifacts {
             artifact.path = absolute(&artifact.path)?;
         }
+        self.written = artifacts
+            .iter()
+            .filter(|a| a.path.extension().is_some_and(|ext| ext == "js" || ext == "jsx"))
+            .map(|a| a.path.clone())
+            .collect();
 
         let mut stale = Vec::new();
         if let Some(path) = manifest_path {

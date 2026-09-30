@@ -59,7 +59,8 @@ This folder is where we write those choices down.
 | `wasm/web/compiler-client.js`, `wasm/web/compiler-worker.js` | Browser compiler lifecycle and recovery |
 | `src/js.rs` | Our small JS AST; every node carries a Rust span |
 | `src/to_oxc.rs` | Converts to oxc's AST, prints, builds the source map |
-| `src/format.rs` | Formats the printed JS as oxfmt does, and moves the source map to match |
+| `src/format.rs` | Formats the printed JS as oxfmt does, with a crate's options, and moves the source map to match, or to a transform's text of the same program |
+| `src/settings.rs`, `src/hooks.rs` | A crate's settings in its `Cargo.toml`, and the transforms and checks it runs on the JS, what they say moved to the Rust (0117) |
 | `test/native.rs`, `test/compiler.test.ts` | Differential test: native Rust vs. generated JS |
 | `test/emission.test.ts`, `test/diagnostics.test.ts` | Source maps, manifests, output ownership and compiler rejections |
 | `test/react.test.ts`, `test/browser.test.ts`, `test/vite.test.ts` | React behavior, browser runners, and real Vite/Fast Refresh |
@@ -196,6 +197,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0113 A plain rustc compiles a program too](decisions/0113-plain-rustc.md)
 - [0114 An app's Rust is a Cargo package, for editors](decisions/0114-app-cargo-toml.md)
 - [0115 The binding crates are packaged for crates.io](decisions/0115-binding-crates-on-crates-io.md)
+- [0117 A crate's settings for the JS rust-js writes: its formatter's options, and hooks](decisions/0117-output-hooks.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

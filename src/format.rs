@@ -19,25 +19,101 @@ use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast_kind::AstType;
 use oxc_ast_visit::Visit;
-use oxc_formatter::{Expand, JsFormatOptions, format, parse_for_format};
-use oxc_sourcemap::{SourceMap, SourceMapBuilder};
+use oxc_formatter::{
+    ArrowParentheses, AttributePosition, BracketSameLine, BracketSpacing, Expand, JsFormatOptions, QuoteProperties,
+    QuoteStyle, Semicolons, TrailingCommas, format, parse_for_format,
+};
+use oxc_formatter_core::{IndentStyle, IndentWidth, LineEnding, LineWidth};
+use oxc_sourcemap::{OwnedSourceMap, SourceMap, SourceMapBuilder};
 use oxc_span::{GetSpan, SourceType};
 
-/// `code` as oxfmt formats it, with `map`'s mappings moved to match. `None`
-/// if the formatter fails, and the caller keeps what it has.
-pub fn formatted(code: &str, map: &SourceMap<'_>, jsx: bool, js_file_name: &str) -> Option<(String, String)> {
+use crate::settings::{ArrowParens, EndOfLine, Format, ObjectWrap, QuoteProps, TrailingComma};
+
+/// `code` as oxfmt formats it, with `options`, and `map`'s mappings moved
+/// to match. `None` if the formatter fails, and the caller keeps what it has.
+pub fn formatted(
+    code: &str,
+    map: &SourceMap<'_>,
+    jsx: bool,
+    js_file_name: &str,
+    options: &JsFormatOptions,
+) -> Option<(String, String)> {
     let source_type = if jsx { SourceType::jsx() } else { SourceType::mjs() };
     let allocator = Allocator::default();
-    let text = format(&allocator, code, source_type, options())
+    let text = format(&allocator, code, source_type, options.clone())
         .ok()?
         .print()
         .ok()?
         .into_code();
+    let before = node_starts(&allocator, code, source_type).ok()?;
+    let after = node_starts(&allocator, &text, source_type).ok()?;
+    let map = moved(code, &text, map, &before, &after, js_file_name);
+    Some((text, map))
+}
 
-    let before = node_starts(&allocator, code, source_type);
-    let after = node_starts(&allocator, &text, source_type);
-    let pairs = pair(&before, &after);
-    let (old_lines, new_lines) = (Lines::new(code), Lines::new(&text));
+/// `text`, a hook's layout of `code` (ADR 0117), with `map`'s mappings
+/// moved to it, if it's the same program: the same nodes, in the same order,
+/// but for the ones a formatter adds or takes out, JSX's text and `{" "}`.
+/// `map` is JSON. Otherwise, why not.
+pub fn transformed(
+    code: &str,
+    text: String,
+    map: &str,
+    jsx: bool,
+    js_file_name: &str,
+) -> Result<(String, String), String> {
+    let map = SourceMap::from_json_string(map).map_err(|e| format!("was given a map it can't read: {e}"))?;
+    let map = &map;
+    let source_type = if jsx { SourceType::jsx() } else { SourceType::mjs() };
+    let allocator = Allocator::default();
+    let before = node_starts(&allocator, code, source_type).map_err(|e| format!("was given JS it can't read: {e}"))?;
+    let after = node_starts(&allocator, &text, source_type).map_err(|e| format!("gave what isn't JS: {e}"))?;
+    let (was, is) = (layout_free(&before, code), layout_free(&after, &text));
+    if let Some(at) = (0..was.len().max(is.len())).find(|&i| was.get(i) != is.get(i)) {
+        // Taken out, with what's in it, if the rest is what the rest was;
+        // added, if what was there is the rest; or else made another.
+        let change = match (was.get(at), is.get(at)) {
+            (Some(node), _) if was.ends_with(&is[at..]) => format!("took out a `{node:?}`"),
+            (_, Some(node)) if is.ends_with(&was[at..]) => format!("added a `{node:?}`"),
+            (Some(was), Some(is)) => format!("made a `{was:?}` a `{is:?}`"),
+            (Some(node), None) => format!("took out a `{node:?}`"),
+            (None, Some(node)) => format!("added a `{node:?}`"),
+            (None, None) => unreachable!("the kinds differ at {at}"),
+        };
+        return Err(format!("changed the program: it {change}"));
+    }
+    let map = moved(code, &text, map, &before, &after, js_file_name);
+    Ok((text, map))
+}
+
+/// The kinds of `nodes`, of `code`, but for what a formatter lays out
+/// otherwise: JSX's text, and the `{" "}` that stands for its spaces.
+fn layout_free(nodes: &[(AstType, u32)], code: &str) -> Vec<AstType> {
+    let mut kinds = Vec::with_capacity(nodes.len());
+    let mut space = false;
+    for &(kind, at) in nodes {
+        let spaces = space && kind == AstType::StringLiteral;
+        space = kind == AstType::JSXExpressionContainer
+            && ["{\" \"}", "{' '}"].iter().any(|s| code[at as usize..].starts_with(s));
+        if !(space || spaces || kind == AstType::JSXText) {
+            kinds.push(kind);
+        }
+    }
+    kinds
+}
+
+/// `map`, of `code`, moved to `text`, the same program laid out otherwise,
+/// by pairing their nodes, `before` and `after`.
+fn moved(
+    code: &str,
+    text: &str,
+    map: &SourceMap<'_>,
+    before: &[(AstType, u32)],
+    after: &[(AstType, u32)],
+    js_file_name: &str,
+) -> String {
+    let pairs = pair(before, after);
+    let (old_lines, new_lines) = (Lines::new(code), Lines::new(text));
 
     let mut out = SourceMapBuilder::default();
     out.set_file(js_file_name);
@@ -58,7 +134,7 @@ pub fn formatted(code: &str, map: &SourceMap<'_>, jsx: bool, js_file_name: &str)
     // new line, where that mapping no longer applies. Carry the mapping
     // active at the original opening tag onto its new position as well.
     let mut openings = Vec::new();
-    for &(ty, offset) in &before {
+    for &(ty, offset) in before {
         if matches!(ty, AstType::JSXOpeningElement | AstType::JSXOpeningFragment) {
             let at = tokens.partition_point(|&(old, _)| old <= offset);
             if let Some(&(old, token)) = at.checked_sub(1).map(|i| &tokens[i])
@@ -91,7 +167,7 @@ pub fn formatted(code: &str, map: &SourceMap<'_>, jsx: bool, js_file_name: &str)
             t.get_name_id().map(|id| name_ids[id as usize]),
         );
     }
-    Some((text, out.into_sourcemap().to_json_string()))
+    out.into_sourcemap().to_json_string()
 }
 
 /// oxfmt's defaults, but an object is on one line when it fits: Prettier's
@@ -104,8 +180,101 @@ fn options() -> JsFormatOptions {
     }
 }
 
-/// Each node's kind and where it starts, in the order a visit meets them.
-fn node_starts(allocator: &Allocator, code: &str, source_type: SourceType) -> Vec<(AstType, u32)> {
+/// rust-js's options with a crate's over them (ADR 0117), as oxfmt's
+/// `to_oxc_formatter` sets them, or why one can't be.
+pub fn options_of(format: &Format) -> Result<JsFormatOptions, String> {
+    let mut o = options();
+    if let Some(width) = format.print_width {
+        o.line_width =
+            LineWidth::try_from(width).map_err(|_| format!("printWidth = {width} is no width oxfmt takes"))?;
+    }
+    if let Some(width) = format.tab_width {
+        o.indent_width =
+            IndentWidth::try_from(width).map_err(|_| format!("tabWidth = {width} is no width oxfmt takes"))?;
+    }
+    if let Some(tabs) = format.use_tabs {
+        o.indent_style = if tabs { IndentStyle::Tab } else { IndentStyle::Space };
+    }
+    if let Some(end) = format.end_of_line {
+        o.line_ending = match end {
+            EndOfLine::Lf => LineEnding::Lf,
+            EndOfLine::Crlf => LineEnding::Crlf,
+            EndOfLine::Cr => LineEnding::Cr,
+        };
+    }
+    let quote = |single| if single { QuoteStyle::Single } else { QuoteStyle::Double };
+    if let Some(single) = format.single_quote {
+        o.quote_style = quote(single);
+    }
+    if let Some(single) = format.jsx_single_quote {
+        o.jsx_quote_style = quote(single);
+    }
+    if let Some(props) = format.quote_props {
+        o.quote_properties = match props {
+            QuoteProps::AsNeeded => QuoteProperties::AsNeeded,
+            QuoteProps::Consistent => QuoteProperties::Consistent,
+            QuoteProps::Preserve => QuoteProperties::Preserve,
+        };
+    }
+    if let Some(commas) = format.trailing_comma {
+        o.trailing_commas = match commas {
+            TrailingComma::All => TrailingCommas::All,
+            TrailingComma::Es5 => TrailingCommas::Es5,
+            TrailingComma::None => TrailingCommas::None,
+        };
+    }
+    if let Some(semi) = format.semi {
+        o.semicolons = if semi { Semicolons::Always } else { Semicolons::AsNeeded };
+    }
+    if let Some(parens) = format.arrow_parens {
+        o.arrow_parentheses = match parens {
+            ArrowParens::Always => ArrowParentheses::Always,
+            ArrowParens::Avoid => ArrowParentheses::AsNeeded,
+        };
+    }
+    if let Some(spacing) = format.bracket_spacing {
+        o.bracket_spacing = BracketSpacing::from(spacing);
+    }
+    if let Some(same_line) = format.bracket_same_line {
+        o.bracket_same_line = BracketSameLine::from(same_line);
+    }
+    if let Some(each) = format.single_attribute_per_line {
+        o.attribute_position = if each {
+            AttributePosition::Multiline
+        } else {
+            AttributePosition::Auto
+        };
+    }
+    if let Some(wrap) = format.object_wrap {
+        o.expand = match wrap {
+            ObjectWrap::Preserve => Expand::Auto,
+            ObjectWrap::Collapse => Expand::Never,
+        };
+    }
+    Ok(o)
+}
+
+/// A written file's source map, for finding where its JS came from.
+pub struct Map(OwnedSourceMap);
+
+impl Map {
+    pub fn read(json: &str) -> Option<Map> {
+        OwnedSourceMap::from_json_string(json).ok().map(Map)
+    }
+
+    /// The source, as the map names it, and the line and column there, all
+    /// 0-based, that the JS at `line` and `col` came from.
+    pub fn original(&self, line: u32, col: u32) -> Option<(String, u32, u32)> {
+        let table = self.0.generate_lookup_table();
+        let token = self.0.lookup_token(&table, line, col)?;
+        let source = self.0.get_source(token.get_source_id()?)?;
+        Some((source.to_string(), token.get_src_line(), token.get_src_col()))
+    }
+}
+
+/// Each node's kind and where it starts, in the order a visit meets them,
+/// or the first error parsing `code`.
+fn node_starts(allocator: &Allocator, code: &str, source_type: SourceType) -> Result<Vec<(AstType, u32)>, String> {
     struct Starts(Vec<(AstType, u32)>);
     impl<'a> Visit<'a> for Starts {
         fn enter_node(&mut self, kind: AstKind<'a>) {
@@ -113,9 +282,12 @@ fn node_starts(allocator: &Allocator, code: &str, source_type: SourceType) -> Ve
         }
     }
     let parsed = parse_for_format(allocator, allocator.alloc_str(code), source_type);
+    if let Some(error) = parsed.diagnostics.errors().next() {
+        return Err(error.to_string());
+    }
     let mut starts = Starts(Vec::new());
     starts.visit_program(&parsed.program);
-    starts.0
+    Ok(starts.0)
 }
 
 /// Pair the nodes of the two programs: where the kinds differ, the

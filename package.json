@@ -61,6 +61,7 @@
     "@vitest/browser-playwright": "5.0.2",
     "babel-plugin-react-compiler": "1.0.0",
     "playwright": "1.63.0",
+    "prettier": "3.9.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwindcss": "4.3.3",

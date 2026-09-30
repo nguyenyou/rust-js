@@ -27,7 +27,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
   // Cargo's checks are the native compiler's (ADR 0101), not another's.
   if (cargo && custom) throw new Error("rust-js: give `cargo` or `compile`, not both");
   if (cargo) crates = [cargo.package];
-  let root, server, builder, closed = false;
+  let root, server, builder, logger, closed = false;
   // A Cargo build's: the package's JS, the manifest Vite is given, and the
   // workspace it's of, what Cargo reads, and its target, what it writes.
   let entry, workspaceManifest, workspace, targetDir;
@@ -83,7 +83,9 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
     await mkdir(dirname(manifest), { recursive: true });
     const output = crate.replace(/\.rs$/, ".js");
     if (custom) await custom({ crate: resolve(root, crate), output: resolve(root, output), manifest });
-    else await builder.compile({ crate, output, manifest });
+    // The Vite server's is a save's, whose checks are those not only for a
+    // build; what rust-js warns of, a check's or a transform's, is Vite's.
+    else await builder.compile({ crate, output, manifest, save: Boolean(server), warn: message => logger.warn(message.trimEnd(), { timestamp: true }) });
     const result = parseManifest(await readFile(manifest, "utf8"));
     const old = manifests.get(crate);
     manifests.set(crate, result);
@@ -165,6 +167,7 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
     enforce: "pre",
     configResolved(config) {
       root = config.root;
+      logger = config.logger;
       if (cargo) {
         workspaceManifest = resolve(root, cargo.manifestPath ?? "Cargo.toml");
         workspace = dirname(workspaceManifest);

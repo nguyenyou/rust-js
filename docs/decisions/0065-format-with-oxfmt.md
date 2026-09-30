@@ -1,6 +1,8 @@
 # 0065. The JS is formatted as oxfmt formats it, and the source map follows
 
-Status: Accepted. Extends [0018](0018-print-with-oxc.md).
+Status: Accepted. Extends [0018](0018-print-with-oxc.md). Extended by
+[0117](0117-output-hooks.md): a crate sets the formatter's options, and can run its
+own formatter after it.
 
 ## Context
 

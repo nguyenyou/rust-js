@@ -42,3 +42,8 @@ version that compiled. The browser's source map points at `App.rs`.
   `react`, `webapi` and `js` in `node_modules/@rust-js/resources`, once the
   app is installed. It doesn't look inside `jsx!`, so a variable used only in
   JSX shows as unused there.
+- **`Cargo.toml` also sets how the JS is laid out**, by oxfmt's options,
+  `[package.metadata.rust-js.format]` with `printWidth = 120`, say, and can run
+  your own tools on it, a formatter or a linter, in
+  `[package.metadata.rust-js.hooks]`: what a linter says of `App.jsx` is said
+  of the line of `App.rs` it came from.

@@ -32,6 +32,7 @@ extern crate rustc_span;
 
 mod cargo;
 mod format;
+mod hooks;
 mod js;
 mod jsx_syntax;
 mod library;
@@ -45,6 +46,7 @@ mod program;
 mod publish;
 mod reachability;
 mod runtime;
+mod settings;
 mod to_oxc;
 
 use std::path::PathBuf;
@@ -270,6 +272,19 @@ fn main() -> ExitCode {
         dependency_paths.push(PathBuf::from(ours.remove(i + 1)));
         ours.remove(i);
     }
+    // Which of a crate's checks this build runs (ADR 0117): a save's, in the
+    // Vite server, or, by default, a build's, all of them.
+    let save = if let Some(i) = ours.iter().position(|arg| arg == "--hooks") {
+        let which = ours.get(i + 1).cloned().unwrap_or_default();
+        if which != "save" && which != "build" {
+            eprintln!("--hooks requires `save` or `build`");
+            return ExitCode::FAILURE;
+        }
+        ours.drain(i..=i + 1);
+        which == "save"
+    } else {
+        false
+    };
     let manifest = if let Some(i) = ours.iter().position(|arg| arg == "--manifest") {
         if i + 1 >= ours.len() {
             eprintln!("--manifest requires a path");
@@ -289,7 +304,7 @@ fn main() -> ExitCode {
         [input, flag, output] if flag == "-o" => (PathBuf::from(input), PathBuf::from(output)),
         _ => {
             eprintln!(
-                "usage: rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>] [--library] [--dependency <manifest.json>] [-- <rustc flags>]"
+                "usage: rust-js [--test] <input.rs> [-o <output.js>] [--manifest <file.json>] [--library] [--dependency <manifest.json>] [--hooks save|build] [-- <rustc flags>]"
             );
             return ExitCode::FAILURE;
         }
@@ -402,8 +417,16 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let recorded = cargo.then(|| (manifest.clone(), metadata.clone()));
+    let settings = match settings::read(&input, cargo) {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!("rust-js: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut plan = output::OutputPlan::new(input, output, test, manifest);
     plan.metadata = metadata.clone();
+    plan.settings = settings;
     let mut callbacks = RustJs {
         dependencies,
         export_library,
@@ -439,7 +462,16 @@ fn main() -> ExitCode {
     if metadata.is_some() || dep_info.is_some() {
         let _ = std::fs::remove_dir_all(stage());
     }
-    match published {
+    // Once it's all written, the crate's checks of it. Cargo's build runs
+    // rust-js for each crate, so its driver is to run them, once (ADR 0117).
+    let checked = published.and_then(|()| {
+        if exit == ExitCode::SUCCESS && !cargo {
+            hooks::check(&callbacks.output.settings, &callbacks.output.written, save)
+        } else {
+            Ok(())
+        }
+    });
+    match checked {
         Ok(()) => exit,
         Err(error) => {
             eprintln!("rust-js: {error}");

@@ -2,7 +2,8 @@
 
 Status: Accepted. Extends [0105](0105-create.md) and [0113](0113-plain-rustc.md).
 Extended by [0115](0115-binding-crates-on-crates-io.md): the crates are packaged
-for crates.io.
+for crates.io; by [0117](0117-output-hooks.md): it has the crate's settings for
+its JS.
 
 ## Context
 

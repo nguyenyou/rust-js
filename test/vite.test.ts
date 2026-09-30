@@ -222,6 +222,52 @@ pub fn App() -> Element {
   await expect(build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], logLevel: "silent" })).rejects.toThrow("no rust-js at");
 }, 60_000);
 
+// A crate's checks in Vite (ADR 0117): a build runs all of them, the server
+// those not only for a build; what one says, of the Rust, is Vite's warning.
+test("Vite runs a crate's checks, a build's all, the server's those for a save", async () => {
+  buildReact();
+  const dir = fixture("vite-checks");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
+  writeFileSync(join(dir, "src/App.rs"), `#![allow(non_snake_case)]
+use react::{Element, jsx};
+pub fn App() -> Element {
+    jsx! {
+        <p>{"Checked"}</p>
+    }
+}
+`);
+  writeFileSync(join(dir, "Cargo.toml"), `[package]
+name = "app"
+version = "0.0.0"
+edition = "2024"
+
+[package.metadata.rust-js.hooks]
+check = [
+  { run = ["sh", "-c", "touch built"], when = "build" },
+  { run = ["sh", "-c", "echo \\"$1:4:3: a note\\"", "sh", "{files}"], fail = "never" },
+]
+`);
+  const warnings: string[] = [];
+  const logger = { ...createLogger("silent"), warn: (message: string) => { warnings.push(message); } };
+  await build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], customLogger: logger, logLevel: "warn" });
+  expect(existsSync(join(dir, "built"))).toBe(true);
+  expect(warnings.join("\n")).toMatch(/src\/App\.rs:\d+:\d+: \[sh\] a note/);
+
+  unlinkSync(join(dir, "built"));
+  warnings.length = 0;
+  const server = await createServer({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], customLogger: logger, logLevel: "warn", server: { port: 0 } });
+  try {
+    await server.listen();
+    expect((await server.transformRequest("/src/App.jsx"))?.code).toContain("Checked");
+    expect(existsSync(join(dir, "built"))).toBe(false);
+    expect(warnings.join("\n")).toMatch(/src\/App\.rs:\d+:\d+: \[sh\] a note/);
+  } finally {
+    await server.close();
+  }
+}, 120_000);
+
 // Fast Refresh keeps state under a context and in a memoized component
 // (ADR 0041). Saving a module runs it again, so a context made in it is a new
 // one, and React remounts what's under its provider: hand-written React does
