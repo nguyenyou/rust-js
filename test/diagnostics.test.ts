@@ -89,3 +89,25 @@ for (const [name, source, message, crate] of [
     expect(readFileSync(output + ".map", "utf8")).toBe("previous map");
   });
 }
+
+// rust-js is a stable release's rustc (ADR 0109): a crate's own
+// `#![feature]` is refused, as that release refuses it, unless
+// `RUSTC_BOOTSTRAP=1`, as for rustc. rust-js's own features, its syntax,
+// aren't, even named by the crate.
+test("a crate's own #![feature] is refused, as on a stable release", () => {
+  const dir = fixture("stable-feature");
+  const compile = (source: string, bootstrap?: string) => {
+    const input = join(dir, "lib.rs");
+    writeFileSync(input, source);
+    const { RUSTC_BOOTSTRAP: _, ...env } = process.env;
+    return Bun.spawnSync([compiler, input, "-o", join(dir, "lib.js")], { env: bootstrap ? { ...env, RUSTC_BOOTSTRAP: bootstrap } : env });
+  };
+  const never = "#![feature(never_type)]\npub fn f() -> u32 { 1 }\n";
+  const refused = compile(never);
+  expect(refused.exitCode).not.toBe(0);
+  expect(refused.stderr.toString()).toContain("error[E0554]: `#![feature]` may not be used on the stable release channel");
+  expect(refused.stderr.toString()).toContain("lib.rs:1:1");
+  expect(compile(never, "1").exitCode).toBe(0);
+  expect(compile("#![feature(register_tool)]\n#![register_tool(rust_js)]\npub fn f() -> u32 { 1 }\n").exitCode).toBe(0);
+  expect(compile("pub fn f() -> u32 { 1 }\n").exitCode).toBe(0);
+});

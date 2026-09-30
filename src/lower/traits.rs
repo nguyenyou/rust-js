@@ -141,6 +141,7 @@ pub(super) fn bounds<'tcx>(
         result.push(ty::TraitRef::identity(tcx, trait_id));
     }
     for (clause, _) in tcx.predicates_of(id).instantiate_identity(tcx) {
+        let clause = clause.skip_normalization();
         if let Some(tr) = bound_of(tcx, foreign, clause, id)
             && !result.contains(&tr)
         {
@@ -206,7 +207,7 @@ pub(super) fn own_bounds<'tcx>(
 /// defaults: `circleShape`, `metersFromF64` for `impl From<f64> for
 /// Meters`, and `versionPartialEq`, whose `Rhs` is `Self` (ADR 0052).
 pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
-    let tr = tcx.impl_trait_ref(id).instantiate_identity();
+    let tr = tcx.impl_trait_ref(id).instantiate_identity().skip_normalization();
     format!(
         "{}{}",
         lower_first(&js_word(&type_word(tcx, tr.self_ty()))),
@@ -229,7 +230,12 @@ pub(super) fn supertraits<'tcx>(
     let predicates = tcx.explicit_super_predicates_of(trait_id);
     let found: Vec<_> = predicates
         .iter_identity_copied()
-        .zip(predicates.iter_instantiated_copied(tcx, args))
+        .map(|item| item.skip_normalization())
+        .zip(
+            predicates
+                .iter_instantiated_copied(tcx, args)
+                .map(|item| item.skip_normalization()),
+        )
         .filter_map(|((declared, span), (instantiated, _))| {
             let ty::ClauseKind::Trait(declared) = declared.kind().skip_binder() else {
                 return None;
@@ -275,9 +281,12 @@ pub(super) fn item_bounds<'tcx>(
             continue;
         }
         let bounds = tcx.explicit_item_bounds(item.def_id);
-        for ((declared, _), (instantiated, _)) in bounds
-            .iter_identity_copied()
-            .zip(bounds.iter_instantiated_copied(tcx, args))
+        for ((declared, _), (instantiated, _)) in
+            bounds.iter_identity_copied().map(|item| item.skip_normalization()).zip(
+                bounds
+                    .iter_instantiated_copied(tcx, args)
+                    .map(|item| item.skip_normalization()),
+            )
         {
             let ty::ClauseKind::Trait(declared) = declared.kind().skip_binder() else {
                 continue;
@@ -297,8 +306,14 @@ pub(super) fn item_bounds<'tcx>(
 /// associated type's of one, `SItem` of `<S as Source>::Item`.
 fn evidence_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
     match ty.kind() {
-        ty::Alias(ty::Projection, alias) => {
-            format!("{}{}", evidence_word(tcx, alias.self_ty()), tcx.item_name(alias.def_id))
+        ty::Alias(
+            _,
+            alias @ ty::AliasTy {
+                kind: ty::Projection { def_id },
+                ..
+            },
+        ) => {
+            format!("{}{}", evidence_word(tcx, alias.self_ty()), tcx.item_name(*def_id))
         }
         // `name: impl Into<String>`'s, which rustc names as it's written: its
         // trait's word alone, `IntoString`.
@@ -323,7 +338,11 @@ fn trait_word<'tcx>(tcx: TyCtxt<'tcx>, tr: ty::TraitRef<'tcx>) -> String {
     let generics = tcx.generics_of(tr.def_id);
     for (param, arg) in generics.own_params.iter().zip(tr.args).skip(1) {
         let Some(arg) = arg.as_type() else { continue };
-        if param.default_value(tcx).map(|d| d.instantiate(tcx, tr.args)) == Some(arg.into()) {
+        if param
+            .default_value(tcx)
+            .map(|d| d.instantiate(tcx, tr.args).skip_normalization())
+            == Some(arg.into())
+        {
             continue;
         }
         let arg = js_word(&type_word(tcx, arg.peel_refs()));
@@ -377,7 +396,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// A const argument's value (ADR 0107): `3`, or the caller's own `N`.
     pub(super) fn const_arg(&self, c: ty::Const<'tcx>, span: Span) -> R<Expr> {
-        let c = self.tcx.normalize_erasing_regions(self.typing_env, c);
+        let c = self
+            .tcx
+            .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(c));
         let value = match c.kind() {
             ty::ConstKind::Param(p) => self
                 .const_params
@@ -418,7 +439,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `<L as Labeled>::Label: Display`, which the trait declares, from `L`'s
     /// `Labeled`: its `LabelDisplay`, or a supertrait's of it (ADR 0106).
     fn item_evidence(&self, tr: ty::TraitRef<'tcx>) -> Option<Expr> {
-        let ty::Alias(ty::Projection, alias) = *tr.self_ty().kind() else {
+        let ty::Alias(
+            _,
+            alias @ ty::AliasTy {
+                kind: ty::Projection { .. },
+                ..
+            },
+        ) = *tr.self_ty().kind()
+        else {
             return None;
         };
         let owner = alias.trait_ref(self.tcx);
@@ -435,7 +463,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // `<Words as Source>::Item: Debug` of a bound instantiated: `String: Debug`.
         let tr = self
             .tcx
-            .try_normalize_erasing_regions(self.typing_env, tr)
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(tr))
             .unwrap_or(tr);
         // serde's: the function that writes or reads the type (ADR 0081).
         match super::serde::serde_trait(self.tcx, tr.def_id) {
@@ -587,7 +615,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .map(|param| self.const_arg(args.const_at(param.index as usize), span))
             .collect::<R<Vec<_>>>()?;
         for bound in bounds(self.tcx, self.krate.foreign, id) {
-            let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
+            let bound = ty::EarlyBinder::bind(self.tcx, bound)
+                .instantiate(self.tcx, args)
+                .skip_normalization();
             values.push(self.dictionary(bound, span)?);
         }
         // Each drop function it takes: a type's with nothing to drop is none,
@@ -627,7 +657,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // In a copied default, `Self` is the impl's type: a call on it
         // resolves to the impl's method, called directly.
         let generic_args = match self.self_args {
-            Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+            Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
+                .instantiate(self.tcx, args)
+                .skip_normalization(),
             None => generic_args,
         };
         let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
@@ -648,7 +680,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .ok_or_else(|| self.unsupported(span, "this trait object supertrait"))?;
             // A `&mut self` method is given the pair, whose `value` a box's is: a
             // number's impl writes the place it reads (ADR 0099).
-            let receiver = self.tcx.fn_sig(id).instantiate_identity().skip_binder().inputs()[0];
+            let receiver = self
+                .tcx
+                .fn_sig(id)
+                .instantiate_identity()
+                .skip_normalization()
+                .skip_binder()
+                .inputs()[0];
             let this = match receiver.kind() {
                 ty::Ref(_, _, Mutability::Mut) => pair,
                 _ => Expr::member(pair, "value"),
@@ -733,7 +771,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn own_evidence(&mut self, id: DefId, generic_args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
         own_bounds(self.tcx, self.krate.foreign, id)
             .into_iter()
-            .map(|bound| self.dictionary(ty::EarlyBinder::bind(bound).instantiate(self.tcx, generic_args), span))
+            .map(|bound| {
+                self.dictionary(
+                    ty::EarlyBinder::bind(self.tcx, bound)
+                        .instantiate(self.tcx, generic_args)
+                        .skip_normalization(),
+                    span,
+                )
+            })
             .collect()
     }
 
@@ -752,7 +797,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let own = own_bounds(self.tcx, self.krate.foreign, method);
         let mut values = Vec::new();
         for bound in bounds(self.tcx, self.krate.foreign, method) {
-            let here = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
+            let here = ty::EarlyBinder::bind(self.tcx, bound)
+                .instantiate(self.tcx, args)
+                .skip_normalization();
             let here = self.tcx.erase_and_anonymize_regions(here);
             if own.contains(&bound) {
                 let at = declared
@@ -909,7 +956,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let span = self.tcx.def_span(id);
         // An impl of a generic trait, `Convert<f64>`, or of a std one,
         // `PartialEq<Rhs>`, is for its arguments: a dictionary of its own.
-        let tr = self.tcx.impl_trait_ref(id).instantiate_identity();
+        let tr = self.tcx.impl_trait_ref(id).instantiate_identity().skip_normalization();
         let params = self.evidence_params(id);
         let mut props = Vec::new();
         for (name, supertrait, _) in supertraits(self.tcx, tr.def_id, tr.args) {
@@ -945,8 +992,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let value = eval_const(self.tcx, self.typing_env, item.def_id, tr.args, span)
                     .and_then(|value| const_js(self.tcx, value))
                     .ok_or_else(|| self.unsupported(span, "a generic impl's constant of its parameters"))?;
-                let ty = self.tcx.type_of(item.def_id).instantiate(self.tcx, tr.args);
-                let ty = self.tcx.normalize_erasing_regions(self.typing_env, ty);
+                let ty = self
+                    .tcx
+                    .type_of(item.def_id)
+                    .instantiate(self.tcx, tr.args)
+                    .skip_normalization();
+                let ty = self
+                    .tcx
+                    .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty));
                 let name = bindings::fn_name(self.tcx, item.def_id);
                 props.push(match self.contains_mutated(ty) {
                     true => Prop::Getter(
@@ -998,6 +1051,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .tcx
                 .fn_sig(method)
                 .instantiate_identity()
+                .skip_normalization()
                 .skip_binder()
                 .inputs()
                 .len()
@@ -1007,7 +1061,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A generic method's own evidence is its caller's, after the arguments.
             let declared: Vec<_> = own_bounds(self.tcx, self.krate.foreign, item.def_id)
                 .into_iter()
-                .map(|bound| ty::EarlyBinder::bind(bound).instantiate(self.tcx, args))
+                .map(|bound| {
+                    ty::EarlyBinder::bind(self.tcx, bound)
+                        .instantiate(self.tcx, args)
+                        .skip_normalization()
+                })
                 .collect();
             let names: Vec<String> = declared
                 .iter()
@@ -1127,7 +1185,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 own_params.push(name);
                 continue;
             }
-            let concrete = ty::EarlyBinder::bind(bound).instantiate(self.tcx, args);
+            let concrete = ty::EarlyBinder::bind(self.tcx, bound)
+                .instantiate(self.tcx, args)
+                .skip_normalization();
             specialized.push((bound, self.dictionary(concrete, span)?));
         }
         // Its trait's type parameters, `Self` among them, drop as the impl's
@@ -1208,6 +1268,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .tcx
                 .explicit_super_predicates_of(id)
                 .iter_identity_copied()
+                .map(|item| item.skip_normalization())
                 .all(|(clause, _)| match clause.kind().skip_binder() {
                     ty::ClauseKind::Trait(p) if operational(self.tcx, self.krate.foreign, p.trait_ref.def_id) => {
                         self.dyn_supported(p.trait_ref.def_id)

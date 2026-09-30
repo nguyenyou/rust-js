@@ -330,7 +330,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let name = tcx.item_name(def_id);
         if krate == sym::core
             && let Some(imp) = tcx.inherent_impl_of_assoc(def_id)
-            && Num::of(tcx.type_of(imp).instantiate_identity()) == Some(Num::F64)
+            && Num::of(tcx.type_of(imp).instantiate_identity().skip_normalization()) == Some(Num::F64)
         {
             match name.as_str() {
                 "max" => return Some(Std::MaxOf(true)),
@@ -558,7 +558,10 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
             return (from_str || to_owned).then_some(Std::Same);
         }
-        let owner = tcx.type_of(tcx.inherent_impl_of_assoc(def_id)?).instantiate_identity();
+        let owner = tcx
+            .type_of(tcx.inherent_impl_of_assoc(def_id)?)
+            .instantiate_identity()
+            .skip_normalization();
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
         let string = self.is_lang_adt(owner, LangItem::String);
         let option = self.is_lang_adt(owner, LangItem::Option);
@@ -788,7 +791,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         // `PhantomData<JsObject>`, then only more markers, for a generic one
         // like `Promise<T>`.
-        let mut fields = adt.non_enum_variant().fields.iter().map(|f| f.ty(self.tcx, args));
+        let mut fields = adt
+            .non_enum_variant()
+            .fields
+            .iter()
+            .map(|f| f.ty(self.tcx, args).skip_normalization());
         let first = fields.next();
         first.is_some_and(|field| {
             matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
@@ -935,7 +942,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             return None;
         }
         let imp = tcx.inherent_impl_of_assoc(def_id)?;
-        let owner = tcx.type_of(imp).instantiate_identity();
+        let owner = tcx.type_of(imp).instantiate_identity().skip_normalization();
         match self.json_type(owner)? {
             json @ (Json::Value | Json::Number) => Some(JsonCall::Method(JsonMethod::recognize(json, name))),
             Json::Map => None,
@@ -1120,7 +1127,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let is_trait = |name: &str| trait_id.is_some_and(|t| tcx.is_diagnostic_item(Symbol::intern(name), t));
         let owner = tcx
             .inherent_impl_of_assoc(def_id)
-            .map(|imp| tcx.type_of(imp).instantiate_identity());
+            .map(|imp| tcx.type_of(imp).instantiate_identity().skip_normalization());
         let on_formatter = owner.is_some_and(|t| self.is_std_adt(t, Symbol::intern("Formatter")));
         match tcx.item_name(def_id).as_str() {
             "write_fmt" | "write_str" | "write_char" if on_formatter || is_trait("FmtWrite") => WriteCall::Text,
@@ -1219,7 +1226,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             return ty;
         }
         self.tcx
-            .try_normalize_erasing_regions(self.typing_env, ty)
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty))
             .unwrap_or(ty)
     }
 
@@ -1294,7 +1301,7 @@ pub(super) fn serde_impl(tcx: TyCtxt<'_>, id: DefId) -> Option<bool> {
     if !matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true }) {
         return None;
     }
-    let tr = tcx.impl_trait_ref(id).instantiate_identity();
+    let tr = tcx.impl_trait_ref(id).instantiate_identity().skip_normalization();
     let own = matches!(tr.self_ty().kind(), ty::Adt(adt, _)
         if adt.did().as_local().is_some_and(|local| !from_serde_derive(tcx, local)));
     serde_trait(tcx, tr.def_id).filter(|_| own)
@@ -1541,7 +1548,10 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             .find(|item| item.is_fn())?
             .def_id;
         let args = self.tcx.mk_args(&[args[1], args[0]]);
-        let args = self.tcx.try_normalize_erasing_regions(self.typing_env, args).ok()?;
+        let args = self
+            .tcx
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args))
+            .ok()?;
         let instance = ty::Instance::try_resolve(self.tcx, self.typing_env, method, args).ok()??;
         Some((method, args, instance.def_id()))
     }
@@ -1575,7 +1585,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 parent = self.tcx.opt_parent(id);
             }
             let Some(imp) = parent else { continue };
-            let self_ty = self.tcx.type_of(imp).instantiate_identity();
+            let self_ty = self.tcx.type_of(imp).instantiate_identity().skip_normalization();
             if serde_impl(self.tcx, imp) != Some(serialize)
                 || !matches!(self_ty.kind(), ty::Adt(a, _) if a.did() == adt)
             {

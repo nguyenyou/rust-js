@@ -744,7 +744,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // apart, else each its own, `Array.from({ length: N }, () => ..)`.
             ExprKind::Repeat { value, count } => {
                 let item_ty = self.thir[value].ty;
-                let count = self.tcx.normalize_erasing_regions(self.typing_env, count);
+                let count = self
+                    .tcx
+                    .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(count));
                 // A caller's `N` (ADR 0107), or the number.
                 let n = count.try_to_target_usize(self.tcx);
                 let length = match n {
@@ -824,6 +826,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .tcx
                         .fn_sig(def_id)
                         .instantiate(self.tcx, args)
+                        .skip_normalization()
                         .skip_binder()
                         .inputs()
                         .len();
@@ -846,6 +849,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .tcx
                         .fn_sig(def_id)
                         .instantiate(self.tcx, args)
+                        .skip_normalization()
                         .skip_binder()
                         .inputs()
                         .len();

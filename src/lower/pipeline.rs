@@ -88,7 +88,7 @@ pub fn lower_crate<'tcx>(
             ),
         };
         let Some(value) = value else {
-            let ty = tcx.type_of(def_id).instantiate_identity();
+            let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
             tcx.dcx()
                 .span_err(span, format!("rust-js does not support {what} of type `{ty}` yet"));
             failed = true;

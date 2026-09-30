@@ -45,7 +45,13 @@ impl Uses<'_> {
         let internal = match js_form(self.tcx, def) {
             JsForm::Jsx(_) => true,
             JsForm::Prop(_) => {
-                let ty = self.tcx.fn_sig(def).instantiate_identity().skip_binder().output();
+                let ty = self
+                    .tcx
+                    .fn_sig(def)
+                    .instantiate_identity()
+                    .skip_normalization()
+                    .skip_binder()
+                    .output();
                 matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.get_attrs_by_path(adt.did(), &[Symbol::intern("rust_js"), Symbol::intern("jsx_element")]).next().is_some())
             }
             _ => false,

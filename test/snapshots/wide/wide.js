@@ -28,6 +28,7 @@ import {
   $sortedEntries,
   $toJson,
   $tryFromInt,
+  $unwrapErr,
   $unwrapOk,
   $zeroPad,
 } from "@rust-js/runtime";
@@ -116,14 +117,18 @@ export function report() {
   out += `${arg$5} ${arg$6} ${arg$7.TAG === "Ok" ? `Ok(${arg$7._0})` : `Err(${$debugParseError(arg$7._0, "ParseIntError")})`} ${$parseBig("18446744073709551616", 0n, 18446744073709551615n).TAG !== "Ok"}\n`;
   const arg$8 = $tryFromInt(max, 0, 4294967295);
   out += `${arg$8.TAG === "Ok" ? `Ok(${arg$8._0})` : `Err(${$debugParseError(arg$8._0, "TryFromIntError")})`} ${$tryFromInt(BigInt.asUintN(64, 1n << 63n), -9223372036854775808n, 9223372036854775807n).TAG !== "Ok"} ${$tryFromInt(BigInt.asIntN(64, min + min), 0, 65535).TAG === "Ok"}\n`;
+  const low = $unwrapErr($tryFromInt(-1n, 0, 255));
+  const arg$9 = $unwrapErr($tryFromInt(300n, 0, 255));
+  const arg$10 = low === $unwrapErr($tryFromInt(300n, 0, 255));
+  out += `${$debugParseError(low, "TryFromIntError")} out of range integral type conversion attempted out of range integral type conversion attempted ${arg$10}\n`;
   let stamps = [1700000000000n, -5n, 0n, 9223372036854775807n, -9223372036854775808n];
   stamps.sort($cmp);
   const total = stamps
     .slice(1)
     .slice(0, 3)
     .reduce((a, b) => BigInt.asIntN(64, a + b), 0n);
-  const arg$9 = $max(stamps);
-  out += `[${stamps.map((item) => String(item)).join(", ")}] ${total} ${arg$9 == null ? "None" : `Some(${arg$9})`}\n`;
+  const arg$11 = $max(stamps);
+  out += `[${stamps.map((item) => String(item)).join(", ")}] ${total} ${arg$11 == null ? "None" : `Some(${arg$11})`}\n`;
   const payment = { id, cents: -1999n, at: 1700000000123n };
   const text$1 = $unwrapOk($toJson(payment, paymentSerialize_serialize, false));
   out += `${text$1}\n`;

@@ -170,7 +170,7 @@ The linked design decisions describe the current boundaries.
 
 Install [Bun](https://bun.sh/) and [Rust](https://rustup.rs/), then run these
 commands from the repository root.
-The repository pins the required Rust nightly and components.
+The repository pins the required Rust release and components.
 
 ```bash
 bun run setup

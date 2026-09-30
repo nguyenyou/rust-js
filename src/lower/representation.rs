@@ -67,7 +67,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ty::Adt(adt, args) => adt
                 .all_fields()
-                .all(|f| self.structural_clone_in(f.ty(self.tcx, args), seen)),
+                .all(|f| self.structural_clone_in(f.ty(self.tcx, args).skip_normalization(), seen)),
             _ => true,
         };
         seen.pop();
@@ -115,11 +115,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn is_unknown(&self, ty: Ty<'tcx>) -> bool {
         match ty.kind() {
             ty::Param(_) => true,
-            ty::Alias(ty::Projection, _) => self
+            ty::Alias(
+                _,
+                ty::AliasTy {
+                    kind: ty::Projection { .. },
+                    ..
+                },
+            ) => self
                 .tcx
-                .try_normalize_erasing_regions(self.typing_env, ty)
+                .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty))
                 .map_or(true, |known| {
-                    matches!(known.kind(), ty::Param(_) | ty::Alias(ty::Projection, _))
+                    matches!(
+                        known.kind(),
+                        ty::Param(_)
+                            | ty::Alias(
+                                _,
+                                ty::AliasTy {
+                                    kind: ty::Projection { .. },
+                                    ..
+                                }
+                            )
+                    )
                 }),
             _ => false,
         }
@@ -225,7 +241,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// dictionary's box (ADR 0099).
     pub(super) fn makes_cell(&self, pointee: Ty<'tcx>) -> bool {
         let pointee = match self.self_args {
-            Some(args) => ty::EarlyBinder::bind(pointee).instantiate(self.tcx, args),
+            Some(args) => ty::EarlyBinder::bind(self.tcx, pointee)
+                .instantiate(self.tcx, args)
+                .skip_normalization(),
             None => pointee,
         };
         self.is_cell_pointee(pointee)
@@ -269,7 +287,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Is `fn_id`'s parameter `i` a box: a `&mut` to a value JS can't change in
     /// place (ADR 0074), or to a type parameter (ADR 0099)?
     pub(super) fn param_is_box(&self, fn_id: DefId, i: usize) -> bool {
-        let inputs = self.tcx.fn_sig(fn_id).instantiate_identity().skip_binder().inputs();
+        let inputs = self
+            .tcx
+            .fn_sig(fn_id)
+            .instantiate_identity()
+            .skip_normalization()
+            .skip_binder()
+            .inputs();
         match inputs.get(i).map(|input| *input.kind()) {
             Some(ty::Ref(_, inner, Mutability::Mut)) => {
                 self.is_boxable(inner) || self.is_generic_boxed(inner, self.tcx.param_env(fn_id))
@@ -317,7 +341,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .fields
             .iter()
             .enumerate()
-            .map(|(i, f)| (variant_field(self.tcx, variant, i), f.ty(self.tcx, args)))
+            .map(|(i, f)| {
+                (
+                    variant_field(self.tcx, variant, i),
+                    f.ty(self.tcx, args).skip_normalization(),
+                )
+            })
             .collect()
     }
 
@@ -333,7 +362,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let fields = variant
                     .fields
                     .iter()
-                    .map(|f| (field_key(self.tcx, f), f.ty(self.tcx, args)));
+                    .map(|f| (field_key(self.tcx, f), f.ty(self.tcx, args).skip_normalization()));
                 match variant.ctor_kind() {
                     None => Shape::Object(fields.collect()),
                     Some(CtorKind::Fn) => Shape::Array(fields.map(|(_, ty)| ty).collect()),
@@ -637,16 +666,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Futures are JS promises (ADR 0029): an `async` block, what an
             // `async fn` returns, and `dyn Future`.
             ty::Coroutine(..) => return None,
-            ty::Alias(ty::Opaque, alias)
-                if matches!(
-                    self.tcx.opaque_ty_origin(alias.def_id),
-                    hir::OpaqueTyOrigin::AsyncFn { .. }
-                ) =>
-            {
+            ty::Alias(
+                _,
+                ty::AliasTy {
+                    kind: ty::Opaque { def_id },
+                    ..
+                },
+            ) if matches!(self.tcx.opaque_ty_origin(*def_id), hir::OpaqueTyOrigin::AsyncFn { .. }) => {
                 return None;
             }
             // `impl Iterator<Item = u32>` is the type it hides (ADR 0061).
-            ty::Alias(ty::Opaque, _) if self.reveal(ty) != ty => return self.unsupported_in(self.reveal(ty), seen),
+            ty::Alias(
+                _,
+                ty::AliasTy {
+                    kind: ty::Opaque { .. },
+                    ..
+                },
+            ) if self.reveal(ty) != ty => return self.unsupported_in(self.reveal(ty), seen),
             ty::Dynamic(traits, ..)
                 if traits
                     .principal_def_id()
@@ -750,7 +786,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let found = match (ty.kind(), self.shape(ty)) {
             // An enum with fields (ADR 0033): every variant's fields.
             (ty::Adt(adt, args), _) if adt.is_enum() => {
-                let fields: Vec<Ty<'tcx>> = adt.all_fields().map(|f| f.ty(self.tcx, args)).collect();
+                let fields: Vec<Ty<'tcx>> = adt
+                    .all_fields()
+                    .map(|f| f.ty(self.tcx, args).skip_normalization())
+                    .collect();
                 fields.into_iter().find_map(|t| self.unsupported_in(t, seen))
             }
             (_, Shape::Object(fields)) => fields.iter().find_map(|&(_, t)| self.unsupported_in(t, seen)),
@@ -911,7 +950,9 @@ pub(super) fn eval_const<'tcx>(
     args: ty::GenericArgsRef<'tcx>,
     span: Span,
 ) -> Option<ty::Value<'tcx>> {
-    let args = tcx.try_normalize_erasing_regions(typing_env, args).ok()?;
+    let args = tcx
+        .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(args))
+        .ok()?;
     let instance = ty::Instance::try_resolve(tcx, typing_env, def_id, args).ok()??;
     // The query itself, not `const_eval_global_id_for_typeck`, which
     // reports a constant too large for a value tree as rustc's own error
@@ -922,9 +963,9 @@ pub(super) fn eval_const<'tcx>(
     };
     let inputs = tcx.erase_and_anonymize_regions(typing_env.with_post_analysis_normalized(tcx).as_query_input(cid));
     let valtree = tcx.at(span).eval_to_valtree(inputs).ok()?;
-    let ty = tcx.type_of(def_id).instantiate(tcx, args);
+    let ty = tcx.type_of(def_id).instantiate(tcx, args).skip_normalization();
     Some(ty::Value {
-        ty: tcx.normalize_erasing_regions(typing_env, ty),
+        ty: tcx.normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(ty)),
         valtree,
     })
 }
@@ -935,7 +976,7 @@ pub(super) fn eval_const<'tcx>(
 /// holds: a reference to another static, a pointer, a `dyn`.
 pub(super) fn static_value<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Option<ty::Value<'tcx>> {
     let memory = tcx.eval_static_initializer(def_id).ok()?;
-    let ty = tcx.type_of(def_id).instantiate_identity();
+    let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
     let valtree = valtree_at(tcx, Pointer::from(unchanging(tcx, memory)), ty)?;
     Some(ty::Value { ty, valtree })
 }

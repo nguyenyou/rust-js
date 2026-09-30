@@ -22,7 +22,9 @@
 extern crate rustc_ast;
 extern crate rustc_builtin_macros;
 extern crate rustc_driver;
+extern crate rustc_errors;
 extern crate rustc_expand;
+extern crate rustc_feature;
 extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_middle;
@@ -69,6 +71,13 @@ struct RustJs {
 }
 
 impl Callbacks for RustJs {
+    /// rust-js's syntax is rustc's unstable features, which a stable release
+    /// allows no crate (ADR 0109): its session allows them, and `enable_features`
+    /// refuses a crate's own, as a stable rustc does.
+    fn config(&mut self, config: &mut rustc_interface::interface::Config) {
+        config.opts.unstable_features = rustc_feature::UnstableFeatures::Cheat;
+    }
+
     fn after_crate_root_parsing(&mut self, compiler: &Compiler, krate: &mut rustc_ast::Crate) -> Compilation {
         enable_features(&compiler.sess, krate);
         jsx_syntax::expand(&compiler.sess, krate);
@@ -395,16 +404,39 @@ fn enable_features(sess: &Session, krate: &mut rustc_ast::Crate) {
             .collect()
     };
     let (features, tools) = (listed(sym::feature), listed(sym::register_tool));
-    let mut missing: Vec<String> = [
+    let ours = [
         sym::register_tool,
         sym::custom_inner_attributes,
         sym::decl_macro,
         sym::stmt_expr_attributes,
-    ]
-    .into_iter()
-    .filter(|feature| !features.contains(feature))
-    .map(|feature| format!("feature({feature})"))
-    .collect();
+    ];
+    // A crate's own `#![feature]`, which a stable release refuses, unless
+    // `RUSTC_BOOTSTRAP=1` says otherwise, as for rustc (ADR 0109). One of
+    // rust-js's own is its syntax, which it turns on anyway.
+    if !rustc_feature::UnstableFeatures::from_environment(None).is_nightly_build() {
+        let others = |attr: &&rustc_ast::Attribute| {
+            attr.has_name(sym::feature)
+                && attr
+                    .meta_item_list()
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|item| item.ident().is_none_or(|ident| !ours.contains(&ident.name)))
+        };
+        for attr in attrs.iter().filter(others) {
+            sess.dcx()
+                .struct_span_err(
+                    attr.span(),
+                    "`#![feature]` may not be used on the stable release channel",
+                )
+                .with_code(rustc_errors::codes::E0554)
+                .emit();
+        }
+    }
+    let mut missing: Vec<String> = ours
+        .into_iter()
+        .filter(|feature| !features.contains(feature))
+        .map(|feature| format!("feature({feature})"))
+        .collect();
     // Ones rust-js adds, the crate doesn't use: rustc says so when it goes on
     // to write a library's metadata.
     if !missing.is_empty() {

@@ -572,7 +572,8 @@ export function $bigRange(start, end) {
 }
 
 export function $tryFromInt(x, lo, hi) {
-  if (x < lo || x > hi) return { TAG: "Err", _0: "out of range integral type conversion attempted" };
+  if (x < lo) return { TAG: "Err", _0: "NegOverflow" };
+  if (x > hi) return { TAG: "Err", _0: "PosOverflow" };
   return { TAG: "Ok", _0: typeof hi === "bigint" ? BigInt(x) : Number(x) };
 }
 
@@ -2958,7 +2959,7 @@ export function $debugParseError(message, name) {
     "cannot parse char from empty string": "EmptyString",
     "too many characters in string": "TooManyChars",
   };
-  if (name === "TryFromIntError") return "TryFromIntError(())";
+  if (name === "TryFromIntError") return `TryFromIntError(${message})`;
   return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
 }
 

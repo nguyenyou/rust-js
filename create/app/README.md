@@ -19,10 +19,10 @@ save App.rs ─► @rust-js/vite-plugin: rust-js ─► App.jsx ─► React Com
 A compile error shows in Vite's overlay, and the page keeps running the last
 version that compiled. The browser's source map points at `App.rs`.
 
-- **rust-js runs with Rust's nightly it's built with**, rustup's: it needs
+- **rust-js runs with the Rust release it's built with**, rustup's: it needs
   rustc's own library, and checks the app for `wasm32-unknown-unknown`. If
-  it says that nightly isn't installed, install it as `bun create @rust-js`
-  said to, and as it says: `rustup toolchain install <nightly> --profile
+  it says that release isn't installed, install it as `bun create @rust-js`
+  said to, and as it says: `rustup toolchain install <release> --profile
   minimal --target wasm32-unknown-unknown`, about 500 MB, once.
 - **Bun or Node.js** installs the app and runs Vite. Node.js must be Vite 8's,
   `^20.19.0` or `>=22.12.0`, with Bun too if it's installed: `bun run dev`

@@ -560,11 +560,13 @@ function $range(start, end) {
             }
             // `u8::try_from(x)` between integers: `Ok` of it as the target's
             // representation, a number or a BigInt, or a `TryFromIntError`,
-            // which is its message, as a parse error is (ADR 0063).
+            // which is its kind, `PosOverflow` or `NegOverflow`, as Rust's is:
+            // its message is one for both (ADRs 0063 and 0109).
             Helper::TryFromInt => {
                 r#"
 function $tryFromInt(x, lo, hi) {
-  if (x < lo || x > hi) return { TAG: "Err", _0: "out of range integral type conversion attempted" };
+  if (x < lo) return { TAG: "Err", _0: "NegOverflow" };
+  if (x > hi) return { TAG: "Err", _0: "PosOverflow" };
   return { TAG: "Ok", _0: typeof hi === "bigint" ? BigInt(x) : Number(x) };
 }
 "#
@@ -1253,7 +1255,8 @@ function $binarySearch(items, x) {
 }
 "#
             }
-            // `{:?}` of a parse error, which is its message: its kind, by the message.
+            // `{:?}` of a parse error, which is its message: its kind, by the
+            // message. A `TryFromIntError` is its kind itself.
             Helper::DebugParseError => {
                 r#"
 function $debugParseError(message, name) {
@@ -1268,7 +1271,7 @@ function $debugParseError(message, name) {
     "cannot parse char from empty string": "EmptyString",
     "too many characters in string": "TooManyChars",
   };
-  if (name === "TryFromIntError") return "TryFromIntError(())";
+  if (name === "TryFromIntError") return `TryFromIntError(${message})`;
   return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
 }
 "#

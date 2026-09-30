@@ -122,7 +122,7 @@ global state and a failed compile ends in a trap.
 - `Cargo.lock` starts as a copy of rust's own lockfile, so every dependency
   version matches the one rustc was built and tested with.
 - `.cargo/config.toml` sets the variables rustc's build system (bootstrap)
-  normally provides. `CFG_VERSION` must match the official nightly exactly,
+  normally provides. `CFG_VERSION` must match the official release exactly,
   or rustc refuses the shipped `core`/`std` metadata.
 - Target `wasm32-wasip1`, **without threads**: wasmtime 49 removed the
   `wasi-threads` support that `wasm32-wasip1-threads` needs, and a

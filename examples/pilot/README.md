@@ -31,7 +31,7 @@ browser ──► Vite ── /api ──► server ── models::validate
 ```bash
 bun run build                              # in the repository root, once
 cd examples/pilot
-cargo +nightly-2026-03-25 run -p server    # http://127.0.0.1:3000
+cargo +1.98.1 run -p server    # http://127.0.0.1:3000
 cd web && bun run dev                      # in another terminal
 ```
 

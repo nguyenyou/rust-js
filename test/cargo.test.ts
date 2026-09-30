@@ -44,7 +44,7 @@ test("Cargo virtual workspaces require selection and build scripts are rejected 
 });
 
 test("Cargo planning rejects floating toolchains and unspecified targets", async () => {
-  await expect(planCargoLibraries({ manifestPath: "Cargo.toml", toolchain: "nightly", target })).rejects.toThrow("exact nightly");
+  await expect(planCargoLibraries({ manifestPath: "Cargo.toml", toolchain: "nightly", target })).rejects.toThrow("exact toolchain pin");
   await expect(planCargoLibraries({ manifestPath: "Cargo.toml", toolchain, target: "" })).rejects.toThrow("explicit target");
 });
 

@@ -1,6 +1,6 @@
 # 0003. Pin one nightly and link rustc's internals
 
-Status: Accepted
+Status: Accepted. Amended by [0109](0109-stable-release.md).
 
 ## Context
 
@@ -57,3 +57,8 @@ base. WASM builds also use `--locked` to keep dependency resolution explicit.
 This removes duplicate executable pins; an upgrade still requires adapting
 rustc integration, patches, bootstrap settings, and lockfiles, then running
 native tests and freshly built WASM parity checks.
+
+## Amendment: a stable release
+
+[ADR 0109](0109-stable-release.md) pins a stable release, `1.98.1`, whose
+`rustc-dev` has rustc's internals too, in place of a nightly.

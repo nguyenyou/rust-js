@@ -24,6 +24,11 @@ import { compileFailure, printed, run, stopped, type Exit } from "../test/child"
 import { rustcCommit, rustcTests } from "./rustc-tests";
 
 const root = join(import.meta.dir, "..");
+
+// rustc's tests use its unstable features, natively and with rust-js alike, as
+// rustc's own CI runs them: a stable release lets a crate use them only with
+// `RUSTC_BOOTSTRAP` (ADR 0109).
+process.env.RUSTC_BOOTSTRAP = "1";
 // The rust-js that compiles each test: a release build, as the known
 // failures are made with, since a debug build's deeper stack overflows on
 // tests a release build passes. `--compiler=path` says another.

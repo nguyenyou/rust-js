@@ -72,8 +72,9 @@ roadmap; the diagrams below continue to describe the target.
 ### One pinned Rust toolchain per release
 
 Each rust-js release supports one exact Rust toolchain. The current pin is
-`nightly-2026-03-25`; [rust-toolchain.toml](rust-toolchain.toml) is the source of
-truth. This follows [ADR 0003](docs/decisions/0003-pin-nightly-toolchain.md).
+the stable release `1.98.1`; [rust-toolchain.toml](rust-toolchain.toml) is the source of
+truth. This follows [ADR 0003](docs/decisions/0003-pin-nightly-toolchain.md) and
+[ADR 0109](docs/decisions/0109-stable-release.md).
 
 The compiler uses rustc's internal APIs and THIR, so a toolchain upgrade is a
 deliberate compatibility change. Update the pin, adapt frontend and lowering

@@ -211,6 +211,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.shows_inside(ty) => args.types().next().expect("what it holds").peel_refs(),
             _ => ty,
         };
+        // A `TryFromIntError` is its kind, whose message is one for both
+        // (ADR 0109): `value && ..` of one whose value runs code, as a kind
+        // is never empty.
+        if let ty::Adt(adt, _) = ty.kind()
+            && self.is_parse_error(ty)
+            && self.tcx.item_name(adt.did()).as_str() == "TryFromIntError"
+        {
+            let message = Expr::str("out of range integral type conversion attempted");
+            return Ok(match value.has_effects() {
+                true => Expr::bin(Op::And, value, message),
+                false => message,
+            });
+        }
         if self.is_string_like(ty) || self.is_parse_error(ty) {
             return Ok(value);
         }

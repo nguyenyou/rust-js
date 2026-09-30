@@ -135,6 +135,13 @@ pub fn report() -> String {
         i64::try_from(1u64 << 63).is_err(),
         u16::try_from(min.wrapping_add(min)).is_ok()
     ));
+    // Of too small a value, and its message, which is one for both.
+    let low = u8::try_from(-1i64).unwrap_err();
+    out.push_str(&format!(
+        "{low:?} {low} {} {}\n",
+        u8::try_from(300i64).unwrap_err(),
+        low == u8::try_from(300i64).unwrap_err()
+    ));
 
     let mut stamps: Vec<i64> = vec![1_700_000_000_000, -5, 0, i64::MAX, i64::MIN];
     stamps.sort();

@@ -99,9 +99,9 @@ pub fn attributes(tcx: TyCtxt<'_>) -> SerdeAttributes {
             visit::walk_field_def(self, field);
         }
     }
-    let lowering = tcx.resolver_for_lowering().borrow();
+    let krate = tcx.resolver_for_lowering().1.borrow();
     let mut collector = Collector(HashMap::new());
-    visit::walk_crate(&mut collector, &lowering.1);
+    visit::walk_crate(&mut collector, &krate);
     collector.0
 }
 
@@ -326,7 +326,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             false => self.krate.trait_impls,
         };
         impls.iter().copied().find_map(|imp| {
-            let tr = self.tcx.impl_trait_ref(imp).instantiate_identity();
+            let tr = self.tcx.impl_trait_ref(imp).instantiate_identity().skip_normalization();
             let same = matches!(tr.self_ty().kind(), ty::Adt(a, _) if a.did() == adt.did());
             if !same || serde_trait(self.tcx, tr.def_id) != Some(serialize) {
                 return None;
@@ -349,7 +349,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn lower_serialize(&mut self, method: DefId) -> R<js::Function> {
         let imp = self.tcx.parent(method);
         let span = self.tcx.def_span(imp);
-        let self_ty = self.tcx.type_of(imp).instantiate_identity();
+        let self_ty = self.tcx.type_of(imp).instantiate_identity().skip_normalization();
         let ty::Adt(adt, args) = *self_ty.kind() else {
             return Err(self.unsupported(span, "serializing this"));
         };
@@ -641,7 +641,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .map(|i| {
                     (
                         self.project(value.clone(), ty, i),
-                        variant.fields.iter().nth(i).expect("a field").ty(self.tcx, args),
+                        variant
+                            .fields
+                            .iter()
+                            .nth(i)
+                            .expect("a field")
+                            .ty(self.tcx, args)
+                            .skip_normalization(),
                     )
                 })
                 .collect();
@@ -709,7 +715,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .map(|(i, f)| {
                         (
                             Expr::member(value.clone(), variant_field(self.tcx, variant, i)),
-                            f.ty(self.tcx, args),
+                            f.ty(self.tcx, args).skip_normalization(),
                         )
                     })
                     .collect();
@@ -806,7 +812,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .fields
             .iter()
             .enumerate()
-            .map(|(i, field)| (self.project(value.clone(), ty, i), field.ty(self.tcx, args)))
+            .map(|(i, field)| {
+                (
+                    self.project(value.clone(), ty, i),
+                    field.ty(self.tcx, args).skip_normalization(),
+                )
+            })
             .collect();
         if attrs.transparent || (variant.ctor_kind() == Some(CtorKind::Fn) && fields.len() == 1) {
             let (value, ty) = self

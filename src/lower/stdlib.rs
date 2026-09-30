@@ -381,10 +381,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A generic `next` boxes a `Some` that looks like `None` (ADR 0051).
         let boxed = self.resolve_instance(next, args)?.is_some_and(|instance| {
             let id = instance.def_id();
-            let output = self.tcx.fn_sig(id).instantiate_identity().skip_binder().output();
             let output = self
                 .tcx
-                .try_normalize_erasing_regions(ty::TypingEnv::post_analysis(self.tcx, id), output)
+                .fn_sig(id)
+                .instantiate_identity()
+                .skip_normalization()
+                .skip_binder()
+                .output();
+            let output = self
+                .tcx
+                .try_normalize_erasing_regions(
+                    ty::TypingEnv::post_analysis(self.tcx, id),
+                    ty::Unnormalized::new_wip(output),
+                )
                 .unwrap_or(output);
             self.option_of(output).is_some_and(|item| self.boxed_payload(item))
         });
@@ -417,8 +426,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .iter()
             .copied()
             .find(|&id| self.tcx.item_name(id) == sym::Item)?;
-        let projection = ty::Ty::new_projection(self.tcx, item, [iterator]);
-        self.tcx.try_normalize_erasing_regions(self.typing_env, projection).ok()
+        let projection = ty::Ty::new_projection(self.tcx, ty::IsRigid::No, item, [iterator]);
+        self.tcx
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(projection))
+            .ok()
     }
 
     pub(super) fn iterator_call(

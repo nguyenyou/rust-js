@@ -10,16 +10,16 @@ rustflags = ["-C", "link-arg=-zstack-size=33554432"]
 
 # rustc's own build system (bootstrap) normally sets these.
 [env]
-# Must match the official nightly byte for byte: rustc rejects metadata
+# Must match the official release byte for byte: rustc rejects metadata
 # (like the shipped `core` and `std`) written by a different version string.
-CFG_VERSION = "1.96.0-nightly (362211dc2 2026-03-24)"
-CFG_RELEASE = "1.96.0-nightly"
-CFG_RELEASE_CHANNEL = "nightly"
-CFG_VER_DATE = "2026-03-24"
-CFG_VER_HASH = "362211dc29abc4e8f8cfc384740237f144929b03"
+CFG_VERSION = "1.98.1 (48a229cea 2026-09-01)"
+CFG_RELEASE = "1.98.1"
+CFG_RELEASE_CHANNEL = "stable"
+CFG_VER_DATE = "2026-09-01"
+CFG_VER_HASH = "48a229ceaefd4985c50990b14116b6d856af0985"
 CFG_COMPILER_HOST_TRIPLE = "wasm32-wasip1"
 # Where the official build says std's sources live, so paths in metadata agree.
-CFG_VIRTUAL_RUST_SOURCE_BASE_DIR = "/rustc/362211dc29abc4e8f8cfc384740237f144929b03"
+CFG_VIRTUAL_RUST_SOURCE_BASE_DIR = "/rustc/48a229ceaefd4985c50990b14116b6d856af0985"
 RUSTC_INSTALL_BINDIR = "bin"
 # rustc_macros' build script refuses to build the compiler outside bootstrap
 # unless this is set: "if you know what you're doing, set RUSTC_BOOTSTRAP".

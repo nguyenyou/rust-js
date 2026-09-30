@@ -1,0 +1,5 @@
+# rust-js links rustc's internal crates, which a stable release has too, in
+# its `rustc-dev` component, but lets only a nightly use (ADR 0109). This lets
+# rust-js's own crate, and no other, use them.
+[env]
+RUSTC_BOOTSTRAP = "rust_js"

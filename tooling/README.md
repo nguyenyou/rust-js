@@ -225,7 +225,7 @@ its own ([ADR 0100](../docs/decisions/0100-separate-crates.md)):
 import { checkCargo } from "@rust-js/build/cargo";
 
 const { js, crates } = await checkCargo({
-  manifestPath: "Cargo.toml", toolchain: "<pinned nightly>", compiler: "/path/to/rust-js",
+  manifestPath: "Cargo.toml", toolchain: "<pinned release>", compiler: "/path/to/rust-js",
   packageName: "frontend", features: [],
 });
 ```
@@ -273,7 +273,7 @@ from: its workspace root, or another of `server.fs.allow`.
 ## Experimental Cargo planning
 
 `@rust-js/build/cargo` exports `planCargoLibraries({ manifestPath, toolchain, target,
-packageName?, features?, noDefaultFeatures? })`. Supply an exact nightly pin and
+packageName?, features?, noDefaultFeatures? })`. Supply an exact toolchain pin and
 an explicit target triple. `packageName` selects a member of a virtual workspace.
 
 The planner invokes Cargo metadata with `--frozen`: create and commit the lockfile

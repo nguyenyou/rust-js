@@ -101,7 +101,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => true,
             ty::Adt(adt, args) if ty.is_box() || !self.is_std(adt.did()) || self.is_known_std(ty) => adt
                 .all_fields()
-                .any(|f| self.needs_clone_in(f.ty(self.tcx, args), seen)),
+                .any(|f| self.needs_clone_in(f.ty(self.tcx, args).skip_normalization(), seen)),
             // Another std type: `clone_value` says it can't.
             ty::Adt(..) => true,
             _ => false,
@@ -216,9 +216,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Does `outer` hold `target` anywhere inside it?
     fn holds(&self, outer: Ty<'tcx>, target: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
         let parts: Vec<Ty<'tcx>> = match outer.kind() {
-            ty::Adt(adt, args) if self.is_rust_adt(adt.did()) => {
-                adt.all_fields().map(|f| f.ty(self.tcx, args)).collect()
-            }
+            ty::Adt(adt, args) if self.is_rust_adt(adt.did()) => adt
+                .all_fields()
+                .map(|f| f.ty(self.tcx, args).skip_normalization())
+                .collect(),
             ty::Adt(_, args) => args.types().collect(),
             ty::Tuple(tys) => tys.to_vec(),
             ty::Array(item, _) | ty::Slice(item) | ty::Ref(_, item, _) => vec![*item],
@@ -451,7 +452,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return false;
         }
         let ty = ty.peel_refs();
+        // A parse error is a string of its kind: its message, or a
+        // `TryFromIntError`'s kind itself (ADR 0109), which its derived `==` compares.
         self.is_string_like(ty)
+            || self.is_parse_error(ty)
             || Num::of(ty).is_some()
             || ty.is_bool()
             || ty.is_unit()
@@ -478,7 +482,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(..) if self.has_user_impl(self.partial_eq_trait(), ty) => true,
             // `Vec`, `Box`, `Rc` and cells compare what they hold.
             ty::Adt(_, args) if self.is_std_wrapper(ty) => args.types().any(|t| self.custom_eq_in(t, seen)),
-            ty::Adt(adt, args) => adt.all_fields().any(|f| self.custom_eq_in(f.ty(self.tcx, args), seen)),
+            ty::Adt(adt, args) => adt
+                .all_fields()
+                .any(|f| self.custom_eq_in(f.ty(self.tcx, args).skip_normalization(), seen)),
             _ => false,
         };
         seen.pop();

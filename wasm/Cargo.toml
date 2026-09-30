@@ -25,7 +25,9 @@ path = "../src/main.rs"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rustc_driver = { path = "rustc/compiler/rustc_driver_impl", package = "rustc_driver_impl" }
+rustc_errors = { path = "rustc/compiler/rustc_errors" }
 rustc_expand = { path = "rustc/compiler/rustc_expand" }
+rustc_feature = { path = "rustc/compiler/rustc_feature" }
 rustc_ast = { path = "rustc/compiler/rustc_ast" }
 rustc_builtin_macros = { path = "rustc/compiler/rustc_builtin_macros" }
 rustc_hir = { path = "rustc/compiler/rustc_hir" }

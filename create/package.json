@@ -6,5 +6,5 @@
   "description": "`bun create @rust-js my-app`: a Vite and React app written in Rust. See docs/decisions/0105-create.md.",
   "bin": "index.js",
   "files": ["index.js", "template"],
-  "rustJs": { "toolchain": "nightly-2026-03-25" }
+  "rustJs": { "toolchain": "1.98.1" }
 }

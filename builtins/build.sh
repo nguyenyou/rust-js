@@ -11,4 +11,6 @@ target=(--target=wasm32-unknown-unknown)
 for arg in "$@"; do
   case "$arg" in --target | --target=*) target=() ;; esac
 done
-exec rustc --edition=2024 --crate-type=lib --crate-name=js --emit=metadata ${target[@]+"${target[@]}"} src/lib.rs "$@"
+# The crate uses rustc's unstable features, which a stable release lets only
+# the crates `RUSTC_BOOTSTRAP` names use (ADR 0109).
+RUSTC_BOOTSTRAP=js exec rustc --edition=2024 --crate-type=lib --crate-name=js --emit=metadata ${target[@]+"${target[@]}"} src/lib.rs "$@"

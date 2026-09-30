@@ -155,9 +155,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .tcx
                 .fn_sig(def_id)
                 .instantiate(self.tcx, generic_args)
+                .skip_normalization()
                 .skip_binder()
                 .output();
-            let output = self.tcx.normalize_erasing_regions(self.typing_env, output);
+            let output = self
+                .tcx
+                .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(output));
             if let Some(item) = self.option_of(output) {
                 boxed = self.boxed_payload(item);
                 if self.can_be_nullish(item) && !boxed {

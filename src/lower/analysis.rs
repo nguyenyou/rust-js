@@ -149,7 +149,16 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let dictionaries: Vec<DefId> = trait_impls
         .iter()
         .copied()
-        .filter(|&id| traits::operational(tcx, &foreign, tcx.impl_trait_ref(id).instantiate_identity().def_id))
+        .filter(|&id| {
+            traits::operational(
+                tcx,
+                &foreign,
+                tcx.impl_trait_ref(id)
+                    .instantiate_identity()
+                    .skip_normalization()
+                    .def_id,
+            )
+        })
         .filter(|&id| serde_impl(tcx, id).is_none())
         .collect();
 
@@ -264,7 +273,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
 /// it. In JS, it's a variable of its module, made from `init`.
 pub(super) fn is_thread_local(tcx: TyCtxt<'_>, d: LocalDefId) -> bool {
     matches!(tcx.def_kind(d), DefKind::Const { .. })
-        && matches!(tcx.type_of(d).instantiate_identity().kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(Symbol::intern("LocalKey"), adt.did()))
+        && matches!(tcx.type_of(d).instantiate_identity().skip_normalization().kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(Symbol::intern("LocalKey"), adt.did()))
 }
 
 /// The thread-local whose block `d` is in, if any.
@@ -331,7 +340,11 @@ fn reject_unsupported(
             // 0064) and a `TryFrom`'s `Error`: rustc works out what they are.
             DefKind::AssocTy
                 if tcx.trait_impl_of_assoc(def_id.to_def_id()).is_some_and(|imp| {
-                    let tr = tcx.impl_trait_ref(imp).instantiate_identity().def_id;
+                    let tr = tcx
+                        .impl_trait_ref(imp)
+                        .instantiate_identity()
+                        .skip_normalization()
+                        .def_id;
                     tcx.is_diagnostic_item(sym::Iterator, tr)
                         || tcx.is_diagnostic_item(sym::TryFrom, tr)
                         || traits::is_operator(tcx, tr)
@@ -348,7 +361,10 @@ fn reject_unsupported(
                     && !traits::implementable(
                         tcx,
                         foreign,
-                        tcx.impl_trait_ref(def_id).instantiate_identity().def_id,
+                        tcx.impl_trait_ref(def_id)
+                            .instantiate_identity()
+                            .skip_normalization()
+                            .def_id,
                     ) =>
             {
                 "user implementations of this standard or external trait"
@@ -504,7 +520,11 @@ fn drops_nothing_derived(tcx: TyCtxt<'_>, imp: DefId) -> bool {
     if !tcx.is_automatically_derived(imp) {
         return false;
     }
-    let tr = tcx.impl_trait_ref(imp).instantiate_identity().def_id;
+    let tr = tcx
+        .impl_trait_ref(imp)
+        .instantiate_identity()
+        .skip_normalization()
+        .def_id;
     [
         LangItem::Clone,
         LangItem::Copy,
@@ -543,7 +563,7 @@ fn holds_user_drop<'tcx>(
                 .is_some_and(|d| d.did.is_local() || foreign.item(d.did).is_some())
                 || adt
                     .all_fields()
-                    .any(|f| holds_user_drop(tcx, foreign, f.ty(tcx, args), seen))
+                    .any(|f| holds_user_drop(tcx, foreign, f.ty(tcx, args).skip_normalization(), seen))
                 || args.types().any(|t| holds_user_drop(tcx, foreign, t, seen))
         }
         ty::Tuple(items) => items.iter().any(|t| holds_user_drop(tcx, foreign, t, seen)),
@@ -730,7 +750,7 @@ fn name_items(
             failed = true;
         }
         let owner_type = tcx.inherent_impl_of_assoc(def_id.to_def_id()).and_then(|imp| {
-            match tcx.type_of(imp).instantiate_identity().kind() {
+            match tcx.type_of(imp).instantiate_identity().skip_normalization().kind() {
                 ty::Adt(adt, _) => Some(adt.did()),
                 _ => None,
             }
@@ -899,7 +919,10 @@ pub(super) fn derived_debug(tcx: TyCtxt<'_>, id: DefId) -> bool {
         && matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
         && tcx.is_diagnostic_item(
             Symbol::intern("Debug"),
-            tcx.impl_trait_ref(id).instantiate_identity().def_id,
+            tcx.impl_trait_ref(id)
+                .instantiate_identity()
+                .skip_normalization()
+                .def_id,
         )
 }
 

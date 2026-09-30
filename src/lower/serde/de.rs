@@ -69,7 +69,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn lower_deserialize(&mut self, method: DefId) -> R<js::Function> {
         let imp = self.tcx.parent(method);
         let span = self.tcx.def_span(imp);
-        let self_ty = self.tcx.type_of(imp).instantiate_identity();
+        let self_ty = self.tcx.type_of(imp).instantiate_identity().skip_normalization();
         let ty::Adt(adt, args) = *self_ty.kind() else {
             return Err(self.unsupported(span, "deserializing this"));
         };
@@ -258,7 +258,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if self.serde_attrs(field.did)?.skip_deserializing {
                     return Err(self.unsupported(span, "a newtype struct whose field is skipped"));
                 }
-                let read = self.json_reader(field.ty(self.tcx, args), span)?;
+                let read = self.json_reader(field.ty(self.tcx, args).skip_normalization(), span)?;
                 let value = Expr::call(read, vec![Expr::var(json)]);
                 Ok(self.construct(adt, variant, args, vec![value]))
             }
@@ -282,8 +282,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .in_definition_order()
             .find(|item| item.is_type())
             .ok_or_else(|| self.unsupported(span, "this `#[serde(try_from)]`"))?;
-        let projection = Ty::new_projection(self.tcx, error.def_id, [to, from]);
-        Ok(self.tcx.normalize_erasing_regions(self.typing_env, projection))
+        let projection = Ty::new_projection(self.tcx, ty::IsRigid::No, error.def_id, [to, from]);
+        Ok(self
+            .tcx
+            .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(projection)))
     }
 
     /// `#[serde(transparent)]`: the one field that's read, as it's read; the
@@ -299,7 +301,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut items = Vec::new();
         for field in &variant.fields {
             let attrs = self.serde_attrs(field.did)?;
-            let field_ty = field.ty(self.tcx, args);
+            let field_ty = field.ty(self.tcx, args).skip_normalization();
             items.push(match attrs.default {
                 // serde's `transparent` is the field without a default, which
                 // a skipped one has.
@@ -345,7 +347,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (mut flattened, mut flat_params) = (Vec::new(), Vec::new());
         for (i, field) in variant.fields.iter().enumerate() {
             let attrs = self.serde_attrs(field.did)?;
-            let field_ty = field.ty(self.tcx, args);
+            let field_ty = field.ty(self.tcx, args).skip_normalization();
             if attrs.flatten && !attrs.skip_deserializing {
                 flattened.push(self.json_reader(field_ty, span)?);
                 let param = self.fresh(&keys[i]);
@@ -696,7 +698,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(CtorKind::Fn) if variant.fields.len() == 1 => {
                 let field = variant.fields.iter().next().expect("a field");
                 let attrs = self.serde_attrs(field.did)?;
-                let field_ty = field.ty(self.tcx, args);
+                let field_ty = field.ty(self.tcx, args).skip_normalization();
                 // A newtype whose field is skipped holds nothing, and its
                 // field is its default.
                 if attrs.skip_deserializing {

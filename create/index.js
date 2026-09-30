@@ -72,7 +72,7 @@ const manager = agent || (process.versions.bun ? "bun" : "npm");
 const { toolchain } = self.rustJs;
 console.log(`Made ${directory}: a Vite and React app, its component src/App.rs, in Rust.
 
-rust-js runs with rustc's own libraries, of the nightly it's built with. Once:
+rust-js runs with rustc's own libraries, of the Rust release it's built with. Once:
 
   rustup toolchain install ${toolchain} --profile minimal --target wasm32-unknown-unknown
 

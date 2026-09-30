@@ -1,7 +1,8 @@
 # rust-js links against rustc's internal crates, whose API changes often.
-# Pin the exact nightly the code was written against.
+# Pin the exact stable release the code was written against, whose
+# `rustc-dev` has them (ADR 0109).
 [toolchain]
-channel = "nightly-2026-03-25"
+channel = "1.98.1"
 components = ["rustc-dev", "llvm-tools", "rust-src", "rustfmt", "clippy"]
 # The target rustc checks programs for (ADR 0090): its `usize` is 32 bits,
 # as rust-js's is.

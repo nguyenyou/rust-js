@@ -10,9 +10,12 @@ import { fingerprint } from "./publish.js";
 
 const execute = promisify(execFile);
 
+/** One exact toolchain: a release, `1.98.1`, or a dated nightly (ADR 0109). */
+const exactToolchain = toolchain => /^(\d+\.\d+\.\d+|nightly-\d{4}-\d{2}-\d{2})$/.test(toolchain ?? "");
+
 /** @param {{ manifestPath: string, toolchain: string, target: string, packageName?: string, features?: string[], noDefaultFeatures?: boolean }} options */
 export async function planCargoLibraries({ manifestPath, toolchain, target, packageName, features = [], noDefaultFeatures = false }) {
-  if (!/^nightly-\d{4}-\d{2}-\d{2}$/.test(toolchain ?? "")) throw new Error("Cargo planning requires an exact nightly toolchain pin");
+  if (!exactToolchain(toolchain)) throw new Error("Cargo planning requires an exact toolchain pin");
   if (typeof target !== "string" || !target) throw new Error("Cargo planning requires an explicit target triple");
   const manifest = resolve(manifestPath);
   const args = [`+${toolchain}`, "metadata", "--format-version=1", "--frozen", "--manifest-path", manifest, "--filter-platform", target];
@@ -76,7 +79,7 @@ export async function planCargoLibraries({ manifestPath, toolchain, target, pack
  * @returns {Promise<{ js: string, crates: Map<string, { js: string, manifest: string }>, files: string[] }>}
  */
 export async function checkCargo({ manifestPath, toolchain, compiler, packageName, features = [], noDefaultFeatures = false, offline = false, react, inSource = false }) {
-  if (!/^nightly-\d{4}-\d{2}-\d{2}$/.test(toolchain ?? "")) throw new Error("Cargo builds require an exact nightly toolchain pin");
+  if (!exactToolchain(toolchain)) throw new Error("Cargo builds require an exact toolchain pin");
   const manifest = resolve(manifestPath);
   const args = [`+${toolchain}`, "check", "--message-format=json", "--target", "wasm32-unknown-unknown", "--manifest-path", manifest];
   if (packageName) args.push("-p", packageName);

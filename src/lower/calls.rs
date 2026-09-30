@@ -114,6 +114,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .tcx
                 .fn_sig(def_id)
                 .instantiate_identity()
+                .skip_normalization()
                 .skip_binder()
                 .inputs()
                 .to_vec();
@@ -288,11 +289,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .fn_sig(def_id)
             .instantiate(self.tcx, generic_args)
+            .skip_normalization()
             .skip_binder()
             .output();
         let output = self
             .tcx
-            .try_normalize_erasing_regions(self.typing_env, output)
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(output))
             .unwrap_or(output);
         // A `&mut` it made itself, to a value JS can't change in place, is the
         // item, not a cell (ADR 0099): only a pattern takes it apart.
@@ -1091,7 +1093,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         def_id: DefId,
         args: ty::GenericArgsRef<'tcx>,
     ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
-        let Ok(args) = self.tcx.try_normalize_erasing_regions(self.typing_env, args) else {
+        let Ok(args) = self
+            .tcx
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args))
+        else {
             return Ok(None);
         };
         ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, args)
@@ -1105,7 +1110,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         generic_args: ty::GenericArgsRef<'tcx>,
     ) -> R<Option<(DefId, ty::GenericArgsRef<'tcx>)>> {
         let generic_args = match self.self_args {
-            Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+            Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
+                .instantiate(self.tcx, args)
+                .skip_normalization(),
             None => generic_args,
         };
         Ok(self
@@ -1237,7 +1244,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let what = format!("a `{here}` inside a generic function's parameters or result");
             return Err(self.unsupported(span, &what));
         }
-        let declared = self.tcx.fn_sig(def_id).instantiate_identity().skip_binder().output();
+        let declared = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate_identity()
+            .skip_normalization()
+            .skip_binder()
+            .output();
         Ok(match *declared.kind() {
             ty::Ref(_, pointee, Mutability::Mut)
                 if self.is_generic_boxed(pointee, self.tcx.param_env(def_id))
@@ -1251,9 +1264,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `ty`, of a function's own generics, in a call of it, `generic_args`.
     fn instantiated(&self, ty: Ty<'tcx>, generic_args: ty::GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        let ty = ty::EarlyBinder::bind(ty).instantiate(self.tcx, generic_args);
+        let ty = ty::EarlyBinder::bind(self.tcx, ty)
+            .instantiate(self.tcx, generic_args)
+            .skip_normalization();
         self.tcx
-            .try_normalize_erasing_regions(self.typing_env, ty)
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty))
             .unwrap_or(ty)
     }
 
@@ -1263,7 +1278,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// parameters. Generic code has a cell there (ADR 0099), and the caller
     /// the object; a parameter is given a box, and the result's taken out.
     fn nested_mut_object(&self, def_id: DefId, generic_args: ty::GenericArgsRef<'tcx>) -> Option<Ty<'tcx>> {
-        let sig = self.tcx.fn_sig(def_id).instantiate_identity().skip_binder();
+        let sig = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate_identity()
+            .skip_normalization()
+            .skip_binder();
         let param_env = self.tcx.param_env(def_id);
         let mut todo: Vec<Ty<'tcx>> = sig
             .inputs_and_output
@@ -1271,6 +1291,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .filter(|ty| !matches!(*ty.kind(), ty::Ref(_, pointee, Mutability::Mut) if self.is_generic_boxed(pointee, param_env)))
             .collect();
         for (clause, _) in self.tcx.predicates_of(def_id).instantiate_identity(self.tcx) {
+            let clause = clause.skip_normalization();
             if let Some(bound) = clause.as_trait_clause() {
                 todo.extend(bound.skip_binder().trait_ref.args.types());
             }
@@ -1299,7 +1320,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if let ty::Adt(adt, args) = *part.kind()
                     && !self.is_std(adt.did())
                 {
-                    todo.extend(adt.all_fields().map(|field| field.ty(self.tcx, args)));
+                    todo.extend(
+                        adt.all_fields()
+                            .map(|field| field.ty(self.tcx, args).skip_normalization()),
+                    );
                 }
             }
         }
@@ -1309,7 +1333,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Can what `fn_id` returns hold the borrow its parameter `i` is given: does
     /// its return type name a lifetime that parameter's type does (ADR 0099)?
     fn result_borrows(&self, fn_id: DefId, i: usize) -> bool {
-        let sig = self.tcx.fn_sig(fn_id).instantiate_identity().skip_binder();
+        let sig = self
+            .tcx
+            .fn_sig(fn_id)
+            .instantiate_identity()
+            .skip_normalization()
+            .skip_binder();
         let Some(&input) = sig.inputs().get(i) else {
             return false;
         };
@@ -1331,6 +1360,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .fn_sig(fn_id)
             .instantiate_identity()
+            .skip_normalization()
             .skip_binder()
             .inputs()
             .get(i)
@@ -1372,7 +1402,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Some((method, method_args)) => (method, method_args, None),
                 None if self.is_rust_trait(trait_id) => {
                     let generic_args = match self.self_args {
-                        Some(args) => ty::EarlyBinder::bind(generic_args).instantiate(self.tcx, args),
+                        Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
+                            .instantiate(self.tcx, args)
+                            .skip_normalization(),
                         None => generic_args,
                     };
                     let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
@@ -1416,6 +1448,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .fn_sig(def_id)
             .instantiate_identity()
+            .skip_normalization()
             .skip_binder()
             .inputs()
             .to_vec();
@@ -1484,6 +1517,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .fn_sig(def_id)
             .instantiate(self.tcx, generic_args)
+            .skip_normalization()
             .skip_binder()
             .output();
         let result = if discarded || output.is_unit() {
@@ -1505,7 +1539,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty::FnDef(def_id, args) = *ty.kind() else {
             return Ok(None);
         };
-        let sig = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_binder();
+        let sig = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate(self.tcx, args)
+            .skip_normalization()
+            .skip_binder();
         let [input] = sig.inputs() else {
             return Ok(None);
         };
@@ -1611,6 +1650,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .tcx
             .fn_sig(def_id)
             .instantiate(self.tcx, args)
+            .skip_normalization()
             .skip_binder()
             .inputs()
             .to_vec();

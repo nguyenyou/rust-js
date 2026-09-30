@@ -32,7 +32,9 @@ target=(--target=wasm32-unknown-unknown)
 for arg in "$@"; do
   case "$arg" in --target | --target=*) target=() ;; esac
 done
+# The crate uses rustc's unstable features, which a stable release lets only
+# the crates `RUSTC_BOOTSTRAP` names use (ADR 0109).
 # The absolute path lets a program's errors quote this crate's source: a gated
 # item's `#[cfg(react = "..")]`.
-exec rustc --edition=2024 --crate-type=lib --crate-name=react --emit=metadata ${target[@]+"${target[@]}"} "$PWD/src/lib.rs" \
+RUSTC_BOOTSTRAP=react exec rustc --edition=2024 --crate-type=lib --crate-name=react --emit=metadata ${target[@]+"${target[@]}"} "$PWD/src/lib.rs" \
   --extern webapi="$dir/libwebapi.rmeta" --extern js="$dir/libjs.rmeta" "${cfg[@]}" -o "$dir/$(basename "$out")" "$@"

@@ -23,7 +23,7 @@ test("hosts reject incompatible and malformed manifests before consuming paths",
 });
 
 test("compiler identities reject incompatible ABI and missing version fields", () => {
-  const identity = { version: "0.1.0", toolchain: "nightly-2026-03-25", abi: 1 };
+  const identity = { version: "0.1.0", toolchain: "1.98.1", abi: 1 };
   expect(parseCompilerIdentity(JSON.stringify(identity))).toEqual(identity);
   for (const value of [null, {}, [], { ...identity, abi: 2 }, { ...identity, version: "" }, { ...identity, toolchain: "" }]) {
     expect(() => parseCompilerIdentity(JSON.stringify(value))).toThrow();
