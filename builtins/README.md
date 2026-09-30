@@ -2,7 +2,8 @@
 
 The `js` crate declares what JS has that Rust's `std` doesn't, as ReScript's
 standard library does: its promises, errors and regular expressions, its byte
-buffers, its JSON, and its global functions. What the browser adds is the
+buffers, its JSON, and its global functions, its timers too, as ReScript's has
+them. What the browser adds is the
 [`webapi`](../webapi/README.md) crate's; what `std` has, rust-js maps itself.
 It holds declarations only, so it's never compiled to JS. See
 [ADR 0102](../docs/decisions/0102-js-and-webapi.md).
@@ -34,6 +35,9 @@ spawn(Box::new(async move {                            // runs, unawaited
 - `object::from_entries(entries)` is a JS object of keys and values, as an API
   taking a dictionary wants, and `object::is(a, b)` is `Object.is`: whether two
   JS objects are one.
+- `set_timeout(f, ms)` and `set_interval(f, ms)` run a closure later, or every
+  so often, and `clear_timeout` and `clear_interval` of what they gave stop it:
+  every JS runtime has them, browsers', workers' and Node's.
 - `number::to_fixed(x, digits)` is `x.toFixed(digits)`, JS's rounding: a tie
   away from zero, `2.5` to `"3"`, where `format!("{:.0}", 2.5)` is `"2"`.
 

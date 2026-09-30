@@ -34,4 +34,21 @@ export async function thrown() {
 export function fixed(x, digits) {
   return [x.toFixed(digits), $toFixed(x, digits)];
 }
+
+export function after(ms, done) {
+  setTimeout(done, ms);
+}
+
+export function cancelled(ms, never) {
+  const id = setTimeout(never, ms);
+  clearTimeout(id);
+}
+
+export function every(ms, tick) {
+  return setInterval(tick, ms);
+}
+
+export function stop(id) {
+  clearInterval(id);
+}
 //# sourceMappingURL=builtins.js.map

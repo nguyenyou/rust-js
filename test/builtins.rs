@@ -43,3 +43,23 @@ pub async fn thrown() -> (String, String) {
 pub fn fixed(x: f64, digits: usize) -> (String, String) {
     (js::number::to_fixed(x, digits as u32), format!("{x:.digits$}"))
 }
+
+/// `done` after `ms`.
+pub fn after(ms: u32, done: Box<dyn FnOnce()>) {
+    js::set_timeout(done, ms);
+}
+
+/// `never` after `ms`, cleared first: it doesn't run.
+pub fn cancelled(ms: u32, never: Box<dyn FnOnce()>) {
+    let id = js::set_timeout(never, ms);
+    js::clear_timeout(id);
+}
+
+/// `tick` every `ms`, until `stop` of what this gives.
+pub fn every(ms: u32, tick: Box<dyn FnMut()>) -> &'static js::IntervalId {
+    js::set_interval(tick, ms)
+}
+
+pub fn stop(id: &js::IntervalId) {
+    js::clear_interval(id);
+}

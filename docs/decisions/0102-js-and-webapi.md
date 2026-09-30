@@ -153,3 +153,16 @@ library's (CodeMirror, the WASI shim, Sucrase), the browser's (webapi has
 `addEventListener`'s options, not yet `performance`), or Rust's: a
 `HashMap` is a JS `Map`. `test/builtins.rs`
 checks each, and the playground uses them instead of its own.
+
+## Amendment: timers are the builtins crate's
+
+`set_timeout`, `clear_timeout`, `set_interval` and `clear_interval` take a
+closure, where webapi's `set_timeout` of `Window` takes only a string of code
+to run. They aren't the language's, but every JS runtime has them as globals,
+browsers', workers' and Node's, and ReScript's standard library, which this
+crate follows, has them: a crate that isn't only a browser's can use them.
+What they give is opaque, `TimeoutId` and `IntervalId`: a number in a
+browser, an object in Node. The playground uses `set_timeout` instead of its
+own, and `object::is` instead of its own `Object.is` for a message's window.
+What else it declares is a library's, its own, or what webapi doesn't have
+yet: an iframe's `contentWindow`, `MessageEvent`, and `performance`.

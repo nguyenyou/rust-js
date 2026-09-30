@@ -1,6 +1,7 @@
 //! The JS language for rust-js (ADR 0102): what JS has that Rust's `std`
 //! doesn't, as ReScript's standard library has it. Its promises, errors and
-//! regular expressions, its byte buffers, its JSON, and its global functions. What the
+//! regular expressions, its byte buffers, its JSON, and its global functions,
+//! its timers too, as ReScript's has them: every JS runtime has them. What the
 //! browser adds is the webapi crate's; what `std` has, rust-js maps itself.
 //!
 //! It holds declarations only, so it's never compiled to JS: a program calls
@@ -71,6 +72,37 @@ unsafe extern "Rust" {
     /// what `encode_uri` made, or the `URIError` of what it can't have.
     #[link_name = "decodeURI"]
     pub safe fn decode_uri(text: &str) -> Result<String, &'static JsError>;
+}
+
+/// What `set_timeout` gives, to clear it with: a number in a browser, an
+/// object in Node.
+pub struct TimeoutId(PhantomData<JsObject>);
+
+/// What `set_interval` gives, to clear it with.
+pub struct IntervalId(PhantomData<JsObject>);
+
+// Timers: not the language's own, but every JS runtime's, browsers', workers'
+// and Node's, as ReScript's standard library has them (ADR 0102).
+unsafe extern "Rust" {
+    /// [`setTimeout(callback, ms)`](https://developer.mozilla.org/docs/Web/API/Window/setTimeout):
+    /// `callback` once, after at least `ms` milliseconds.
+    #[link_name = "setTimeout"]
+    pub safe fn set_timeout(callback: Box<dyn FnOnce()>, ms: u32) -> &'static TimeoutId;
+
+    /// [`clearTimeout(id)`](https://developer.mozilla.org/docs/Web/API/Window/clearTimeout):
+    /// the timeout's `callback` won't run, if it hasn't.
+    #[link_name = "clearTimeout"]
+    pub safe fn clear_timeout(id: &TimeoutId);
+
+    /// [`setInterval(callback, ms)`](https://developer.mozilla.org/docs/Web/API/Window/setInterval):
+    /// `callback` every `ms` milliseconds, until it's cleared.
+    #[link_name = "setInterval"]
+    pub safe fn set_interval(callback: Box<dyn FnMut()>, ms: u32) -> &'static IntervalId;
+
+    /// [`clearInterval(id)`](https://developer.mozilla.org/docs/Web/API/Window/clearInterval):
+    /// the interval's `callback` doesn't run again.
+    #[link_name = "clearInterval"]
+    pub safe fn clear_interval(id: &IntervalId);
 }
 
 /// A JS [`RegExp`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/RegExp),

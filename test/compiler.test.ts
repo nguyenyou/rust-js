@@ -467,6 +467,24 @@ test("the builtins crate's object and js_error functions are JS's", async () => 
   expect(await builtins.thrown()).toEqual([message, "not an Error"]);
 });
 
+// Timers, globals of every JS runtime, as ReScript's standard library has
+// them (ADR 0102): a closure after a time, or every so often, until cleared.
+test("the builtins crate's timers run a closure, and clearing one stops it", async () => {
+  await new Promise<void>((resolve) => builtins.after(5, resolve));
+  let fired = false;
+  builtins.cancelled(5, () => {
+    fired = true;
+  });
+  let ticks = 0;
+  const id = builtins.every(5, () => {
+    ticks += 1;
+    if (ticks === 3) builtins.stop(id);
+  });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(fired).toBe(false);
+  expect(ticks).toBe(3);
+});
+
 // `toFixed` is JS's rounding: a tie away from zero, where `format!` rounds it
 // to even, as Rust does; `-0` without its sign, and `1e21` and up as
 // `String(x)`. Between ties they agree (ADR 0102).
