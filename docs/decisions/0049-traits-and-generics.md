@@ -177,16 +177,17 @@ order, in a `const` before the call: `const receiver = make(c);`.
 
 This does not make wrapper identity Rust pointer identity, and does not
 provide equality, reference counts, `Any`, or downcasting. Mutable dyn
-receivers are rejected: replacing a number or an entire struct requires a
-writable storage location, which the current reference representation does
-not supply generally.
+receivers were rejected at first: replacing a number or an entire struct
+requires a writable storage location. [ADR 0099](0099-mut-references.md)
+gives a `&mut self` method the pair itself, whose `value` is a box's, and
+the pair of a `&mut` to a number reads and writes its place.
 
 ### Initial supported boundary
 
 This implementation supports local non-type-generic traits, handwritten
 impls, defaults, supertraits, generic functions and impls over supported
 representations, multiple bounds, receiverless methods, captured dictionaries,
-function values, and read-only dyn calls and upcasts. Trait lifetime
+function values, and dyn calls and upcasts, read-only at first. Trait lifetime
 parameters erase as other lifetimes do.
 
 `Default` is also supported for handwritten local impls and the supported

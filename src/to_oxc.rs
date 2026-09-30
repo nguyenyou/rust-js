@@ -639,7 +639,8 @@ impl<'a> Cx<'a> {
         let b = &self.b;
         let sp = span(e.span);
         match &e.kind {
-            ExprKind::Handle(place) => self.handle(sp, place),
+            ExprKind::Handle(place) => self.handle(sp, place, None),
+            ExprKind::Pair(place, dictionary) => self.handle(sp, place, Some(dictionary)),
             ExprKind::Num(n) => self.number(sp, *n),
             // `5n`, and `-5n` as `-` of it, as a number is written.
             ExprKind::BigInt(n) => {
@@ -869,7 +870,8 @@ impl<'a> Cx<'a> {
 
     /// A handle (ADR 0099): `{ get value() { return x; }, set value(value) { x = value; } }`,
     /// the setter's parameter named as the place doesn't name anything.
-    fn handle(&self, sp: Span, place: &js::Expr) -> Expression<'a> {
+    /// A handle on `place`, and a `dyn`'s pair with `dictionary` its `impl`.
+    fn handle(&self, sp: Span, place: &js::Expr, dictionary: Option<&js::Expr>) -> Expression<'a> {
         let b = &self.b;
         let mut param = "value".to_string();
         if place.mentions_var(&param) {
@@ -908,7 +910,12 @@ impl<'a> Cx<'a> {
             vec![js::Pattern::Name(param.clone())],
             vec![js::StmtKind::Assign(place.clone(), js::Expr::var(&param)).at(place.span)],
         );
-        Expression::new_object_expression(sp, ArenaVec::from_iter_in([get, set], b), b)
+        let dictionary = dictionary.map(|d| self.property(&Prop::Field("impl".into(), d.clone())));
+        Expression::new_object_expression(
+            sp,
+            ArenaVec::from_iter_in(dictionary.into_iter().chain([get, set]), b),
+            b,
+        )
     }
 
     fn property(&self, prop: &Prop) -> ObjectPropertyKind<'a> {

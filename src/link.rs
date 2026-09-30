@@ -197,7 +197,7 @@ fn expr(e: &mut Expr, visitor: &mut Visitor<'_>) {
         ExprKind::Symbol(_) => {}
         ExprKind::Var(n) => visitor.name(n),
         ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) | ExprKind::Handle(a) => expr(a, visitor),
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => {
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Pair(a, b) => {
             expr(a, visitor);
             expr(b, visitor);
         }

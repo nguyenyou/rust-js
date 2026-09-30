@@ -388,7 +388,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let dictionary = self
                 .super_evidence(principal, tr, Expr::member(pair.clone(), "impl"))
                 .ok_or_else(|| self.unsupported(span, "this trait object supertrait"))?;
-            values.insert(0, Expr::member(pair, "value"));
+            // A `&mut self` method is given the pair, whose `value` a box's is: a
+            // number's impl writes the place it reads (ADR 0099).
+            let receiver = self.tcx.fn_sig(id).instantiate_identity().skip_binder().inputs()[0];
+            let this = match receiver.kind() {
+                ty::Ref(_, _, Mutability::Mut) => pair,
+                _ => Expr::member(pair, "value"),
+            };
+            values.insert(0, this);
             return Ok(Some(Expr::call(
                 Expr::member(dictionary, bindings::fn_name(self.tcx, id)),
                 values,
@@ -539,15 +546,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let dictionary = self
                 .super_evidence(from, to, Expr::member(pair.clone(), "impl"))
                 .ok_or_else(|| self.unsupported(span, "this trait upcast"))?;
+            // A `&mut dyn Sub` as a `&mut dyn Super`: a pair on the first's
+            // `value`, which its `&mut self` methods write (ADR 0099).
+            if matches!(target.kind(), ty::Ref(_, _, Mutability::Mut)) {
+                return Ok(Expr::pair(Expr::member(pair, "value"), dictionary));
+            }
             return Ok(Expr::object(vec![
                 Prop::Field("value".into(), Expr::member(pair, "value")),
                 Prop::Field("impl".into(), dictionary),
             ]));
         }
         let tr = self.dyn_trait_ref(target, self.pointee(source)).unwrap();
+        let dictionary = self.dictionary(tr, span)?;
+        // `&mut n as &mut dyn Trait` of a number: the pair reads and writes
+        // the place the cell does (ADR 0099). A temporary's box is the pair's.
+        if self.is_cell(source) {
+            return Ok(match value.kind {
+                js::ExprKind::Handle(place) => Expr::pair(*place, dictionary),
+                js::ExprKind::Object(mut props) if matches!(props.as_slice(), [Prop::Field(name, _)] if name == "value") =>
+                {
+                    props.push(Prop::Field("impl".into(), dictionary));
+                    Expr::object(props)
+                }
+                _ => {
+                    let cell = if value.reads_same() {
+                        value
+                    } else {
+                        self.spill("cell", value, out)
+                    };
+                    Expr::pair(Expr::member(cell, "value"), dictionary)
+                }
+            });
+        }
         Ok(Expr::object(vec![
             Prop::Field("value".into(), value),
-            Prop::Field("impl".into(), self.dictionary(tr, span)?),
+            Prop::Field("impl".into(), dictionary),
         ]))
     }
 
@@ -776,30 +809,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
-    pub(super) fn readonly_dyn(&self, id: DefId) -> bool {
+    /// Can a `dyn` of the trait `id` be a pair (ADR 0049): its items are
+    /// methods, and neither it nor a supertrait has type parameters. A `&mut
+    /// self` method is given the pair, whose `value` a box's is (ADR 0099).
+    pub(super) fn dyn_supported(&self, id: DefId) -> bool {
         !self
             .tcx
             .generics_of(id)
             .own_params
             .iter()
             .any(|p| p.index != 0 && !matches!(p.kind, ty::GenericParamDefKind::Lifetime))
-            && self.tcx.associated_items(id).in_definition_order().all(|item| {
-                if self.tcx.def_kind(item.def_id) != DefKind::AssocFn {
-                    return false;
-                }
-                let sig = self.tcx.fn_sig(item.def_id).instantiate_identity().skip_binder();
-                !matches!(
-                    sig.inputs().first().map(|t| t.kind()),
-                    Some(ty::Ref(_, _, Mutability::Mut))
-                )
-            })
+            && self
+                .tcx
+                .associated_items(id)
+                .in_definition_order()
+                .all(|item| self.tcx.def_kind(item.def_id) == DefKind::AssocFn)
             && self
                 .tcx
                 .explicit_super_predicates_of(id)
                 .iter_identity_copied()
                 .all(|(clause, _)| match clause.kind().skip_binder() {
                     ty::ClauseKind::Trait(p) if operational(self.tcx, self.krate.foreign, p.trait_ref.def_id) => {
-                        self.readonly_dyn(p.trait_ref.def_id)
+                        self.dyn_supported(p.trait_ref.def_id)
                     }
                     _ => true,
                 })

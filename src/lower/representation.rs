@@ -270,6 +270,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || ["Cell", "RefCell", "Atomic"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_vec_like(ty)
             || self.is_map(ty)
+            // A `dyn` of the crate's trait is its pair (ADR 0049): a `&mut` to
+            // one is the pair, whose `value` its `&mut self` methods write.
+            || matches!(ty.kind(), ty::Dynamic(..)) && self.dynamic_trait(ty).is_some()
             // An enum with fields: those variants are objects (ADR 0033). A
             // fieldless one's string can't be changed through a `&mut` anyway,
             // since `*r = ..` of a whole value isn't supported. `Option` is
@@ -608,7 +611,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Dynamic(predicates, ..)
                 if predicates
                     .principal_def_id()
-                    .is_some_and(|id| id.is_local() && self.readonly_dyn(id)) =>
+                    .is_some_and(|id| id.is_local() && self.dyn_supported(id)) =>
             {
                 return None;
             }

@@ -241,6 +241,10 @@ pub enum ExprKind {
     /// `&mut` kept, reading and writing its place each time (ADR 0099). The
     /// place is what's read then, not before: it's never taken out.
     Handle(Box<Expr>),
+    /// `{ impl: d, get value() { return x; }, set value(value) { x = value; } }`:
+    /// a `&mut dyn Trait` of a value JS can't change in place, its impl's
+    /// dictionary and a handle on its place (ADR 0099).
+    Pair(Box<Expr>, Box<Expr>),
 }
 
 /// A JSX element (ADR 0040).
@@ -360,6 +364,10 @@ impl Expr {
 
     pub fn handle(place: Expr) -> Expr {
         Expr::new(ExprKind::Handle(Box::new(place)))
+    }
+
+    pub fn pair(place: Expr, dictionary: Expr) -> Expr {
+        Expr::new(ExprKind::Pair(Box::new(place), Box::new(dictionary)))
     }
 
     pub fn member(object: Expr, property: impl Into<String>) -> Expr {
@@ -492,7 +500,7 @@ impl Expr {
                 _ => false,
             }),
             ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.contains_jsx(),
-            ExprKind::Handle(_) => false,
+            ExprKind::Handle(_) | ExprKind::Pair(..) => false,
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
             ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
             ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
@@ -577,6 +585,7 @@ impl Expr {
             ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => return None,
             ExprKind::Member(a, field) => ExprKind::Member(one(a)?, field.clone()),
             ExprKind::Handle(place) => ExprKind::Handle(one(place)?),
+            ExprKind::Pair(place, dictionary) => ExprKind::Pair(one(place)?, one(dictionary)?),
             ExprKind::Index(a, b) => ExprKind::Index(one(a)?, one(b)?),
             ExprKind::Array(items) => ExprKind::Array(all(items)?),
             ExprKind::Object(fields) => ExprKind::Object(props(fields)?),
@@ -615,7 +624,9 @@ impl Expr {
             ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) | ExprKind::Handle(a) => {
                 a.mentions_var(name)
             }
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.mentions_var(name) || b.mentions_var(name),
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Pair(a, b) => {
+                a.mentions_var(name) || b.mentions_var(name)
+            }
             ExprKind::Cond(a, b, c) => a.mentions_var(name) || b.mentions_var(name) || c.mentions_var(name),
             ExprKind::Call(f, args) | ExprKind::OptionalCall(f, args) | ExprKind::New(f, args) => {
                 f.mentions_var(name) || args.iter().any(|a| a.mentions_var(name))
@@ -679,6 +690,7 @@ impl Expr {
             ExprKind::Member(object, _) => object.has_effects(),
             // Making one reads nothing: its getter does, later.
             ExprKind::Handle(_) => false,
+            ExprKind::Pair(_, dictionary) => dictionary.has_effects(),
             ExprKind::Index(object, index) => object.has_effects() || index.has_effects(),
             ExprKind::Array(items) | ExprKind::Template(_, items) => items.iter().any(Expr::has_effects),
             ExprKind::Object(props) => props.iter().any(|p| match p {

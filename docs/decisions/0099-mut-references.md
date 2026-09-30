@@ -1,8 +1,9 @@
 # 0099. A `&mut` held in a variable names its place; one kept elsewhere is a handle
 
 Status: Accepted in part: a `&mut` in a variable, the index loop, a
-generic `&mut T`, a `&mut` to a closure, and handles of a `&mut` to a
-value JS can't change in place, and to a temporary. A generic `&mut T` to
+generic `&mut T`, a `&mut` to a closure, a `&mut dyn Trait` of the
+crate's, and handles of a `&mut` to a value JS can't change in place, and
+to a temporary. A generic `&mut T` to
 an object inside what a generic function takes or gives, and a handle to
 an object replaced whole, are to come. Extends
 [0049](0049-traits-and-generics.md), [0025](0025-vec-loops-refcell-mut.md), [0033](0033-enums-with-fields.md) and [0074](0074-mut-boxes.md).
@@ -128,8 +129,15 @@ parameter, is an error for an object `T` for now: nothing converts it.
 - **A trait's default, copied into an impl, takes its `&mut self` as a
   box too:** it's in the dictionary. Calling the impl's own methods, it
   gives an object's what's in the box.
-- **A `&mut dyn Trait`, when it's supported, gives its `&mut self` methods a
-  box:** a trait object's methods are its impl's dictionary's.
+- **A `&mut dyn Trait` gives its `&mut self` methods a box, its pair
+  itself:** a trait object's methods are its impl's dictionary's, and its
+  pair, `{ impl, value }` (ADR 0049), has a box's `value`. `d.bump()` is
+  `d.impl.bump(d)`, and a `&self` method is given `d.value`. Of a `&mut`
+  to a number, the pair reads and writes its place, as a handle does:
+  `{ impl: i32Counter(), get value() { return n; }, set value(value) { n =
+  value; } }`. Of an object, it's `{ value: c, impl }`, and a `&mut` to a
+  `dyn` is the pair, as one to an object is the object. A `&mut dyn Sub`
+  as a `&mut dyn Super` is a pair on the first's `value`.
 - **Not a type parameter that's a JS function or a JS iterator already:**
   one bound by `Fn`, `FnMut` or `FnOnce`, whose `&mut` is the closure, or
   by `Iterator` (ADR 0061).
@@ -139,8 +147,8 @@ parameter, is an error for an object `T` for now: nothing converts it.
 as calling it through the `&mut` does in Rust. `f()`, not `f.value()`.
 Assigning a new closure through one is an error.
 
-**Not here:** `&mut dyn Trait`, where a trait's `&mut self` methods on a
-number have nowhere to write, raw pointers, and a `&mut` in a `static`.
+**Not here:** a `&mut dyn` of std's traits, `Write` or `Iterator`, raw
+pointers, and a `&mut` in a `static`.
 
 ## Why
 
@@ -273,11 +281,16 @@ number have nowhere to write, raw pointers, and a `&mut` in a `static`.
   again. Of the 12 tests stopping at a `&mut T`, 8 pass.
 - **Anything else stays an error:** a generic `&mut T` to an object inside
   what a generic function takes or gives, a handle to an object replaced
-  whole, and `&mut dyn Trait`.
+  whole, and a `&mut dyn` of std's traits.
 - Most of the 37 tests of `&mut` to a value that isn't an object need the
   first two rules only, and those come first; handles, generic `&mut T`
   and closures follow, each with its corpus cases and mutations.
-- `&mut dyn Trait` (12 tests) needs its own decision: where a `dyn` of a
-  number keeps the number its `&mut self` methods change.
+- **A `&mut dyn Trait` of the crate's is its pair** (`dyn_mut`): of an
+  object and of a number, a parameter, a variable, a temporary, one made
+  `&dyn`, and upcast to a supertrait: probing found an upcast writing a
+  copy of the `value`. A `Box<dyn Trait>` owns its pair's `value`, which its
+  `&mut self` methods write. The traits test's mutable `dyn` receiver,
+  once an error, compiles. Of rustc's 10 tests stopping at a `&mut dyn`,
+  4 pass; 4 are of std's `Write` and `Iterator`.
 - Each test that gets further may stop at something else, as rustc's tests
   do; the known failures say where.

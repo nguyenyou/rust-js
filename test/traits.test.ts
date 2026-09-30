@@ -170,7 +170,6 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 });
 
 for (const [name, source, diagnostic] of [
-  ["mutable dyn receiver", `trait Reset { fn reset(&mut self); } pub fn f(x: &mut dyn Reset) { x.reset(); }`, "does not support"],
   ["generic trait", `pub trait Convert<T> { fn convert(&self) -> T; }`, "generic trait parameters"],
   ["generic method", `pub trait Shape { fn f<T>(&self, value: T); }`, "generic trait methods"],
   ["associated type", `pub trait Source { type Item; }`, "associated types"],
