@@ -7,17 +7,13 @@
 // The frame has an opaque origin and allows scripts only. Programs can report
 // results through postMessage, but cannot access the editor's DOM or storage.
 
-use js::{JsObject, RegExp, reg_exp};
+use std::collections::HashMap;
 
-use crate::compiler::{JsMap, text_entries};
+use js::{JsObject, RegExp, encode_uri_component, json, reg_exp};
 
-// `replace` is one JS method, typed for each way it's called.
-#[allow(clashing_extern_declarations)]
+// A replacer and `matchAll`, typed for the patterns here: a JS replacer is
+// given the match, then each group, so its type is its pattern's (js::RegExp).
 unsafe extern "Rust" {
-    #[link_name = "JSON.stringify"]
-    safe fn json_string(text: &str) -> String;
-    #[link_name = "encodeURIComponent"]
-    safe fn encode_uri_component(text: &str) -> String;
     /// `text.replace(pattern, (match, a, b) => ..)`: a closure for each match.
     #[link_name = "replace"]
     safe fn replace_matches(
@@ -25,8 +21,6 @@ unsafe extern "Rust" {
         pattern: &RegExp,
         with: Box<dyn Fn(String, String, String) -> String>,
     ) -> String;
-    #[link_name = "replace"]
-    safe fn replace_pattern(this: &str, pattern: &RegExp, with: &str) -> String;
     #[link_name = "matchAll"]
     safe fn match_all(this: &str, pattern: &RegExp) -> &'static JsObject;
     /// Each match of a pattern with one group, as `(match, group)`.
@@ -126,14 +120,14 @@ pub fn link(files: &[(String, String)]) -> String {
             &code,
             imports,
             Box::new(move |_, names, specifier| {
-                let target = json_string(&format!("rust-js:{}", resolve(&from, &specifier)));
+                let target = json::stringify(&format!("rust-js:{}", resolve(&from, &specifier)));
                 format!("import {names} from {target};")
             }),
         );
-        let body = replace_pattern(&body, source_map, "");
-        let specifier = json_string(&format!("rust-js:{path}"));
+        let body = reg_exp::replace(&body, source_map, "");
+        let specifier = json::stringify(&format!("rust-js:{path}"));
         // Identical module bodies must still have separate state.
-        let url = json_string(&format!(
+        let url = json::stringify(&format!(
             "data:text/javascript,{}#{}",
             encode_uri_component(&body),
             encode_uri_component(&path)
@@ -192,7 +186,7 @@ const FRAME_STYLE: &str = r#"<style>
 /// The page that runs the root module's `main()`, or with `test`, the
 /// crate's tests, and reports as run number `run`.
 pub fn prepare(
-    files: &JsMap,
+    files: &HashMap<String, String>,
     modules: &[(String, String)],
     styles: &[(String, String)],
     root_file: &str,
@@ -201,8 +195,9 @@ pub fn prepare(
 ) -> Prepared {
     // The program's modules, its JSX as JS (Sucrase's), and what they import
     // of the page's: the runtime, and React's.
-    let mut sources: Vec<(String, String)> = text_entries(files)
-        .into_iter()
+    let mut sources: Vec<(String, String)> = files
+        .iter()
+        .map(|(path, code)| (path.clone(), code.clone()))
         .map(|(path, code)| match path.ends_with(".jsx") {
             true => {
                 let options = TransformOptions {
@@ -280,7 +275,7 @@ pub fn prepare(
     }
     let report = |message: &str| format!("parent.postMessage({{ run: {run}, {message} }}, \"*\")");
     let linked = link(&sources);
-    let entry = json_string(&format!("rust-js:{}", if test { &tests } else { root_file }));
+    let entry = json::stringify(&format!("rust-js:{}", if test { &tests } else { root_file }));
     let start = if test {
         format!("await import({entry});\n{TEST_RUNNER}")
     } else {

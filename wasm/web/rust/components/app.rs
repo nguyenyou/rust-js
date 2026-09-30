@@ -7,6 +7,7 @@
 //       ◄── on_compile, on_open, on_delete, on_outcome ──┘
 
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use js::{Promise, reg_exp, spawn};
@@ -21,16 +22,14 @@ use super::stats_table::StatsTable;
 use super::status_line::{Status, Tone};
 use super::toolbar::Toolbar;
 use crate::codemirror::{EditorView, editor_state, output_state, source_state};
-use crate::compiler::{
-    Compiled, Example, JsMap, Loaded, Stat, load, load_example, mb, ms, set_last_result, text_entries,
-};
+use crate::compiler::{Compiled, Example, Loaded, Stat, load, load_example, mb, ms, set_last_result};
 use crate::programs::{Outcome, Prepared, Program, prepare};
 use crate::projects::{Project, js_name};
 use crate::tree::build_tree;
 
 unsafe extern "Rust" {
     #[link_name = "../compiler-client.js#compileInWorker"]
-    safe fn compile(loaded: &Loaded, sources: &JsMap, root: &str, test: bool) -> Promise<Compiled>;
+    safe fn compile(loaded: &Loaded, sources: &HashMap<String, String>, root: &str, test: bool) -> Promise<Compiled>;
 }
 
 /// What the JavaScript side shows.
@@ -124,7 +123,7 @@ pub fn App() -> Element {
     let live = move || source.current().map(|view| editor_state(view));
 
     // Run what a compile wrote, in the Result frame.
-    let run = move |files: &JsMap, loaded: &Loaded, root_js: &str, test: bool| {
+    let run = move |files: &HashMap<String, String>, loaded: &Loaded, root_js: &str, test: bool| {
         let n = runs.current() + 1;
         runs.set_current(n);
         match prepare(files, &loaded.modules, &loaded.styles, root_js, test, n) {
@@ -167,11 +166,15 @@ pub fn App() -> Element {
         ));
         // A Transition: `compiling` is true until it's done.
         start_transition.start(move || async move {
-            let r = compile(loaded, sources, &root, test).await;
+            let r = compile(loaded, &sources, &root, test).await;
             let n = compiles.current() + 1;
             compiles.set_current(n);
             if r.ok {
-                let files = text_entries(r.files);
+                let files: Vec<(String, String)> = r
+                    .files
+                    .iter()
+                    .map(|(path, text)| (path.clone(), text.clone()))
+                    .collect();
                 let count = files.len();
                 let root_jsx = format!("{root_js}x");
                 let root_js = if files.iter().any(|(path, _)| *path == root_jsx) {
@@ -190,7 +193,7 @@ pub fn App() -> Element {
                     format!("Compiled: {count} JS file{}.", if count == 1 { "" } else { "s" }),
                     Tone::Good,
                 ));
-                run(r.files, loaded, &root_js, test);
+                run(&r.files, loaded, &root_js, test);
             } else {
                 set_output.set(Output::Diagnostics(r.stderr.clone()));
                 set_program.set(None);

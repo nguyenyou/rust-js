@@ -49,6 +49,7 @@ const cases: [string, string, Crate[]][] = [
   ["fetch", "examples/fetch.rs", ["web"]],
   ["web_forms", "test/web_forms.rs", ["web"]],
   ["throws", "test/throws.rs", ["web"]],
+  ["builtins", "test/builtins.rs", ["web"]],
   ["async", "test/async.rs", ["web"]],
   ["imports", "test/imports/lib.rs", []],
   ["components", "test/components.rs", ["react"]],

@@ -129,7 +129,7 @@ export function App() {
         const n = (compiles.current + 1) | 0;
         compiles.current = n;
         if (r.ok) {
-          const files = Array.from(r.files);
+          const files = Array.from(r.files).map(([path, text]) => [path, text]);
           const count = files.length;
           const rootJsx = `${rootJs}x`;
           const rootJs$1 = files.some((param) => param[0] === rootJsx) ? rootJsx : rootJs;

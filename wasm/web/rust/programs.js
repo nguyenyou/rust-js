@@ -47,16 +47,18 @@ export function link(files) {
 }
 
 export function prepare(files, modules, styles, rootFile, test, run) {
-  let sources = Array.from(files).map(([path, code]) => {
-    const match = path.endsWith(".jsx");
-    if (match === true) {
-      const options = { transforms: ["jsx"], jsxRuntime: "automatic", production: true };
-      const code$1 = transform(code, options).code;
-      return [path, code$1];
-    } else {
-      return [path, code];
-    }
-  });
+  let sources = Array.from(files)
+    .map(([path, code]) => [path, code])
+    .map(([path, code]) => {
+      const match = path.endsWith(".jsx");
+      if (match === true) {
+        const options = { transforms: ["jsx"], jsxRuntime: "automatic", production: true };
+        const code$1 = transform(code, options).code;
+        return [path, code$1];
+      } else {
+        return [path, code];
+      }
+    });
   $extend(sources, Array.from(modules));
   let tests;
   const option = $stripSuffix(rootFile, ".jsx");

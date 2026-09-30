@@ -127,3 +127,28 @@ calls them, apart from the browser's, `rust-js-webapi`'s, and from Rust's
 `std`. So is its directory, `builtins/`, as `react/` and `webapi/` are
 theirs. Its library is still `js`: a program says `js::Promise`, beside
 `webapi::Element` and `react::use_state`.
+
+## Amendment: JSON, `replace`, `Object` and an `Error`'s message
+
+The playground declared both for itself, and every program writing JS text
+would: `json::stringify(text)` quotes a string as JSON, which is a JS string
+literal too, and `reg_exp::replace(text, pattern, with)` is
+`text.replace(pattern, with)`. Each is exact for what it's typed for.
+`JSON.stringify` of other Rust values isn't their JSON, as rust-js has them in
+JS: `None` is `undefined` and an `i64` a `BigInt`, which it throws on;
+that's serde's. A replacer closure and `matchAll` stay a program's bindings:
+a JS replacer is given the match, then each group, then where it matched, so
+its Rust type is its pattern's.
+
+The rest of what the playground declared of JS's own is here too:
+`object::from_entries`, a JS object of keys and values, `object::is`,
+whether two JS objects are one, which `std::ptr::eq` isn't in rust-js, and
+`js_error::is_error` and `js_error::message`, an `Error`'s. Not `JSON.parse`:
+what it gives is whatever the text holds, so no Rust type is its, and
+serde's reader checks the text against one. What else it declared is a
+library's (CodeMirror, the WASI shim, Sucrase), the browser's (webapi has
+`addEventListener`'s options, not yet `performance`), or Rust's: a
+`HashMap` is a JS `Map`. Not `toFixed`, which the playground keeps: JS
+rounds a tie away from zero, `2.5` to `"3"`, and `format!("{:.0}", x)` to
+even, as Rust does. `test/builtins.rs`
+checks each, and the playground uses them instead of its own.

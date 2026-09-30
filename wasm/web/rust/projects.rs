@@ -4,8 +4,9 @@
 // `App` renders with it. In JS, the methods are `Project`'s object of them
 // (ADR 0047): `project.opening(path, live)` is `Project.opening(project, path, live)`.
 
+use std::collections::HashMap;
+
 use crate::codemirror::{EditorState, source_state, text_of};
-use crate::compiler::{JsMap, new_text_map};
 
 /// A Rust file, and its editor state: its text, selection and undo history.
 pub struct SourceFile {
@@ -139,8 +140,8 @@ impl Project {
     }
 
     /// The crate as text, `path → text`, with the open file's `live` edits.
-    pub fn sources(&self, live: Option<&'static EditorState>) -> &'static JsMap {
+    pub fn sources(&self, live: Option<&'static EditorState>) -> HashMap<String, String> {
         let files = self.keeping(live);
-        new_text_map(files.iter().map(|f| (f.path.clone(), text_of(f.state))).collect())
+        files.iter().map(|f| (f.path.clone(), text_of(f.state))).collect()
     }
 }

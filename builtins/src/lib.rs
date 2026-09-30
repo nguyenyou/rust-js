@@ -1,12 +1,14 @@
 //! The JS language for rust-js (ADR 0102): what JS has that Rust's `std`
 //! doesn't, as ReScript's standard library has it. Its promises, errors and
-//! regular expressions, its byte buffers, and its global functions. What the
+//! regular expressions, its byte buffers, its JSON, and its global functions. What the
 //! browser adds is the webapi crate's; what `std` has, rust-js maps itself.
 //!
 //! It holds declarations only, so it's never compiled to JS: a program calls
 //! what it declares, and the calls become plain JS.
 
 #![feature(extern_types)]
+// `object::is` of an extern type, which is only `PointeeSized`.
+#![feature(sized_hierarchy)]
 // `#[rust_js::link_name]` on a generic function, `settle` (ADR 0039).
 #![feature(register_tool)]
 #![register_tool(rust_js)]
@@ -72,9 +74,10 @@ unsafe extern "Rust" {
 }
 
 /// A JS [`RegExp`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/RegExp),
-/// for what Rust would use the `regex` crate for. String methods that take one
-/// (`replace` with a closure, `matchAll`) are bindings a program declares,
-/// typed for what it does with them.
+/// for what Rust would use the `regex` crate for. `replace` with a string is
+/// here; with a closure, and `matchAll`, are bindings a program declares, typed
+/// for its pattern: a JS replacer is given the match, then each group, then
+/// where it matched, so its Rust type is the pattern's.
 pub struct RegExp(PhantomData<JsObject>);
 
 pub mod reg_exp {
@@ -87,6 +90,38 @@ pub mod reg_exp {
 
         #[link_name = "test"]
         pub safe fn test(this: &RegExp, text: &str) -> bool;
+
+        /// [`text.replace(pattern, with)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String/replace):
+        /// the first match, or with the `g` flag each, replaced with `with`,
+        /// in which `$1` is the first group and `$&` the match.
+        #[link_name = "replace"]
+        pub safe fn replace(this: &str, pattern: &RegExp, with: &str) -> String;
+    }
+}
+
+/// A JS number's methods, for where Rust's own `format!` isn't what's wanted.
+pub mod number {
+    unsafe extern "Rust" {
+        /// [`x.toFixed(digits)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed):
+        /// `x` with `digits` decimals, as JS rounds, a tie away from zero:
+        /// `2.5` is `"3"`, where `format!("{:.0}", 2.5)` is `"2"`, to even, as
+        /// Rust rounds it. Between ties they agree.
+        #[link_name = "toFixed"]
+        pub safe fn to_fixed(this: f64, digits: u32) -> String;
+    }
+}
+
+/// JS's [`JSON`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON).
+/// A Rust value's JSON is serde's (ADR 0077): `JSON.stringify` of one, as
+/// rust-js has it in JS, isn't, since `None` is `undefined` and an `i64` a
+/// `BigInt`, which it throws on. So it's typed for what it's exact for.
+pub mod json {
+    unsafe extern "Rust" {
+        /// [`JSON.stringify(text)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify):
+        /// `text`'s JSON, in quotes, with its `"`, `\` and control characters
+        /// escaped, which is a JS string literal too.
+        #[link_name = "JSON.stringify"]
+        pub safe fn stringify(text: &str) -> String;
     }
 }
 
@@ -102,6 +137,42 @@ pub mod js_error {
         /// `String(e)`: an `Error`'s name and message, or any value as text.
         #[link_name = "String"]
         pub safe fn to_string(error: &JsError) -> String;
+
+        /// `e instanceof Error`: what was thrown is an
+        /// [`Error`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Error),
+        /// which has a `message`. A promise may be rejected with anything.
+        #[link_name = "instanceof Error"]
+        pub safe fn is_error(this: &JsError) -> bool;
+
+        /// [`e.message`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Error/message):
+        /// an `Error`'s message, without its name, as `is_error(e)` says it is one.
+        #[link_name = "get message"]
+        pub safe fn message(this: &JsError) -> String;
+    }
+}
+
+/// JS's [`Object`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)
+/// functions, for a JS object an API takes or gives.
+pub mod object {
+    use super::*;
+
+    /// [`Object.fromEntries(entries)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries):
+    /// a JS object of these keys and values, as an API that takes a
+    /// dictionary of them wants: `{ "aria-label": "Rust source" }`.
+    #[rust_js::link_name = "Object.fromEntries"]
+    #[allow(unused_variables)]
+    pub fn from_entries<T>(entries: Vec<(String, T)>) -> &'static JsObject {
+        unreachable!()
+    }
+
+    /// [`Object.is(a, b)`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/is):
+    /// the same object, or the same value, where `NaN` is itself and `0`
+    /// isn't `-0`. Of JS objects, whether they're one: `std::ptr::eq` isn't
+    /// rust-js's.
+    #[rust_js::link_name = "Object.is"]
+    #[allow(unused_variables)]
+    pub fn is<T: core::marker::PointeeSized>(a: &T, b: &T) -> bool {
+        unreachable!()
     }
 }
 

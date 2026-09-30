@@ -8,7 +8,7 @@ import {
   PreopenDirectory,
   WASI,
 } from "@bjorn3/browser_wasi_shim";
-import { $extend, $rsplitOnce, $stripSuffix, $try } from "@rust-js/runtime";
+import { $extend, $rsplitOnce, $stripSuffix, $try, $unwrap } from "@rust-js/runtime";
 
 export function ms(t) {
   return `${t.toFixed(0)} ms`;
@@ -116,17 +116,17 @@ function dir(name, entry) {
 }
 
 function directoryOf(sources) {
-  const top = new Map([]);
-  for (const [path, text] of Array.from(sources)) {
+  let top = new Map();
+  for (const [path, text] of sources) {
     let folder = top;
     let name;
     const match = $rsplitOnce(path, "/");
     if (match != null) {
       for (const part of match[0].split("/")) {
         if (!folder.has(part)) {
-          folder.set(part, new Directory(new Map([])));
+          folder.set(part, new Directory(new Map()));
         }
-        folder = folder.get(part).contents;
+        folder = $unwrap(folder.get(part), "key not found").contents;
       }
       name = match[1];
     } else {
@@ -153,7 +153,7 @@ export async function compile(loaded, sources, rootFile, test) {
   const stderr = { value: [] };
   const stdoutLines = stderr;
   const stderrLines = stderr;
-  const outDir = new PreopenDirectory("/out", new Map([]));
+  const outDir = new PreopenDirectory("/out", new Map());
   const sysrootDir = new Directory(loaded.sysroot);
   const fds = [
     new OpenFile(new File([])),

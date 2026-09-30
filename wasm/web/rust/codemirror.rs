@@ -2,7 +2,7 @@
 // the `Editor` component does to its view. Both editors follow the system's
 // light or dark setting.
 
-use js::JsObject;
+use js::{JsObject, object};
 use webapi::Element;
 
 #[allow(clashing_extern_declarations)]
@@ -38,8 +38,6 @@ unsafe extern "Rust" {
     safe fn content_attributes(attributes: &JsObject) -> &'static Extension;
     #[link_name = "@codemirror/state#EditorState.readOnly.of"]
     safe fn read_only(value: bool) -> &'static Extension;
-    #[link_name = "Object.fromEntries"]
-    safe fn object_of(entries: Vec<(String, String)>) -> &'static JsObject;
     #[link_name = "@codemirror/state#EditorState.create"]
     safe fn create_state(config: &StateConfig) -> &'static EditorState;
     #[link_name = "new codemirror#EditorView"]
@@ -56,8 +54,6 @@ unsafe extern "Rust" {
     safe fn doc(this: &EditorState) -> &'static Text;
     #[link_name = "toString"]
     safe fn text_string(this: &Text) -> String;
-    #[link_name = "Object.is"]
-    safe fn same_state(a: &EditorState, b: &EditorState) -> bool;
 }
 
 // CodeMirror's configurations: JS objects that only CodeMirror reads.
@@ -86,7 +82,7 @@ thread_local! {
         basic_setup,
         rust_language(),
         compartment_of(THEME.with(|theme| *theme), theme_for(false)),
-        content_attributes(object_of(vec![("aria-label".to_string(), "Rust source".to_string())])),
+        content_attributes(object::from_entries(vec![("aria-label".to_string(), "Rust source".to_string())])),
     ]);
     // Read-only, but still selectable and copyable. Highlighted as JS for a
     // generated file, plain text when it shows rustc's diagnostics.
@@ -101,7 +97,7 @@ fn output(language: Option<&'static Extension>) -> &'static Extension {
     }
     extensions.push(compartment_of(THEME.with(|theme| *theme), theme_for(false)));
     extensions.push(read_only(true));
-    extensions.push(content_attributes(object_of(vec![(
+    extensions.push(content_attributes(object::from_entries(vec![(
         "aria-label".to_string(),
         "Generated JavaScript".to_string(),
     )])));
@@ -146,7 +142,7 @@ pub fn open_view(parent: &'static Element, state: &'static EditorState) -> &'sta
 /// Show `state`, unless it's the one showing: setting it again would lose
 /// the view's scroll position.
 pub fn show(view: &EditorView, state: &EditorState) {
-    if !same_state(editor_state(view), state) {
+    if !object::is(editor_state(view), state) {
         set_editor_state(view, state);
     }
 }

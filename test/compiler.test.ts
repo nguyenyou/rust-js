@@ -51,6 +51,7 @@ let strings: Record<string, (...args: any[]) => unknown>;
 let results: Record<string, (...args: any[]) => unknown>;
 let iterators: Record<string, (...args: any[]) => unknown>;
 let throws: Record<string, (...args: any[]) => any>;
+let builtins: Record<string, (...args: any[]) => any>;
 // The multi-file crate: its root, and two of its other modules.
 let modules: Record<string, Record<string, (...args: any[]) => number>>;
 // Imports from JS modules: the root, and a module two directories down.
@@ -127,6 +128,8 @@ beforeAll(async () => {
   run([compiler, "examples/fetch.rs", "-o", join(target, "fetch.js"), ...withWeb]);
   run([compiler, "test/throws.rs", "-o", join(target, "throws.js"), ...withWeb]);
   throws = await import(join(target, "throws.js"));
+  run([compiler, "test/builtins.rs", "-o", join(target, "builtins.js"), ...withWeb]);
+  builtins = await import(join(target, "builtins.js"));
   // The playground's own Rust (ADRs 0032, 0044), as compile-rust.ts compiles it with
   // rust-js.wasm: with React.
   buildReact();
@@ -433,6 +436,37 @@ test("iterators are array methods, and sorting takes comparators", async () => {
 });
 
 // ADR 0035: JS that throws, as a `Result`; and `?`.
+// JS's own, from the builtins crate (ADR 0102): `JSON.stringify` of a
+// string, its JSON text and a JS string literal, and `replace` with a
+// string, in which `$1` is a group.
+test("the builtins crate's json::stringify and reg_exp::replace are JS's", () => {
+  for (const text of ["plain", 'a "quote" and a \\ backslash', "a line\nbreak, a\ttab, a \u0001", "é and 😀", ""]) {
+    expect(builtins.quoted(text)).toBe(JSON.stringify(text));
+    expect(JSON.parse(builtins.quoted(text))).toBe(text);
+  }
+  expect(builtins.quoted('say "hi"\n')).toBe('"say \\"hi\\"\\n"');
+  expect(builtins.replaced("a-b-c", "-", "g", "+")).toBe("a+b+c");
+  expect(builtins.replaced("a-b-c", "-", "", "+")).toBe("a+b-c");
+  expect(builtins.replaced("2026-09-30", "(\\d+)-(\\d+)-(\\d+)", "", "$3/$2/$1")).toBe("30/09/2026");
+});
+
+// `Object.fromEntries` and `Object.is`, and an `Error`'s message, for what
+// was thrown (ADR 0102).
+test("the builtins crate's object and js_error functions are JS's", async () => {
+  expect(builtins.attributes("Rust source", 2)).toEqual({ "aria-label": "Rust source", "aria-level": "2" });
+  expect(builtins.identical(true)).toEqual([true, true]);
+  expect(builtins.identical(false)).toEqual([false, true]);
+  // Its message is the engine's: "URI malformed" in V8, "URI error" in Bun.
+  const message = (() => {
+    try {
+      decodeURIComponent("%E0%A4%A");
+    } catch (e) {
+      return (e as Error).message;
+    }
+  })();
+  expect(await builtins.thrown()).toEqual([message, "not an Error"]);
+});
+
 test("a throwing JS call is a Result, and ? returns early", async () => {
   expect(throws.sum_json("[1, 2, 3]")).toEqual({ TAG: "Ok", _0: 6 });
   const bad = throws.sum_json("[1, 2,");

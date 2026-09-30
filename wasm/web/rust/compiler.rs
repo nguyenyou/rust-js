@@ -13,6 +13,7 @@
 // keeps global state, and a failed compile ends in a trap.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use js::{JsError, JsObject, Promise, Uint8Array, array_buffer, js_error, uint8_array};
@@ -22,25 +23,23 @@ use webapi::{
 };
 
 // Some JS functions are declared more than once, typed for each use (`json`
-// for each file it reads, `new Map` for what it holds): rustc warns that
-// native code would see one symbol.
+// for each file it reads, `new Directory` for what it holds): rustc warns
+// that native code would see one symbol. A directory's contents are a JS
+// `Map`, which a `HashMap` is.
 #[allow(clashing_extern_declarations)]
 unsafe extern "Rust" {
     /// A file in the WASI shim's in-memory filesystem.
     pub type WasiFile;
-    /// A JS `Map`: a directory's contents, for the WASI shim.
-    pub type JsMap;
 
     #[link_name = "performance.now"]
     safe fn now() -> f64;
+    /// JS's rounding, a tie away from zero, where `format!`'s is to even.
     #[link_name = "toFixed"]
     safe fn to_fixed(this: f64, digits: u32) -> String;
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_file(data: &Uint8Array, options: &dyn std::any::Any) -> &'static WasiFile;
     #[link_name = "get data"]
     safe fn file_data(this: &WasiFile) -> &'static Uint8Array;
-    #[link_name = "new Map"]
-    safe fn new_map(entries: Vec<(String, &'static WasiFile)>) -> &'static JsMap;
     #[link_name = "json"]
     safe fn names_json(this: &Response) -> Promise<Vec<String>>;
     #[link_name = "json"]
@@ -65,9 +64,11 @@ unsafe extern "Rust" {
     #[link_name = "new @bjorn3/browser_wasi_shim#File"]
     safe fn new_plain_file(data: &Uint8Array) -> &'static WasiFile;
     #[link_name = "new @bjorn3/browser_wasi_shim#Directory"]
-    safe fn new_directory(contents: &JsMap) -> &'static WasiDirectory;
+    safe fn new_directory(contents: &HashMap<String, &'static Inode>) -> &'static WasiDirectory;
+    #[link_name = "new @bjorn3/browser_wasi_shim#Directory"]
+    safe fn new_file_directory(contents: &HashMap<String, &'static WasiFile>) -> &'static WasiDirectory;
     #[link_name = "get contents"]
-    safe fn contents(this: &WasiDirectory) -> &'static JsMap;
+    safe fn contents(this: &WasiDirectory) -> &'static mut HashMap<String, &'static Inode>;
     #[link_name = "this"]
     safe fn file_inode(this: &WasiFile) -> &'static Inode;
     #[link_name = "this"]
@@ -81,27 +82,12 @@ unsafe extern "Rust" {
     #[link_name = "this"]
     safe fn as_file(this: &Inode) -> &'static WasiFile;
 
-    #[link_name = "new Map"]
-    safe fn new_inode_map(entries: Vec<(String, &'static Inode)>) -> &'static JsMap;
-    #[link_name = "new Map"]
-    pub safe fn new_text_map(entries: Vec<(String, String)>) -> &'static JsMap;
-    #[link_name = "Array.from"]
-    safe fn inode_entries(map: &JsMap) -> Vec<(String, &'static Inode)>;
-    #[link_name = "Array.from"]
-    pub safe fn text_entries(map: &JsMap) -> Vec<(String, String)>;
-    #[link_name = "has"]
-    safe fn map_has(this: &JsMap, key: &str) -> bool;
-    #[link_name = "get"]
-    safe fn map_get(this: &JsMap, key: &str) -> &'static Inode;
-    #[link_name = "set"]
-    safe fn map_set(this: &JsMap, key: &str, value: &Inode);
-
     #[link_name = "new @bjorn3/browser_wasi_shim#OpenFile"]
     safe fn new_open_file(file: &WasiFile) -> &'static Fd;
     #[link_name = "@bjorn3/browser_wasi_shim#ConsoleStdout.lineBuffered"]
     safe fn line_buffered(write: Box<dyn FnMut(String)>) -> &'static Fd;
     #[link_name = "new @bjorn3/browser_wasi_shim#PreopenDirectory"]
-    safe fn new_preopen(name: &str, contents: &JsMap) -> &'static PreopenDirectory;
+    safe fn new_preopen(name: &str, contents: &HashMap<String, &'static Inode>) -> &'static PreopenDirectory;
     #[link_name = "this"]
     safe fn preopen_fd(this: &PreopenDirectory) -> &'static Fd;
     #[link_name = "get dir"]
@@ -121,10 +107,6 @@ unsafe extern "Rust" {
     safe fn run_wasi(this: &Wasi, instance: &WebAssemblyInstance) -> Result<i32, &'static JsError>;
     #[link_name = "get memory"]
     safe fn exported_memory(this: &JsObject) -> &'static WebAssemblyMemory;
-    #[link_name = "instanceof Error"]
-    safe fn is_error(this: &JsError) -> bool;
-    #[link_name = "get message"]
-    safe fn error_message(this: &JsError) -> String;
     /// The last compile, for automated checks.
     #[link_name = "set lastResult"]
     pub safe fn set_last_result(this: &webapi::Window, result: &Compiled);
@@ -147,7 +129,7 @@ struct Packages {
 /// What the page needs before it can compile anything.
 pub struct Loaded {
     pub module: &'static WebAssemblyModule,
-    pub sysroot: &'static JsMap,
+    pub sysroot: HashMap<String, &'static WasiFile>,
     pub webapi_crate: &'static WasiFile,
     pub js_crate: &'static WasiFile,
     pub react_crate: &'static WasiFile,
@@ -210,7 +192,7 @@ async fn load_compiler(start: f64, stat: Stat) -> &'static WebAssemblyModule {
     module
 }
 
-async fn load_sysroot(start: f64, stat: Stat) -> &'static JsMap {
+async fn load_sysroot(start: f64, stat: Stat) -> HashMap<String, &'static WasiFile> {
     let names = names_json(window::fetch(window, "./sysroot.json").await).await;
     // Every file's download starts before the first is awaited.
     let mut downloads = Vec::new();
@@ -228,7 +210,7 @@ async fn load_sysroot(start: f64, stat: Stat) -> &'static JsMap {
         "download sysroot".to_string(),
         format!("{} ({} files, {})", ms(now() - start), entries.len(), mb(size as f64)),
     );
-    new_map(entries)
+    entries.into_iter().collect()
 }
 
 async fn load_sysroot_file(name: String) -> (String, &'static WasiFile) {
@@ -292,7 +274,7 @@ pub struct Compiled {
     pub exit: String,
     pub ok: bool,
     /// The JS files, `path → text`.
-    pub files: &'static JsMap,
+    pub files: HashMap<String, String>,
     pub stderr: String,
     pub instantiate: f64,
     pub run: f64,
@@ -314,35 +296,35 @@ struct Imports {
 
 /// A directory holding one entry.
 fn dir(name: &str, entry: &'static Inode) -> &'static Inode {
-    directory_inode(new_directory(new_inode_map(vec![(name.to_string(), entry)])))
+    directory_inode(new_directory(&HashMap::from([(name.to_string(), entry)])))
 }
 
 /// A WASI directory tree from `path → text`, e.g. `geometry/area.rs`.
-fn directory_of(sources: &JsMap) -> &'static JsMap {
-    let top = new_inode_map(Vec::new());
-    for (path, text) in text_entries(sources) {
-        let mut folder = top;
+fn directory_of(sources: &HashMap<String, String>) -> HashMap<String, &'static Inode> {
+    let mut top = HashMap::new();
+    for (path, text) in sources {
+        let mut folder = &mut top;
         let name = match path.rsplit_once('/') {
             Some((folders, name)) => {
                 for part in folders.split('/') {
-                    if !map_has(folder, part) {
-                        map_set(folder, part, directory_inode(new_directory(new_inode_map(Vec::new()))));
+                    if !folder.contains_key(part) {
+                        folder.insert(part.to_string(), directory_inode(new_directory(&HashMap::new())));
                     }
-                    folder = contents(as_directory(map_get(folder, part)));
+                    folder = contents(as_directory(folder[part]));
                 }
                 name
             }
             None => path.as_str(),
         };
-        let bytes = text_encoder::encode_with_input(text_encoder::new(), &text);
-        map_set(folder, name, file_inode(new_plain_file(bytes)));
+        let bytes = text_encoder::encode_with_input(text_encoder::new(), text);
+        folder.insert(name.to_string(), file_inode(new_plain_file(bytes)));
     }
     top
 }
 
 /// Every `.js` or `.jsx` file under a WASI directory, as `path → text`.
 fn js_files_in(folder: &WasiDirectory, prefix: &str, found: &mut Vec<(String, String)>) {
-    for (name, entry) in inode_entries(contents(folder)) {
+    for (name, &entry) in contents(folder).iter() {
         if is_directory(entry) {
             js_files_in(as_directory(entry), &format!("{prefix}{name}/"), found);
         } else if is_file(entry) && (name.ends_with(".js") || name.ends_with(".jsx")) {
@@ -355,28 +337,28 @@ fn js_files_in(folder: &WasiDirectory, prefix: &str, found: &mut Vec<(String, St
 /// Run rust-js.wasm on the crate in `sources` (`path → text`): a fresh
 /// instance each time, since rustc keeps global state, and a failed compile
 /// ends in a trap. With `test`, the crate's `#[test]` functions too (ADR 0026).
-pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bool) -> Compiled {
+pub async fn compile(loaded: &Loaded, sources: &HashMap<String, String>, root_file: &str, test: bool) -> Compiled {
     let stderr = Rc::new(RefCell::new(Vec::new()));
     let stdout_lines = stderr.clone();
     let stderr_lines = stderr.clone();
-    let out_dir = new_preopen("/out", new_inode_map(Vec::new()));
-    let sysroot_dir = directory_inode(new_directory(loaded.sysroot));
+    let out_dir = new_preopen("/out", &HashMap::new());
+    let sysroot_dir = directory_inode(new_file_directory(&loaded.sysroot));
     let fds = vec![
         new_open_file(new_empty_file(Vec::new())), // stdin
         line_buffered(Box::new(move |line| stdout_lines.borrow_mut().push(line))), // stdout
         line_buffered(Box::new(move |line| stderr_lines.borrow_mut().push(line))), // stderr
-        preopen_fd(new_preopen("/in", directory_of(sources))),
+        preopen_fd(new_preopen("/in", &directory_of(sources))),
         preopen_fd(out_dir),
         preopen_fd(new_preopen(
             "/sysroot",
-            new_inode_map(vec![(
+            &HashMap::from([(
                 "lib".to_string(),
                 dir("rustlib", dir("wasm32-unknown-unknown", dir("lib", sysroot_dir))),
             )]),
         )),
         preopen_fd(new_preopen(
             "/crates",
-            new_inode_map(vec![
+            &HashMap::from([
                 ("libwebapi.rmeta".to_string(), file_inode(loaded.webapi_crate)),
                 ("libjs.rmeta".to_string(), file_inode(loaded.js_crate)),
                 ("libreact.rmeta".to_string(), file_inode(loaded.react_crate)),
@@ -438,8 +420,8 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
         Ok(code) => code.to_string(),
         Err(e) => format!(
             "trap ({})",
-            if is_error(e) {
-                error_message(e)
+            if js_error::is_error(e) {
+                js_error::message(e)
             } else {
                 js_error::to_string(e)
             }
@@ -454,7 +436,7 @@ pub async fn compile(loaded: &Loaded, sources: &JsMap, root_file: &str, test: bo
     Compiled {
         exit,
         ok,
-        files: new_text_map(files),
+        files: files.into_iter().collect(),
         stderr: stderr.borrow().join("\n"),
         instantiate: t1 - t0,
         run: t2 - t1,
