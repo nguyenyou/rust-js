@@ -1861,6 +1861,22 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","byte_strings"],
   },
   {
+    name: "const-block-unknown",
+    breaks: "`const { square(7) + 1 }`, an inline constant, is refused",
+    file: "src/lower.rs",
+    find: "            ExprKind::ConstBlock { did, args } => eval_const(",
+    replace: "            ExprKind::ConstBlock { did, args } if false => eval_const(",
+    tests: ["test/corpus.test.ts","-t","const_blocks_and_let_guards"],
+  },
+  {
+    name: "let-guard-untested",
+    breaks: "an arm's `if let` guard binds, but its arm runs whether its `let` matched or not",
+    file: "src/lower/patterns.rs",
+    find: "                        self.assemble_let_chain(levels, body, None, span, &mut before);",
+    replace: "                        for (_, _, bindings) in levels {\n                            before.extend(bindings);\n                        }\n                        before.extend(body);",
+    tests: ["test/corpus.test.ts","-t","const_blocks_and_let_guards"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",

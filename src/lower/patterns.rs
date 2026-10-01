@@ -13,6 +13,10 @@ use rustc_middle::thir::{self, ArmId, ExprId, ExprKind, LogicalOp, Pat, PatKind,
 use rustc_middle::ty;
 use rustc_span::{DesugaringKind, Span};
 
+/// One level of a let chain: what runs before its test, its test's parts, and
+/// what its body starts with, a `let`'s bindings.
+pub(super) type LetLevel = (Vec<Stmt>, Vec<Expr>, Vec<Stmt>);
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A tuple or struct pattern of plain variables and `_`s, as JS
     /// destructuring: `[count, setCount]`, `{ initial, label }`. Binds the
@@ -576,7 +580,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
         // Each arm: its test, a guard's statements and test when it needs
         // statements of its own, and its body.
-        type Arm = (Option<Expr>, Option<(Vec<Stmt>, Expr)>, Vec<Stmt>, js::Span);
+        // A guard that needs statements: they and its test; or an `if let`
+        // guard, a let chain, whose levels the arm's body goes inside.
+        enum Guarded {
+            Test(Vec<Stmt>, Expr),
+            Chain(Vec<LetLevel>),
+        }
+        type Arm = (Option<Expr>, Option<Guarded>, Vec<Stmt>, js::Span);
         let mut chain: Vec<Arm> = Vec::new();
         for (i, &arm_id) in arms.iter().enumerate() {
             let arm = &self.thir[arm_id];
@@ -604,19 +614,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     };
                     self.locals.vars.insert(b.var, place);
                 }
-                let mut before = Vec::new();
-                let guard = self.expr(guard, &mut before);
-                for b in &bindings {
-                    self.locals.vars.remove(&b.var);
-                }
-                let guard = guard?;
-                if before.is_empty() {
-                    test = Some(match test {
-                        Some(t) => Expr::bin(Op::And, t, guard),
-                        None => guard,
-                    });
+                // `Some(x) if let Ok(n) = x.parse() =>` (ADR 0127): a let chain,
+                // whose `let`s bind for the arm's body.
+                let parts = self.let_chain(guard).or_else(|| {
+                    let part = self.strip(guard);
+                    matches!(self.thir[part].kind, ExprKind::Let { .. }).then(|| vec![part])
+                });
+                if let Some(parts) = parts {
+                    let levels = self.let_chain_levels(parts);
+                    for b in &bindings {
+                        self.locals.vars.remove(&b.var);
+                    }
+                    guarded = Some(Guarded::Chain(levels?));
                 } else {
-                    guarded = Some((before, guard));
+                    let mut before = Vec::new();
+                    let guard = self.expr(guard, &mut before);
+                    for b in &bindings {
+                        self.locals.vars.remove(&b.var);
+                    }
+                    let guard = guard?;
+                    if before.is_empty() {
+                        test = Some(match test {
+                            Some(t) => Expr::bin(Op::And, t, guard),
+                            None => guard,
+                        });
+                    } else {
+                        guarded = Some(Guarded::Test(before, guard));
+                    }
                 }
             }
             // The arm owns what its pattern moves out of the scrutinee, and
@@ -647,7 +671,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut label = None;
         let mut rest: Option<Vec<Stmt>> = None;
         for (test, guarded, mut body, span) in chain.into_iter().rev() {
-            if let Some((mut before, guard)) = guarded {
+            if let Some(guarded) = guarded {
                 let leaves = matches!(
                     body.last().map(|s| &s.kind),
                     Some(StmtKind::Return(_) | StmtKind::Throw(_) | StmtKind::Break(_) | StmtKind::Continue(_))
@@ -656,7 +680,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let label = label.get_or_insert_with(|| fresh_in(&mut self.labels, "arms")).clone();
                     body.push(StmtKind::Break(Some(label)).at(span));
                 }
-                before.push(StmtKind::If(guard, body, None).at(span));
+                let before = match guarded {
+                    Guarded::Test(mut before, guard) => {
+                        before.push(StmtKind::If(guard, body, None).at(span));
+                        before
+                    }
+                    // The body inside the chain's levels, which a level that
+                    // doesn't hold goes past, on to the later arms.
+                    Guarded::Chain(levels) => {
+                        let mut before = Vec::new();
+                        self.assemble_let_chain(levels, body, None, span, &mut before);
+                        before
+                    }
+                };
                 let mut arm = match test {
                     Some(t) => vec![StmtKind::If(t, before, None).at(span)],
                     None => before,
@@ -725,9 +761,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: js::Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
-        // Each level: what runs before its test, its test, and what its body
-        // starts with (a `let`'s bindings).
-        let mut levels: Vec<(Vec<Stmt>, Vec<Expr>, Vec<Stmt>)> = vec![(Vec::new(), Vec::new(), Vec::new())];
+        let levels = self.let_chain_levels(parts)?;
+        let mut then_out = Vec::new();
+        self.stmt(then, dest, &mut then_out)?;
+        let else_out = match else_opt {
+            Some(els) => {
+                let mut else_out = Vec::new();
+                self.stmt(els, dest, &mut else_out)?;
+                Some(else_out)
+            }
+            None => None,
+        };
+        self.assemble_let_chain(levels, then_out, else_out, span, out);
+        Ok(())
+    }
+
+    /// A let chain's parts, each level what runs before its test, its test,
+    /// and what its body starts with (a `let`'s bindings). What each `let`
+    /// binds is in scope after, for what's lowered in its body.
+    pub(super) fn let_chain_levels(&mut self, parts: Vec<ExprId>) -> R<Vec<LetLevel>> {
+        let mut levels: Vec<LetLevel> = vec![(Vec::new(), Vec::new(), Vec::new())];
         for part in parts {
             let (mut before, mut bindings) = (Vec::new(), Vec::new());
             let test = match self.thir[part].kind {
@@ -743,16 +796,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 levels.push((before, vec![test], bindings));
             }
         }
-        let mut then_out = Vec::new();
-        self.stmt(then, dest, &mut then_out)?;
-        let mut else_out = match else_opt {
-            Some(els) => {
-                let mut else_out = Vec::new();
-                self.stmt(els, dest, &mut else_out)?;
-                Some(else_out)
-            }
-            None => None,
-        };
+        Ok(levels)
+    }
+
+    /// A let chain's levels around its `then`, lowered already, and its
+    /// `else`, if it has one.
+    pub(super) fn assemble_let_chain(
+        &mut self,
+        levels: Vec<LetLevel>,
+        mut then_out: Vec<Stmt>,
+        mut else_out: Option<Vec<Stmt>>,
+        span: js::Span,
+        out: &mut Vec<Stmt>,
+    ) {
         let label = (levels.len() > 1 && else_out.is_some()).then(|| fresh_in(&mut self.labels, "chain"));
         let leaves = matches!(
             then_out.last().map(|s| &s.kind),
@@ -784,7 +840,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => out.extend(body),
         }
-        Ok(())
     }
 
     /// `if let pat = scrutinee`: the test, with the pattern's variables

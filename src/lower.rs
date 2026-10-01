@@ -967,6 +967,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.generic_result(fun, value, span)
             }
             ExprKind::NamedConst { def_id, args, .. } => self.named_const(def_id, args, ty, span),
+            // `const { square(7) + 1 }`: its value, as rustc computes it, as a
+            // named constant's is (ADR 0127).
+            ExprKind::ConstBlock { did, args } => eval_const(self.tcx, self.typing_env, did, args, span)
+                .and_then(|value| const_js(self.tcx, value))
+                .ok_or_else(|| self.unsupported(span, "this `const` block")),
             ExprKind::ConstParam { param, .. } => self.const_arg(ty::Const::new_param(self.tcx, param), span),
             ExprKind::Match { .. } if let Some(awaited) = self.body_query().as_await(e) => {
                 Ok(Expr::await_(self.expr(awaited, out)?))
