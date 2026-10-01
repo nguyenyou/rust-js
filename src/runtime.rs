@@ -130,6 +130,15 @@ helpers! {
     Zip,
     TakeWhile,
     SkipWhile,
+    LazyChain,
+    LazyZip,
+    LazyTakeWhile,
+    LazySkipWhile,
+    Repeating,
+    RepeatingWith,
+    Successors,
+    FromFn,
+    Unzip,
     Partition,
     SortedKeys,
     StripPrefix,
@@ -265,6 +274,7 @@ impl Helper {
             Helper::SomeAt => &[Helper::Some],
             Helper::Pop => &[Helper::Some],
             Helper::Iterator => &[Helper::SomeValue],
+            Helper::Successors | Helper::FromFn => &[Helper::SomeValue],
             Helper::RemEuclid => &[Helper::Rem],
             Helper::DivEuclid => &[Helper::Div],
             Helper::NextSome => &[Helper::Some],
@@ -1303,6 +1313,112 @@ function $takeWhile(items, keep) {
 function $skipWhile(items, skip) {
   const start = items.findIndex((item) => !skip(item));
   return start < 0 ? [] : items.slice(start);
+}
+"#
+            }
+            // A JS iterator's adapters (ADR 0128), which take from it only as
+            // far as they're used, as Rust's do: an endless one is fine.
+            Helper::LazyChain => {
+                r#"
+function* $lazyChain(a, b) {
+  yield* a;
+  yield* b;
+}
+"#
+            }
+            Helper::LazyZip => {
+                r#"
+function* $lazyZip(a, b) {
+  const right = b[Symbol.iterator]();
+  for (const item of a) {
+    const other = right.next();
+    if (other.done) {
+      return;
+    }
+    yield [item, other.value];
+  }
+}
+"#
+            }
+            Helper::LazyTakeWhile => {
+                r#"
+function* $lazyTakeWhile(items, keep) {
+  for (const item of items) {
+    if (!keep(item)) {
+      return;
+    }
+    yield item;
+  }
+}
+"#
+            }
+            Helper::LazySkipWhile => {
+                r#"
+function* $lazySkipWhile(items, skip) {
+  let skipping = true;
+  for (const item of items) {
+    if (skipping && skip(item)) {
+      continue;
+    }
+    skipping = false;
+    yield item;
+  }
+}
+"#
+            }
+            // std's endless iterator sources (ADR 0128). `repeat` clones its
+            // value for each item, as Rust's does.
+            Helper::Repeating => {
+                r#"
+function* $repeating(value, clone = (value) => value) {
+  while (true) {
+    yield clone(value);
+  }
+}
+"#
+            }
+            Helper::RepeatingWith => {
+                r#"
+function* $repeatingWith(f) {
+  while (true) {
+    yield f();
+  }
+}
+"#
+            }
+            // The next item is found before this one is given, as Rust's is. A
+            // generic `Some` may be boxed (ADR 0051): `boxed` unboxes it.
+            Helper::Successors => {
+                r#"
+function* $successors(next, successor, boxed = false) {
+  while (next != null) {
+    const item = boxed ? $someValue(next) : next;
+    next = successor(item);
+    yield item;
+  }
+}
+"#
+            }
+            // `f` is called for each item, again after a `None` too, as Rust's is.
+            Helper::FromFn => {
+                r#"
+function $fromFn(f, boxed = false) {
+  return Iterator.from({
+    next() {
+      const item = f();
+      if (item == null) {
+        return { done: true, value: undefined };
+      }
+      return { done: false, value: boxed ? $someValue(item) : item };
+    }
+  });
+}
+"#
+            }
+            Helper::Unzip => {
+                r#"
+function $unzip(pairs) {
+  return [pairs.map(([a]) => a), pairs.map(([, b]) => b)];
 }
 "#
             }

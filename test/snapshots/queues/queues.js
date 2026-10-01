@@ -131,7 +131,7 @@ export function heaps() {
     .map((t) => t.name)
     .join("");
   const from = $heapFrom([4, 8, 1, 9, 9, 2, 7, 3], $cmp);
-  const collected = $heapFrom([5, 1, 5, 2, 8].slice(), $cmp);
+  const collected = $heapFrom([5, 1, 5, 2, 8], $cmp);
   const arg$1 = collected;
   const arg$2 = $heapSorted(from, $cmp);
   out += `${sorted} [${from.map((item) => String(item)).join(", ")}] [${arg$1.map((item) => String(item)).join(", ")}] [${arg$2.map((item) => String(item)).join(", ")}]\n`;

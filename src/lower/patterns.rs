@@ -100,7 +100,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<()> {
         // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,
-        // which knows where it is (ADR 0071).
+        // which knows where it is (ADR 0071). A JS iterator knows already.
         if let PatKind::Binding {
             name,
             var,
@@ -112,6 +112,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && let Some(init) = init
             && self.stepped.contains(&var)
             && self.is_array_iter(ty)
+            && !self.is_lazy_iter(ty)
             && !self.is_peekable(ty)
             && !self.has_drops(ty)
         {

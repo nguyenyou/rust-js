@@ -1,7 +1,7 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
 use super::bindings::{self, JsForm, is_binding, is_method, js_form, js_import};
-use super::combinators::StepOp;
+use super::combinators::{IterSource, StepOp};
 use super::drops::Drops;
 use super::numbers::NumOp;
 use super::recognition::{Catching, Std};
@@ -929,6 +929,48 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
             Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
             Std::VecNew => Expr::array(vec![]),
+            Std::OptionIter => {
+                let item = self
+                    .option_of(self.thir[args[0]].ty.peel_refs())
+                    .expect("an `Option` has a `T`");
+                let option = arg();
+                self.option_items(option, item, out)
+            }
+            Std::IterSource(IterSource::Once) => Expr::array(vec![arg()]),
+            Std::IterSource(IterSource::Empty) => Expr::array(vec![]),
+            Std::IterSource(IterSource::Repeat) => {
+                let value = arg();
+                let item = generic_args.type_at(0);
+                let mut list = vec![value];
+                if self.needs_clone(item) {
+                    list.push(self.clone_fn("value", item, span)?);
+                }
+                self.runtime.insert(Helper::Repeating);
+                Expr::call(Expr::var("$repeating"), list)
+            }
+            Std::IterSource(IterSource::RepeatWith) => {
+                self.runtime.insert(Helper::RepeatingWith);
+                Expr::call(Expr::var("$repeatingWith"), vec![arg()])
+            }
+            // Their closures' `Option`s: a generic `Some` is boxed (ADR 0051).
+            Std::IterSource(source @ (IterSource::Successors | IterSource::FromFn)) => {
+                let item = generic_args.type_at(0);
+                let (helper, name, what) = match source {
+                    IterSource::Successors => (Helper::Successors, "$successors", "successors"),
+                    _ => (Helper::FromFn, "$fromFn", "from_fn"),
+                };
+                let boxed = self.boxed_payload(item);
+                if self.can_be_nullish(item) && !boxed {
+                    let what = format!("`{what}` of a `{item}`, whose `Some` would be `None` in JS");
+                    return Err(self.unsupported(span, &what));
+                }
+                let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
+                if boxed {
+                    list.push(Expr::bool(true));
+                }
+                self.runtime.insert(helper);
+                Expr::call(Expr::var(name), list)
+            }
             Std::VecMacro | Std::FmtNew | Std::AssertFailed => unreachable!("handled above"),
             Std::Panic | Std::PanicFmt => {
                 out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));

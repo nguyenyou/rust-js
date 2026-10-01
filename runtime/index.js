@@ -3485,6 +3485,78 @@ export function $skipWhile(items, skip) {
   return start < 0 ? [] : items.slice(start);
 }
 
+export function* $lazyChain(a, b) {
+  yield* a;
+  yield* b;
+}
+
+export function* $lazyZip(a, b) {
+  const right = b[Symbol.iterator]();
+  for (const item of a) {
+    const other = right.next();
+    if (other.done) {
+      return;
+    }
+    yield [item, other.value];
+  }
+}
+
+export function* $lazyTakeWhile(items, keep) {
+  for (const item of items) {
+    if (!keep(item)) {
+      return;
+    }
+    yield item;
+  }
+}
+
+export function* $lazySkipWhile(items, skip) {
+  let skipping = true;
+  for (const item of items) {
+    if (skipping && skip(item)) {
+      continue;
+    }
+    skipping = false;
+    yield item;
+  }
+}
+
+export function* $repeating(value, clone = (value) => value) {
+  while (true) {
+    yield clone(value);
+  }
+}
+
+export function* $repeatingWith(f) {
+  while (true) {
+    yield f();
+  }
+}
+
+export function* $successors(next, successor, boxed = false) {
+  while (next != null) {
+    const item = boxed ? $someValue(next) : next;
+    next = successor(item);
+    yield item;
+  }
+}
+
+export function $fromFn(f, boxed = false) {
+  return Iterator.from({
+    next() {
+      const item = f();
+      if (item == null) {
+        return { done: true, value: undefined };
+      }
+      return { done: false, value: boxed ? $someValue(item) : item };
+    }
+  });
+}
+
+export function $unzip(pairs) {
+  return [pairs.map(([a]) => a), pairs.map(([, b]) => b)];
+}
+
 export function $partition(items, keep) {
   const yes = [];
   const no = [];

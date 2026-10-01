@@ -1619,6 +1619,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Expr::call(Expr::var("$some"), vec![value])
     }
 
+    /// An `Option<T>`'s items, as its `iter()` gives them (ADR 0128):
+    /// `option == null ? [] : [option]`.
+    fn option_items(&mut self, option: Expr, item: Ty<'tcx>, out: &mut Vec<Stmt>) -> Expr {
+        let option = if option.reads_same() {
+            option
+        } else {
+            self.spill("option", option, out)
+        };
+        let value = if self.boxed_payload(item) {
+            self.some_value(option.clone())
+        } else {
+            option.clone()
+        };
+        Expr::cond(
+            Expr::bin(Op::LooseEq, option, Expr::null()),
+            Expr::array(vec![]),
+            Expr::array(vec![value]),
+        )
+    }
+
     /// What's in an `Option` of a generic `T` (ADR 0051): `$someValue(option)`.
     fn some_value(&mut self, option: Expr) -> Expr {
         self.runtime.insert(Helper::SomeValue);

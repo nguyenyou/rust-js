@@ -121,7 +121,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             (None, Some((start_js, end_js)))
         } else {
             let peeled = head_ty.peel_refs();
-            let sequence = peeled.is_array()
+            // An `Option`, or a `&Option`: a `&mut` one's items are places.
+            let option = self
+                .option_of(peeled)
+                .filter(|_| !matches!(head_ty.kind(), ty::Ref(_, _, Mutability::Mut)));
+            let sequence = option.is_some()
+                || peeled.is_array()
                 || peeled.is_slice()
                 || self.is_vec_like(peeled)
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
@@ -136,6 +141,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
             }
             let head = self.iter_value(f.head, out)?;
+            let head = match option {
+                Some(item) => self.option_items(head, item, out),
+                None => head,
+            };
             let head = self.in_order_of(head, head_ty, head_span)?;
             (Some(self.iter_source(head, head_ty, head_span)?), None)
         };

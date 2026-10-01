@@ -70,6 +70,20 @@ pub(super) enum IterComb {
     Nth,
     FindMap,
     Partition,
+    /// `unzip()` into two `Vec`s: `$unzip(pairs)`.
+    Unzip,
+}
+
+/// One of std's iterator sources (ADR 0128): `once` and `empty` are
+/// arrays, and the rest, which may never end, JS iterators.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum IterSource {
+    Once,
+    Empty,
+    Repeat,
+    RepeatWith,
+    Successors,
+    FromFn,
 }
 
 /// Stepping through an iterator (ADR 0071): a `Peekable`, and a local that
@@ -686,13 +700,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ],
             )
         };
-        let eager_only = |this: &Self, what: &str| {
-            if lazy {
-                Err(this.unsupported(span, &format!("`{what}` of an iterator of the crate's own")))
-            } else {
-                Ok(())
-            }
-        };
+        // `chain` and `zip` are lazy when either side is (ADR 0128).
+        let other_lazy = generic_args
+            .types()
+            .nth(1)
+            .is_some_and(|other| self.is_lazy_iter(other));
         let item_ty = || self.iterator_item(receiver_ty);
         Ok(match comb {
             // `Some`s only: `.map(f).filter((item) => item != null)`.
@@ -718,22 +730,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 _ => method(items, "flat", Vec::new()),
             },
+            IterComb::Zip if lazy || other_lazy => {
+                self.runtime.insert(Helper::LazyZip);
+                Expr::call(Expr::var("$lazyZip"), vec![items, next()])
+            }
             IterComb::Zip => {
-                eager_only(self, "zip")?;
                 self.runtime.insert(Helper::Zip);
                 Expr::call(Expr::var("$zip"), vec![items, next()])
             }
-            IterComb::Chain => {
-                eager_only(self, "chain")?;
-                method(items, "concat", vec![next()])
+            IterComb::Chain if lazy || other_lazy => {
+                self.runtime.insert(Helper::LazyChain);
+                Expr::call(Expr::var("$lazyChain"), vec![items, next()])
+            }
+            IterComb::Chain => method(items, "concat", vec![next()]),
+            IterComb::TakeWhile if lazy => {
+                self.runtime.insert(Helper::LazyTakeWhile);
+                Expr::call(Expr::var("$lazyTakeWhile"), vec![items, next()])
             }
             IterComb::TakeWhile => {
-                eager_only(self, "take_while")?;
                 self.runtime.insert(Helper::TakeWhile);
                 Expr::call(Expr::var("$takeWhile"), vec![items, next()])
             }
+            IterComb::SkipWhile if lazy => {
+                self.runtime.insert(Helper::LazySkipWhile);
+                Expr::call(Expr::var("$lazySkipWhile"), vec![items, next()])
+            }
             IterComb::SkipWhile => {
-                eager_only(self, "skip_while")?;
                 self.runtime.insert(Helper::SkipWhile);
                 Expr::call(Expr::var("$skipWhile"), vec![items, next()])
             }
@@ -829,6 +851,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 self.runtime.insert(Helper::Partition);
                 Expr::call(Expr::var("$partition"), vec![items, next()])
+            }
+            IterComb::Unzip => {
+                let into = generic_args.types().skip(3).all(|into| self.is_vec_like(into));
+                if !into {
+                    return Err(self.unsupported(span, "`unzip` into what isn't a `Vec`"));
+                }
+                let items = if lazy {
+                    method(items, "toArray", Vec::new())
+                } else {
+                    items
+                };
+                self.runtime.insert(Helper::Unzip);
+                Expr::call(Expr::var("$unzip"), vec![items])
             }
         })
     }

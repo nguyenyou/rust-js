@@ -2,7 +2,7 @@
 
 mod methods;
 
-use super::combinators::{Comb, HeapOp, IterComb, StepOp};
+use super::combinators::{Comb, HeapOp, IterComb, IterSource, StepOp};
 use super::format_spec::Radix;
 use super::maps::{MapOp, Part};
 use super::numbers::NumOp;
@@ -144,6 +144,11 @@ pub(super) enum Std {
     Comb(Comb),
     /// An iterator adapter or consumer (ADR 0062).
     IterComb(IterComb),
+    /// `std::iter::once(x)` and std's other iterator sources (ADR 0128).
+    IterSource(IterSource),
+    /// An `Option`'s `iter()` and `into_iter()`: an array of its value, or
+    /// of none (ADR 0128).
+    OptionIter,
     /// `Option` (ADR 0030): `o != null`, `o == null`.
     IsSome,
     IsNone,
@@ -284,6 +289,22 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_replace") {
             return Some(Std::Replace);
+        }
+        // std's iterator sources (ADR 0128), by path: most have no
+        // diagnostic item.
+        if tcx.crate_name(def_id.krate) == sym::core && tcx.def_kind(def_id) == DefKind::Fn {
+            let source = match tcx.def_path_str(def_id).as_str() {
+                "std::iter::once" => Some(IterSource::Once),
+                "std::iter::empty" => Some(IterSource::Empty),
+                "std::iter::repeat" => Some(IterSource::Repeat),
+                "std::iter::repeat_with" => Some(IterSource::RepeatWith),
+                "std::iter::successors" => Some(IterSource::Successors),
+                "std::iter::from_fn" => Some(IterSource::FromFn),
+                _ => None,
+            };
+            if let Some(source) = source {
+                return Some(Std::IterSource(source));
+            }
         }
         // `hint::black_box(x)` is `x`: it only hides `x` from an optimizer.
         // libtest's `test::black_box` is the same.
@@ -506,6 +527,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_vec_like(ty.peel_refs()))
             {
                 return Some(Std::Same);
+            }
+            // An `Option`'s, or a `&Option`'s: a `&mut` one's items are places.
+            if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
+                && tcx.item_name(def_id).as_str() == "into_iter"
+                && !matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
+                && self.is_lang_adt(ty.peel_refs(), LangItem::Option)
+            {
+                return Some(Std::OptionIter);
             }
             // `cmp`, `max` and `min` of what JS's `<` orders the same way.
             if tcx.is_diagnostic_item(sym::Ord, trait_) {
@@ -737,6 +766,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
             "as_ref" | "as_mut" if option => Std::Pointee,
             "is_some" if option => Std::IsSome,
+            "iter" if option => Std::OptionIter,
             "copied" | "cloned" if option => Std::OptionCloned,
             "is_none" if option => Std::IsNone,
             "unwrap_or" if option => Std::UnwrapOr,
@@ -1234,6 +1264,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     "std::collections::vec_deque::IntoIter",
                     "std::collections::binary_heap::Iter",
                     "std::collections::binary_heap::IntoIter",
+                    "std::option::Iter",
+                    "std::option::IntoIter",
                 ]
                 .contains(&path.as_str())
                 || self.is_str_split(ty))
@@ -1554,7 +1586,12 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
 
     pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
         let ty = self.reveal(ty.peel_refs());
-        self.is_user_iterator(ty)
+        // std's sources that may never end (ADR 0128).
+        let endless = matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
+            && ["std::iter::Repeat", "std::iter::RepeatWith", "std::iter::Successors", "std::iter::FromFn"]
+                .contains(&self.tcx.def_path_str(adt.did()).as_str()));
+        endless
+            || self.is_user_iterator(ty)
             || self.is_generic_iter(ty)
             || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
     }

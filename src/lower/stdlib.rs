@@ -1,5 +1,6 @@
 //! Lower standard-library formatting and iterator behavior. Recognition is separate.
 
+use super::combinators::IterComb;
 use super::format_spec::Spec;
 use super::representation::Num;
 use super::{FnCx, R, Std};
@@ -501,8 +502,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "`rev` of an iterator of the crate's own"));
         }
         if let Std::IterComb(comb) = known {
-            let rest = self.operands(&args[1..], out)?.into_iter();
-            return self.iter_comb(comb, items, rest, generic_args, receiver_ty, lazy, span, out);
+            let mut rest = self.operands(&args[1..], out)?;
+            // What's chained or zipped on: one of the crate's own as a JS iterator.
+            if matches!(comb, IterComb::Chain | IterComb::Zip) {
+                let other = std::mem::replace(&mut rest[0], Expr::undefined());
+                rest[0] = self.iter_source(other, self.thir[args[1]].ty, span)?;
+            }
+            return self.iter_comb(
+                comb,
+                items,
+                rest.into_iter(),
+                generic_args,
+                receiver_ty,
+                lazy,
+                span,
+                out,
+            );
         }
         let items = match known {
             _ if !lazy => items,
@@ -573,6 +588,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // them doesn't change the other.
             Std::Collect => {
                 let fresh = match &items.kind {
+                    js::ExprKind::Array(_) => true,
                     js::ExprKind::Call(callee, _) => match &callee.kind {
                         js::ExprKind::Member(_, name) => [
                             "map",

@@ -171,6 +171,7 @@ pub(super) fn iterator(name: &str) -> Option<IterComb> {
         "nth" => IterComb::Nth,
         "find_map" => IterComb::FindMap,
         "partition" => IterComb::Partition,
+        "unzip" => IterComb::Unzip,
         _ => return None,
     })
 }
