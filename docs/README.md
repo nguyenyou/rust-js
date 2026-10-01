@@ -215,6 +215,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0131 A temporary taken apart owns what its pattern leaves](decisions/0131-temporaries-taken-apart.md)
 - [0132 A `Box` from its value, `Default` of a `&str`, `type_name`, and standard streams](decisions/0132-std-odds.md)
 - [0133 Impls whose names would be the same are named by their arguments](decisions/0133-impl-names-apart.md)
+- [0134 A `let` of a pattern without a value declares each of its variables](decisions/0134-let-patterns-without-values.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

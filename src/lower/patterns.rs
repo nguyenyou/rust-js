@@ -348,8 +348,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             },
             // `let (q, r) = divmod(a, b);`
             _ => {
+                // `let (a, b);`, which a destructuring assignment gives values
+                // later: each of its variables is a `let a;` of its own.
                 let Some(init) = init else {
-                    return Err(self.unsupported(pat.span, "this `let` pattern without a value"));
+                    let mut bindings = Vec::new();
+                    let mut other = false;
+                    pat.walk_always(|p| match p.kind {
+                        PatKind::Binding { subpattern: None, .. } => bindings.push(p.clone()),
+                        PatKind::Binding { .. } => other = true,
+                        _ => {}
+                    });
+                    if other {
+                        return Err(self.unsupported(pat.span, "this `let` pattern without a value"));
+                    }
+                    for binding in bindings {
+                        self.lower_let(&binding, None, binding.span, out)?;
+                    }
+                    return Ok(());
                 };
                 // `let (count, set_count) = use_state(0);` is
                 // `const [count, setCount] = useState(0);`. A place is taken

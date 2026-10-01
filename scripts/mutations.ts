@@ -2372,6 +2372,14 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","impl_names"],
   },
   {
+    name: "let-pattern-uninit-refused",
+    breaks: "`let (a, b);`, a pattern without a value, is refused",
+    file: "src/lower/patterns.rs",
+    find: "                    if other {\n                        return Err(self.unsupported(pat.span, \"this `let` pattern without a value\"));",
+    replace: "                    if true {\n                        return Err(self.unsupported(pat.span, \"this `let` pattern without a value\"));",
+    tests: ["test/corpus.test.ts","-t","destructuring_assignment"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",
