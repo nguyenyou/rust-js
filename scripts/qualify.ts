@@ -107,7 +107,7 @@ export function viteApp(dist: string, logs: string): Suite {
     writeFileSync(join(app, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>\n');
     mkdirSync(join(app, "src"));
     writeFileSync(join(app, "src", "main.jsx"), 'import { createRoot } from "react-dom/client";\nimport { App } from "./App.jsx";\n\ncreateRoot(document.getElementById("root")).render(<App />);\n');
-    writeFileSync(join(app, "src", "App.rs"), '#![allow(non_snake_case)]\nuse react::Element;\n\npub fn App() -> Element {\n    jsx! { <main><h1>{"Qualified"}</h1></main> }\n}\n');
+    writeFileSync(join(app, "src", "App.rs"), '#![allow(non_snake_case)]\nuse react::{Element, jsx};\n\npub fn App() -> Element {\n    jsx! { <main><h1>{"Qualified"}</h1></main> }\n}\n');
     const install = runSync([process.execPath, "install", "--ignore-scripts"], app, installTimeout, { ...cleared, BUN_INSTALL_CACHE_DIR: join(app, "bun-cache") });
     log.push(install.stdout, install.stderr);
     if (install.code !== 0) problems.push(`the app didn't install: ${stopped(install, installTimeout) ?? install.stderr.trim().split("\n").at(-1)}`);

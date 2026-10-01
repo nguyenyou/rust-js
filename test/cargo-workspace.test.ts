@@ -4,7 +4,7 @@
 // Cargo would. `check`, a native binary calling `frontend::main`, is the oracle.
 
 import { beforeAll, expect, test } from "bun:test";
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { node } from "./programs";
 import { buildCompiler, buildSerde, compiler, fixture, root, run } from "./support";
@@ -76,7 +76,13 @@ test("a Cargo build of rust-js's crates is done when their JS is, and not before
   expect(dirname(dirname(js))).toBe(join(deps, "rust-js"));
   const recorded = readdirSync(deps).filter((f) => f.startsWith("validation-") && f.endsWith(".d")).map((f) => readFileSync(join(deps, f), "utf8"));
   expect(recorded.length).toBe(1);
-  expect(recorded[0].split("\n")[0]).toEndWith(` ${compiler.replaceAll(" ", "\\ ")}`);
+  // The compiler that ran, which a change to makes Cargo build again: an
+  // installed launcher's is the binary beside it, which it runs.
+  const launcher = readFileSync(compiler).subarray(0, 2).toString() === "#!";
+  const binary = launcher ? join(dirname(realpathSync(compiler)), "compiler") : compiler;
+  // A dep-info file's last path, its spaces escaped, `\ `.
+  const named = recorded[0].split("\n")[0].split(/(?<!\\) /).at(-1)!.replaceAll("\\ ", " ");
+  expect(realpathSync(named)).toBe(realpathSync(binary));
   // A library's JS gone from a build Cargo has as done: refused, not given to
   // an app that imports it, until Cargo is told to build it again. Found in
   // review.

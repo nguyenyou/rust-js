@@ -5,18 +5,22 @@
 // version.
 
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCompiler, compiler, fixture, root, run } from "./support";
 
+// A distribution qualification gives (ADR 0094), its compiler an installed
+// launcher, which isn't packed; else one is packed here.
+const supplied = process.env.RUST_JS_DISTRIBUTION;
 const version = (Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
 
 test("each package a release publishes is publishable, at the compiler's version", () => {
   buildCompiler();
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "rust-js-release-")));
   const bundle = join(dir, "distribution");
-  run([process.execPath, "scripts/package-distribution.ts", compiler, bundle], 600_000);
+  if (supplied) cpSync(supplied, bundle, { recursive: true });
+  else run([process.execPath, "scripts/package-distribution.ts", compiler, bundle], 600_000);
   run([process.execPath, "scripts/package-create.ts", join(bundle, "create.tgz")]);
   const names: string[] = [];
   for (const file of ["runtime.tgz", "resources.tgz", "native.tgz", "build.tgz", "vite-plugin.tgz", "create.tgz"]) {
