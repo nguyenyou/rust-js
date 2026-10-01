@@ -207,12 +207,72 @@ pub(super) fn own_bounds<'tcx>(
 /// defaults: `circleShape`, `metersFromF64` for `impl From<f64> for
 /// Meters`, and `versionPartialEq`, whose `Rhs` is `Self` (ADR 0052).
 pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
+    let named = |id: DefId, full: bool| {
+        let tr = tcx.impl_trait_ref(id).instantiate_identity().skip_normalization();
+        if !full {
+            return format!(
+                "{}{}",
+                lower_first(&js_word(&type_word(tcx, tr.self_ty()))),
+                trait_word(tcx, tr)
+            );
+        }
+        let mut name = lower_first(&js_word(&full_type_word(tcx, tr.self_ty())));
+        name.push_str(tcx.item_name(tr.def_id).as_str());
+        for arg in tr.args.types().skip(1) {
+            let word = js_word(&full_type_word(tcx, arg));
+            let mut chars = word.chars();
+            name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
+            name.extend(chars);
+        }
+        name
+    };
+    let name = named(id, false);
+    // Two impls of a trait for one type with other arguments, `Vec<i32>`'s and
+    // `Vec<String>`'s: each named with the arguments, its type's and its
+    // trait's, `vecI32Describe`; and, two types of one name, local to two
+    // functions, numbered in the order they're declared.
     let tr = tcx.impl_trait_ref(id).instantiate_identity().skip_normalization();
-    format!(
-        "{}{}",
-        lower_first(&js_word(&type_word(tcx, tr.self_ty()))),
-        trait_word(tcx, tr)
-    )
+    let mut alike: Vec<DefId> = tcx
+        .all_impls(tr.def_id)
+        .filter(|&other| other.krate == id.krate && named(other, false) == name)
+        .collect();
+    if alike.len() < 2 {
+        return name;
+    }
+    let full = named(id, true);
+    alike.retain(|&other| named(other, true) == full);
+    alike.sort_by_key(|other| other.index);
+    match alike.iter().position(|&other| other == id) {
+        Some(at) if at > 0 => format!("{full}{}", at + 1),
+        _ => full,
+    }
+}
+
+/// `type_word`, with the type's arguments other than their defaults:
+/// `VecI32` of `Vec<i32>`, whose allocator is the default.
+fn full_type_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
+    match ty.kind() {
+        ty::Adt(adt, args) => {
+            let mut name = tcx.item_name(adt.did()).to_string();
+            let generics = tcx.generics_of(adt.did());
+            for (param, arg) in generics.own_params.iter().zip(args.iter()) {
+                let Some(arg) = arg.as_type() else { continue };
+                if param
+                    .default_value(tcx)
+                    .map(|d| d.instantiate(tcx, args).skip_normalization())
+                    == Some(arg.into())
+                {
+                    continue;
+                }
+                let word = js_word(&full_type_word(tcx, arg));
+                let mut chars = word.chars();
+                name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
+                name.extend(chars);
+            }
+            name
+        }
+        _ => type_word(tcx, ty),
+    }
 }
 
 /// A trait's supertraits, as its dictionary has them: each one's key, its
