@@ -53,11 +53,6 @@ for (const field of ["dependencies", "devDependencies"]) {
     if (spec.startsWith("workspace:")) manifest[field][name] = dist ? archive(name) : self.version;
   }
 }
-// The app's own, so every package manager has it at node_modules/@rust-js/resources,
-// where its Cargo.toml has the crates the app uses.
-manifest.devDependencies["@rust-js/resources"] = dist ? archive("@rust-js/resources") : self.version;
-const cargo = join(app, "Cargo.toml");
-writeFileSync(cargo, readFileSync(cargo, "utf8").replaceAll('path = "../../', 'path = "node_modules/@rust-js/resources/'));
 // The compiler is the app's own, as the plugin finds it, from the app: a
 // release's or a distribution's. A distribution's `@rust-js/build` is the
 // app's too, and the plugin's, where a release's is the registry's.

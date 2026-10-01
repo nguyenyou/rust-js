@@ -38,10 +38,14 @@ version that compiled. The browser's source map points at `App.rs`.
   else { "text-sky-500" }`, not a string built from pieces.
 - `rustJs()` comes first in `vite.config.js`, before `tailwindcss()`, so that
   a save refreshes the page instead of reloading it.
-- **`Cargo.toml` is for your editor** and `cargo check`: rust-analyzer finds
-  `react`, `webapi` and `js` in `node_modules/@rust-js/resources`, once the
-  app is installed. It doesn't look inside `jsx!`, so a variable used only in
-  JSX shows as unused there.
+- **The app is a Cargo package**, `Cargo.toml`, which the Vite plugin builds
+  with Cargo, and your editor's rust-analyzer checks. Its crates, `react`,
+  `webapi` and `js`, are npm packages, `@rust-js/react` and the others, named
+  in `Cargo.toml` by version: `rust-js-patch`, the app's `postinstall`, tells
+  Cargo they're in `node_modules`, in `.cargo/config.toml`. A binding of another
+  library, `@rust-js-bindings/canvas-confetti`, is added the same way: its npm
+  package, and a line in `Cargo.toml`. rust-analyzer doesn't look inside
+  `jsx!`, so a variable used only in JSX shows as unused there.
 - **`Cargo.toml` also sets how the JS is laid out**, by oxfmt's options,
   `[package.metadata.rust-js.format]` with `printWidth = 120`, say, and can run
   your own tools on it, a formatter or a linter, in

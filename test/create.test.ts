@@ -3,7 +3,7 @@
 // directory, with rust-js's packages at the release's version.
 
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { runSync } from "./child";
 import { fixture, root, run } from "./support";
@@ -68,21 +68,33 @@ test("a packed @rust-js/create makes the vite-react example's app, named for its
   expect(made.stdout).toContain("bun install");
 });
 
-// An editor's rust-analyzer, or a `cargo check`, checks the app's Rust as
-// Cargo does: its Cargo.toml has the crates it uses where the app installs
-// them, in @rust-js/resources, as the packed package has them.
-test("a created app's Cargo.toml checks with the crates @rust-js/resources has", () => {
+// An app is a Cargo package, which Vite builds in Cargo's way (ADR 0101),
+// and an editor checks: its crates, `js`, `webapi` and `react`, are npm
+// packages, named in its Cargo.toml by version, which `rust-js-patch`, as
+// the app's `postinstall`, tells Cargo are in node_modules.
+test("a created app has its crates from npm, which its patch tells Cargo where they are", () => {
   const index = packed();
   const cwd = fixture("create-cargo");
   expect(runSync([process.execPath, index, "app"], cwd, 60_000).code).toBe(0);
   const app = join(cwd, "app");
-  expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).devDependencies["@rust-js/resources"]).toBe(version);
-  // As a package manager installs it: the packed package, unpacked.
-  const scope = join(app, "node_modules", "@rust-js");
-  mkdirSync(scope, { recursive: true });
-  run([process.execPath, "scripts/package-resources.ts", join(cwd, "resources.tgz")]);
-  run(["tar", "-xzf", join(cwd, "resources.tgz"), "-C", scope]);
-  renameSync(join(scope, "package"), join(scope, "resources"));
+  const manifest = JSON.parse(readFileSync(join(app, "package.json"), "utf8"));
+  const crate = (dir: string) => readFileSync(join(root, dir, "Cargo.toml"), "utf8").match(/^version = "([^"]+)"/m)![1];
+  expect(manifest.dependencies).toMatchObject({ "@rust-js/builtins": crate("builtins"), "@rust-js/webapi": crate("webapi"), "@rust-js/react": crate("react") });
+  expect(manifest.devDependencies["@rust-js/build"]).toBe(version);
+  expect(manifest.devDependencies["@rust-js/resources"]).toBeUndefined();
+  expect(manifest.scripts.postinstall).toBe("rust-js-patch");
+  const cargoToml = readFileSync(join(app, "Cargo.toml"), "utf8");
+  expect(cargoToml).not.toContain('path = "../');
+  expect(cargoToml).toContain(`react = { package = "rust-js-react", version = "~${crate("react")}" }`);
+  // As a package manager installs them: the packed packages, unpacked.
+  const packs = fixture("create-crates");
+  run([process.execPath, "scripts/package-npm-crates.ts", packs], 600_000);
+  for (const name of ["builtins", "webapi", "react"]) {
+    const at = join(app, "node_modules", "@rust-js", name);
+    mkdirSync(at, { recursive: true });
+    run(["tar", "-xzf", join(packs, `${name}.tgz`), "-C", at, "--strip-components", "1"]);
+  }
+  expect(runSync([process.execPath, join(root, "tooling", "patch.js"), app], app, 60_000).code).toBe(0);
   const check = runSync(["cargo", "check", "--offline", "--quiet", "--manifest-path", join(app, "Cargo.toml")], app, 300_000, { RUSTC_BOOTSTRAP: undefined });
   // No error, and no warning of the crates it uses: the app's are of what's
   // used only in JSX, which react's placeholder `jsx!` doesn't look inside.
@@ -90,7 +102,7 @@ test("a created app's Cargo.toml checks with the crates @rust-js/resources has",
   expect(warnings.filter((line) => !/^warning: (unused variable: |static `\w+` is never used)/.test(line))).toEqual([]);
   expect(check.stderr).not.toMatch(/`rust-js-\w+` \(lib\) generated/);
   expect(check.code).toBe(0);
-}, 300_000);
+}, 900_000);
 
 // Before a release is on npm: the packages `pack:distribution` made, each
 // the app's, and `@rust-js/build` the plugin's too, as Qualify installs them.
@@ -131,8 +143,8 @@ test("--local makes the app install a distribution's packages", () => {
     "@rust-js/vite-plugin": file("vite-plugin.tgz"),
     "@rust-js/build": file("build.tgz"),
     "@rust-js/native": file("native.tgz"),
-    "@rust-js/resources": file("resources.tgz"),
   });
+  expect(manifest.devDependencies["@rust-js/resources"]).toBeUndefined();
   expect(manifest.overrides).toEqual({ "@rust-js/build": file("build.tgz") });
 });
 

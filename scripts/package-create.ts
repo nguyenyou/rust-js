@@ -1,7 +1,7 @@
 // Pack @rust-js/create (ADR 0105): its script, and as its template the
 // vite-react example's files as git has them, with create/app's in
 // place of the example's own. This never publishes to a registry.
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
@@ -33,6 +33,25 @@ try {
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(join(root, overrides.has(path) ? join(app, path) : file), target);
   }
+  // The crates the example has by path, from this checkout, are an app's npm
+  // packages, each at its crate's version, named in its Cargo.toml by
+  // version: its `postinstall`, rust-js-patch, tells Cargo where they are.
+  const crates = [["builtins", "@rust-js/builtins"], ["webapi", "@rust-js/webapi"], ["react", "@rust-js/react"]] as const;
+  const crateVersion = (dir: string) => (Bun.TOML.parse(readFileSync(join(root, dir, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version;
+  const cargoPath = join(staging, "template", "Cargo.toml");
+  let cargo = readFileSync(cargoPath, "utf8");
+  for (const [dir] of crates) {
+    const byPath = `path = "../../${dir}"`;
+    if (!cargo.includes(byPath)) throw new Error(`the example's Cargo.toml has no ${byPath}`);
+    cargo = cargo.replace(byPath, `version = "~${crateVersion(dir)}"`);
+  }
+  writeFileSync(cargoPath, cargo);
+  const templatePath = join(staging, "template", "package.json");
+  const template = JSON.parse(readFileSync(templatePath, "utf8"));
+  for (const [dir, name] of crates) template.dependencies[name] = crateVersion(dir);
+  template.devDependencies["@rust-js/build"] = "workspace:*";
+  template.scripts = { ...template.scripts, postinstall: "rust-js-patch" };
+  writeFileSync(templatePath, JSON.stringify(template, null, 2) + "\n");
   mkdirSync(dirname(output), { recursive: true });
   run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", output], staging);
   console.log(output);

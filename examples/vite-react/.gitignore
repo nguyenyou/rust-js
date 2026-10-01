@@ -27,7 +27,9 @@ dist-ssr
 # ReScript recommends for its JS. Its source map isn't.
 /src/App.jsx.map
 
-# What an editor's `cargo check` of Cargo.toml writes. Its crates are paths,
-# which a lockfile pins nothing of.
+# What Cargo writes, and the patch rust-js-patch writes, of what's
+# installed: its crates are npm packages, which the lockfile of the app's
+# package manager pins.
 /target
 /Cargo.lock
+/.cargo

@@ -1,7 +1,7 @@
-# src/App.rs as a crate, for an editor's rust-analyzer and a `cargo check`,
-# which check it with a plain rustc (ADR 0114). rust-js's build of it is the
-# Vite plugin's. `bun create @rust-js` has the crates where the app installs
-# them, in @rust-js/resources.
+# The app's crate, src/App.rs, which the Vite plugin builds with Cargo, and
+# an editor's rust-analyzer checks (ADR 0114). Its crates are npm packages,
+# named by version, which rust-js-patch, the app's `postinstall`, tells
+# Cargo are in node_modules; rust-js's own example has them by path.
 [package]
 name = "app"
 version = "0.0.0"
