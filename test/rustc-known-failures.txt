@@ -111,12 +111,12 @@ coercion/any-trait-object-debug-12744.rs	error: rust-js does not support `{:?}` 
 coercion/basic-ptr-coercions.rs	error: rust-js does not support values of type `*const isize` yet
 coercion/box-dyn-to-ref-dyn.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
 coercion/coerce-overloaded-autoderef.rs	error: rust-js does not support `&mut` to a `&mut &mut std::boxed::Box<T>` yet
-coercion/coerce-unify.rs	error: rust-js does not support this expression yet
+coercion/coerce-unify.rs	error: rust-js does not support `Default` of `&str` yet
 coercion/unsafe-coercion.rs	error: rust-js does not support this expression yet
 collections/hashmap/hashmap-path-key.rs	error: rust-js does not support values of type `&std::path::Path` yet
 collections/vecdeque-append-operation-54477.rs	error: rust-js does not support calling `std::collections::VecDeque::<T, A>::append` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this `const` block yet
-const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support this expression yet
+const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support calling `std::any::type_name` yet
 const-generics/const-generic-type_name.rs	error: rust-js does not support calling `std::any::type_name` yet
 const-generics/defaults/const-param-as-default-value.rs	error: rust-js does not support `Default` of `[u8; 13]` yet
 const-generics/defaults/rp_impl_trait.rs	error: rust-js does not support const generics of traits and their methods yet
@@ -254,7 +254,6 @@ functions-closures/clone-closure.rs	error: rust-js does not support cloning a cl
 functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support constants of type `fn(u8) -> u8` yet
 functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics of type `std::option::Option<fn(isize) -> isize>` yet
-functions-closures/fn-item-type-zero-sized.rs	error: rust-js does not support this expression yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support const generics of traits and their methods yet
 generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
@@ -296,7 +295,6 @@ liveness/var-defined-after-early-return.rs	error: rust-js does not support value
 macros/colorful-write-macros.rs	error: rust-js does not support user implementations of this standard or external trait yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 macros/try-macro.rs	error: rust-js does not support calling `std::convert::From::from` yet
-match/match-on-negative-integer-ranges.rs	error: rust-js does not support this expression yet
 match/match-ref-mut-stability.rs	error: rust-js does not support values of type `*const i32` yet
 match/struct-reference-patterns-12285.rs	error: rust-js does not support values of type `std::option::Option<&S>` yet
 methods/inherent-method-resolution-on-deref-type-53843.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
@@ -324,7 +322,6 @@ never_type/regress/never-type-fallback-option.rs	error: rust-js does not support
 nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 nll/issue-47589.rs	error: rust-js does not support values of type `<Resources as ResourcesTrait<'_>>::DescriptorSet` yet
 nll/issue-48623-closure.rs	error: rust-js does not support a `&mut` of this in a variable yet
-nll/issue-50343.rs	error: rust-js does not support this expression yet
 nll/issue-53123-raw-pointer-cast.rs	error: rust-js does not support values of type `*mut T` yet
 numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calling `core::f64::<impl f64>::signum` yet
 numbers-arithmetic/float-int-invalid-const-cast.rs	error: rust-js does not support constants of type `u128` yet
@@ -380,7 +377,6 @@ rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support a
 rfcs/rfc-2091-track-caller/tracked-trait-impls.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support constants of type `&'static (dyn Tracked + 'static)` yet
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
-rfcs/rfc-2302-self-struct-ctor/rfc-2302-self-struct-ctor.rs	error: rust-js does not support this expression yet
 rfcs/rfc-2361-dbg-macro/dbg-macro-expected-behavior.rs	error: rust-js does not support `{:#?}` yet
 rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<std::option::Option<i32>>>` yet
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
@@ -436,7 +432,6 @@ traits/encoder-trait-bounds-regression.rs	error: rust-js does not support callin
 traits/error-trait-object-from-string.rs	error: rust-js does not support values of type `dyn std::error::Error + std::marker::Send + std::marker::Sync` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support implementation evidence for `<dyn Bar as Foo>` yet
 traits/infer-from-object-issue-26952.rs	error: rust-js does not support implementation evidence for `<dyn Trait<A> as Trait<A>>` yet
-traits/issue-18412.rs	error: rust-js does not support this expression yet
 traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops::Add::add` yet
 traits/issue-43132.rs	error: rust-js does not support implementation evidence for `<dyn Future<Error = u32> as Future>` yet
 traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `size_of` of a type parameter yet
@@ -458,8 +453,6 @@ traits/trait-upcasting/struct.rs	error: rust-js does not support `{:?}` of a `dy
 traits/with-bounds-default.rs	error: rust-js does not support this call, for an `Option` of a generic type yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet
-type-alias-enum-variants/enum-variant-generic-args-pass.rs	error: rust-js does not support this expression yet
-type-alias-enum-variants/type-alias-enum-variants-pass.rs	error: rust-js does not support this expression yet
 type-inference/issue-113283-alllocator-trait-eq.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
 type/type-name-basic.rs	error: rust-js does not support calling `std::any::type_name` yet
 typeck/issue-18937-1.rs	error: rust-js does not support values of type `*mut [U]` yet
