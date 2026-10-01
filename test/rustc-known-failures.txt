@@ -40,7 +40,6 @@ associated-types/issue-47139-2.rs	error: rust-js does not support this method of
 associated-types/issue-54467.rs	error: rust-js does not support values of type `<<() as Stream>::Error as ParseError<char>>::Output` yet
 associated-types/nested-fnonce-output-projection.rs	error: rust-js does not support values of type `<{closure@<case>/nested-fnonce-output-projection.rs:13:21: 13:23} as std::ops::FnOnce<()>>::Output` yet
 associated-types/object-method-numbering.rs	error: rust-js does not support implementation evidence for `<dyn SomeTrait<SomeType = i32> as SomeTrait>` yet
-associated-types/project-defer-unification.rs	error: rust-js does not support `zip` of an iterator of the crate's own yet
 associated-types/recursive-enum-with-assoc-type-selfref.rs	error: rust-js does not support values of type `<BP as Parameters>::SelfRef` yet
 async-await/async-closures/type-name.rs	error: rust-js does not support calling `std::any::type_name_of_val` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -49,7 +48,6 @@ async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not supp
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
 autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::boxed::Box<{closure@<case>/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>) is !null` yet
 autoref-autoderef/deref-chain-method-calls-13264.rs	error: rust-js does not support values of type `*const Node` yet
-bench/issue-32062.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of type `*const usize` yet
 binding/match-pipe-binding.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 binding/match-ref-binding-in-guard-3256.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
@@ -185,7 +183,6 @@ consts/static-raw-pointer-interning2.rs	error: rust-js does not support statics 
 consts/std/iter.rs	error: rust-js does not support constants of type `std::iter::Empty<u32>` yet
 consts/tuple-struct-constructors.rs	error: rust-js does not support constants of type `std::num::NonZero<u64>` yet
 consts/zst_no_llvm_alloc.rs	error: rust-js does not support constants of type `*const ()` yet
-deref/deref-in-for-loop.rs	error: rust-js does not support iterating over `std::option::Iter<'_, &usize>` yet
 derives/debug/derive-debug.rs	error: rust-js does not support values of type `*const (dyn std::marker::Send + 'static)` yet
 derives/default/deriving-default-box.rs	error: rust-js does not support `Default` of `[bool]` yet
 derives/derive-hash-on-unit-struct.rs	error: rust-js does not support calling `std::hash::SipHasher::new` yet
@@ -225,7 +222,6 @@ drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not suppo
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/trait-object-drop-10802.rs	error: rust-js: generated trait implementation name `boxMyTrait` collides; put the implementations in separate modules
 dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support this `let` pattern without a value yet
-dropck/dropck-resolves-associated-type-in-field.rs	error: rust-js does not support calling `std::iter::once` yet
 dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<<Resources as ResourcesTrait<'_>>::DescriptorSet>) is !null` yet
 dropck/issue-34053.rs	error: rust-js does not support a temporary with a destructor here yet
 dst/dst-coerce-rc.rs	error: rust-js does not support values of type `(*const std::rc::RcInner<i32>) is !null` yet
@@ -246,7 +242,6 @@ fn/dyn-fn-alignment.rs	error: rust-js does not support values of type `*const A`
 for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support a temporary with a destructor here yet
 for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 for-loop-while/for-loop-lifetime-of-unbound-values.rs	error: rust-js does not support moving part of a temporary with a destructor yet
-for-loop-while/for-loop-mut-ref-element.rs	error: rust-js does not support calling `std::iter::once` yet
 for-loop-while/foreach-external-iterators-hashmap-break-restart.rs	error: rust-js does not support calling `std::iter::Iterator::by_ref` yet
 for-loop-while/issue-69841.rs	error: rust-js does not support calling `std::hint::unreachable_unchecked` yet
 for-loop-while/label_break_value.rs	error: rust-js does not support labeled blocks yet
@@ -269,10 +264,9 @@ generic-associated-types/iterable.rs	error: rust-js does not support generic ass
 generic-associated-types/streaming_iterator.rs	error: rust-js does not support generic associated types yet
 higher-ranked/trait-bounds/assoc-type-projection-method.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 higher-ranked/trait-bounds/hrtb-closure-lifetime-infer.rs	error: rust-js does not support `{:?}` of a `std::marker::PhantomData<&()>` yet
-impl-trait/closure-in-impl-trait-arg.rs	error: rust-js does not support calling `std::iter::empty` yet
-impl-trait/closure-in-impl-trait.rs	error: rust-js does not support calling `std::iter::empty` yet
+impl-trait/closure-in-impl-trait.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = [(); 4]>` yet
 impl-trait/example-st.rs	error: rust-js does not support this method of an `Option` of a generic type yet
-impl-trait/issues/issue-49685.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
+impl-trait/issues/issue-49685.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
@@ -280,7 +274,6 @@ inference/matcher-lifetime-inference-14919.rs	error: rust-js does not support a 
 intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32::<impl f32>::exp2` yet
 intrinsics/volatile-composite-types.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
 issues/issue-30081.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
-issues/issue-30371.rs	error: rust-js does not support iterating over `std::option::Option<i32>` yet
 issues/issue-34503.rs	error: rust-js does not support comparing `main::X`s yet
 issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_raw_parts` yet
 issues/issue-42148.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
@@ -296,7 +289,7 @@ iterators/iter-map-fold-type-length.rs	error: rust-js does not support `std::ite
 layout/aggregate-lang/struct-offsets.rs	error: rust-js does not support values of type `u128` yet
 layout/issue-112048-unsizing-field-order.rs	error: rust-js does not support a `GcNode<dyn std::fmt::Debug>`, whose last field is a `dyn` yet
 layout/null-pointer-optimization.rs	error: rust-js does not support `{:?}` of a `fn()` yet
-let-else/let-else-drop-order.rs	error: rust-js does not support calling `std::iter::once` yet
+let-else/let-else-drop-order.rs	error: rust-js does not support taking apart a temporary with a destructor yet
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
 lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
