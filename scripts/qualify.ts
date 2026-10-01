@@ -237,15 +237,17 @@ async function main() {
       if (JSON.stringify(JSON.parse(identity.stdout || "null")) !== JSON.stringify(manifest.compiler)) {
         problems.push(`the installed compiler says it's ${identity.stdout.trim() || identity.stderr.trim()}, and the distribution ${JSON.stringify(manifest.compiler)}`);
       } else {
-        // Every test file, through the installed launcher; the package
-        // test packs a distribution of its own, so it takes the binary the
-        // one installed has.
+        // Every test file, through the installed launcher; the tests of
+        // what's packed, the package test and the release's, pack a
+        // distribution of their own, or take this one, so they take the
+        // binary the one installed has, and this distribution.
+        const packing = ["packages.test.ts", "release.test.ts"];
         const files = readdirSync(join(root, "test"))
-          .filter((file) => file.endsWith(".test.ts") && file !== "packages.test.ts")
+          .filter((file) => file.endsWith(".test.ts") && !packing.includes(file))
           .sort()
           .map((file) => `test/${file}`);
         suites.push(suite("installed-launcher", files, launcher, reports));
-        suites.push(suite("packaged-binary", ["test/packages.test.ts"], binary, reports, { RUST_JS_DISTRIBUTION: dist }));
+        suites.push(suite("packaged-binary", packing.map((file) => `test/${file}`), binary, reports, { RUST_JS_DISTRIBUTION: dist }));
         suites.push(viteApp(dist, reports));
       }
     }
