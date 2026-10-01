@@ -4,11 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Build preparation, manifests, and publication for rust-js hosts.",
+  "bin": {
+    "rust-js-patch": "./patch.js"
+  },
   "exports": {
     "./build": "./build.js",
     "./manifest": "./manifest.js",
     "./publish": "./publish.js",
-    "./cargo": "./cargo.js"
+    "./cargo": "./cargo.js",
+    "./patch": "./patch.js"
   },
   "files": [
     "build.js",
@@ -16,6 +20,7 @@
     "manifest.js",
     "publish.js",
     "README.md",
-    "cargo.js"
+    "cargo.js",
+    "patch.js"
   ]
 }

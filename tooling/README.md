@@ -32,6 +32,15 @@ preparation, `/manifest` for build-result validation, and `/publish` for WASI
 artifact publication. Vite and the playground declare this package dependency;
 neither imports tooling through a path outside its own package.
 
+`/patch`, and its command, `rust-js-patch [app-dir]`, tell an app's Cargo where
+the crates its npm packages have are: each package with `"rust-js": { "crate" }`,
+as `@rust-js/builtins` and `@rust-js/webapi` have, found as Node finds it, in
+npm's, bun's or pnpm's layout, is a `[patch.crates-io]` entry in the app's
+`.cargo/config.toml`, between `# rust-js: begin` and `# rust-js: end`. An app
+runs it as its `postinstall`, so Cargo and its editor have them once it's
+installed. A crate installed twice, which would be two of each of its types, is
+refused, with who asked for each.
+
 Both host packages remain private while distribution is being developed. Local
 tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
 The package test installs these tarballs with Bun into an independent application
