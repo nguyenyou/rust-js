@@ -13,7 +13,7 @@ associated-consts/assoc-const-in-static-array-size.rs	error: rust-js does not su
 associated-consts/associated-const-type-parameters.rs	error: rust-js does not support a generic impl's constant of its parameters yet
 associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support this constant yet
 associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support this constant yet
-associated-type-bounds/rpit.rs	error: rust-js: generated trait implementation name `aTr1` collides; put the implementations in separate modules
+associated-type-bounds/rpit.rs	error: rust-js does not support values of type `<impl Tr1 + std::clone::Clone + std::iter::Iterator + std::ops::Add<u8> + std::convert::Into<u8> as Tr1>::As1` yet
 associated-type-bounds/struct-bounds.rs	error: rust-js does not support values of type `<&str as Tr1>::As1` yet
 associated-type-bounds/union-bounds.rs	error: rust-js does not support values of type `_Un7<'_, '_, T>` yet
 associated-types/assoc-type-in-extern-fn-signature.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
@@ -211,7 +211,7 @@ drop/or-pattern-drop-order.rs	error: rust-js does not support calling `std::cell
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
-drop/trait-object-drop-10802.rs	error: rust-js: generated trait implementation name `boxMyTrait` collides; put the implementations in separate modules
+drop/trait-object-drop-10802.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support this `let` pattern without a value yet
 dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<<Resources as ResourcesTrait<'_>>::DescriptorSet>) is !null` yet
 dropck/issue-34053.rs	error: rust-js does not support a temporary with a destructor here yet
@@ -290,10 +290,7 @@ match/struct-reference-patterns-12285.rs	error: rust-js does not support values 
 methods/inherent-method-resolution-on-deref-type-53843.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 methods/method-mut-self-modifies-mut-slice-lvalue.rs	error: rust-js does not support `&mut` to a `&mut [u8]` yet
 methods/method-recursive-blanket-impl.rs	error: rust-js does not support a generic function given a value with a destructor yet
-methods/method-two-trait-defer-resolution-1.rs	error: rust-js: generated trait implementation name `vecfoo` collides; put the implementations in separate modules
-methods/method-two-trait-defer-resolution-2.rs	error: rust-js: generated trait implementation name `vecFoo` collides; put the implementations in separate modules
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
-methods/method-where-clause.rs	error: rust-js: generated trait implementation name `optionFoo` collides; put the implementations in separate modules
 mir/mir_adt_construction.rs	error: rust-js does not support a temporary with a destructor here yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
 mir/mir_augmented_assignments.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -413,7 +410,6 @@ traits/coercion.rs	error: rust-js does not support values of type `dyn std::io::
 traits/default-method/skip-default-method-if-normalization-fails.rs	error: rust-js does not support `&mut` to a `Self` yet
 traits/dyn-drop-principal.rs	error: rust-js does not support statics of type `&'static (dyn std::marker::Send + std::marker::Sync + 'static)` yet
 traits/dyn-trait.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
-traits/elaborate-type-region.rs	error: rust-js: generated trait implementation name `__Master_U_` collides; put the implementations in separate modules
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support calling `std::io::Write::write_fmt` yet
 traits/error-trait-object-from-string.rs	error: rust-js does not support values of type `dyn std::error::Error + std::marker::Send + std::marker::Sync` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support implementation evidence for `<dyn Bar as Foo>` yet
