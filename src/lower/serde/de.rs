@@ -160,7 +160,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(Expr::call(reader("vec"), vec![read]))
             }
             ty::Adt(_, args) if self.is_set(ty) => {
-                let read = self.json_reader(args.type_at(0), span)?;
+                let item = args.type_at(0);
+                let read = self.json_reader(item, span)?;
+                // Of items found by their value, a `$KeySet` of the array's
+                // (ADR 0121), as JSON's `set` makes a `Set`.
+                if self.is_value_key(item) && !self.is_js_key(item) {
+                    let class = self.map_class(true, Some(item));
+                    let items = Expr::call(Expr::call(reader("vec"), vec![read]), vec![Expr::var("json")]);
+                    let made = Expr::new_(class, vec![items]);
+                    return Ok(Expr::arrow(
+                        vec!["json".into()],
+                        vec![StmtKind::Return(Some(made)).at(js::Span::NONE)],
+                    ));
+                }
                 Ok(Expr::call(reader("set"), vec![read]))
             }
             ty::Adt(_, args) if self.is_map(ty) => {

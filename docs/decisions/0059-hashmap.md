@@ -1,6 +1,7 @@
 # 0059. `HashMap` is a JS `Map`, `HashSet` a `Set`, keyed by value
 
-Status: Accepted. Extends [0036](0036-iterators-and-sorting.md).
+Status: Accepted. Extends [0036](0036-iterators-and-sorting.md). Extended by
+[0121](0121-value-keys.md): a key that compares by value, a struct or a tuple.
 
 ## Context
 

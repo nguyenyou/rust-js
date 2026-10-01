@@ -92,6 +92,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
+    /// What makes a map or a set of `key`s: `Map` and `Set`, or for a key
+    /// that compares by value, `$KeyMap` and `$KeySet` (ADR 0121). One of no
+    /// key type, serde_json's `Map`, is of strings.
+    pub(super) fn map_class(&mut self, set: bool, key: Option<Ty<'tcx>>) -> Expr {
+        let by_value = key.is_some_and(|key| self.is_value_key(key) && !self.is_js_key(key));
+        let (helper, name) = match (set, by_value) {
+            (false, false) => return Expr::var("Map"),
+            (true, false) => return Expr::var("Set"),
+            (false, true) => (Helper::KeyMap, "$KeyMap"),
+            (true, true) => (Helper::KeySet, "$KeySet"),
+        };
+        self.runtime.insert(helper);
+        Expr::var(name)
+    }
+
+    /// What a call makes: a map or a set of what its key is, as its type
+    /// arguments have it, the map's among them, as `collect` and `From`
+    /// have it, or else the first, `HashMap::<K, V>::new`'s; serde_json's
+    /// `Map::new()` has none.
+    fn made(&mut self, set: bool, generic_args: ty::GenericArgsRef<'tcx>) -> Expr {
+        let map = generic_args.types().find(|&t| self.is_map(t.peel_refs()));
+        let key = match map.map(|t| t.peel_refs().kind()) {
+            Some(ty::Adt(_, args)) => args.types().next(),
+            _ => generic_args.types().next(),
+        };
+        self.map_class(set, key)
+    }
+
     /// A call of one of `op`'s kind. `discarded`: its result isn't used, so
     /// `insert` is plain `m.set(k, v)`.
     pub(super) fn map_call(
@@ -117,8 +145,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
         Ok(match op {
-            MapOp::New { set } => Expr::new_(Expr::var(if set { "Set" } else { "Map" }), Vec::new()),
-            MapOp::From { set } => Expr::new_(Expr::var(if set { "Set" } else { "Map" }), vec![arg()]),
+            MapOp::New { set } => Expr::new_(self.made(set, generic_args), Vec::new()),
+            MapOp::From { set } => {
+                let items = arg();
+                Expr::new_(self.made(set, generic_args), vec![items])
+            }
             MapOp::Insert if discarded => {
                 let (m, k, v) = (arg(), arg(), arg());
                 method(m, "set", vec![k, v])

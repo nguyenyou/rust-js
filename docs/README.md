@@ -202,6 +202,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0118 Bindings on npm only, as ReScript's are](decisions/0118-bindings-on-npm-only.md)
 - [0119 Bindings the community maintains, in one repository](decisions/0119-community-bindings.md)
 - [0120 The first npm release: 0.0.1, for macOS on Apple silicon](decisions/0120-first-npm-release.md)
+- [0121 A map keyed by a struct is a `Map` keyed by its value](decisions/0121-value-keys.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

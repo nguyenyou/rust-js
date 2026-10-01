@@ -25,12 +25,59 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Eligibility for JS Map/Set equality. A string-shaped enum alone is
     /// not enough: user equality or ordering may equate distinct variants.
     pub(super) fn is_key(&self, ty: Ty<'tcx>, ordered: bool) -> bool {
+        let peeled = ty.peel_refs();
+        let primitive = !peeled.is_unit()
+            && Num::of(peeled) != Some(Num::F64)
+            && self.is_primitive_key(peeled)
+            && !self.has_user_impl(self.partial_eq_trait(), peeled)
+            && (!ordered || !self.has_user_impl(self.ord_trait(), peeled));
+        primitive || (!ordered && self.is_value_key(ty))
+    }
+
+    /// A key a `$KeyMap` finds by its value (ADR 0121): one that isn't its
+    /// own JS key, and that a derived `Eq` compares field by field, as `$eq`
+    /// and `$key` do.
+    pub(super) fn is_value_key(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        !ty.is_unit()
-            && Num::of(ty) != Some(Num::F64)
-            && self.is_primitive_key(ty)
-            && !self.has_user_impl(self.partial_eq_trait(), ty)
-            && (!ordered || !self.has_user_impl(self.ord_trait(), ty))
+        !ty.is_unit() && !self.is_primitive_key(ty) && self.compares_by_value(ty, &mut Vec::new())
+    }
+
+    /// A key a JS `Map` finds as Rust does: a primitive one (ADR 0059), or
+    /// an `Option` of one, `undefined` or the value (ADR 0030). One found by
+    /// value that's one of these needs no `$KeyMap`.
+    pub(super) fn is_js_key(&self, ty: Ty<'tcx>) -> bool {
+        let ty = ty.peel_refs();
+        self.is_primitive_key(ty)
+            || self.option_of(ty).is_some_and(|inner| {
+                let inner = inner.peel_refs();
+                !self.boxed_payload(inner) && self.is_primitive_key(inner) && Num::of(inner) != Some(Num::F64)
+            })
+    }
+
+    fn compares_by_value(&self, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+        let ty = ty.peel_refs();
+        if seen.contains(&ty) {
+            return true;
+        }
+        seen.push(ty);
+        match ty.kind() {
+            _ if Num::of(ty) == Some(Num::F64) => false,
+            _ if ty.is_unit() => true,
+            _ if self.is_primitive_key(ty) => !self.has_user_impl(self.partial_eq_trait(), ty),
+            ty::Tuple(parts) => parts.iter().all(|t| self.compares_by_value(t, seen)),
+            ty::Array(item, _) | ty::Slice(item) => self.compares_by_value(*item, seen),
+            ty::Adt(_, args) if self.is_lang_adt(ty, LangItem::Option) || ty.is_box() || self.is_vec_like(ty) => {
+                self.compares_by_value(args.type_at(0), seen)
+            }
+            ty::Adt(adt, args) => {
+                self.is_rust_adt(adt.did())
+                    && self.recognition().derives(self.partial_eq_trait(), ty)
+                    && adt
+                        .all_fields()
+                        .all(|field| self.compares_by_value(field.ty(self.tcx, args).skip_normalization(), seen))
+            }
+            _ => false,
+        }
     }
 
     pub(super) fn is_primitive_key(&self, ty: Ty<'tcx>) -> bool {

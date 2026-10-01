@@ -1288,6 +1288,15 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             Ok(ImplSource::UserDefined(imp)) if self.trait_impls.contains(&imp.impl_def_id)
                 && self.tcx.is_automatically_derived(imp.impl_def_id))
     }
+
+    /// Is `ty`'s impl of `trait_id` a `#[derive]`d one, whether or not
+    /// rust-js lowers it: a derived `PartialEq` it never does.
+    pub(super) fn derives(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
+        let tr = ty::TraitRef::new_from_args(self.tcx, trait_id, self.args_of(trait_id, ty));
+        let tr = self.tcx.erase_and_anonymize_regions(tr);
+        matches!(self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),
+            Ok(ImplSource::UserDefined(imp)) if self.tcx.is_automatically_derived(imp.impl_def_id))
+    }
 }
 
 pub(super) fn serde_trait(tcx: TyCtxt<'_>, trait_id: DefId) -> Option<bool> {

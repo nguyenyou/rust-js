@@ -116,7 +116,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// A type rust-js compiled: the crate's own, or a library's (ADR 0100).
-    fn is_rust_adt(&self, id: DefId) -> bool {
+    pub(super) fn is_rust_adt(&self, id: DefId) -> bool {
         id.is_local() || self.krate.foreign.in_library(id)
     }
 
@@ -254,24 +254,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let value = self.clone_value(Expr::member(place, "value"), args.type_at(0), span, out)?;
                 Ok(Expr::object(vec![Prop::Field("value".into(), value)]))
             }
-            // `new Map(m)`, cloning each value that needs it; keys never do.
+            // `new Map(m)`, cloning each value that needs it, and each key: a
+            // primitive one never does, and one found by value may (ADR 0121).
             ty::Adt(_, args) if self.is_map(ty) => {
                 let set = self.is_set(ty);
+                let key = args.types().next();
+                let class = self.map_class(set, key);
+                let key = key.filter(|&k| self.is_value_key(k) && self.needs_clone(k));
                 let value = args.types().nth(1).filter(|&v| !set && self.needs_clone(v));
-                let entries = match value {
-                    Some(v) => {
-                        let clone = self.clone_value(Expr::var("value"), v, span, out)?;
-                        let pair = Expr::array(vec![Expr::var("key"), clone]);
-                        let f = Expr::arrow(
-                            vec![js::Pattern::Array(vec![Some("key".into()), Some("value".into())])],
-                            vec![StmtKind::Return(Some(pair)).at(js::Span::NONE)],
-                        );
-                        let all = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![place]);
-                        Expr::call(Expr::member(all, "map"), vec![f])
-                    }
-                    None => place,
+                if key.is_none() && value.is_none() {
+                    return Ok(Expr::new_(class, vec![place]));
+                }
+                let mut cloned = |this: &mut Self, name: &str, ty: Option<Ty<'tcx>>| match ty {
+                    Some(ty) => this.clone_value(Expr::var(name), ty, span, out),
+                    None => Ok(Expr::var(name)),
                 };
-                Ok(Expr::new_(Expr::var(if set { "Set" } else { "Map" }), vec![entries]))
+                let (params, item) = if set {
+                    (vec!["item".into()], cloned(self, "item", key)?)
+                } else {
+                    let pair = Expr::array(vec![cloned(self, "key", key)?, cloned(self, "value", value)?]);
+                    (
+                        vec![js::Pattern::Array(vec![Some("key".into()), Some("value".into())])],
+                        pair,
+                    )
+                };
+                let f = Expr::arrow(params, vec![StmtKind::Return(Some(item)).at(js::Span::NONE)]);
+                let all = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![place]);
+                Ok(Expr::new_(class, vec![Expr::call(Expr::member(all, "map"), vec![f])]))
             }
             ty::Adt(_, args) if self.is_lang_adt(ty, LangItem::Option) => {
                 let inner = args.type_at(0);
@@ -409,7 +418,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),
             _ if self.is_lang_adt(ty, LangItem::String) => Expr::str(""),
             _ if self.is_vec_like(ty) => Expr::array(Vec::new()),
-            _ if self.is_map(ty) => Expr::new_(Expr::var(if self.is_set(ty) { "Set" } else { "Map" }), Vec::new()),
+            ty::Adt(_, args) if self.is_map(ty) => {
+                let class = self.map_class(self.is_set(ty), args.types().next());
+                Expr::new_(class, Vec::new())
+            }
             ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
             ty::Adt(_, args) if std("Cell") || std("RefCell") || std("Atomic") => Expr::object(vec![Prop::Field(
                 "value".into(),

@@ -41,6 +41,9 @@ helpers! {
     Repeat,
     OrInsert,
     OrInsertWith,
+    Key,
+    KeyMap,
+    KeySet,
     SortedEntries,
     ToDigit,
     Lines,
@@ -248,6 +251,8 @@ impl Helper {
             Helper::UnwrapOk => &[Helper::Debug],
             Helper::UnwrapErr => &[Helper::Debug],
             Helper::SomeValue => &[Helper::Some],
+            Helper::KeyMap => &[Helper::Key],
+            Helper::KeySet => &[Helper::Key],
             Helper::SomeAt => &[Helper::Some],
             Helper::Pop => &[Helper::Some],
             Helper::Iterator => &[Helper::SomeValue],
@@ -926,6 +931,145 @@ function $iterator(iterator, next, boxed = false) {
       return { done: false, value: boxed ? $someValue(item) : item };
     }
   });
+}
+"#
+            }
+            // A key as a string of its value (ADR 0121): the same for two keys
+            // exactly when `$eq` finds them equal, an object's fields by name.
+            Helper::Key => {
+                r#"
+function $key(value) {
+  if (value == null) {
+    return "~";
+  }
+  switch (typeof value) {
+    case "string":
+      return JSON.stringify(value);
+    case "bigint":
+      return value + "n";
+    case "object":
+      if (Array.isArray(value)) {
+        return "[" + value.map($key).join(",") + "]";
+      }
+      return "{" + Object.keys(value).sort().map((k) => JSON.stringify(k) + ":" + $key(value[k])).join(",") + "}";
+    default:
+      return String(value);
+  }
+}
+"#
+            }
+            // A `HashMap` whose key compares by value (ADR 0121): a `Map` that
+            // keeps `[key, value]` under the key's string. `insert` of a key
+            // that's there keeps the key, as Rust's does.
+            Helper::KeyMap => {
+                r#"
+class $KeyMap extends Map {
+  constructor(entries) {
+    super();
+    if (entries) {
+      for (const [key, value] of entries) {
+        this.set(key, value);
+      }
+    }
+  }
+  get(key) {
+    const entry = super.get($key(key));
+    return entry === undefined ? undefined : entry[1];
+  }
+  set(key, value) {
+    const found = $key(key);
+    const entry = super.get(found);
+    if (entry === undefined) {
+      super.set(found, [key, value]);
+    } else {
+      entry[1] = value;
+    }
+    return this;
+  }
+  has(key) {
+    return super.has($key(key));
+  }
+  delete(key) {
+    return super.delete($key(key));
+  }
+  *entries() {
+    for (const [key, value] of super.values()) {
+      yield [key, value];
+    }
+  }
+  *keys() {
+    for (const [key] of super.values()) {
+      yield key;
+    }
+  }
+  *values() {
+    for (const [, value] of super.values()) {
+      yield value;
+    }
+  }
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+  forEach(f, that) {
+    for (const [key, value] of this.entries()) {
+      f.call(that, value, key, this);
+    }
+  }
+}
+"#
+            }
+            // A `HashSet` whose item compares by value (ADR 0121): a `Set` of
+            // the items, found by their strings.
+            Helper::KeySet => {
+                r#"
+class $KeySet extends Set {
+  #items = new Map();
+  constructor(items) {
+    super();
+    if (items) {
+      for (const item of items) {
+        this.add(item);
+      }
+    }
+  }
+  get size() {
+    return this.#items.size;
+  }
+  add(item) {
+    const found = $key(item);
+    if (!this.#items.has(found)) {
+      this.#items.set(found, item);
+    }
+    return this;
+  }
+  has(item) {
+    return this.#items.has($key(item));
+  }
+  delete(item) {
+    return this.#items.delete($key(item));
+  }
+  clear() {
+    this.#items.clear();
+  }
+  values() {
+    return this.#items.values();
+  }
+  keys() {
+    return this.#items.values();
+  }
+  *entries() {
+    for (const item of this.#items.values()) {
+      yield [item, item];
+    }
+  }
+  [Symbol.iterator]() {
+    return this.#items.values();
+  }
+  forEach(f, that) {
+    for (const item of this.#items.values()) {
+      f.call(that, item, item, this);
+    }
+  }
 }
 "#
             }

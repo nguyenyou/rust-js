@@ -190,6 +190,31 @@ pub fn report() -> String {
   });
 }
 
+// A set of structs, an array in JSON, found by value as it's read (ADR
+// 0121): two equal items are one, as serde_json's `HashSet` has them.
+test("serde: a set of structs read from JSON has each value once", async () => {
+  const dir = fixture("serde-value-set");
+  writeFileSync(join(dir, "cases.rs"), `#[derive(Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Point { pub x: i32, pub y: i32 }
+pub fn report() -> String {
+    let set: std::collections::HashSet<Point> =
+        serde_json::from_str(r#"[{"x":1,"y":2},{"y":2,"x":1},{"x":3,"y":4}]"#).unwrap();
+    let one: std::collections::HashSet<Point> = serde_json::from_str(r#"[{"x":5,"y":6},{"x":5,"y":6}]"#).unwrap();
+    format!(
+        "{} {} {} {}",
+        set.len(),
+        set.contains(&Point { x: 1, y: 2 }),
+        set.contains(&Point { x: 2, y: 1 }),
+        serde_json::to_string(&one).unwrap()
+    )
+}
+`);
+  const expected = JSON.parse(run([native(dir)]));
+  run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js"), "--", ...buildSerde()]);
+  const generated = await import(join(dir, "cases.js"));
+  expect(generated.report()).toBe(expected);
+});
+
 // Numbers chosen at random, the same ones each run: an f64 from any 64 bits,
 // written with `to_string`, and number texts of every form, read with
 // `from_str` as an `f64` and an `i32`. serde_json's float parsing isn't

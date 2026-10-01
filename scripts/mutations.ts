@@ -1693,6 +1693,30 @@ export const mutations: Mutation[] = [
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "fused_iterator"],
   },
+  {
+    name: "value-keys-by-identity",
+    breaks: "a `HashMap<Point, _>` is a plain `Map`, which finds a struct key by identity, and never the equal one asked for",
+    file: "src/lower/maps.rs",
+    find: "        let by_value = key.is_some_and(|key| self.is_value_key(key) && !self.is_js_key(key));",
+    replace: "        let by_value = false && key.is_some_and(|key| self.is_value_key(key) && !self.is_js_key(key));",
+    tests: ["test/corpus.test.ts", "-t", "value_keys"],
+  },
+  {
+    name: "value-key-clone-shares-keys",
+    breaks: "a map's clone shares its keys, which a consumed original's owner then changes",
+    file: "src/lower/std_impls.rs",
+    find: "                let key = key.filter(|&k| self.is_value_key(k) && self.needs_clone(k));",
+    replace: "                let key = key.filter(|&k| false && self.is_value_key(k) && self.needs_clone(k));",
+    tests: ["test/corpus.test.ts", "-t", "value_keys"],
+  },
+  {
+    name: "json-value-set",
+    breaks: "a `HashSet<Point>` read from JSON is a plain `Set`, which keeps equal points twice",
+    file: "src/lower/serde/de.rs",
+    find: "                if self.is_value_key(item) && !self.is_js_key(item) {",
+    replace: "                if false && self.is_value_key(item) && !self.is_js_key(item) {",
+    tests: ["test/serde.test.ts", "-t", "set of structs"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
