@@ -160,3 +160,26 @@ pub fn roundtrip(text: &str) -> String {
     expect(readFileSync(output, "utf8")).toBe(previous);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 600_000);
+
+// An app in Cargo mode (ADR 0101) installs no `@rust-js/resources`: its
+// Cargo builds run the Rust the compiler says it was built with, its
+// `--version-json`, where they read the resources' pin. Without one, the
+// resources found from `@rust-js/build` are a directory that has none.
+test("the build adapter's Cargo builds run the compiler's Rust, without resources", async () => {
+  buildCompiler();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "rust-js-cargo-app-")));
+  try {
+    const resources = join(root, "no-resources");
+    mkdirSync(resources);
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "app"\nversion = "0.0.0"\nedition = "2024"\n\n[workspace]\n');
+    writeFileSync(join(root, "src", "lib.rs"), "pub fn answer() -> i32 {\n    42\n}\n");
+    installRuntime(root);
+    const builder = createNativeBuilder({ root, rustJs: compiler, resources, bindings: [] });
+    const manifestPath = join(root, "Cargo.toml");
+    const { packages } = await builder.cargoWorkspace({ manifestPath, offline: true });
+    expect([...packages.keys()]).toEqual(["app"]);
+    const built = await builder.checkCargo({ manifestPath, packageName: "app", offline: true });
+    expect(readFileSync(built.js, "utf8")).toContain("export function answer() {\n  return 42;\n}");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 600_000);

@@ -161,16 +161,22 @@ export function createNativeBuilder({ root, rustJs = findCompiler(root), resourc
     return { flags, react };
   }
 
+  // The Rust a Cargo build runs: the compiler's, as it says it was built
+  // with, as an app in Cargo mode has no resources; without a compiler, the
+  // resources' pin, for the committed JS's fallback.
+  const toolchain = async () => (existsSync(rustJs) ? (await compilerIdentity()).toolchain : pinned());
+
   return {
-    /** A Cargo workspace's check (ADR 0101), with the pinned toolchain, this
-     * compiler, and the React the project has installed. */
+    /** A Cargo workspace's check (ADR 0101), with the compiler's toolchain,
+     * this compiler, and the React the project has installed. */
     async checkCargo(options) {
-      checkRuntime(root, (await compilerIdentity()).version);
-      return checkCargo({ ...options, toolchain: pinned(), compiler: rustJs, react: installedReact(root) ?? undefined });
+      const identity = await compilerIdentity();
+      checkRuntime(root, identity.version);
+      return checkCargo({ ...options, toolchain: identity.toolchain, compiler: rustJs, react: installedReact(root) ?? undefined });
     },
     /** The workspace of a Cargo manifest, and its target directory. */
-    cargoWorkspace(options) {
-      return cargoWorkspace({ ...options, toolchain: pinned() });
+    async cargoWorkspace(options) {
+      return cargoWorkspace({ ...options, toolchain: await toolchain() });
     },
     watchFiles: [...metadataInputs, ...(bindings.length ? [join(repo, "package.json")] : []), ...compilerInputs, ...Object.values(externs)],
     prepare,
