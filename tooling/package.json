@@ -1,9 +1,14 @@
 {
   "name": "@rust-js/build",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "description": "Build preparation, manifests, and publication for rust-js hosts.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rust-js-lang/rust-js.git",
+    "directory": "tooling"
+  },
   "bin": {
     "rust-js-patch": "./patch.js"
   },

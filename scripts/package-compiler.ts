@@ -32,7 +32,8 @@ try {
   chmodSync(join(staging, "bin/compiler"), 0o755);
   chmodSync(join(staging, "bin/rust-js"), 0o755);
   writeFileSync(join(staging, "package.json"), JSON.stringify({
-    name: "@rust-js/native", version, private: true, type: "module",
+    name: "@rust-js/native", version, type: "module", license: "MIT",
+    repository: { type: "git", url: "git+https://github.com/rust-js-lang/rust-js.git" },
     os: [process.platform], cpu: [process.arch],
     bin: { "rust-js": "bin/rust-js" }, files: ["bin"], rustJs: identity,
   }, null, 2) + "\n");

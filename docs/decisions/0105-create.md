@@ -2,7 +2,8 @@
 
 Status: Accepted. Builds on [0041](0041-react.md), [0094](0094-qualification.md)
 and [0103](0103-runtime-package.md). Extended by [0114](0114-app-cargo-toml.md): the
-app has a `Cargo.toml`, for an editor.
+app has a `Cargo.toml`, for an editor; by [0120](0120-first-npm-release.md): it's on npm,
+and an app names its compiler.
 
 ## Context
 
@@ -88,6 +89,6 @@ npm create @rust-js my-app      # with Node.js
   compiled `App.rs` and built it.
 - `bunx` and `npm exec` take a local tarball by an absolute `file:` path.
 - `bun create @rust-js` itself needs `@rust-js/create` and the packages on npm,
-  which nothing publishes yet. The app's `package.json` names `@rust-js/runtime`
-  and `@rust-js/vite-plugin`; `@rust-js/build` is to bring the compiler and
-  its resources, one package for each host.
+  which ADR 0120 publishes. The app's `package.json` names `@rust-js/runtime`,
+  `@rust-js/vite-plugin`, and the compiler, `@rust-js/native`, and its
+  resources, `@rust-js/resources`, its own: `@rust-js/build` brings neither.

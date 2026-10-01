@@ -1,10 +1,20 @@
 {
   "name": "@rust-js/create",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "description": "`bun create @rust-js my-app`: a Vite and React app written in Rust. See docs/decisions/0105-create.md.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rust-js-lang/rust-js.git",
+    "directory": "create"
+  },
   "bin": "index.js",
-  "files": ["index.js", "template"],
-  "rustJs": { "toolchain": "1.98.1" }
+  "files": [
+    "index.js",
+    "template"
+  ],
+  "rustJs": {
+    "toolchain": "1.98.1"
+  }
 }

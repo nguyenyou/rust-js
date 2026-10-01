@@ -58,6 +58,8 @@ test("a packed @rust-js/create makes the vite-react example's app, named for its
   expect(manifest.name).toBe("my-app");
   expect(manifest.dependencies["@rust-js/runtime"]).toBe(version);
   expect(manifest.devDependencies["@rust-js/vite-plugin"]).toBe(version);
+  // The compiler, which a release of @rust-js/build doesn't bring: the app's own.
+  expect(manifest.devDependencies["@rust-js/native"]).toBe(version);
   expect(JSON.stringify(manifest)).not.toContain("workspace:");
   // What to run next, the Rust it needs first.
   expect(made.stdout).toContain(`rustup toolchain install ${pin} --profile minimal --target wasm32-unknown-unknown

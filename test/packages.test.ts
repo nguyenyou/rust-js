@@ -65,7 +65,7 @@ test(`installed packages compile using ${runtime} without the other runtime`, ()
     run(install);
     run([...install, "--frozen-lockfile"]);
     const plugin = JSON.parse(readFileSync(join(root, "node_modules/@rust-js/vite-plugin/package.json"), "utf8"));
-    expect(plugin.dependencies["@rust-js/build"]).toBe("0.1.0");
+    expect(plugin.dependencies["@rust-js/build"]).toBe((Bun.TOML.parse(readFileSync(join(repository, "Cargo.toml"), "utf8")) as { package: { version: string } }).package.version);
     const installedCompiler = join(root, "node_modules/.bin/rust-js");
     expect(JSON.parse(run([runtime, installedCompiler, "--version-json"]))).toEqual(JSON.parse(run([compiler, "--version-json"])));
     const resourcePackage = JSON.parse(readFileSync(join(resources, "package.json"), "utf8"));

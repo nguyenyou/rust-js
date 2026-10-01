@@ -58,10 +58,12 @@ for (const field of ["dependencies", "devDependencies"]) {
 manifest.devDependencies["@rust-js/resources"] = dist ? archive("@rust-js/resources") : self.version;
 const cargo = join(app, "Cargo.toml");
 writeFileSync(cargo, readFileSync(cargo, "utf8").replaceAll('path = "../../', 'path = "node_modules/@rust-js/resources/'));
-// A release's `@rust-js/build` brings the compiler and its resources; a
-// distribution's are the app's own, and its `@rust-js/build` the plugin's too.
+// The compiler is the app's own, as the plugin finds it, from the app: a
+// release's or a distribution's. A distribution's `@rust-js/build` is the
+// app's too, and the plugin's, where a release's is the registry's.
+manifest.devDependencies["@rust-js/native"] = dist ? archive("@rust-js/native") : self.version;
 if (dist) {
-  for (const name of ["@rust-js/build", "@rust-js/native"]) manifest.devDependencies[name] = archive(name);
+  manifest.devDependencies["@rust-js/build"] = archive("@rust-js/build");
   manifest.overrides = { ...manifest.overrides, "@rust-js/build": archive("@rust-js/build") };
 }
 for (const field of ["dependencies", "devDependencies"]) {

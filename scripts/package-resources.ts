@@ -27,7 +27,8 @@ try {
     else copyFileSync(join(root, file), target);
   }
   writeFileSync(join(staging, "package.json"), JSON.stringify({
-    name: "@rust-js/resources", version, private: true, type: "module",
+    name: "@rust-js/resources", version, type: "module", license: "MIT",
+    repository: { type: "git", url: "git+https://github.com/rust-js-lang/rust-js.git" },
     description: "Pinned build inputs for rust-js React, web, and Serde bindings.",
     files,
   }, null, 2) + "\n");

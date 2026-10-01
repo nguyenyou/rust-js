@@ -1,11 +1,18 @@
 {
   "name": "@rust-js/vite-plugin",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "description": "Compile Rust with rust-js in a Vite project, on start and on save. See docs/decisions/0041-react.md.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rust-js-lang/rust-js.git",
+    "directory": "vite-plugin"
+  },
   "exports": "./index.js",
-  "files": ["index.js"],
+  "files": [
+    "index.js"
+  ],
   "dependencies": {
     "@rust-js/build": "workspace:*"
   },

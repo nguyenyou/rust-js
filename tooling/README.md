@@ -41,10 +41,10 @@ runs it as its `postinstall`, so Cargo and its editor have them once it's
 installed. A crate installed twice, which would be two of each of its types, is
 refused, with who asked for each.
 
-Both host packages remain private while distribution is being developed. Local
+Both host packages are on npm, released with the compiler (ADR 0120). Local
 tarballs can be made with `bun pm pack` from `tooling/` and `vite-plugin/`.
 The package test installs these tarballs with Bun into an independent application
-and compiles through the plugin. No registry release is implied.
+and compiles through the plugin.
 Compiler discovery first uses the supplied `rustJs` path, then the application's
 `@rust-js/native` package, then the development checkout. Resource discovery uses the supplied `resources`
 path, then `@rust-js/resources` resolved from the application's dependencies,

@@ -198,6 +198,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0114 An app's Rust is a Cargo package, for editors](decisions/0114-app-cargo-toml.md)
 - [0115 The binding crates are packaged for crates.io](decisions/0115-binding-crates-on-crates-io.md)
 - [0117 A crate's settings for the JS rust-js writes: its formatter's options, and hooks](decisions/0117-output-hooks.md)
+- [0120 The first npm release: 0.0.1, for macOS on Apple silicon](decisions/0120-first-npm-release.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

@@ -102,8 +102,8 @@ test("the build adapter refuses an app without the compiler's @rust-js/runtime",
     const version = parseCompilerIdentity(Bun.spawnSync([compiler, "--version-json"], { stdout: "pipe" }).stdout.toString()).version;
     await expect(builder().compile(job)).rejects.toThrow(`imports @rust-js/runtime ${version}: install it`);
     mkdirSync(join(root, "node_modules", "@rust-js", "runtime"), { recursive: true });
-    writeFileSync(join(root, "node_modules", "@rust-js", "runtime", "package.json"), '{ "name": "@rust-js/runtime", "version": "0.0.1", "exports": { "./package.json": "./package.json" } }\n');
-    await expect(builder().compile(job)).rejects.toThrow(`needs @rust-js/runtime ${version}, not the installed 0.0.1`);
+    writeFileSync(join(root, "node_modules", "@rust-js", "runtime", "package.json"), '{ "name": "@rust-js/runtime", "version": "999.0.0", "exports": { "./package.json": "./package.json" } }\n');
+    await expect(builder().compile(job)).rejects.toThrow(`needs @rust-js/runtime ${version}, not the installed 999.0.0`);
     rmSync(join(root, "node_modules"), { recursive: true });
     installRuntime(root);
     await builder().compile(job);

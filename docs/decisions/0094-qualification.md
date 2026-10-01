@@ -1,6 +1,8 @@
 # 0094. A distribution is qualified by the suite, run through what it installs
 
 Status: Accepted. Extends [0088](0088-corpus.md) and [0093](0093-mutations.md).
+Extended by [0120](0120-first-npm-release.md): a release's distribution is
+qualified on the host it's built for.
 
 ## Context
 
