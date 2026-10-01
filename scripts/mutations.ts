@@ -1758,6 +1758,22 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts", "-t", "f32_parse"],
   },
   {
+    name: "json-f32-as-f64",
+    breaks: "an `f32` in JSON is written as its `f64`, `0.10000000149011612`, where serde_json writes `0.1`",
+    file: "src/runtime/to_json.js",
+    find: "this.text += single ? $jsonF32(x) : $jsonNumber(x);",
+    replace: "this.text += $jsonNumber(x);",
+    tests: ["test/serde.test.ts", "-t", "an f32 is written"],
+  },
+  {
+    name: "json-f32-integer-through-f64",
+    breaks: "an integer in JSON read as an `f32` is rounded to an `f64` first, and then can be a tie it isn't",
+    file: "src/runtime/from_json.js",
+    find: ": $bigToF32(BigInt(n.value))));",
+    replace: ": Math.fround(Number(n.value))));",
+    tests: ["test/serde.test.ts", "-t", "an f32 is written"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",

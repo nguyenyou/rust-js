@@ -190,6 +190,43 @@ pub fn report() -> String {
   });
 }
 
+// An `f32` in JSON (ADR 0122): written with its own shortest digits, fixed
+// from 1e-6 to 1e12, as serde_json's zmij writes them; read as serde reads
+// one, any number `as f32`; and a `Value` of one is its `f64`.
+test("serde: an f32 is written and read as serde_json does", async () => {
+  const dir = fixture("serde-f32");
+  writeFileSync(join(dir, "cases.rs"), `#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Sample { pub x: f32, pub ys: Vec<f32>, pub z: Option<f32> }
+pub fn report() -> String {
+    let mut out = String::new();
+    for v in [0.1f32, 1.5, -2.75, 1e-6, 9.9e-7, 1e-7, 123456.7, 1e12, 9.99e12, 1e13, 3.4028235e38, f32::MIN_POSITIVE, 1e-45, 16777217.0, f32::NAN, f32::INFINITY, -0.0, 0.0] {
+        out.push_str(&serde_json::to_string(&v).unwrap());
+        out.push('\\n');
+    }
+    let s = Sample { x: 0.1, ys: vec![1e-7, 2.5e13], z: Some(-3.2) };
+    out.push_str(&serde_json::to_string(&s).unwrap());
+    out.push('\\n');
+    out.push_str(&serde_json::to_string_pretty(&s).unwrap());
+    out.push('\\n');
+    for text in ["0.1", "16777217", "18446744073709551615", "-9223372036854775808", "1152921573326323713", "1e39", "3.4028235e38", "\\"x\\"", "true", "null"] {
+        match serde_json::from_str::<f32>(text) {
+            Ok(v) => out.push_str(&format!("{:?}\\n", v)),
+            Err(e) => out.push_str(&format!("{}\\n", e)),
+        }
+    }
+    let back: Sample = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+    out.push_str(&format!("{:?} {}\\n", back, back == s));
+    let v = serde_json::to_value(&0.1f32).unwrap();
+    out.push_str(&format!("{} {} {} {}\\n", v, serde_json::json!(0.1f32), v == 0.1f32, serde_json::json!(16777217) == 16777216.0f32));
+    out
+}
+`);
+  const expected = JSON.parse(run([native(dir)]));
+  run([compiler, join(dir, "cases.rs"), "-o", join(dir, "cases.js"), "--", ...buildSerde()]);
+  const generated = await import(join(dir, "cases.js"));
+  expect(generated.report()).toBe(expected);
+});
+
 // A set of structs, an array in JSON, found by value as it's read (ADR
 // 0121): two equal items are one, as serde_json's `HashSet` has them.
 test("serde: a set of structs read from JSON has each value once", async () => {

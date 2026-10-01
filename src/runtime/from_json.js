@@ -19,6 +19,12 @@ class $JsonDecoder {
     return this.deserializeNumber("f64", (n) => Number(n.value));
   }
 
+  // serde's `f32` takes any number, `as f32`: an integer rounded once, by
+  // `$bigToF32`, and a float, serde_json's `f64`, rounded (ADR 0122).
+  f32() {
+    return this.deserializeNumber("f32", (n) => (n.kind === "f" ? Math.fround(n.value) : $bigToF32(BigInt(n.value))));
+  }
+
   string() {
     return this.deserializeStr("a string", (s) => s);
   }
@@ -1815,7 +1821,7 @@ class $JsonMissing {
   }
 }
 for (const method of [
-  "bool", "int", "f64", "string", "char", "borrowedStr", "unit", "unitStruct", "vec", "tuple", "array", "map",
+  "bool", "int", "f64", "f32", "string", "char", "borrowedStr", "unit", "unitStruct", "vec", "tuple", "array", "map",
   "struct", "untaggedStruct", "tupleStruct", "enum", "taggedUnit", "internallyTagged",
   "adjacentlyTagged", "untagged",
 ]) {
@@ -1917,6 +1923,7 @@ const $json = {
   u64: (json) => json.int("u64", 0n, 18446744073709551615n),
   i64: (json) => json.int("i64", -9223372036854775808n, 9223372036854775807n),
   f64: (json) => json.f64(),
+  f32: (json) => json.f32(),
   string: (json) => json.string(),
   str: (json) => json.borrowedStr(),
   // serde_json's `Value` (ADR 0083), from whatever's there, and its `Number`.

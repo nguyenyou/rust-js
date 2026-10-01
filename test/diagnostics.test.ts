@@ -9,7 +9,8 @@ for (const [name, source, message, crate] of [
   ["type error", 'pub fn f() -> i32 { "wrong" }', "mismatched types"],
   ["borrow error", 'pub fn f() -> i32 { let mut x = 1; let r = &x; x = 2; *r }', "borrowed"],
   ["unsupported type", 'pub fn f(x: u128) -> u128 { x }', "does not support"],
-  // ADR 0122: what an `f32` can't do yet, each said so.
+  // ADR 0122: an `f32`'s bits aren't yet: a NaN's payload is JS's to keep or not.
+  ["an f32's bits", "pub fn f(x: f32) -> u32 { x.to_bits() }", "to_bits"],
   ["camelCase fields that collide", '#![allow(non_snake_case)]\n#[rust_js::camel_case]\nconst _: () = ();\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["#[thread_local] static", "#![feature(thread_local)]\n#[thread_local] static N: std::cell::Cell<u32> = std::cell::Cell::new(0);\npub fn f() -> u32 { N.get() }", "does not support `#[thread_local]` statics"],
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
@@ -77,9 +78,6 @@ for (const [name, source, message, crate] of [
   ["assigning to a Value's key", 'pub fn f() -> String { let mut v = serde_json::json!({}); v["k"] = serde_json::json!(1); v.to_string() }', "assigning to this place", "serde"],
   // A JSON object's keys are strings: serde_json refuses a struct's (ADR 0121).
   ["a map keyed by a struct in JSON", '#[derive(PartialEq, Eq, Hash, serde::Serialize)] pub struct P { pub x: u32 }\npub fn f(m: &std::collections::HashMap<P, u32>) -> String { serde_json::to_string(m).unwrap() }', "a map key of", "serde"],
-  // serde_json writes an `f32` with its own shortest digits (ADR 0122).
-  ["an f32 written as JSON", '#[derive(serde::Serialize)] pub struct P { pub x: f32 }\npub fn f(p: &P) -> String { serde_json::to_string(p).unwrap() }', "an `f32` in JSON", "serde"],
-  ["an f32 read from JSON", '#[derive(serde::Deserialize)] pub struct P { pub x: f32 }\npub fn f(s: &str) -> f32 { serde_json::from_str::<P>(s).map(|p| p.x).unwrap_or(0.0) }', "an `f32` in JSON", "serde"],
 ] as [string, string, string, string?][]) {
   test(`${name} reports a source location and preserves existing output`, () => {
     const dir = fixture("diagnostic");

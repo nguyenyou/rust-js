@@ -455,9 +455,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.emit(json, "bool", vec![value], out);
             return Ok(());
         }
-        // serde_json writes an `f32` with its own shortest digits: not yet (ADR 0122).
+        // serde_json writes an `f32` with its own shortest digits, and a
+        // `Value` of it is its `f64` (ADR 0122).
         if Num::of(ty) == Some(Num::F32) {
-            return Err(self.unsupported(span, "an `f32` in JSON"));
+            self.emit(json, "number", vec![value, Expr::bool(true)], out);
+            return Ok(());
         }
         if Num::of(ty).is_some_and(|n| !n.float()) {
             self.emit(json, "int", vec![value], out);

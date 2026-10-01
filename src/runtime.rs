@@ -275,6 +275,7 @@ impl Helper {
                 Helper::SortedEntries,
                 Helper::Cmp,
                 Helper::Some,
+                Helper::BigToF32,
             ],
             Helper::JsonValue => &[
                 Helper::SortedEntries,
@@ -282,8 +283,9 @@ impl Helper {
                 Helper::ToJson,
                 Helper::JsonFail,
                 Helper::DebugStr,
+                Helper::BigToF32,
             ],
-            Helper::ToJson => &[Helper::JsonFail],
+            Helper::ToJson => &[Helper::JsonFail, Helper::F32Digits],
             Helper::HeapPush => &[Helper::SiftUp],
             Helper::HeapPop => &[Helper::SiftUp],
             Helper::HeapSorted => &[Helper::SiftDown],

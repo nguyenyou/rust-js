@@ -923,7 +923,8 @@ export function $jsonWriter(pretty) {
     null() { this.text += "null"; },
     bool(b) { this.text += String(b); },
     int(n) { this.text += String(n); },
-    number(x) { this.text += $jsonNumber(x); },
+    // An `f32`'s, `single`, with its own digits, as serde_json writes it (ADR 0122).
+    number(x, single) { this.text += single ? $jsonF32(x) : $jsonNumber(x); },
     char(c) { this.text += JSON.stringify(c); },
     string(s) { this.text += JSON.stringify(s); },
     // An externally tagged unit variant: its name.
@@ -955,7 +956,7 @@ export function $jsonFlat(into) {
     null() { if (depth > 0) into.null(); },
     bool(b) { top("a boolean"); into.bool(b); },
     int(n) { top("an integer"); into.int(n); },
-    number(x) { top("a float"); into.number(x); },
+    number(x, single) { top("a float"); into.number(x, single); },
     char(c) { top("a char"); into.char(c); },
     string(s) { top("a string"); into.string(s); },
     variant(name) {
@@ -985,6 +986,22 @@ export function $toJson(value, write, pretty) {
   }
   return { TAG: "Ok", _0: json.text };
 }
+// An `f32` as serde_json writes one: its shortest digits, zmij's, fixed from
+// 1e-6 to 1e12, else `1.5e+16` (ADR 0122).
+export function $jsonF32(x) {
+  if (!Number.isFinite(x)) return "null";
+  if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
+  const [digits, point] = $f32Digits(Math.abs(x));
+  const sign = x < 0 ? "-" : "";
+  const e = point - 1;
+  if (e < -6 || e > 12) {
+    const mantissa = digits.length > 1 ? `${digits[0]}.${digits.slice(1)}` : digits;
+    return `${sign}${mantissa}e${e < 0 ? "-" : "+"}${Math.abs(e)}`;
+  }
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}.0`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
 
 // What serde's impls and derives read, the same whatever they read from:
 // the text (`$JsonReader`), or a value already read (`$JsonContent`), which
@@ -1004,6 +1021,12 @@ export class $JsonDecoder {
 
   f64() {
     return this.deserializeNumber("f64", (n) => Number(n.value));
+  }
+
+  // serde's `f32` takes any number, `as f32`: an integer rounded once, by
+  // `$bigToF32`, and a float, serde_json's `f64`, rounded (ADR 0122).
+  f32() {
+    return this.deserializeNumber("f32", (n) => (n.kind === "f" ? Math.fround(n.value) : $bigToF32(BigInt(n.value))));
   }
 
   string() {
@@ -2802,7 +2825,7 @@ export class $JsonMissing {
   }
 }
 for (const method of [
-  "bool", "int", "f64", "string", "char", "borrowedStr", "unit", "unitStruct", "vec", "tuple", "array", "map",
+  "bool", "int", "f64", "f32", "string", "char", "borrowedStr", "unit", "unitStruct", "vec", "tuple", "array", "map",
   "struct", "untaggedStruct", "tupleStruct", "enum", "taggedUnit", "internallyTagged",
   "adjacentlyTagged", "untagged",
 ]) {
@@ -2904,6 +2927,7 @@ export const $json = {
   u64: (json) => json.int("u64", 0n, 18446744073709551615n),
   i64: (json) => json.int("i64", -9223372036854775808n, 9223372036854775807n),
   f64: (json) => json.f64(),
+  f32: (json) => json.f32(),
   string: (json) => json.string(),
   str: (json) => json.borrowedStr(),
   // serde_json's `Value` (ADR 0083), from whatever's there, and its `Number`.
@@ -3120,6 +3144,7 @@ export function $jsonValueEq(value, other, kind) {
   if (value.TAG !== "Number") return false;
   const n = value._0;
   if (kind === "f64") return Number(n.value) === other;
+  if (kind === "f32") return (n.kind === "f" ? Math.fround(n.value) : $bigToF32(BigInt(n.value))) === other;
   if (kind === "i64") return $jsonNumberIsI64(n) && n.value == other;
   return n.kind === "u" && n.value == other;
 }

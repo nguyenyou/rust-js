@@ -1068,9 +1068,9 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             return Some(JsonConversion::Null);
         }
         match Num::of(from) {
-            Some(Num::F64) => return Some(JsonConversion::Float),
-            // Not yet (ADR 0122).
-            Some(Num::F32) => return None,
+            // An `f32`'s `Value` is its `f64`, as serde_json's `Number::from_f32` is
+            // (ADR 0122).
+            Some(Num::F64 | Num::F32) => return Some(JsonConversion::Float),
             Some(_) => return Some(JsonConversion::Integer),
             None => {}
         }
@@ -1098,8 +1098,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         } else {
             match Num::of(other)? {
                 Num::F64 => Some("f64"),
-                // Not yet (ADR 0122).
-                Num::F32 => None,
+                // serde_json's `as_f32()`, the number `as f32` (ADR 0122).
+                Num::F32 => Some("f32"),
                 n if n.signed() => Some("i64"),
                 _ => Some("u64"),
             }

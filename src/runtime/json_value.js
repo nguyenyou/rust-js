@@ -133,6 +133,7 @@ function $jsonValueEq(value, other, kind) {
   if (value.TAG !== "Number") return false;
   const n = value._0;
   if (kind === "f64") return Number(n.value) === other;
+  if (kind === "f32") return (n.kind === "f" ? Math.fround(n.value) : $bigToF32(BigInt(n.value))) === other;
   if (kind === "i64") return $jsonNumberIsI64(n) && n.value == other;
   return n.kind === "u" && n.value == other;
 }

@@ -21,7 +21,8 @@ function $jsonWriter(pretty) {
     null() { this.text += "null"; },
     bool(b) { this.text += String(b); },
     int(n) { this.text += String(n); },
-    number(x) { this.text += $jsonNumber(x); },
+    // An `f32`'s, `single`, with its own digits, as serde_json writes it (ADR 0122).
+    number(x, single) { this.text += single ? $jsonF32(x) : $jsonNumber(x); },
     char(c) { this.text += JSON.stringify(c); },
     string(s) { this.text += JSON.stringify(s); },
     // An externally tagged unit variant: its name.
@@ -53,7 +54,7 @@ function $jsonFlat(into) {
     null() { if (depth > 0) into.null(); },
     bool(b) { top("a boolean"); into.bool(b); },
     int(n) { top("an integer"); into.int(n); },
-    number(x) { top("a float"); into.number(x); },
+    number(x, single) { top("a float"); into.number(x, single); },
     char(c) { top("a char"); into.char(c); },
     string(s) { top("a string"); into.string(s); },
     variant(name) {
@@ -82,4 +83,20 @@ function $toJson(value, write, pretty) {
     throw e;
   }
   return { TAG: "Ok", _0: json.text };
+}
+// An `f32` as serde_json writes one: its shortest digits, zmij's, fixed from
+// 1e-6 to 1e12, else `1.5e+16` (ADR 0122).
+function $jsonF32(x) {
+  if (!Number.isFinite(x)) return "null";
+  if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
+  const [digits, point] = $f32Digits(Math.abs(x));
+  const sign = x < 0 ? "-" : "";
+  const e = point - 1;
+  if (e < -6 || e > 12) {
+    const mantissa = digits.length > 1 ? `${digits[0]}.${digits.slice(1)}` : digits;
+    return `${sign}${mantissa}e${e < 0 ? "-" : "+"}${Math.abs(e)}`;
+  }
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}.0`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
