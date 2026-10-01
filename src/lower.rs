@@ -836,11 +836,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 self.constructor_value(def_id, args, span)
             }
+            // `Self` of a `struct Marker;`, which holds nothing, like `()`.
+            ExprKind::ZstLiteral { .. }
+                if let ty::Adt(adt, _) = ty.kind()
+                    && adt.is_struct()
+                    && adt.non_enum_variant().ctor_kind() == Some(CtorKind::Const) =>
+            {
+                Ok(Expr::undefined())
+            }
             // A function as a value, `component(Card, props)`: its JS name, or
             // a library's import of it (ADR 0100), given its dictionaries.
             ExprKind::ZstLiteral { .. }
                 if let &ty::FnDef(def_id, args) = ty.kind()
-                    && self.is_rust_fn(def_id) =>
+                    && (self.is_rust_fn(def_id) || self.is_rust_trait_fn(def_id, args)) =>
             {
                 if self.tcx.trait_of_assoc(def_id).is_some() {
                     let count = self
@@ -856,6 +864,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let call = self
                         .trait_call(def_id, args, values, span, out)?
                         .ok_or_else(|| self.unsupported(span, "this trait function value"))?;
+                    // `(arg0) => shapeArea_area(arg0)` is `shapeArea_area`: a
+                    // function by name, not a dictionary's method, read off it.
+                    if let js::ExprKind::Call(callee, list) = &call.kind
+                        && matches!(callee.kind, js::ExprKind::Var(_))
+                        && list.len() == params.len()
+                        && list
+                            .iter()
+                            .zip(&params)
+                            .all(|(value, name)| matches!(&value.kind, js::ExprKind::Var(v) if v == name))
+                        && params.iter().all(|name| !callee.mentions_var(name))
+                    {
+                        return Ok((**callee).clone());
+                    }
                     return Ok(Expr::arrow(
                         params.into_iter().map(Into::into).collect(),
                         vec![StmtKind::Return(Some(call)).at(js_span)],
@@ -988,11 +1009,49 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 then,
                 else_opt: Some(els),
                 ..
-            } if self.is_simple(then) && self.is_simple(els) && self.let_chain(cond).is_none() => {
+            } if self.is_simple(then)
+                && self.is_simple(els)
+                && self.let_chain(cond).is_none()
+                && !matches!(self.thir[self.strip(cond)].kind, ExprKind::Let { .. }) =>
+            {
                 let c = self.expr(cond, out)?;
                 let t = self.evaluated(then)?;
                 let f = self.evaluated(els)?;
                 Ok(self.conditional(c, t, f, js_span, out))
+            }
+            // `if let` as a value: `test ? then : else`, where the pattern
+            // names its variables' places and needs no `const`s for them;
+            // `{ true } else { false }` is the test itself, and a pattern that
+            // always matches is its `then`.
+            ExprKind::If {
+                cond,
+                then,
+                else_opt: Some(els),
+                ..
+            } if self.is_simple(then)
+                && self.is_simple(els)
+                && let ExprKind::Let {
+                    expr: scrutinee,
+                    ref pat,
+                } = self.thir[self.strip(cond)].kind =>
+            {
+                let (mut bound, mut before) = (Vec::new(), Vec::new());
+                let test = self.if_let(scrutinee, pat, &mut bound, &mut before)?;
+                if !bound.is_empty() {
+                    let tmp = self.fresh("tmp");
+                    out.push(StmtKind::Let(tmp.clone(), None).at(js_span));
+                    self.stmt(e, &Dest::Assign(tmp.clone()), out)?;
+                    return Ok(Expr::var(&tmp));
+                }
+                out.extend(before);
+                let (yes, no) = (self.evaluated(then)?, self.evaluated(els)?);
+                let plain = yes.statements.is_empty() && no.statements.is_empty();
+                Ok(match (&yes.value.kind, &no.value.kind) {
+                    _ if matches!(test.kind, js::ExprKind::Bool(true)) && yes.statements.is_empty() => yes.value,
+                    (js::ExprKind::Bool(true), js::ExprKind::Bool(false)) if plain => test,
+                    (js::ExprKind::Bool(false), js::ExprKind::Bool(true)) if plain => Expr::unary(UnaryOp::Not, test),
+                    _ => self.conditional(test, yes, no, js_span, out),
+                })
             }
             // Control flow: run it as statements, then read the result.
             ExprKind::Scope { .. }

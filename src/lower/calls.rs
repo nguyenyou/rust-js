@@ -984,24 +984,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // generic function is one JS function for every type, so a type
             // parameter's has no one answer.
             Std::SizeOf | Std::AlignOf | Std::SizeOfVal => {
-                let name = match known {
-                    Std::SizeOf => "size_of",
-                    Std::AlignOf => "align_of",
-                    _ => "size_of_val",
-                };
                 let of = generic_args.types().next().expect("a size's type argument");
-                if of.has_param() {
-                    return Err(self.unsupported(span, &format!("`{name}` of a type parameter")));
-                }
-                if !of.is_sized(self.tcx, self.typing_env) {
-                    return Err(self.unsupported(span, &format!("`{name}` of a value without one size")));
-                }
-                // Of a type without parameters, as codegen asks: 1.98 finds an
-                // `async fn`'s future too generic to lay out otherwise (ADR 0109).
-                let layout = self
-                    .tcx
-                    .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))
-                    .map_err(|_| self.unsupported(span, &format!("`{name}` of this type")))?;
+                let bytes = self.layout_bytes(known, of, span)?;
                 // What's measured still runs, if it does anything.
                 if matches!(known, Std::SizeOfVal) {
                     let measured = arg();
@@ -1009,12 +993,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         out.push(StmtKind::Expr(measured).at(js_span));
                     }
                 }
-                let bytes = if matches!(known, Std::AlignOf) {
-                    layout.align.abi.bytes()
-                } else {
-                    layout.size.bytes()
-                };
-                Expr::int(bytes as i128)
+                Expr::int(bytes)
             }
             // A `&str` or a `String` is the panic's message, as Rust's hook
             // shows it; another payload, `panic!(5)`, has none.
@@ -1598,10 +1577,57 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A std function taken as a value, `str::trim` in `.map(str::trim)`:
     /// an arrow of one parameter, doing what a call does. `None` for one
     /// that isn't one of these.
+    /// The bytes `size_of`, `align_of` or `size_of_val` gives for `of`.
+    fn layout_bytes(&self, known: Std, of: Ty<'tcx>, span: Span) -> R<i128> {
+        let name = match known {
+            Std::SizeOf => "size_of",
+            Std::AlignOf => "align_of",
+            _ => "size_of_val",
+        };
+        if of.has_param() {
+            return Err(self.unsupported(span, &format!("`{name}` of a type parameter")));
+        }
+        if !of.is_sized(self.tcx, self.typing_env) {
+            return Err(self.unsupported(span, &format!("`{name}` of a value without one size")));
+        }
+        // Of a type without parameters, as codegen asks: 1.98 finds an
+        // `async fn`'s future too generic to lay out otherwise (ADR 0109).
+        let layout = self
+            .tcx
+            .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))
+            .map_err(|_| self.unsupported(span, &format!("`{name}` of this type")))?;
+        let bytes = if matches!(known, Std::AlignOf) {
+            layout.align.abi.bytes()
+        } else {
+            layout.size.bytes()
+        };
+        Ok(bytes as i128)
+    }
+
     pub(super) fn std_fn_value(&mut self, known: Std, ty: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
         let ty::FnDef(def_id, args) = *ty.kind() else {
             return Ok(None);
         };
+        let js_span = self.js_span(span);
+        // `size_of::<u16>`: `() => 2`. `drop`: what dropping its value runs,
+        // and `forget`: nothing (ADR 0098).
+        match known {
+            Std::SizeOf | Std::AlignOf => {
+                let bytes = self.layout_bytes(known, args.type_at(0), span)?;
+                return Ok(Some(Expr::arrow(
+                    Vec::new(),
+                    vec![StmtKind::Return(Some(Expr::int(bytes))).at(js_span)],
+                )));
+            }
+            Std::Drop | Std::Forget => {
+                let mut body = Vec::new();
+                if known == Std::Drop {
+                    self.drop_value(Expr::var("value"), args.type_at(0), span, &mut body)?;
+                }
+                return Ok(Some(Expr::arrow(vec!["value".into()], body)));
+            }
+            _ => {}
+        }
         let sig = self
             .tcx
             .fn_sig(def_id)
@@ -1626,6 +1652,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Trim => Expr::call(Expr::member(x, "trim"), vec![]),
             Std::Method(method) => Expr::call(Expr::member(x, method), vec![]),
             Std::Same => x,
+            Std::IsSome => Expr::bin(Op::LooseNe, x, Expr::null()),
+            Std::IsNone => Expr::bin(Op::LooseEq, x, Expr::null()),
             Std::ToBig => Expr::call(Expr::var("BigInt"), vec![x]),
             Std::ToString => self.display_string(x, input, span)?,
             Std::Text(TextOp::Is(regex)) => Expr::call(Expr::member(Expr::regex(regex), "test"), vec![x]),
@@ -1644,7 +1672,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Ok(None),
         };
-        let js_span = self.js_span(span);
         Ok(Some(Expr::arrow(
             vec![name.into()],
             vec![StmtKind::Return(Some(body)).at(js_span)],
@@ -1680,6 +1707,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// library exports (ADR 0100)?
     pub(super) fn is_rust_fn(&self, def_id: DefId) -> bool {
         self.krate.fns.contains_key(&def_id) || self.krate.foreign.item(def_id).is_some()
+    }
+
+    /// Is `def_id` a trait's function that a call of runs through the trait:
+    /// one of a trait the crate's own impls are called through, or that
+    /// resolves to a function rust-js compiled.
+    pub(super) fn is_rust_trait_fn(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> bool {
+        self.tcx.trait_of_assoc(def_id).is_some_and(|id| {
+            super::traits::operational(self.tcx, self.krate.foreign, id)
+                || self
+                    .resolve_instance(def_id, args)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|i| self.is_rust_fn(i.def_id()))
+        })
     }
 
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {
