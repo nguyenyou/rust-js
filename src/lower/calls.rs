@@ -1577,7 +1577,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::ToBig => Expr::call(Expr::var("BigInt"), vec![x]),
             Std::ToString => self.display_string(x, input, span)?,
             Std::Text(TextOp::Is(regex)) => Expr::call(Expr::member(Expr::regex(regex), "test"), vec![x]),
-            Std::Number(NumOp::Math(function)) => Expr::call(Expr::member(Expr::var("Math"), function), vec![x]),
+            // An `f32`'s rounded to one, as its call is, but for those that are
+            // exact already (ADR 0122).
+            Std::Number(NumOp::Math(function)) => {
+                let value = Expr::call(Expr::member(Expr::var("Math"), function), vec![x]);
+                match Num::of(input) {
+                    Some(num @ Num::F32) if !matches!(function, "floor" | "ceil" | "trunc" | "abs") => num.wrap(value),
+                    _ => value,
+                }
+            }
+            // `i32::abs`, wrapped as its call is: `i32::MIN`'s is itself (ADR 0125).
+            Std::Number(NumOp::Abs) if let Some(num) = Num::of(input).filter(|n| !n.big()) => {
+                num.wrap(Expr::call(Expr::member(Expr::var("Math"), "abs"), vec![x]))
+            }
             _ => return Ok(None),
         };
         let js_span = self.js_span(span);

@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rustc_ast::LitKind;
-use rustc_hir::def::CtorKind;
+use rustc_hir::def::{CtorKind, DefKind};
 use rustc_middle::middle::region;
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{
@@ -814,11 +814,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 source,
                 ..
             } => self.expr(source, out),
+            // A closure that captures nothing, as a `fn`: a JS function already
+            // (ADR 0125).
+            ExprKind::PointerCoercion {
+                cast: PointerCoercion::ClosureFnPointer(_),
+                source,
+                ..
+            } => self.expr(source, out),
             ExprKind::ZstLiteral { .. }
                 if let &ty::FnDef(id, _) = ty.kind()
                     && let Some(why) = self.krate.foreign.unlisted(id) =>
             {
                 Err(self.tcx.dcx().span_err(span, why))
+            }
+            // A constructor as a value, `.map(Some)`: an arrow making what its
+            // call makes (ADR 0125).
+            ExprKind::ZstLiteral { .. }
+                if let &ty::FnDef(def_id, args) = ty.kind()
+                    && matches!(self.tcx.def_kind(def_id), DefKind::Ctor(_, CtorKind::Fn)) =>
+            {
+                self.constructor_value(def_id, args, span)
             }
             // A function as a value, `component(Card, props)`: its JS name, or
             // a library's import of it (ADR 0100), given its dictionaries.
@@ -1353,14 +1368,56 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 (None, None) => unreachable!("rustc checked that every field is given"),
             });
         }
-        Ok(match shape {
-            Shape::Object(fields) => {
-                let tag = tag.map(|name| Prop::Field("TAG".into(), Expr::str(name)));
-                let fields = fields.into_iter().zip(items).map(|((name, _), v)| Prop::Field(name, v));
-                Expr::object(tag.into_iter().chain(fields).collect())
+        Ok(assembled(shape, tag, items))
+    }
+
+    /// A constructor as a value, `.map(Some)` or `.map(Shape::Circle)`: an
+    /// arrow of its fields, making what a call of it makes (ADR 0125).
+    fn constructor_value(&mut self, def_id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Expr> {
+        let sig = self
+            .tcx
+            .fn_sig(def_id)
+            .instantiate(self.tcx, args)
+            .skip_normalization()
+            .skip_binder();
+        let ty = sig.output();
+        let ty::Adt(adt_def, adt_args) = *ty.kind() else {
+            return Err(self.unsupported(span, "this constructor as a value"));
+        };
+        let variant = adt_def.variant_with_ctor_id(def_id);
+        // Its arrow reads only its own parameters, so their names can't take
+        // another's: `value` of one field, and `_0`, `_1` of more, a variant's
+        // own names for them.
+        let params: Vec<String> = match sig.inputs().len() {
+            1 => vec!["value".into()],
+            count => (0..count).map(|i| format!("_{i}")).collect(),
+        };
+        let items: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
+        let value = if let Some(inner) = self.option_of(ty) {
+            // `Some`: the value, as `Some(x)` is `x` (ADR 0030), or boxed where
+            // it could look like `None` (ADR 0051).
+            let [item] = <[Expr; 1]>::try_from(items).map_err(|_| self.unsupported(span, "this constructor"))?;
+            if self.boxed_payload(inner) {
+                self.some(item)
+            } else if self.can_be_nullish(inner) {
+                return Err(self.unsupported(span, &format!("values of type `{ty}`")));
+            } else {
+                item
             }
-            _ => Expr::array(items),
-        })
+        } else if adt_def.is_union() || self.is_fmt_result(ty) {
+            return Err(self.unsupported(span, "this constructor as a value"));
+        } else {
+            let tag = adt_def.is_enum().then(|| bindings::variant_name(self.tcx, variant));
+            let shape = match tag {
+                Some(_) => Shape::Object(self.variant_fields(variant, adt_args)),
+                None => self.shape(ty),
+            };
+            assembled(shape, tag, items)
+        };
+        Ok(Expr::arrow(
+            params.into_iter().map(Into::into).collect(),
+            vec![StmtKind::Return(Some(value)).at(self.js_span(span))],
+        ))
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -1604,6 +1661,20 @@ fn discriminants<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>) -> Vec<(String,
             (bindings::variant_name(tcx, adt.variant(index)), value)
         })
         .collect()
+}
+
+/// A struct's or a variant's value, of its fields' values in declared order:
+/// an object, tagged `{ TAG: "Circle", _0: r }` for a variant (ADR 0033), or
+/// an array for a tuple struct (ADR 0020).
+fn assembled(shape: Shape<'_>, tag: Option<String>, items: Vec<Expr>) -> Expr {
+    match shape {
+        Shape::Object(fields) => {
+            let tag = tag.map(|name| Prop::Field("TAG".into(), Expr::str(name)));
+            let fields = fields.into_iter().zip(items).map(|((name, _), v)| Prop::Field(name, v));
+            Expr::object(tag.into_iter().chain(fields).collect())
+        }
+        _ => Expr::array(items),
+    }
 }
 
 fn is_union(ty: Ty<'_>) -> bool {
