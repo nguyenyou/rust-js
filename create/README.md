@@ -1,8 +1,8 @@
 # @rust-js/create
 
 ```bash
-bun create @rust-js my-app      # with Bun
-npm create @rust-js my-app      # with Node.js
+bun create @rust-js@latest my-app      # with Bun
+npm create @rust-js@latest my-app      # with Node.js
 ```
 
 makes `my-app`, a Vite and React app whose component is written in Rust

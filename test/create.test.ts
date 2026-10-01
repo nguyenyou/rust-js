@@ -173,5 +173,5 @@ test("@rust-js/create without a directory says how to use it", () => {
   const index = packed();
   const made = runSync([process.execPath, index], fixture("create-usage"), 60_000);
   expect(made.code).not.toBe(0);
-  expect(made.stderr).toContain("bun create @rust-js <directory>");
+  expect(made.stderr).toContain("bun create @rust-js@latest <directory>");
 });

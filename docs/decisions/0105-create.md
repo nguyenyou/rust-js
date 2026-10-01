@@ -19,8 +19,8 @@ is how a Vite user starts, and `bun create <name>` runs the package named
 **`@rust-js/create` copies the vite-react example into a new directory**:
 
 ```bash
-bun create @rust-js my-app      # with Bun
-npm create @rust-js my-app      # with Node.js
+bun create @rust-js@latest my-app      # with Bun
+npm create @rust-js@latest my-app      # with Node.js
 ```
 
 - **Its template is the example's files, as git has them**, packed beside
@@ -62,6 +62,9 @@ npm create @rust-js my-app      # with Node.js
   already the repository's; a template of its own would drift from them.
 - **A distribution is what a release will publish.** An app made with
   `--local` runs what npm will serve, from the same archives.
+- **`@latest`**, as `npm create vite@latest` is: bunx and npx keep the
+  package they ran first, and run it again for a name without a version, an
+  app of an old release; `@latest` asks npm which is the newest.
 
 ## Alternatives
 

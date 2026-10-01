@@ -20,7 +20,7 @@ const at = args.indexOf("--local");
 const local = at >= 0 ? args.splice(at, 2)[1] : undefined;
 if (at >= 0 && !local) fail("--local needs a distribution, the directory `bun run pack:distribution` makes");
 const [directory, ...extra] = args;
-if (!directory || extra.length) fail("usage: bun create @rust-js <directory> [--local <distribution>]");
+if (!directory || extra.length) fail("usage: bun create @rust-js@latest <directory> [--local <distribution>]");
 
 // A distribution is for one host, and one compiler: this one's.
 const dist = local && resolve(local);
