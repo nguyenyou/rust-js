@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 
 import { homedir } from "node:os";
 
-import { failureKind, firstError, ratchet, scope, surprises, unblessable, validate, type Result, type Shard } from "../scripts/rustc-suite";
+import { failureKind, features, firstError, ratchet, scope, stableFeatures, surprises, unblessable, validate, type Result, type Shard } from "../scripts/rustc-suite";
 
 test("a test is in scope unless a directive says it needs what a case can't have", () => {
   expect(scope("//@ run-pass\nfn main() {}\n")).toEqual({ edition: "2015" });
@@ -27,6 +27,23 @@ test("a test is in scope unless a directive says it needs what a case can't have
   expect(scope('//@ run-pass\nfn main() { let s = include_str!("data.txt"); }\n')).toEqual({ skip: "reads files beside it" });
   expect(scope("//@ run-pass\n#![feature(staged_api)]\nfn main() {}\n")).toEqual({ skip: "is the standard library's own API" });
   expect(scope("//@ run-pass\nfn main() -> Result<(), ()> { Ok(()) }\n")).toEqual({ skip: "has no `fn main() {`" });
+});
+
+// rust-js takes stable Rust (ADR 0109): a test of a feature a stable release
+// doesn't have is code no program of rust-js's can be. One whose features a
+// stable release has, which the attribute names only from before, is in scope.
+test("a test that needs an unstable feature is out of scope, and one of stable features isn't", () => {
+  const source = "//@ run-pass\n#![feature(let_chains)]\n#![feature(\n    async_drop, // its own\n    never_type,\n)]\nfn main() {}\n";
+  expect(features(source)).toEqual(["let_chains", "async_drop", "never_type"]);
+  expect(scope(source, new Set(["let_chains"]))).toEqual({ skip: "needs unstable features: async_drop, never_type" });
+  expect(scope(source, new Set(["let_chains", "async_drop", "never_type"]))).toEqual({ edition: "2015" });
+  expect(scope("//@ run-pass\n#![allow(unused)]\nfn main() {}\n")).toEqual({ edition: "2015" });
+});
+
+// Which features are stable is the pinned rustc's to say: it warns that an
+// attribute names one stable since a release, and of an unknown one, errs.
+test("the pinned rustc says which features are stable", () => {
+  expect(stableFeatures(["let_chains", "async_drop", "iter_zip", "not_a_feature_of_rustc"])).toEqual(new Set(["let_chains", "iter_zip"]));
 });
 
 test("a failure's reason names no path of this machine's", () => {

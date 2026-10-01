@@ -79,8 +79,51 @@ const outOfScope: [RegExp, string][] = [
 
 export type Scope = { edition: string } | { skip: string };
 
-/** Whether a test fits a corpus case, and its edition: 2015, unless it says. */
-export function scope(source: string): Scope {
+/** The features a test's `#![feature(..)]` attributes name, in order. */
+export function features(source: string): string[] {
+  return [...source.matchAll(/#!\[\s*feature\s*\(([^)]*)\)\s*\]/g)].flatMap(([, list]) =>
+    list
+      .replaceAll(/\/\/[^\n]*/g, "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter((name) => name !== ""),
+  );
+}
+
+/** What the pinned rustc said of each feature asked about: stable or not. */
+const stable = new Map<string, boolean>();
+
+/** Which of `names` the pinned rustc has as stable: it warns that the
+ * attribute names one stable since a release, and says nothing of an
+ * unstable one, and of one it doesn't know, errs. Asked once for those it
+ * hasn't been, in one crate. */
+export function stableFeatures(names: string[]): Set<string> {
+  const asked = [...new Set(names)].filter((name) => !stable.has(name));
+  if (asked.length > 0) {
+    mkdirSync(work, { recursive: true });
+    const dir = mkdtempSync(join(work, "features-"));
+    try {
+      const file = join(dir, "features.rs");
+      writeFileSync(file, `#![feature(${asked.join(", ")})]\nfn main() {}\n`);
+      // In this checkout, so its `rust-toolchain.toml` says which rustc.
+      const check = Bun.spawnSync(["rustc", "--edition=2021", "--emit=metadata", "-o", join(dir, "features.rmeta"), file], {
+        cwd: root,
+        env: { ...process.env, RUSTC_BOOTSTRAP: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const said = new Set([...check.stderr.toString().matchAll(/the feature `(\w+)` has been stable since/g)].map(([, name]) => name));
+      for (const name of asked) stable.set(name, said.has(name));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  return new Set(names.filter((name) => stable.get(name)));
+}
+
+/** Whether a test fits a corpus case, and its edition: 2015, unless it
+ * says. `stableNow` is the features the pinned release has as stable. */
+export function scope(source: string, stableNow = new Set<string>()): Scope {
   let edition = "2015";
   // Every `//@` line: its name is what starts it, whatever follows.
   for (const [, line] of source.matchAll(/^\/\/@\s*(.*)$/gm)) {
@@ -95,6 +138,10 @@ export function scope(source: string): Scope {
   if (/^\s*(pub\s+)?mod\s+\w+\s*;/m.test(source)) return { skip: "has modules in other files" };
   if (/\binclude(_str|_bytes)?!\s*\(/.test(source)) return { skip: "reads files beside it" };
   if (/\bfeature\([^)]*\bstaged_api\b/.test(source)) return { skip: "is the standard library's own API" };
+  // rust-js takes stable Rust (ADR 0109): no program of its can use a
+  // feature a stable release doesn't have.
+  const unstable = features(source).filter((name) => !stableNow.has(name));
+  if (unstable.length > 0) return { skip: `needs unstable features: ${unstable.join(", ")}` };
   return { edition };
 }
 
@@ -307,7 +354,7 @@ const changing = () =>
 export async function runTest(ui: string, file: string, listedChanging: Set<string> = changing(), rustJs = compiler): Promise<Result> {
   const test = relative(ui, file);
   const source = readFileSync(file, "utf8");
-  const s = scope(source);
+  const s = scope(source, stableFeatures(features(source)));
   if ("skip" in s) return { test, status: "skip", reason: s.skip };
   const dir = mkdtempSync(join(work, "case-"));
   try {

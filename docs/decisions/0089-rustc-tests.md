@@ -26,6 +26,15 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
   or a subprocess, is for some targets, reads files beside it, or its own
   output changes from run to run (a `HashMap`'s order). The counts of each
   are printed; none is hidden.
+- **So is a test of a feature stable Rust doesn't have**, `#![feature(async_drop)]`:
+  rust-js takes stable Rust (ADR 0109), and refuses a program's own
+  `#![feature]`, so no program of its can be one. The pinned rustc says
+  which features are stable, warning that an attribute names one stable
+  since a release; a test whose features all are, which its attribute
+  names only from before they were, stays in scope. The tests still run
+  with `RUSTC_BOOTSTRAP=1`, as that attribute needs it. At 1.98.1, 458 of
+  the 2,664 tests in scope left it, and 15 more native Rust gave no answer
+  for: rust-js passed 109 of them and refused 349.
 - **What rust-js gets wrong is `test/rustc-known-failures.txt`**, a test
   and its first error on each line. A test that isn't listed must pass, and
   one that is must fail: when it passes, the run fails until it's taken off
