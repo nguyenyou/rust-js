@@ -76,7 +76,7 @@ binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
 binding/or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 binding/order-drop-with-match.rs	error: rust-js does not support moving a value with a destructor here yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this pattern yet
-binop/augmented-assignment.rs	error: rust-js does not support user implementations of this standard or external trait yet
+binop/augmented-assignment.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 binop/compound-assign-by-ref.rs	error: rust-js does not support values of type `f32` yet
 block-result/blocks-without-results-11709.rs	error: rust-js does not support calling `std::option::Option::<T>::take` yet
 borrowck/borrowck-borrow-from-expr-block.rs	error: rust-js does not support values of type `*const isize` yet
@@ -91,7 +91,6 @@ borrowck/issue-51348-multi-ref-mut-in-guard.rs	error: rust-js does not support b
 borrowck/pointer-reassignment-after-deref-78192.rs	error: rust-js does not support values of type `*const u32` yet
 borrowck/reborrow-in-match-ref-mut-option.rs	error: rust-js does not support values of type `&mut std::option::Option<&mut Foo>` yet
 borrowck/ref-mut-rebind-does-not-affect-outer.rs	error: rust-js does not support `ref mut` bindings to this type yet
-borrowck/two-phase-bin-ops.rs	error: rust-js does not support user implementations of this standard or external trait yet
 borrowck/two-phase-multiple-activations.rs	error: rust-js does not support values of type `(*const core::io::error::Custom) is !null` yet
 box/unit/unique-in-vec-copy.rs	error: rust-js does not support assigning to this place yet
 box/unit/unique-pat-3.rs	error: rust-js does not support calling `std::convert::Into::into` yet
@@ -99,7 +98,6 @@ box/unit/unique-send.rs	error: rust-js does not support calling `std::sync::mpsc
 builtin-superkinds/builtin-superkinds-capabilities-transitive.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 builtin-superkinds/builtin-superkinds-capabilities.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 cast/as-cast-unifies-raw-pointer-and-fn-type.rs	error: rust-js does not support values of type `*const T` yet
-cast/cast-does-fallback.rs	error: rust-js does not support calling `std::ops::Shr::shr` yet
 cast/cast-not-treated-as-lvalue.rs	error: rust-js does not support this expression yet
 cast/cast-ptr-to-fat-ptr.rs	error: rust-js does not support this expression yet
 cast/cast-rfc0401-vtable-kinds.rs	error: rust-js does not support values of type `*const FooS<T>` yet
@@ -382,7 +380,7 @@ methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does 
 methods/method-where-clause.rs	error: rust-js: generated trait implementation name `optionFoo` collides; put the implementations in separate modules
 mir/mir_adt_construction.rs	error: rust-js does not support this expression yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
-mir/mir_augmented_assignments.rs	error: rust-js does not support user implementations of this standard or external trait yet
+mir/mir_augmented_assignments.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 mir/mir_autoderef.rs	error: rust-js does not support this expression yet
 mir/mir_early_return_scope.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 mir/mir_fat_ptr.rs	error: rust-js does not support values of type `&mut &[u8]` yet
@@ -436,7 +434,7 @@ packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expr
 packed/packed-struct-size.rs	error: rust-js does not support statics of type `P4S16` yet
 packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::DebugStruct::<'a, 'b>::finish` yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-parser/macro/statement-boundaries.rs	error: rust-js does not support user implementations of this standard or external trait yet
+parser/macro/statement-boundaries.rs	error: rust-js does not support this expression yet
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
 parser/syntactic-trailing-commas.rs	error: rust-js does not support this pattern yet

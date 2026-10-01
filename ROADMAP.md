@@ -318,15 +318,16 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,583 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
+  1,585 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
   other one is a clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink. A test of a
   feature stable Rust doesn't have is out of scope, as no program of
-  rust-js's can use one (`7962214`). The 623 rejections, by kind: values of
+  rust-js's can use one (`7962214`). The 621 rejections, by kind: values of
   a type rust-js doesn't support (142; `f32` and raw pointers the most
-  common), std calls (111; intrinsics and `mpsc` the most), expressions
-  (47), patterns (40), constants of a type (31), statics of a type (27),
-  and user implementations of a std trait (11).
+  common), std calls (112; intrinsics and `mpsc` the most), expressions
+  (48), patterns (40), constants of a type (31), statics of a type (27),
+  and user implementations of a std trait (7: `Hash`, `fmt::Write`,
+  `FusedIterator`, `Future` and `Wake`).
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for
   broad portable Rust. Include wider integers, `f32`, nested options, general
