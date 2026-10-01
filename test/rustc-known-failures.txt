@@ -142,7 +142,6 @@ coercion/coerce-overloaded-autoderef.rs	error: rust-js does not support `&mut` t
 coercion/coerce-unify.rs	error: rust-js does not support this expression yet
 coercion/unsafe-coercion.rs	error: rust-js does not support this expression yet
 collections/hashmap/hashmap-path-key.rs	error: rust-js does not support values of type `&std::path::Path` yet
-collections/hashset-connected-border-12860.rs	error: rust-js does not support values of type `XYZ` yet
 collections/vecdeque-append-operation-54477.rs	error: rust-js does not support calling `std::collections::VecDeque::<T, A>::append` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this expression yet
 const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support this expression yet
@@ -316,7 +315,6 @@ impl-trait/issues/issue-49685.rs	error: rust-js does not support calling `std::i
 impl-trait/issues/issue-51185.rs	error: rust-js does not support this expression yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
-inference/issue-36053.rs	error: rust-js does not support user implementations of this standard or external trait yet
 inference/lub-glb-with-unbound-infer-var.rs	error: rust-js does not support this expression yet
 inference/matcher-lifetime-inference-14919.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 inference/range-type-infer.rs	error: rust-js does not support values of type `f32` yet
