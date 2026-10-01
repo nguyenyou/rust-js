@@ -26,6 +26,10 @@ export type Mutation = {
   replace: string;
   /** `bun test` arguments whose tests must catch it. */
   tests: string[];
+  /** Its tests check the corpus's JS snapshots too: it changes only how
+   * the JS reads, as one that takes away the readable form of something
+   * a more general one also does right, and how it reads is what's checked. */
+  snapshots?: boolean;
 };
 
 export const mutations: Mutation[] = [
@@ -831,11 +835,12 @@ export const mutations: Mutation[] = [
   },
   {
     name: "generic-mut-closure-boxed",
-    breaks: "`f: &mut F` of an `F: FnMut()` is a box, which `f()` calls, where a `&mut` to a closure is the closure",
+    breaks: "`f: &mut F` of an `F: FnMut()` is boxed, `f.value()`, where the closure itself is the `&mut` to it, `f()`: right, as a box is, but not the JS a person writes",
     file: "src/lower/representation.rs",
     find: "                self.tcx.fn_trait_kind_from_def_id(id).is_some()\n                    || self.tcx.is_diagnostic_item(sym::Iterator, id)",
     replace: "                false\n                    || self.tcx.is_diagnostic_item(sym::Iterator, id)",
     tests: ["test/corpus.test.ts", "-t", "closure_mut_ref"],
+    snapshots: true,
   },
   {
     name: "closure-mut-refused",
@@ -855,11 +860,12 @@ export const mutations: Mutation[] = [
   },
   {
     name: "mut-ref-as-generic-unboxed",
-    breaks: "`go(&mut x)` of a number, given where a `T` goes, is refused: a `&mut` to a number isn't a box there",
+    breaks: "`go(&mut x)` of a number, given where a `T` goes, is a getter and a setter where it can be a box, `{ value: x }`, and `x` read back after: right, as a handle is, but not the JS a person writes",
     file: "src/lower/calls.rs",
     find: "if param_box || (generic && self.is_boxable(self.thir[place].ty)) {",
     replace: "if param_box {",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_as_generic"],
+    snapshots: true,
   },
   {
     name: "box-reborrow-as-generic-unboxed",
@@ -1559,11 +1565,12 @@ export const mutations: Mutation[] = [
   },
   {
     name: "trait-mut-self-unboxed",
-    breaks: "`n.bump()` of a trait's `&mut self` method on a number is refused: its argument isn't boxed as a function's is",
+    breaks: "`n.bump()` of a trait's `&mut self` method on a number gives a getter and a setter where it can be a box, `{ value: n }`: right, as a handle is, but not the JS a person writes",
     file: "src/lower/calls.rs",
     find: "                Some((method, method_args)) => (method, method_args, None),\n",
     replace: "                Some(_) => return Ok(None),\n",
     tests: ["test/corpus.test.ts", "-t", "trait_mut_self_value"],
+    snapshots: true,
   },
   {
     name: "mut-ref-loop-unchecked",
@@ -1875,13 +1882,14 @@ export function judge(p: Exit, output: string): "caught" | "survived" | "inconcl
 }
 
 /** How `tests` do with `compiler`, what they printed, and how many ran. */
-function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string; exit: Exit } {
+function test(tests: string[], compiler: string, snapshots = false): { passed: boolean; ran: number; output: string; exit: Exit } {
   // What the JS does is what's checked: a corpus snapshot differs with
-  // nearly any change to the compiler, a mutation's or not.
+  // nearly any change to the compiler, a mutation's or not. One that only
+  // changes how the JS reads is checked by its snapshots.
   const p = withRuntime(compiler, () =>
     runSync([process.execPath, "test", ...tests], root, testTimeout, {
       RUST_JS_COMPILER: compiler,
-      RUST_JS_SNAPSHOTS: "ignore",
+      ...(snapshots ? {} : { RUST_JS_SNAPSHOTS: "ignore" }),
     }),
   );
   const output = p.stdout + p.stderr;
@@ -1902,13 +1910,15 @@ async function main() {
   const broken = join(work, "bin", "broken");
   writeFileSync(broken, "#!/bin/sh\necho 'error: rust-js compiles nothing here' >&2\nexit 101\n");
   chmodSync(broken, 0o755);
-  for (const tests of new Set(chosen.map((m) => m.tests.join("\0")))) {
-    const control = test(tests.split("\0"), unmutated);
+  // Each set of tests as its mutations run them, with snapshots or without.
+  for (const key of new Set(chosen.map((m) => [m.snapshots ? "snapshots" : "", ...m.tests].join("\0")))) {
+    const [mode, ...tests] = key.split("\0");
+    const control = test(tests, unmutated, mode === "snapshots");
     if (!control.passed || control.ran === 0) {
-      throw new Error(`\`bun test ${tests.split("\0").join(" ")}\` doesn't pass, or runs nothing, as the compiler is:\n${control.output.slice(-2000)}`);
+      throw new Error(`\`bun test ${tests.join(" ")}\` doesn't pass, or runs nothing, as the compiler is:\n${control.output.slice(-2000)}`);
     }
-    if (test(tests.split("\0"), broken).passed) {
-      throw new Error(`\`bun test ${tests.split("\0").join(" ")}\` passes with a compiler that compiles nothing: it isn't using the one it's given`);
+    if (test(tests, broken, mode === "snapshots").passed) {
+      throw new Error(`\`bun test ${tests.join(" ")}\` passes with a compiler that compiles nothing: it isn't using the one it's given`);
     }
   }
   const rows: [Mutation, string][] = [];
@@ -1918,7 +1928,7 @@ async function main() {
       rows.push([mutation, compiler.problem]);
       continue;
     }
-    const { ran, output, exit } = test(mutation.tests, compiler);
+    const { ran, output, exit } = test(mutation.tests, compiler, mutation.snapshots);
     // Its log, whatever it says, for what it caught or didn't.
     const log = join(work, "logs", `${mutation.name}.log`);
     mkdirSync(join(work, "logs"), { recursive: true });
