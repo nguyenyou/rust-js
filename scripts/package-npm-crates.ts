@@ -1,12 +1,12 @@
-// Pack the crates rust-js releases on npm, `@rust-js/builtins` and
-// `@rust-js/webapi`: each is Cargo's own packaging of its crate, which
+// Pack the crates rust-js releases on npm, `@rust-js/builtins`,
+// `@rust-js/webapi` and `@rust-js/react`: each is Cargo's own packaging of its crate, which
 // `package-crates.ts` makes and verifies with a plain stable rustc, in an
 // npm package that names the crate. What a crate shares with an app, the
 // crates it depends on, is a peer dependency, so an app has one copy of
 // each; Cargo finds them in its `node_modules` by a patch. This never
 // publishes.
 //
-//   bun scripts/package-npm-crates.ts <out-dir>   # <out-dir>/builtins.tgz, webapi.tgz
+//   bun scripts/package-npm-crates.ts <out-dir>   # <out-dir>/builtins.tgz, webapi.tgz, react.tgz
 
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,10 +18,17 @@ if (args.length !== 1 || args[0].startsWith("-")) throw new Error("Usage: bun sc
 const out = resolve(args[0]);
 
 /** Each crate released on npm, by its directory, and its package's name. */
-const packages: Record<string, string> = { builtins: "@rust-js/builtins", webapi: "@rust-js/webapi" };
+const packages: Record<string, string> = { builtins: "@rust-js/builtins", webapi: "@rust-js/webapi", react: "@rust-js/react" };
 
 type Manifest = {
-  package: { name: string; version: string; description: string; license: string };
+  package: {
+    name: string;
+    version: string;
+    description: string;
+    license: string;
+    /** The npm packages a crate binds, `{ react = ">=18.0.0" }`: its package's peers too. */
+    metadata?: { "rust-js"?: { npm?: Record<string, string> } };
+  };
   dependencies?: Record<string, { package?: string; version?: string }>;
 };
 
@@ -53,12 +60,13 @@ try {
     // Its crates' requirements, as Cargo packaged them, are the peer
     // dependencies' ranges: `~0.0.1` means the same to both.
     const manifest = readManifest(join(staging, "Cargo.toml"));
-    const peers = Object.fromEntries(
-      Object.entries(manifest.dependencies ?? {}).flatMap(([key, dep]) => {
+    const peers = Object.fromEntries([
+      ...Object.entries(manifest.dependencies ?? {}).flatMap(([key, dep]) => {
         const peer = npmName.get(dep.package ?? key);
         return peer && dep.version ? [[peer, dep.version]] : [];
       }),
-    );
+      ...Object.entries(manifest.package.metadata?.["rust-js"]?.npm ?? {}),
+    ]);
     const pkg = {
       name,
       version: crate.version,
@@ -68,7 +76,8 @@ try {
       keywords: ["rust-js", "rust"],
       "rust-js": { crate: crate.name },
       ...(Object.keys(peers).length ? { peerDependencies: peers } : {}),
-      files: ["Cargo.toml", "src", "README.md", "LICENSE"],
+      // What Cargo packaged, a build script and what it reads too.
+      files: readdirSync(staging).filter((file) => file !== "package.json").sort(),
     };
     writeFileSync(join(staging, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
     run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", join(out, `${dir}.tgz`)], staging);

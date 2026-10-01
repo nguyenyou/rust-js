@@ -22,6 +22,11 @@ path = "src/lib.rs"
 js = { package = "rust-js-builtins", path = "../builtins", version = "~0.0.1" }
 webapi = { package = "rust-js-webapi", path = "../webapi", version = "~0.0.1" }
 
+# The npm packages it binds, which an app has beside it: from 18.0, the
+# first React its gates have (ADR 0043). Its npm package's peer dependencies.
+[package.metadata.rust-js]
+npm = { react = ">=18.0.0", react-dom = ">=18.0.0" }
+
 # rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_js)"] }

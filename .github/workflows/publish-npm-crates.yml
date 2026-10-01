@@ -1,5 +1,5 @@
-# Publish the crates rust-js releases on npm, @rust-js/builtins and
-# @rust-js/webapi, as `bun run pack:npm-crates` packs them. Run it by hand
+# Publish the crates rust-js releases on npm, @rust-js/builtins,
+# @rust-js/webapi and @rust-js/react, as `bun run pack:npm-crates` packs them. Run it by hand
 # from the Actions tab. It publishes through npm's trusted publishing, with
 # provenance and no token, once each package's settings on npmjs.com trust
 # this workflow; a version already published is left as it is.
@@ -33,7 +33,7 @@ jobs:
 
       - name: Publish each version not yet published
         run: |
-          for name in builtins webapi; do
+          for name in builtins webapi react; do
             version=$(tar -xzf "dist-npm/$name.tgz" -O package/package.json | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)')
             if npm view "@rust-js/$name@$version" version >/dev/null 2>&1; then
               echo "@rust-js/$name@$version is published already"
