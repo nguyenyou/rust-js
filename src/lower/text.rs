@@ -125,10 +125,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::ParseF64);
                 return Ok(Expr::call(Expr::var("$parseF64"), vec![text]));
             }
-            // Rust reads the digits to their nearest `f32`, which through an
-            // `f64` can be missed: not yet (ADR 0122).
+            // The digits' nearest `f32`, which through an `f64` alone can be
+            // missed (ADR 0122).
             if num == Num::F32 {
-                return Err(self.unsupported(span, "`parse` of an `f32`"));
+                self.runtime.insert(Helper::ParseF32);
+                return Ok(Expr::call(Expr::var("$parseF32"), vec![text]));
             }
             let (lo, hi) = num.range();
             // A 64-bit one is read as a BigInt, exactly (ADR 0086).

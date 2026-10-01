@@ -1750,6 +1750,14 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
   },
   {
+    name: "parse-f32-through-f64",
+    breaks: "`s.parse::<f32>()` is the `f64` nearest the digits, rounded to an `f32`, which a hair off a tie rounds as the tie",
+    file: "src/runtime.rs",
+    find: "  if (read.TAG === \"Err\" || !Number.isFinite(d) || Math.fround(d) === d) {",
+    replace: "  if (true) {",
+    tests: ["test/corpus.test.ts", "-t", "f32_parse"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",
