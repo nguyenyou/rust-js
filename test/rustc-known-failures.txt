@@ -4,9 +4,7 @@ abi/c-stack-returning-int64.rs	error: rust-js does not support calling `std::ffi
 abi/nullable-pointer-ffi-compat.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 allocator/empty-alloc-nonnull-guarantee.rs	error: rust-js does not support values of type `std::option::Option<std::boxed::Box<()>>` yet
 allocator/weak-uninhabited-type.rs	error: rust-js does not support calling `std::rc::Weak::<T>::new` yet
-array-slice-vec/byte-literals.rs	error: rust-js does not support this literal yet
 array-slice-vec/destructure-array-1.rs	error: rust-js does not support binding a value with a destructor here yet
-array-slice-vec/estr-slice.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
 array-slice-vec/issue-18425.rs	error: rust-js does not support `[x; N]` of a value that isn't `Copy` yet
 array-slice-vec/slice_binary_search.rs	error: rust-js does not support calling `core::slice::<impl [T]>::binary_search_by_key` yet
 array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support values of type `std::option::Option<&Z>` yet
@@ -151,14 +149,14 @@ consts/const_unsafe_unreachable.rs	error: rust-js does not support calling `std:
 consts/const-block.rs	error: rust-js does not support statics of type `Foo` yet
 consts/const-blocks/const-repeat.rs	error: rust-js does not support constants of type `std::vec::Vec<i32>` yet
 consts/const-blocks/fn-call-in-const.rs	error: rust-js does not support values of type `std::option::Option<Bar>` yet
-consts/const-byte-str-cast.rs	error: rust-js does not support this literal yet
+consts/const-byte-str-cast.rs	error: rust-js does not support this expression yet
 consts/const-cast-ptr-int.rs	error: rust-js does not support statics of type `TestStruct` yet
 consts/const-cast.rs	error: rust-js does not support constants of type `extern "C" fn()` yet
 consts/const-closure-fn-trait-object.rs	error: rust-js does not support constants of type `&'static (dyn std::ops::Fn() + 'static)` yet
 consts/const-err-rpass.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/const-eval/issue-64908.rs	error: rust-js does not support `size_of` of a type parameter yet
 consts/const-eval/ptr_fragments.rs	error: rust-js does not support constants of type `std::mem::MaybeUninit<*const i32>` yet
-consts/const-eval/strlen.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
+consts/const-eval/strlen.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 consts/const-extern-function.rs	error: rust-js does not support statics of type `extern "C" fn()` yet
 consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn() -> isize>` yet
 consts/const-int-arithmetic.rs	error: rust-js does not support constants of type `i128` yet
@@ -170,8 +168,6 @@ consts/const-size_of-align_of.rs	error: rust-js does not support `size_of` of a 
 consts/const-trait-to-trait.rs	error: rust-js does not support constants of type `&'static (dyn Trait + 'static)` yet
 consts/const-typeid-of-rpass.rs	error: rust-js does not support statics of type `std::any::TypeId` yet
 consts/const-vec-of-fns.rs	error: rust-js does not support statics of type `&'static [fn()]` yet
-consts/consts-in-patterns.rs	error: rust-js does not support this literal yet
-consts/deref_in_pattern.rs	error: rust-js does not support this literal yet
 consts/issue-105536-const-val-roundtrip-ptr-eq.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/issue-17718-borrow-interior.rs	error: rust-js does not support statics of type `&'static usize` yet
 consts/issue-21721.rs	error: rust-js does not support values of type `*const u8` yet
@@ -181,12 +177,10 @@ consts/issue-46553.rs	error: rust-js does not support statics of type `Data<i32>
 consts/issue-54582.rs	error: rust-js does not support statics of type `[(&'static (dyn Stage + 'static), &'static str); 1]` yet
 consts/issue-58435-ice-with-assoc-const.rs	error: rust-js does not support this constant yet
 consts/issue-69532.rs	error: rust-js does not support calling `core::f64::<impl f64>::from_bits` yet
-consts/issue-broken-mir.rs	error: rust-js does not support this literal yet
 consts/load-preserves-partial-init.rs	error: rust-js does not support constants of type `BagOfBits<[usize; 1]>` yet
 consts/method-reference-in-const-dyn-fn.rs	error: rust-js does not support constants of type `&'static (dyn for<'a> std::ops::Fn(&'a mut Foo) + 'static)` yet
 consts/mozjs-error.rs	error: rust-js does not support this constant yet
 consts/oncecell-const-init-57781.rs	error: rust-js does not support this constant yet
-consts/references.rs	error: rust-js does not support this literal yet
 consts/static-mut-refs.rs	error: rust-js does not support statics of type `*mut [isize]` yet
 consts/static-raw-pointer-interning.rs	error: rust-js does not support statics of type `Foo` yet
 consts/static-raw-pointer-interning2.rs	error: rust-js does not support statics of type `Foo` yet
@@ -313,7 +307,6 @@ layout/issue-112048-unsizing-field-order.rs	error: rust-js does not support a `G
 layout/issue-112048-unsizing-niche.rs	error: rust-js does not support this expression yet
 layout/null-pointer-optimization.rs	error: rust-js does not support `{:?}` of a `fn()` yet
 let-else/let-else-drop-order.rs	error: rust-js does not support calling `std::iter::once` yet
-lexer/crlf-in-byte-string-literal.rs	error: rust-js does not support this literal yet
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
 lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
@@ -323,10 +316,8 @@ macros/colorful-write-macros.rs	error: rust-js does not support user implementat
 macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 macros/try-macro.rs	error: rust-js does not support calling `std::convert::From::from` yet
-match/issue-46920-byte-array-patterns.rs	error: rust-js does not support this literal yet
 match/match-on-negative-integer-ranges.rs	error: rust-js does not support this expression yet
 match/match-ref-mut-stability.rs	error: rust-js does not support values of type `*const i32` yet
-match/pattern-deref-miscompile.rs	error: rust-js does not support this literal yet
 match/struct-reference-patterns-12285.rs	error: rust-js does not support values of type `std::option::Option<&S>` yet
 methods/inherent-method-resolution-on-deref-type-53843.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 methods/method-mut-self-modifies-mut-slice-lvalue.rs	error: rust-js does not support `&mut` to a `&mut [u8]` yet
@@ -382,9 +373,7 @@ packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::D
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 parser/macro/statement-boundaries.rs	error: rust-js does not support this expression yet
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
-parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
-pattern/match-array-against-slice.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 pattern/premature-match-scrutinee-temporary-drop-10683.rs	error: rust-js does not support calling `std::str::<impl str>::to_ascii_lowercase` yet
@@ -411,10 +400,7 @@ rfcs/rfc-0107-bind-by-move-pattern-guards/bind-by-move-no-guards.rs	error: rust-
 rfcs/rfc-1445-restrict-constants-in-patterns/phantom-data-is-structurally-matchable.rs	error: rust-js does not support `Default` of `std::marker::PhantomData<main::NotSM>` yet
 rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics of type `&'static for<'a> fn(&'a [u8]) -> &'a [u8]` yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
-rfcs/rfc-2005-default-binding-mode/constref.rs	error: rust-js does not support this literal yet
 rfcs/rfc-2005-default-binding-mode/general.rs	error: rust-js does not support `&mut` to a `&mut std::option::Option<i32>` yet
-rfcs/rfc-2005-default-binding-mode/lit-ok.rs	error: rust-js does not support this literal yet
-rfcs/rfc-2005-default-binding-mode/slice-ok.rs	error: rust-js does not support this literal yet
 rfcs/rfc-2091-track-caller/file-is-nul-terminated.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
 rfcs/rfc-2091-track-caller/tracked-trait-impls.rs	error: rust-js does not support values of type `(*const str) is !null` yet
@@ -424,7 +410,7 @@ rfcs/rfc-2302-self-struct-ctor/rfc-2302-self-struct-ctor.rs	error: rust-js does 
 rfcs/rfc-2361-dbg-macro/dbg-macro-expected-behavior.rs	error: rust-js does not support `{:#?}` yet
 rfcs/rfc-2497-if-let-chains/if_let_guard_indirect_let_chains.rs	error: rust-js does not support this expression yet
 rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<std::option::Option<i32>>>` yet
-rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support this literal yet
+rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 rust-2018/uniform-paths/redundant.rs	error: rust-js does not support calling `std::io::stdout` yet
 self/arbitrary_self_types_nested.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::rc::Rc<std::boxed::Box<Ty>>>) is !null` yet
@@ -438,7 +424,6 @@ specialization/soundness/partial_eq_range_inclusive.rs	error: rust-js does not s
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
 statics/static-lazy-init-with-arena-set.rs	error: rust-js does not support statics of type `*const ArenaSet<std::vec::Vec<u8>>` yet
-statics/static-promotion.rs	error: rust-js does not support this literal yet
 statics/static-recursive.rs	error: rust-js does not support statics of type `*const u8` yet
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/char-escape-unicode.rs	error: rust-js does not support iterating over `std::char::EscapeUnicode` yet
