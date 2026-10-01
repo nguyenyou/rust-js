@@ -119,9 +119,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .inputs()
                 .to_vec();
             for ((value, &arg), input) in values.iter_mut().zip(args).zip(inputs) {
-                if matches!(input.kind(), ty::Param(_)) && self.is_user_iterator(self.reveal(self.thir[arg].ty)) {
+                if matches!(input.kind(), ty::Param(_)) && self.given_as_iterator(def_id, input, self.thir[arg].ty) {
                     let taken = std::mem::replace(value, Expr::undefined());
-                    *value = self.iter_source(taken, self.thir[arg].ty, span)?;
+                    *value = self.iter_source(taken, self.thir[arg].ty, span, out)?;
                 }
             }
             let mut args = values;
@@ -332,6 +332,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Std::Map(op) = known {
             return self.map_call(op, args, generic_args, discarded, span, out);
+        }
+        if let Std::Range(op) = known {
+            return self.range_call(op, args, span, out);
         }
         if let Std::Comb(comb) = known {
             return self.comb_call(comb, args, generic_args, span, out);
@@ -1051,6 +1054,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(span, "`{:x}` and the like here"));
             }
             Std::Map(_)
+            | Std::Range(_)
             | Std::Comb(_)
             | Std::IterComb(_)
             | Std::Text(_)
@@ -1080,8 +1084,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `count()` of a JS iterator (ADR 0055) takes all of it.
             Std::Len if self.is_lazy_iter(self.thir[args[0]].ty) => {
-                let items = self.iter_source(arg(), self.thir[args[0]].ty, span)?;
+                let items = self.iter_source(arg(), self.thir[args[0]].ty, span, out)?;
                 Expr::member(Expr::call(Expr::member(items, "toArray"), vec![]), "length")
+            }
+            // A range's, which is an object, is its items' (ADR 0129).
+            Std::Len if self.range_kind(self.thir[args[0]].ty.peel_refs()).is_some() => {
+                let items = self.iter_source(arg(), self.thir[args[0]].ty.peel_refs(), span, out)?;
+                Expr::member(items, "length")
             }
             Std::Len => Expr::member(arg(), "length"),
             Std::Index => {
@@ -1543,10 +1552,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let mut value = self.expr(arg, out)?;
                     // An iterator of the crate's own, given where a generic one
                     // goes, is a JS iterator (ADR 0061).
-                    if inputs.get(i).is_some_and(|input| matches!(input.kind(), ty::Param(_)))
-                        && self.is_user_iterator(self.reveal(self.thir[arg].ty))
+                    if let Some(&input) = inputs.get(i)
+                        && matches!(input.kind(), ty::Param(_))
+                        && self.given_as_iterator(def_id, input, self.thir[arg].ty)
                     {
-                        value = self.iter_source(value, self.thir[arg].ty, span)?;
+                        value = self.iter_source(value, self.thir[arg].ty, span, out)?;
                     }
                     let value = if value.reads_same() {
                         value

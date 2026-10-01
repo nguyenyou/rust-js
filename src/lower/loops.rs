@@ -1,6 +1,8 @@
 //! Loop lowering and labels: preserve control flow and iteration order.
 
 use super::body_queries::ForLoop;
+use super::ranges::RangeKind;
+use super::representation::Num;
 use super::{Dest, FnCx, Loop, R, Std, Var, fresh_in, is_enumerate_pair, std_impls, without_refs};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
@@ -86,15 +88,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let head_ty = self.reveal(self.thir[f.head].ty);
         let head_span = self.thir[f.head].span;
         let inclusive = self.inclusive_range(f.head);
-        let range = self.is_lang_adt(head_ty, LangItem::Range) || inclusive.is_some();
+        let kind = self.range_kind(head_ty);
+        // Of numbers: a `char`'s is a sequence, `$charRange(a, b)`.
+        let range = matches!(
+            kind,
+            Some(RangeKind::Exclusive | RangeKind::Inclusive | RangeKind::From)
+        ) && self.range_index(head_ty).and_then(Num::of).is_some();
+        // `1..=n` includes its end.
+        let includes_end = kind == Some(RangeKind::Inclusive);
+        let written = inclusive.is_some()
+            || (kind == Some(RangeKind::Exclusive) && matches!(self.thir[self.strip(f.head)].kind, ExprKind::Adt(_)));
 
         // What to loop over: a range's bounds, or a sequence.
-        let (iterable, start_end) = if range {
+        let (iterable, start_end) = if range && !written {
+            // A range kept as a value (ADR 0129): `for (let i = r.start; i < r.end; i++)`,
+            // and `a..` has no end. Its end is a `const` if anything could change it.
+            let index = self.range_index(head_ty).expect("a range's bounds");
+            self.num(index, head_span)?;
+            let value = self.expr(f.head, out)?;
+            let stable = self.stable_place(f.head).is_some();
+            let mut parts = self.range_parts(value, kind.expect("a range"), out).into_iter();
+            let start = parts.next().expect("a start");
+            let end = parts.next().map(|end| {
+                if end.is_constant() || stable {
+                    end
+                } else {
+                    self.spill("end", end, out)
+                }
+            });
+            (None, Some((start, end)))
+        } else if range {
             let (start, end) = match inclusive {
                 Some(bounds) => bounds,
                 None => {
                     let ExprKind::Adt(ref adt) = self.thir[self.strip(f.head)].kind else {
-                        return Err(self.unsupported(head_span, "this range"));
+                        unreachable!("a range written as one")
                     };
                     let bound = |i: usize| {
                         adt.fields
@@ -118,7 +146,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 out.push(StmtKind::Const(name.clone(), end_js).at(span));
                 Expr::var(&name)
             };
-            (None, Some((start_js, end_js)))
+            (None, Some((start_js, Some(end_js))))
         } else {
             let peeled = head_ty.peel_refs();
             // An `Option`, or a `&Option`: a `&mut` one's items are places.
@@ -126,6 +154,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .option_of(peeled)
                 .filter(|_| !matches!(head_ty.kind(), ty::Ref(_, _, Mutability::Mut)));
             let sequence = option.is_some()
+                || kind.is_some()
                 || peeled.is_array()
                 || peeled.is_slice()
                 || self.is_vec_like(peeled)
@@ -146,7 +175,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => head,
             };
             let head = self.in_order_of(head, head_ty, head_span)?;
-            (Some(self.iter_source(head, head_ty, head_span)?), None)
+            (Some(self.iter_source(head, head_ty, head_span, out)?), None)
         };
 
         // The loop variable: the pattern's own name if it's a plain
@@ -215,9 +244,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let js::Pattern::Name(name) = name else {
                         unreachable!("a range's item is a number, bound by name")
                     };
-                    // `1..=n` includes its end.
-                    let op = if inclusive.is_some() { Op::Le } else { Op::Lt };
-                    let test = Expr::bin(op, Expr::var(&name), end);
+                    let op = if includes_end { Op::Le } else { Op::Lt };
+                    // `a..` never ends.
+                    let test = match end {
+                        Some(end) => Expr::bin(op, Expr::var(&name), end),
+                        None => Expr::bool(true),
+                    };
                     StmtKind::For {
                         label,
                         name,

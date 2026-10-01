@@ -6,6 +6,7 @@ use super::combinators::{Comb, HeapOp, IterComb, IterSource, StepOp};
 use super::format_spec::Radix;
 use super::maps::{MapOp, Part};
 use super::numbers::NumOp;
+use super::ranges::{RangeKind, RangeOp};
 use super::representation::Num;
 use super::text::TextOp;
 use rustc_ast::Mutability;
@@ -127,6 +128,8 @@ pub(super) enum Std {
     Map(MapOp),
     /// A `char` or `str` method, `parse`, or slicing by a range (ADR 0063).
     Text(TextOp),
+    /// A range's method, or `a..=b` (ADR 0129).
+    Range(RangeOp),
     Number(NumOp),
     /// A `BinaryHeap`'s own methods (ADR 0068).
     Heap(HeapOp),
@@ -289,6 +292,9 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_replace") {
             return Some(Std::Replace);
+        }
+        if tcx.is_lang_item(def_id, LangItem::RangeInclusiveNew) {
+            return Some(Std::Range(RangeOp::New));
         }
         // std's iterator sources (ADR 0128), by path: most have no
         // diagnostic item.
@@ -454,10 +460,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             // `&v[a..b]` of a slice, an array or a `Vec` (ADR 0063).
             if tcx.is_lang_item(trait_, LangItem::Index)
                 && let Some(range) = args.types().nth(1)
-                && ["Range", "RangeFrom", "RangeTo", "RangeFull"].iter().any(|name| {
-                    matches!(range.kind(), ty::Adt(adt, _) if tcx.item_name(adt.did()).as_str() == *name
-                        && tcx.crate_name(adt.did().krate) == sym::core)
-                })
+                && self.range_kind(range).is_some()
                 && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_vec_like(ty.peel_refs()))
             {
                 return Some(Std::Text(TextOp::Slice));
@@ -490,6 +493,15 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                         .is_some_and(|b| self.is_lang_adt(b, LangItem::String))
                 };
                 return Some(match tcx.item_name(def_id).as_str() {
+                    // A `Range`'s and an `a..`'s move its `start` (ADR 0129).
+                    "next"
+                        if matches!(
+                            self.range_kind(ty.peel_refs()),
+                            Some(RangeKind::Exclusive | RangeKind::From)
+                        ) =>
+                    {
+                        Std::Range(RangeOp::Next)
+                    }
                     // One of the crate's own is its impl's `next` (ADR 0055).
                     "next" if !self.is_user_iterator(ty) => Std::Step(StepOp::Next),
                     "peekable" => Std::Step(StepOp::Peekable),
@@ -527,6 +539,25 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_vec_like(ty.peel_refs()))
             {
                 return Some(Std::Same);
+            }
+            // A range is an iterator already, and its `len` and `next_back`
+            // are its bounds' (ADR 0129).
+            if let Some(kind) = self.range_kind(ty) {
+                let stepped = matches!(kind, RangeKind::Exclusive | RangeKind::Inclusive);
+                let name = tcx.item_name(def_id);
+                match name.as_str() {
+                    "into_iter" if tcx.is_diagnostic_item(sym::IntoIterator, trait_) => return Some(Std::Same),
+                    "len" if stepped && tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator" => {
+                        return Some(Std::Range(RangeOp::Len));
+                    }
+                    "next_back"
+                        if kind == RangeKind::Exclusive
+                            && tcx.get_diagnostic_item(Symbol::intern("DoubleEndedIterator")) == Some(trait_) =>
+                    {
+                        return Some(Std::Range(RangeOp::NextBack));
+                    }
+                    _ => {}
+                }
             }
             // An `Option`'s, or a `&Option`'s: a `&mut` one's items are places.
             if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
@@ -609,6 +640,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let adt = |name: &str| self.is_std_adt(owner, Symbol::intern(name));
         let string = self.is_lang_adt(owner, LangItem::String);
         let option = self.is_lang_adt(owner, LangItem::Option);
+        let range = self.range_kind(owner);
         let result = self.is_std_adt(owner, sym::Result);
         let ordering = self.is_lang_adt(owner, LangItem::OrderingEnum);
         let local_key = adt("LocalKey");
@@ -764,6 +796,13 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "join" if owner.is_slice() => Std::Method("join"),
             "push_str" | "push" if string => Std::PushStr,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
+            "contains" if range.is_some() => Std::Range(RangeOp::Contains),
+            "start" if range == Some(RangeKind::Inclusive) => Std::Range(RangeOp::Bound("start")),
+            "end" if range == Some(RangeKind::Inclusive) => Std::Range(RangeOp::Bound("end")),
+            "into_inner" if range == Some(RangeKind::Inclusive) => Std::Range(RangeOp::IntoInner),
+            "is_empty" if matches!(range, Some(RangeKind::Exclusive | RangeKind::Inclusive)) => {
+                Std::Range(RangeOp::IsEmpty)
+            }
             "as_ref" | "as_mut" if option => Std::Pointee,
             "is_some" if option => Std::IsSome,
             "iter" if option => Std::OptionIter,
@@ -815,6 +854,22 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
         ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
+    }
+
+    /// Which of std's ranges `ty` is, if it's one (ADR 0129).
+    pub(super) fn range_kind(&self, ty: Ty<'tcx>) -> Option<RangeKind> {
+        let ty::Adt(adt, _) = ty.kind() else { return None };
+        [
+            (LangItem::Range, RangeKind::Exclusive),
+            (LangItem::RangeInclusiveStruct, RangeKind::Inclusive),
+            (LangItem::RangeFrom, RangeKind::From),
+            (LangItem::RangeTo, RangeKind::To),
+            (LangItem::RangeToInclusive, RangeKind::ToInclusive),
+            (LangItem::RangeFull, RangeKind::Full),
+        ]
+        .into_iter()
+        .find(|&(item, _)| self.tcx.is_lang_item(adt.did(), item))
+        .map(|(_, kind)| kind)
     }
 
     pub(super) fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
@@ -1591,6 +1646,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             && ["std::iter::Repeat", "std::iter::RepeatWith", "std::iter::Successors", "std::iter::FromFn"]
                 .contains(&self.tcx.def_path_str(adt.did()).as_str()));
         endless
+            || self.range_kind(ty) == Some(RangeKind::From)
             || self.is_user_iterator(ty)
             || self.is_generic_iter(ty)
             || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))

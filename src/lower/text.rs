@@ -3,6 +3,7 @@
 //! questions are regular expressions of the Unicode properties Rust uses:
 //! `c.is_whitespace()` is `/^\p{White_Space}$/u.test(c)`.
 
+use super::ranges::RangeKind;
 use super::representation::Num;
 use super::{FnCx, R};
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
@@ -177,9 +178,40 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn slice_range(&mut self, op: TextOp, args: &[ExprId], span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let range = self.strip(args[1]);
         let range_ty = self.thir[range].ty;
+        let (helper, name) = match op {
+            TextOp::Drain => (Helper::Drain, "$drain"),
+            _ => (Helper::SliceRange, "$slice"),
+        };
+        let kind = self.range_kind(range_ty);
         let fields: Vec<(usize, ExprId)> = match self.thir[range].kind {
-            ExprKind::Adt(ref adt) => adt.fields.iter().map(|f| (f.name.as_usize(), f.expr)).collect(),
-            _ => return Err(self.unsupported(span, "slicing by a range in a variable")),
+            ExprKind::Adt(ref adt) if kind != Some(RangeKind::ToInclusive) => {
+                adt.fields.iter().map(|f| (f.name.as_usize(), f.expr)).collect()
+            }
+            // A range kept as a value, or `a..=b` or `..=b` (ADR 0129): its bounds.
+            _ => {
+                let Some(kind) = kind else {
+                    return Err(self.unsupported(span, "slicing by this range"));
+                };
+                let [items, range]: [Expr; 2] = self.operands(&[args[0], args[1]], out)?.try_into().ok().unwrap();
+                let parts = self.range_parts(range, kind, out);
+                // `..=1` is `..2`.
+                let past = |end: &Expr| match end.as_int() {
+                    Some(n) => Expr::int(n + 1),
+                    None => Expr::bin(Op::Add, end.clone(), Expr::int(1)),
+                };
+                let (start, end) = match (kind, parts.as_slice()) {
+                    (RangeKind::Exclusive, [start, end]) => (start.clone(), Some(end.clone())),
+                    (RangeKind::Inclusive, [start, end]) => (start.clone(), Some(past(end))),
+                    (RangeKind::From, [start]) => (start.clone(), None),
+                    (RangeKind::To, [end]) => (Expr::int(0), Some(end.clone())),
+                    (RangeKind::ToInclusive, [end]) => (Expr::int(0), Some(past(end))),
+                    _ => (Expr::int(0), None),
+                };
+                self.runtime.insert(helper);
+                let mut list = vec![items, start];
+                list.extend(end);
+                return Ok(Expr::call(Expr::var(name), list));
+            }
         };
         let bound = |i: usize| fields.iter().find(|&&(n, _)| n == i).map(|&(_, e)| e);
         let (start, end) = if self.is_lang_adt(range_ty, LangItem::Range) {
@@ -203,10 +235,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             None => Expr::int(0),
         };
         let end = end.map(|_| values.next().expect("an end"));
-        let (helper, name) = match op {
-            TextOp::Drain => (Helper::Drain, "$drain"),
-            _ => (Helper::SliceRange, "$slice"),
-        };
         self.runtime.insert(helper);
         let mut list = vec![items, start];
         list.extend(end);

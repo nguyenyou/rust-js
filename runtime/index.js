@@ -860,6 +860,35 @@ export function $bigRange(start, end) {
   return items;
 }
 
+export function* $rangeFrom(start) {
+  for (let i = start; ; i++) {
+    yield i;
+  }
+}
+
+export function $rangeNext(range) {
+  return range.start < range.end ? range.start++ : undefined;
+}
+
+export function $rangeNextBack(range) {
+  return range.start < range.end ? --range.end : undefined;
+}
+
+export function $rangeFromNext(range) {
+  return range.start++;
+}
+
+export function $charRange(start, end, inclusive = false) {
+  const items = [];
+  const last = end.codePointAt(0) - (inclusive ? 0 : 1);
+  for (let c = start.codePointAt(0); c <= last; c++) {
+    if (c < 0xd800 || c > 0xdfff) {
+      items.push(String.fromCodePoint(c));
+    }
+  }
+  return items;
+}
+
 export function $tryFromInt(x, lo, hi) {
   if (x < lo) return { TAG: "Err", _0: "NegOverflow" };
   if (x > hi) return { TAG: "Err", _0: "PosOverflow" };

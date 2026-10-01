@@ -12,7 +12,7 @@ use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
-use rustc_span::{Symbol, sym};
+use rustc_span::{DesugaringKind, Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Made by serde's `#[derive(Serialize)]` or `#[derive(Deserialize)]`, or
@@ -244,7 +244,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
 
     let paths: HashMap<LocalModDefId, Vec<String>> = modules.iter().map(|&m| (m, module_path(tcx, m))).collect();
 
-    let mutated = mutated_types(all_bodies);
+    let mutated = mutated_types(tcx, all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
     let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
     let generic_consts = generic_consts(tcx, all_bodies);
@@ -870,18 +870,26 @@ fn generic_consts(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> HashSet<DefId> {
 /// The types whose JS objects get changed in place somewhere in the crate:
 /// `a.b.c = ..` changes the object `a.b`, so it's `a.b`'s type. Only these
 /// ever need copying (ADR 0020).
-fn mutated_types<'tcx>(all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
+fn mutated_types<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[&Body<'tcx>]) -> HashSet<Ty<'tcx>> {
     let mut mutated = HashSet::new();
     for body in all_bodies {
         for expr in body.thir.exprs.iter() {
             // An enum something takes `&mut` of, or matches with a `ref mut`
             // binding, may have a variant's field changed through it.
             let enum_ty = |ty: Ty<'tcx>| matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if adt.is_enum());
+            // A range's bounds are changed by std's methods, as `next()` (ADR 0129),
+            // though not by a `for`, which steps through its own.
+            let range_ty = |ty: Ty<'tcx>| {
+                !expr.span.is_desugaring(DesugaringKind::ForLoop)
+                    && matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if [LangItem::Range, LangItem::RangeInclusiveStruct, LangItem::RangeFrom]
+                    .into_iter()
+                    .any(|item| tcx.is_lang_item(adt.did(), item)))
+            };
             match expr.kind {
                 ExprKind::Borrow {
                     borrow_kind: BorrowKind::Mut { .. },
                     arg,
-                } if enum_ty(body.thir[arg].ty) => {
+                } if enum_ty(body.thir[arg].ty) || range_ty(body.thir[arg].ty) => {
                     mutated.insert(body.thir[arg].ty.peel_refs());
                 }
                 ExprKind::Match {

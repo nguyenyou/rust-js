@@ -30,7 +30,7 @@ for (const [name, source, message, crate] of [
   ["B-tree keyed by a struct", '#[derive(PartialEq, Eq, PartialOrd, Ord)] pub struct P { pub x: u32 }\npub fn f() -> usize { let m: std::collections::BTreeMap<P, u32> = std::collections::BTreeMap::new(); m.len() }', "does not support values of type `P`"],
   ["== on maps", 'pub fn f(a: &std::collections::HashMap<u32, u32>, b: &std::collections::HashMap<u32, u32>) -> bool { a == b }', "`==` on"],
   ["parse to a type without FromStr support", 'pub fn f(s: &str) -> bool { s.parse::<std::net::IpAddr>().is_ok() }', "does not support"],
-  ["slicing by a range in a variable", 'pub fn f(v: &[u32], r: std::ops::Range<usize>) -> usize { v[r].len() }', "slicing by a range in a variable"],
+  ["next() of a RangeInclusive kept as a value", 'pub fn f(r: &mut std::ops::RangeInclusive<u32>) -> Option<u32> { r.next() }', "kept as a value"],
   ["byte offsets of a string", 'pub fn f(s: &str) -> Option<usize> { s.find(\'o\') }', "`find()` of a string"],
   ["binary_search of floats", 'pub fn f(v: &[f64]) -> bool { v.binary_search_by(|x| x.total_cmp(&1.0)).is_ok() }', "does not support"],
   // `a + b` of a `T: Add` is its dictionary's (ADR 0108); `a += b` isn't yet.

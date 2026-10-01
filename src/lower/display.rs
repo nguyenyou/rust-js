@@ -368,6 +368,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let args = self.args_of(debug, ty);
             return self.impl_call(fmt, args, vec![value], span);
         }
+        if self.range_kind(ty).is_some() {
+            return self.range_debug(value, ty, span);
+        }
         match ty.kind() {
             // A constant is known: `Some(1.0)` is `"Some(1.0)"`, with no test.
             _ if let Some(inner) = self.option_of(ty)
@@ -522,7 +525,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `f(value)`, with a function that only returns written in place when
     /// `value` is a variable: `value == null ? "None" : ..`.
-    fn applied(&mut self, f: Expr, value: Expr) -> Expr {
+    pub(super) fn applied(&mut self, f: Expr, value: Expr) -> Expr {
         if let js::ExprKind::Arrow(params, body) = &f.kind
             && let [js::Pattern::Name(name)] = params.as_slice()
             && let [

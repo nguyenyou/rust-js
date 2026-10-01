@@ -99,6 +99,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(..) if self.is_map(ty) => true,
             ty::Adt(..) if std("Rc") || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
             ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => true,
+            // A range is its bounds (ADR 0129), changed in place only if
+            // `contains_mutated` says so.
+            ty::Adt(_, args) if self.range_kind(ty).is_some() => args
+                .types()
+                .next()
+                .is_some_and(|index| self.needs_clone_in(index, seen)),
             ty::Adt(adt, args) if ty.is_box() || !self.is_std(adt.did()) || self.is_known_std(ty) => adt
                 .all_fields()
                 .any(|f| self.needs_clone_in(f.ty(self.tcx, args).skip_normalization(), seen)),
@@ -281,6 +287,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let f = Expr::arrow(params, vec![StmtKind::Return(Some(item)).at(js::Span::NONE)]);
                 let all = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![place]);
                 Ok(Expr::new_(class, vec![Expr::call(Expr::member(all, "map"), vec![f])]))
+            }
+            // `{ start: r.start, end: r.end }` (ADR 0129).
+            ty::Adt(_, args) if let Some(kind) = self.range_kind(ty) => {
+                let props = kind
+                    .bounds()
+                    .iter()
+                    .map(|&name| {
+                        let bound = self.clone_value(Expr::member(place.clone(), name), args.type_at(0), span, out)?;
+                        Ok(Prop::Field(name.into(), bound))
+                    })
+                    .collect::<R<_>>()?;
+                Ok(Expr::object(props))
             }
             ty::Adt(_, args) if self.is_lang_adt(ty, LangItem::Option) => {
                 let inner = args.type_at(0);
@@ -552,6 +570,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if self.is_primitive_eq(inner) {
                 return Ok(Expr::bin(Op::LooseEq, a, b));
             }
+        }
+        // Its bounds' (ADR 0129): `a.start === b.start && a.end === b.end`.
+        if let Some(kind) = self.range_kind(ty) {
+            let index = self.range_index(ty);
+            let a = self.range_parts(a, kind, out);
+            let b = self.range_parts(b, kind, out);
+            let mut all: Option<Expr> = None;
+            for (x, y) in a.into_iter().zip(b) {
+                let part = self.eq_value(x, y, index.expect("a bound's type"), span, out)?;
+                all = Some(match all {
+                    Some(all) => Expr::bin(Op::And, all, part),
+                    None => part,
+                });
+            }
+            return Ok(all.unwrap_or_else(|| Expr::bool(true)));
         }
         let structural = matches!(ty.kind(), ty::Tuple(_) | ty::Array(..) | ty::Slice(_))
             || self.is_std_wrapper(ty)

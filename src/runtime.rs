@@ -88,6 +88,11 @@ helpers! {
     BigMinMax,
     ParseBig,
     BigRange,
+    RangeFrom,
+    RangeNext,
+    RangeNextBack,
+    RangeFromNext,
+    CharRange,
     TryFromInt,
     Print,
     EmptyPattern,
@@ -679,6 +684,54 @@ function $tryFromInt(x, lo, hi) {
 "#
             }
             // `a..b` of `i64`s or `u64`s, collected (ADR 0086).
+            // `a..`, which never ends (ADR 0129): `++` steps a BigInt too.
+            Helper::RangeFrom => {
+                r#"
+function* $rangeFrom(start) {
+  for (let i = start; ; i++) {
+    yield i;
+  }
+}
+"#
+            }
+            // A `Range`'s `next()` and `next_back()` move its bounds, as Rust's do.
+            Helper::RangeNext => {
+                r#"
+function $rangeNext(range) {
+  return range.start < range.end ? range.start++ : undefined;
+}
+"#
+            }
+            // `a..`'s `next()`: past its type's end it counts on, as `$rangeFrom` does.
+            Helper::RangeFromNext => {
+                r#"
+function $rangeFromNext(range) {
+  return range.start++;
+}
+"#
+            }
+            // A range of `char`s, which skips the surrogates no `char` is, as Rust's does.
+            Helper::CharRange => {
+                r#"
+function $charRange(start, end, inclusive = false) {
+  const items = [];
+  const last = end.codePointAt(0) - (inclusive ? 0 : 1);
+  for (let c = start.codePointAt(0); c <= last; c++) {
+    if (c < 0xd800 || c > 0xdfff) {
+      items.push(String.fromCodePoint(c));
+    }
+  }
+  return items;
+}
+"#
+            }
+            Helper::RangeNextBack => {
+                r#"
+function $rangeNextBack(range) {
+  return range.start < range.end ? --range.end : undefined;
+}
+"#
+            }
             Helper::BigRange => {
                 r#"
 function $bigRange(start, end) {

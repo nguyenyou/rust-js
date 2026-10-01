@@ -55,6 +55,7 @@ mod ordering;
 mod patterns;
 mod pipeline;
 mod places;
+mod ranges;
 mod recognition;
 mod representation;
 mod serde;

@@ -198,6 +198,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let it = self.expr(args[0], out)?;
                 helper(self, Helper::Next, "$next", vec![it])
             }
+            // A `RangeInclusive` keeps whether it's reached its end, which
+            // its object has no field for (ADR 0129).
+            StepOp::Next if self.is_kept(args[0]) && self.range_kind(receiver_ty).is_some() => {
+                return Err(self.unsupported(span, &format!("`next()` of a `{receiver_ty}` kept as a value")));
+            }
             // One kept elsewhere, as a field or a parameter, would have to know
             // where it is too: a `Peekable` does.
             StepOp::Next if self.is_kept(args[0]) => {
@@ -209,7 +214,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A new one, `v.iter().skip(2).next()`: its first item.
             StepOp::Next => {
                 let items = self.iter_value(args[0], out)?;
-                let items = self.iter_source(items, receiver_ty, span)?;
+                let items = self.iter_source(items, receiver_ty, span, out)?;
                 if boxed {
                     self.some_at(items, Expr::int(0))
                 } else {
@@ -221,7 +226,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return Err(self.unsupported(span, "`peekable` of a lazy iterator"));
                 }
                 let items = self.iter_value(args[0], out)?;
-                let items = self.iter_source(items, receiver_ty, span)?;
+                let items = self.iter_source(items, receiver_ty, span, out)?;
                 helper(self, Helper::Iter, "$iter", vec![items])
             }
             StepOp::Peek if boxed => {

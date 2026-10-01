@@ -117,7 +117,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && !self.has_drops(ty)
         {
             let items = self.iter_value(init, out)?;
-            let items = self.iter_source(items, ty, span)?;
+            let items = self.iter_source(items, ty, span, out)?;
             self.runtime.insert(Helper::Iter);
             let value = Expr::call(Expr::var("$iter"), vec![items]);
             let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);

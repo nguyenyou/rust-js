@@ -11,6 +11,7 @@ use rustc_ast::LitKind;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
 use rustc_middle::ty::{self, Ty};
+use rustc_span::def_id::DefId;
 use rustc_span::{ErrorGuaranteed, Span, Symbol, sym};
 
 /// A piece of a `format_args!` template.
@@ -358,10 +359,44 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.recognition().is_lazy_iter(ty)
     }
 
-    /// An iterator of the crate's own as a JS one, `$iterator(it,
-    /// countdownIterator_next)`. Anything else is `value` itself.
-    pub(super) fn iter_source(&mut self, value: Expr, ty: ty::Ty<'tcx>, span: Span) -> R<Expr> {
+    /// Is a `ty` given for `callee`'s type parameter `input` one whose JS
+    /// value isn't an iterator, where one goes: one of the crate's own, or a
+    /// range, an object (ADR 0129), where `input` is an `Iterator` or an
+    /// `IntoIterator`. A range is itself anywhere else.
+    pub(super) fn given_as_iterator(&self, callee: DefId, input: ty::Ty<'tcx>, ty: ty::Ty<'tcx>) -> bool {
         let ty = self.reveal(ty);
+        if self.is_user_iterator(ty) {
+            return true;
+        }
+        if self.range_kind(ty.peel_refs()).is_none() {
+            return false;
+        }
+        let env = ty::TypingEnv::post_analysis(self.tcx, callee);
+        [sym::Iterator, sym::IntoIterator].into_iter().any(|name| {
+            self.tcx.get_diagnostic_item(name).is_some_and(|id| {
+                let tr = ty::TraitRef::new(self.tcx, id, [input]);
+                matches!(
+                    self.tcx.codegen_select_candidate(env.as_query_input(tr)),
+                    Ok(rustc_middle::traits::ImplSource::Param(_))
+                )
+            })
+        })
+    }
+
+    /// An iterator of the crate's own as a JS one, `$iterator(it,
+    /// countdownIterator_next)`, and a range as its items (ADR 0129).
+    /// Anything else is `value` itself.
+    pub(super) fn iter_source(&mut self, value: Expr, ty: ty::Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let ty = self.reveal(ty);
+        if self.range_kind(ty).is_some() {
+            return self.range_items(value, ty, span, out);
+        }
+        // A `&mut` one is stepped through as it's taken from.
+        if let ty::Ref(_, inner, _) = ty.kind()
+            && self.range_kind(*inner).is_some()
+        {
+            return Err(self.unsupported(span, &format!("iterating over a `{ty}`, which steps it")));
+        }
         // A generic one is an array or a JS iterator: `Iterator.from` takes
         // either (ADR 0061).
         if self.is_generic_iter(ty) {
@@ -457,7 +492,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let receiver_ty = self.reveal(self.thir[receiver].ty);
         let items = match self.thir[self.strip(receiver)].kind {
-            ExprKind::Adt(ref range) if self.is_lang_adt(receiver_ty, LangItem::Range) => {
+            ExprKind::Adt(ref range)
+                if self.is_lang_adt(receiver_ty, LangItem::Range)
+                    && self.range_index(receiver_ty).and_then(Num::of).is_some() =>
+            {
                 let bound = |i: usize| range.fields.iter().find(|f| f.name.as_usize() == i).map(|f| f.expr);
                 let (Some(start), Some(end)) = (bound(0), bound(1)) else {
                     unreachable!("a range has a start and an end")
@@ -472,11 +510,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let bounds = self.operands(&[start, end], out)?;
                 Expr::call(Expr::var(name), bounds)
             }
-            _ if self.is_lang_adt(receiver_ty, LangItem::Range) => {
-                return Err(self.unsupported(span, "a range in a variable, as an iterator"));
-            }
             // `a..=b`: `$range(a, b + 1)`, exact, and past the type's end.
-            _ if let Some((start_id, end_id)) = self.inclusive_range(receiver) => {
+            _ if let Some((start_id, end_id)) = self.inclusive_range(receiver)
+                && Num::of(self.thir[start_id].ty).is_some() =>
+            {
                 let num = Num::of(self.thir[start_id].ty);
                 let big = num.is_some_and(Num::big);
                 let (helper, name) = if big {
@@ -491,7 +528,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => {
                 let value = self.iter_value(receiver, out)?;
-                self.iter_source(value, receiver_ty, span)?
+                self.iter_source(value, receiver_ty, span, out)?
             }
         };
         // A JS iterator's helpers are lazy: `map`, `filter`, `take`, `drop`,
@@ -506,7 +543,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // What's chained or zipped on: one of the crate's own as a JS iterator.
             if matches!(comb, IterComb::Chain | IterComb::Zip) {
                 let other = std::mem::replace(&mut rest[0], Expr::undefined());
-                rest[0] = self.iter_source(other, self.thir[args[1]].ty, span)?;
+                rest[0] = self.iter_source(other, self.thir[args[1]].ty, span, out)?;
             }
             return self.iter_comb(
                 comb,
@@ -606,6 +643,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         js::ExprKind::Var(name) => [
                             "$range",
                             "$bigRange",
+                            "$charRange",
                             "$zip",
                             "$takeWhile",
                             "$skipWhile",
