@@ -207,7 +207,7 @@ drop/drop-struct-as-object.rs	error: rust-js does not support a `dyn` of a value
 drop/drop-with-trait-bound-calls-method-on-self.rs	error: rust-js does not support generic trait methods, where a type may have a destructor yet
 drop/dropck_legal_cycles.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support a temporary with a destructor here yet
-drop/if-let-guards-2.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
+drop/if-let-guards-2.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 drop/issue-21486.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support a temporary with a destructor in a branch yet
 drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
@@ -280,11 +280,9 @@ issues/issue-42148.rs	error: rust-js does not support calling `std::ptr::write_v
 issues/issue-42552.rs	error: rust-js does not support values of type `<std::iter::Map<std::slice::Iter<'_, i32>, {closure@<case>/issue-42552.rs:28:39: 28:42}> as std::iter::Iterator>::Item` yet
 issues/issue-4541.rs	error: rust-js does not support calling `std::env::args` yet
 issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::Args` yet
-issues/issue-50415.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
 iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
-iterators/into-iterator-type-inference-shift.rs	error: rust-js does not support `next()` of a `std::ops::Range<i32>` kept in a field, a parameter or a closure: make it a `Peekable`
 iterators/iter-map-fold-type-length.rs	error: rust-js does not support `std::iter::Iterator::next` of a value with a destructor yet
 layout/aggregate-lang/struct-offsets.rs	error: rust-js does not support values of type `u128` yet
 layout/issue-112048-unsizing-field-order.rs	error: rust-js does not support a `GcNode<dyn std::fmt::Debug>`, whose last field is a `dyn` yet
@@ -296,7 +294,6 @@ lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexi
 lint/issue-20343.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 liveness/var-defined-after-early-return.rs	error: rust-js does not support values of type `(*const core::io::error::Custom) is !null` yet
 macros/colorful-write-macros.rs	error: rust-js does not support user implementations of this standard or external trait yet
-macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 macros/try-macro.rs	error: rust-js does not support calling `std::convert::From::from` yet
 match/match-on-negative-integer-ranges.rs	error: rust-js does not support this expression yet
@@ -322,7 +319,6 @@ mir/mir_static_subtype.rs	error: rust-js does not support statics of type `fn(&'
 mir/mir_struct_with_assoc_ty.rs	error: rust-js does not support values of type `<Global<[u32; 2]> as DataBind>::Data` yet
 mir/reset-discriminant-drop-flag-on-partial-move.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
 moves/issue-22536-copy-mustnt-zero.rs	error: rust-js does not support values of type `<Res as Resources>::Buffer` yet
-mut/no-mut-lint-for-desugared-mut.rs	error: rust-js does not support this range yet
 never_type/regress/never-as-function-argument.rs	error: rust-js does not support calling `std::process::exit` yet
 never_type/regress/never-type-fallback-option.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
@@ -353,7 +349,6 @@ packed/packed-struct-layout.rs	error: rust-js does not support calling `std::int
 packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expression yet
 packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::DebugStruct::<'a, 'b>::finish` yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
@@ -363,8 +358,7 @@ process/env-vars.rs	error: rust-js does not support iterating over `std::env::Va
 ptr_ops/ptr-swap-overlapping-regions.rs	error: rust-js does not support calling `std::ptr::swap` yet
 ptr_ops/ptr-write-bool-representation.rs	error: rust-js does not support calling `std::ptr::write` yet
 ptr_ops/raw-pointer-type-basic.rs	error: rust-js does not support values of type `*const isize` yet
-range/range_inclusive.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
-range/range-implement-clone.rs	error: rust-js does not support cloning `std::ops::Range<i32>` yet
+range/range_inclusive.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 raw-ref-op/raw-ref-op.rs	error: rust-js does not support values of type `*const i32` yet
 reborrow/reborrow-mutable-reference.rs	error: rust-js does not support values of type `&mut std::option::Option<&mut Foo>` yet
 recursion/instantiable.rs	error: rust-js does not support values of type `*const foo` yet
@@ -399,7 +393,6 @@ self/dyn-compatibility-sized-self-generic-method.rs	error: rust-js does not supp
 self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 self/string-self-append.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
-specialization/soundness/partial_eq_range_inclusive.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
 statics/static-lazy-init-with-arena-set.rs	error: rust-js does not support statics of type `*const ArenaSet<std::vec::Vec<u8>>` yet
