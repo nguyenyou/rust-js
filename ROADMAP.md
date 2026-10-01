@@ -27,7 +27,7 @@ crate reuse are central work, even where an early release can defer them.
 Assessment: substantial compiler and application foundations are implemented;
 production readiness has not yet been established.
 
-Baseline reviewed: `3a3f757`, 2026-10-01. “Implemented” below means code and
+Baseline reviewed: `7962214`, 2026-10-01. “Implemented” below means code and
 tests exist in this checkout, not that every combination is supported or that
 the tests were rerun for this assessment. The latest successful
 [Check run inspected](https://github.com/rust-js-lang/rust-js/actions/runs/36274665281)
@@ -318,13 +318,15 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,692 of 2,664 in scope pass at the pinned stable release, 1.98.1, every
+  1,583 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
   other one is a clear rejection, none a crash or a wrong answer, and the
-  [known failures](test/rustc-known-failures.txt) only shrink. The 972
-  rejections, by kind: values of a type rust-js doesn't support (185; `f32`
-  and raw pointers the most common), std calls (166; intrinsics and `mpsc`
-  the most), expressions (100), user implementations of a std or external
-  trait (74), patterns (56), and constants of a type (41).
+  [known failures](test/rustc-known-failures.txt) only shrink. A test of a
+  feature stable Rust doesn't have is out of scope, as no program of
+  rust-js's can use one (`7962214`). The 623 rejections, by kind: values of
+  a type rust-js doesn't support (142; `f32` and raw pointers the most
+  common), std calls (111; intrinsics and `mpsc` the most), expressions
+  (47), patterns (40), constants of a type (31), statics of a type (27),
+  and user implementations of a std trait (11).
 - [ ] **M7.2 — Close core representation gaps.** Design and implement the
   numeric, option, reference, slice, and resource-lifetime behavior needed for
   broad portable Rust. Include wider integers, `f32`, nested options, general

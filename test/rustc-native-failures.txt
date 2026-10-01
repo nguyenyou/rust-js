@@ -27,44 +27,29 @@ abi/issues/issue-62350-sysv-neg-reg-counts.rs	rustc: error: linking with `cc` fa
 abi/issues/issue-97463-broken-abi-leaked-uninit-data.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/mir/mir_codegen_calls_variadic.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/numbers-arithmetic/i128-ffi.rs	rustc: error: linking with `cc` failed: exit status: 1
-abi/rust-preserve-none-cc.rs	prints what changes from run to run
 abi/statics/static-mut-foreign.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/struct-enums/struct-return.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/union/union-c-interop.rs	rustc: error: linking with `cc` failed: exit status: 1
-abi/variadic-ffi.rs	rustc: error: linking with `cc` failed: exit status: 1
 binding/fn-arg-incomplete-pattern-drop-order.rs	prints what changes from run to run
 binop/binops.rs	prints what changes from run to run
 cast/cast-region-to-uint.rs	prints what changes from run to run
-coroutine/gen_block_panic.rs	prints what changes from run to run
-coroutine/panic-drops-resume.rs	prints what changes from run to run
-coroutine/panic-drops.rs	prints what changes from run to run
-coroutine/panic-safe.rs	prints what changes from run to run
-coroutine/resume-after-return.rs	prints what changes from run to run
 drop/dynamic-drop-async.rs	prints what changes from run to run
-drop/dynamic-drop.rs	prints what changes from run to run
 drop/panic-during-drop-14875.rs	prints what changes from run to run
 drop/repeat-drop.rs	prints what changes from run to run
 fmt/format-args-capture.rs	prints what changes from run to run
 foreign/foreign-mod-src/inner.rs	rustc: error[E0425]: cannot find value `rustrt` in this scope
 foreign/foreign-src/foreign.rs	rustc: error[E0425]: cannot find value `libc` in this scope
-foreign/foreign2.rs	rustc: error[E0464]: multiple candidates for `rlib` dependency `libc` found
 io-checks/write-macro-error.rs	prints what changes from run to run
 issues/issue-29948.rs	prints what changes from run to run
 issues/issue-3559.rs	prints what changes from run to run
 issues/issue-43853.rs	prints what changes from run to run
-loop-match/unwind.rs	prints what changes from run to run
 macros/cfg_select-expr.rs	prints what changes from run to run
 macros/cfg-expr.rs	prints what changes from run to run
-macros/macros-in-extern.rs	rustc: error: linking with `cc` failed: exit status: 1
-mir/mir_calls_to_shims.rs	prints what changes from run to run
 mir/mir_drop_order.rs	prints what changes from run to run
 mir/mir_let_chains_drop_order.rs	prints what changes from run to run
 panic-handler/catch-unwind-during-unwind-68696.rs	prints what changes from run to run
 panics/catch-unwind-bang.rs	prints what changes from run to run
 panics/nested_panic_caught.rs	prints what changes from run to run
-panics/panic-during-display-formatting.rs	prints what changes from run to run
-process/env-null-vars.rs	rustc: error[E0464]: multiple candidates for `rlib` dependency `libc` found
-rfcs/rfc-1014-stdout-existential-crisis/rfc-1014.rs	rustc: error[E0464]: multiple candidates for `rlib` dependency `libc` found
 rfcs/rfc-1857-stabilize-drop-order/drop-order.rs	prints what changes from run to run
 std/stdio-from.rs	doesn't pass natively with overflow checks off: exited 101
 traits/clone-unwind-rc-cleanup.rs	prints what changes from run to run

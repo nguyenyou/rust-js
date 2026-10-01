@@ -12,24 +12,33 @@ abi/foreign/invoke-external-foreign.rs	needs another crate
 abi/homogenous-floats-target-feature-mixup.rs	needs a capability of its own
 abi/numbers-arithmetic/return-float.rs	needs flags or an environment of its own
 abi/relocation_model_pic.rs	needs flags or an environment of its own
+abi/rust-preserve-none-cc.rs	needs unstable features: rust_preserve_none_cc
 abi/rust-tail-cc.rs	has revisions
 abi/segfault-no-out-of-stack.rs	needs a capability of its own
 abi/stack-probes-lto.rs	has revisions
 abi/stack-probes.rs	has revisions
 abi/stack-protector.rs	is for some targets only
+abi/variadic-ffi.rs	needs unstable features: c_variadic
 abi/x86stdcall.rs	is for some targets only
 abi/x86stdcall2.rs	is for some targets only
 alloc-error/alloc-error-backtrace.rs	needs flags or an environment of its own
 alloc-error/default-alloc-error-hook.rs	needs a capability of its own
+allocator/alloc-shrink-oob-read.rs	needs unstable features: allocator_api, slice_ptr_get
 allocator/custom-in-block.rs	needs another crate
 allocator/custom-in-submodule.rs	needs another crate
 allocator/custom.rs	needs another crate
+allocator/dyn-compatible.rs	needs unstable features: allocator_api
 allocator/hygiene.rs	needs another crate
 allocator/no_std-alloc-error-handler-custom.rs	is for some targets only
 allocator/no_std-alloc-error-handler-default.rs	is for some targets only
 allocator/regression-abort-on-free-issue-150898.rs	is for some targets only
 allocator/xcrate-use.rs	needs another crate
 allocator/xcrate-use2.rs	needs another crate
+any/try_as_dyn_mut.rs	needs unstable features: try_as_dyn
+any/try_as_dyn_soundness_test1.rs	needs unstable features: try_as_dyn
+any/try_as_dyn_soundness_test2.rs	needs unstable features: try_as_dyn
+any/try_as_dyn_unsized.rs	needs unstable features: try_as_dyn
+any/try_as_dyn.rs	needs unstable features: try_as_dyn
 array-slice-vec/box-of-array-of-drop-1.rs	needs a capability of its own
 array-slice-vec/box-of-array-of-drop-2.rs	needs a capability of its own
 array-slice-vec/nested-vec-3.rs	needs a capability of its own
@@ -57,12 +66,18 @@ associated-consts/associated-const-cross-crate-const-eval.rs	needs another crate
 associated-consts/associated-const-cross-crate-defaults.rs	needs another crate
 associated-consts/associated-const-cross-crate.rs	needs another crate
 associated-consts/associated-const-match-patterns.rs	needs another crate
+associated-consts/mismatched_impl_ty_1.rs	needs unstable features: generic_const_exprs
+associated-type-bounds/duplicate-bound.rs	needs unstable features: min_generic_const_args, return_type_notation
 associated-type-bounds/fn-apit.rs	needs another crate
 associated-type-bounds/fn-aux.rs	needs another crate
 associated-type-bounds/fn-inline.rs	needs another crate
 associated-type-bounds/fn-where.rs	needs another crate
 associated-type-bounds/fn-wrap-apit.rs	needs another crate
+associated-type-bounds/trait-alias-impl-trait.rs	needs unstable features: type_alias_impl_trait
 associated-types/associated-types-cc.rs	needs another crate
+associated-types/default-associated-types.rs	needs unstable features: associated_type_defaults
+associated-types/issue-25339.rs	needs unstable features: associated_type_defaults
+associated-types/issue-54182-1.rs	needs unstable features: associated_type_defaults
 async-await/async-await.rs	has revisions
 async-await/async-closure.rs	has revisions
 async-await/async-closures/async-fn-mut-for-async-fn.rs	needs another crate
@@ -76,7 +91,18 @@ async-await/async-closures/mut-ref-reborrow.rs	needs another crate
 async-await/async-closures/mutate.rs	needs another crate
 async-await/async-closures/overlapping-projs.rs	needs another crate
 async-await/async-closures/precise-captures.rs	needs another crate
+async-await/async-drop/async-drop-box-allocator.rs	needs unstable features: async_drop, allocator_api
+async-await/async-drop/async-drop-box.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-future-from-future.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-future-in-sync-context.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-glue-array.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-glue-generic.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-glue.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-initial.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-middle-drop.rs	needs unstable features: async_drop
+async-await/async-drop/async-drop-open.rs	needs unstable features: async_drop
 async-await/async-drop/async-drop-run-without-feature/async-drop-run-without-feature.rs	needs flags or an environment of its own
+async-await/async-drop/async-drop.rs	needs unstable features: async_drop
 async-await/async-drop/dependency-dropped.rs	has revisions
 async-await/async-drop/ex-ice-132103.rs	needs flags or an environment of its own
 async-await/async-fn-size.rs	needs another crate
@@ -86,46 +112,74 @@ async-await/drop-order/drop-order-for-async-fn-parameters.rs	needs another crate
 async-await/drop-order/drop-order-for-locals-when-cancelled.rs	needs another crate
 async-await/drop-order/drop-order-for-temporary-in-tail-return-expr.rs	needs another crate
 async-await/drop-order/drop-order-when-cancelled.rs	needs another crate
+async-await/for-await-passthrough.rs	needs unstable features: async_iterator, async_iter_from_iter, async_for_loop, gen_blocks
+async-await/for-await.rs	needs unstable features: async_iterator, async_iter_from_iter, async_for_loop
 async-await/futures-api.rs	needs another crate
+async-await/interior-with-const-generic-expr.rs	needs unstable features: generic_const_exprs
 async-await/issue-60709.rs	needs flags or an environment of its own
 async-await/issues/issue-59972.rs	needs flags or an environment of its own
 async-await/track-caller/panic-track-caller.rs	has revisions
 attributes/crate-name-attr-validation.rs	needs flags or an environment of its own
 attributes/fn-align-dyn.rs	doesn't apply to wasm, whose integers rust-js has
+attributes/inline-attribute-on-closure.rs	needs unstable features: stmt_expr_attributes
 attributes/log-backtrace.rs	needs flags or an environment of its own
 attributes/main-removed-2/main.rs	needs another crate
 attributes/no_link/multiple-crates-and-no_link.rs	needs a capability of its own
+attributes/optimize-smoke-test.rs	needs unstable features: optimize_attribute
 attributes/reexport-test-harness-entry-point.rs	needs flags or an environment of its own
 attributes/used_with_archive.rs	needs another crate
 attributes/z-crate-attr/basic.rs	needs flags or an environment of its own
 attributes/z-crate-attr/respect-existing-attrs.rs	needs flags or an environment of its own
+auto-traits/auto-traits.rs	needs unstable features: auto_traits, negative_impls
 backtrace/apple-no-dsymutil.rs	needs flags or an environment of its own
 backtrace/backtrace.rs	needs a capability of its own
 backtrace/dylib-dep.rs	needs flags or an environment of its own
 backtrace/line-tables-only.rs	needs flags or an environment of its own
 backtrace/std-backtrace.rs	needs a capability of its own
 backtrace/synchronized-panic-handler.rs	needs flags or an environment of its own
+binding/empty-types-in-patterns.rs	needs unstable features: never_type, exhaustive_patterns
+binding/func-arg-ref-pattern.rs	needs unstable features: box_patterns
 binding/match-arm-statics.rs	needs flags or an environment of its own
+binding/range-inclusive-pattern-precedence.rs	needs unstable features: box_patterns
 binop/augmented-assignments-cross-crate.rs	needs another crate
+borrowck/borrowck-macro-interaction-issue-6304.rs	needs unstable features: box_patterns
 borrowck/issue-52967-edition-2018-needs-two-phase-borrows.rs	has revisions
 borrowck/trait-method-lifetime-substitution-5518.rs	needs another crate
+box/alloc-unstable.rs	needs unstable features: allocator_api
+box/into-boxed-slice.rs	needs unstable features: box_into_boxed_slice
+box/thin_align.rs	needs unstable features: thin_box
+box/thin_drop.rs	needs unstable features: thin_box
+box/thin_new.rs	needs unstable features: thin_box
+box/thin_zst.rs	needs unstable features: thin_box
+box/unit/unique-pat.rs	needs unstable features: box_patterns
 box/unit/unique-send-2.rs	needs a capability of its own
 builtin-superkinds/builtin-superkinds-capabilities-xc.rs	needs another crate
+c-variadic/copy.rs	needs unstable features: c_variadic
+c-variadic/inherent-method.rs	needs unstable features: c_variadic
 c-variadic/naked.rs	is for some targets only
+c-variadic/roundtrip.rs	needs unstable features: c_variadic, const_c_variadic, const_destruct, const_raw_ptr_comparison
 c-variadic/same-program-multiple-abis-arm.rs	is for some targets only
 c-variadic/same-program-multiple-abis-x86_64.rs	is for some targets only
+c-variadic/trait-method.rs	needs unstable features: c_variadic
+c-variadic/valid.rs	needs unstable features: c_variadic
+cast/fat-ptr-cast-rpass.rs	needs unstable features: ptr_metadata
 cfg/assume-incomplete-release/assume-incomplete.rs	needs another crate
 cfg/cfg_attr.rs	needs flags or an environment of its own
 cfg/cfg_inner_static.rs	needs another crate
 cfg/cfg-in-crate-1.rs	needs flags or an environment of its own
 cfg/cfg-macros-foo.rs	needs flags or an environment of its own
+cfg/cfg-target-compact.rs	needs unstable features: cfg_target_compact
 cfg/cfg-version/cfg-version-expand.rs	needs flags or an environment of its own
 cfg/cfgs-on-items.rs	needs flags or an environment of its own
 cfg/conditional-compile.rs	has modules in other files
 cfg/crt-static-off-works.rs	needs flags or an environment of its own
 cfg/crt-static-on-works.rs	needs flags or an environment of its own
+cfg/true-false.rs	needs unstable features: link_cfg
 closures/2229_closure_analysis/match/partial-move-drop-order.rs	needs another crate
+closures/2229_closure_analysis/migrations/insignificant_drop_attr_no_migrations.rs	needs unstable features: rustc_attrs
 closures/2229_closure_analysis/preserve_field_drop_order2.rs	has revisions
+closures/2229_closure_analysis/run_pass/capture-disjoint-field-tuple-mut.rs	needs unstable features: rustc_attrs
+closures/2229_closure_analysis/run_pass/capture-disjoint-field-tuple.rs	needs unstable features: rustc_attrs
 closures/debug-info-for-closure-capture.rs	needs flags or an environment of its own
 closures/issue-22864-2.rs	needs a capability of its own
 closures/many-closures.rs	needs flags or an environment of its own
@@ -157,10 +211,15 @@ codegen/llvm-pr32379.rs	needs another crate
 codegen/matrix-row-swap-54462.rs	needs flags or an environment of its own
 codegen/maximal-hir-to-mir-coverage-flag.rs	needs flags or an environment of its own
 codegen/msvc-opt-level-z-no-corruption.rs	is for some targets only
+codegen/no-codegen-blowup-in-deeply-nested-struct.rs	needs unstable features: test
 codegen/no-segfault-with-multiple-codegen-units.rs	needs flags or an environment of its own
+codegen/StackColoring-not-blowup-stack-issue-40883.rs	needs unstable features: test
 codegen/subtyping-impacts-selection-1.rs	has revisions
 codegen/subtyping-impacts-selection-2.rs	has revisions
+coercion/coerce-trait-object-removes-send-bound.rs	needs unstable features: rustc_attrs
+coercion/issue-26905-rpass.rs	needs unstable features: unsize, coerce_unsized
 coercion/issue-39823.rs	needs another crate
+coercion/no_local_for_coerced_const-issue-143671.rs	needs unstable features: unsize, coerce_unsized
 coherence/coherence_copy_like.rs	needs another crate
 coherence/coherence-bigint-int.rs	needs another crate
 coherence/coherence-bigint-vecint.rs	needs another crate
@@ -168,6 +227,7 @@ coherence/coherence-blanket.rs	needs another crate
 coherence/coherence-covered-type-parameter.rs	needs another crate
 coherence/coherence-iterator-vec-any-elem.rs	needs another crate
 coherence/coherence-iterator-vec.rs	needs another crate
+coherence/coherence-negative-impls-safe-rpass.rs	needs unstable features: negative_impls
 coherence/pr-review-132289-2.rs	needs another crate
 coherence/pr-review-132289-3.rs	needs another crate
 coherence/re-rebalance-coherence-default-generic-associated-type.rs	needs another crate
@@ -190,28 +250,87 @@ compiletest-self-test/trim-env-name.rs	has revisions
 const_prop/apfloat-f64-roundtrip.rs	needs flags or an environment of its own
 const_prop/apfloat-remainder-regression.rs	needs flags or an environment of its own
 const_prop/overwrite_with_const_with_params.rs	needs flags or an environment of its own
+const-generics/adt_const_params/const_param_ty_unchecked.rs	needs unstable features: const_param_ty_unchecked, const_param_ty_trait
+const-generics/associated-const-bindings/assoc-const.rs	needs unstable features: min_generic_const_args
+const-generics/associated-const-bindings/dyn-compat-self-const-projections-in-methods.rs	needs unstable features: min_generic_const_args
 const-generics/const-argument-cross-crate.rs	has revisions
 const-generics/core-types.rs	has revisions
 const-generics/cross_crate_complex.rs	needs another crate
 const-generics/defaults/default-annotation.rs	is the standard library's own API
 const-generics/defaults/trait_object_lt_defaults.rs	needs another crate
+const-generics/generic_const_exprs/associated-consts.rs	needs unstable features: generic_const_exprs
 const-generics/generic_const_exprs/cross_crate.rs	needs another crate
+const-generics/generic_const_exprs/division.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/dont-eagerly-error-in-is-const-evaluatable.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/dyn-compatibility-ok.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/elaborate-trait-pred.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/fn_call.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/from-sig.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/infer-too-generic.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/issue-73899.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/issue-99647.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/less_than.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/nested_uneval_unification-1.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/nested_uneval_unification-2.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/nested-abstract-consts-1.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/nested-abstract-consts-2.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/subexprs_are_const_evalutable.rs	needs unstable features: generic_const_exprs
+const-generics/generic_const_exprs/unop.rs	needs unstable features: generic_const_exprs
+const-generics/inhabited-assoc-ty-ice-1.rs	needs unstable features: generic_const_exprs
+const-generics/inhabited-assoc-ty-ice-2.rs	needs unstable features: generic_const_exprs
 const-generics/issue-102124.rs	needs flags or an environment of its own
+const-generics/issues/issue-105037.rs	needs unstable features: generic_const_exprs
 const-generics/issues/issue-68104-print-stack-overflow.rs	needs another crate
 const-generics/issues/issue-75299.rs	needs flags or an environment of its own
+const-generics/issues/issue-86535-2.rs	needs unstable features: adt_const_params, unsized_const_params, generic_const_exprs
+const-generics/issues/issue-86535.rs	needs unstable features: adt_const_params, unsized_const_params, generic_const_exprs
 const-generics/legacy-const-generics.rs	needs another crate
+const-generics/mgca/array-expr-simple.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/array-expr-with-assoc-const.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/array-expr-with-macro.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/array-expr-with-struct.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/array-expr-with-tuple.rs	needs unstable features: min_generic_const_args, adt_const_params, unsized_const_params
+const-generics/mgca/assoc-const-projection-in-bound.rs	needs unstable features: min_generic_const_args
+const-generics/mgca/tuple_ctor_arg_simple.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/tuple_ctor_nested.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/mgca/tuple_ctor_type_relative.rs	needs unstable features: min_generic_const_args, adt_const_params
+const-generics/min_adt_const_params/min_adt_const_params-gate.rs	needs unstable features: min_adt_const_params, const_param_ty_trait
+const-generics/min_adt_const_params/type-field-more-visible-than-type.rs	needs unstable features: min_adt_const_params
+const-generics/slice-const-param.rs	needs unstable features: adt_const_params, unsized_const_params
+const-generics/transmute.rs	needs unstable features: generic_const_exprs
 const-generics/transparent-maybeunit-array-wrapper.rs	has revisions
 const-generics/type-dependent/const-arg-in-const-arg.rs	has revisions
 const-generics/type-dependent/non-local.rs	needs another crate
+const-ptr/allowed_slices.rs	needs unstable features: slice_from_ptr_range, const_slice_from_ptr_range
+consts/bswap-const.rs	needs unstable features: core_intrinsics
+consts/const_in_pattern/accept_structural.rs	needs unstable features: type_ascription
 consts/const_in_pattern/cross-crate-pass.rs	needs another crate
 consts/const-block-cross-crate-fn.rs	needs another crate
+consts/const-compare-bytes.rs	needs unstable features: core_intrinsics, const_cmp
+consts/const-endianess.rs	needs unstable features: test
+consts/const-eval/c-variadic.rs	needs unstable features: c_variadic, const_c_variadic, const_destruct, const_cmp, const_trait_impl
 consts/const-eval/const_fn_ptr_fail.rs	needs flags or an environment of its own
 consts/const-eval/const_fn_ptr.rs	needs flags or an environment of its own
+consts/const-eval/heap/alloc_intrinsic_nontransient.rs	needs unstable features: core_intrinsics, const_heap
+consts/const-eval/heap/alloc_intrinsic_transient.rs	needs unstable features: core_intrinsics, const_heap
+consts/const-eval/heap/alloc_intrinsic_zero_sized.rs	needs unstable features: core_intrinsics, const_heap
+consts/const-eval/heap/dealloc_intrinsic_zero_sized.rs	needs unstable features: core_intrinsics, const_heap
+consts/const-eval/heap/dealloc_intrinsic.rs	needs unstable features: core_intrinsics, const_heap
+consts/const-eval/heap/make-global.rs	needs unstable features: core_intrinsics, const_heap
 consts/const-eval/simd/insert_extract.rs	is the standard library's own API
 consts/const-fn-stability-calls.rs	needs another crate
+consts/const-fn-type-name-any.rs	needs unstable features: const_type_name
+consts/const-fn-type-name.rs	needs unstable features: core_intrinsics
 consts/const-int-arithmetic-overflow.rs	needs flags or an environment of its own
+consts/const-int-pow-rpass.rs	needs unstable features: wrapping_next_power_of_two
 consts/const-mut-refs-crate.rs	needs another crate
+consts/const-ptr-nonnull-rpass.rs	needs unstable features: test
+consts/const-ptr-unique-rpass.rs	needs unstable features: ptr_internals, test
+consts/const-size_of_val-align_of_val.rs	needs unstable features: layout_for_ptr
+consts/const-variant-count.rs	needs unstable features: variant_count, never_type
 consts/control-flow/drop-pass.rs	has revisions
+consts/control-flow/drop-precise.rs	needs unstable features: const_precise_live_drops
+consts/is_val_statically_known.rs	needs unstable features: core_intrinsics
 consts/issue-17718.rs	needs another crate
 consts/issue-64059.rs	has revisions
 consts/issue-66345.rs	needs flags or an environment of its own
@@ -221,7 +340,11 @@ consts/issue-67641.rs	needs flags or an environment of its own
 consts/issue-67862.rs	needs flags or an environment of its own
 consts/min_const_fn/allow_const_fn_ptr_run_pass.rs	is the standard library's own API
 consts/miri_unleashed/slice_eq.rs	needs flags or an environment of its own
+consts/mut-ptr-to-static.rs	needs unstable features: sync_unsafe_cell
 consts/trait_specialization.rs	needs flags or an environment of its own
+consts/try-operator.rs	needs unstable features: const_trait_impl, const_try
+contracts/contracts-disabled-side-effect-declarations.rs	needs unstable features: contracts
+contracts/contracts-disabled-side-effect-ensures.rs	needs unstable features: contracts
 contracts/contracts-ensures-is-not-inherited-when-nesting.rs	needs flags or an environment of its own
 contracts/contracts-requires-is-not-inherited-when-nesting.rs	needs flags or an environment of its own
 contracts/declared-vars-referring-to-params.rs	needs flags or an environment of its own
@@ -230,17 +353,54 @@ contracts/declared-vars-used-in-requires-and-ensures.rs	needs flags or an enviro
 contracts/incomplete-feature.rs	needs flags or an environment of its own
 contracts/internal_machinery/contracts-lowering-ensures-is-not-inherited-when-nesting.rs	needs flags or an environment of its own
 contracts/internal_machinery/contracts-lowering-requires-is-not-inherited-when-nesting.rs	needs flags or an environment of its own
+contracts/internal_machinery/lowering/basics.rs	needs unstable features: contracts, contracts_internals, core_intrinsics
 contracts/requires-block-stmt.rs	needs flags or an environment of its own
+coroutine/addassign-yield.rs	needs unstable features: coroutines, stmt_expr_attributes
+coroutine/async_gen_fn_iter.rs	needs unstable features: gen_blocks, async_iterator
+coroutine/borrow-in-tail-expr.rs	needs unstable features: coroutines, stmt_expr_attributes
 coroutine/conditional-drop.rs	has revisions
 coroutine/control-flow.rs	has revisions
+coroutine/discriminant.rs	needs unstable features: coroutines, coroutine_trait, core_intrinsics, discriminant_kind
+coroutine/drop-and-replace.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
 coroutine/drop-env.rs	has revisions
+coroutine/drop-track-addassign-yield.rs	needs unstable features: coroutines, stmt_expr_attributes
 coroutine/gen_block_iterate.rs	has revisions
+coroutine/gen_block_panic.rs	needs unstable features: gen_blocks
+coroutine/gen_fn_iter.rs	needs unstable features: gen_blocks
+coroutine/issue-44197.rs	needs unstable features: coroutines, coroutine_trait
+coroutine/issue-52398.rs	needs unstable features: coroutines
+coroutine/issue-57084.rs	needs unstable features: coroutines, coroutine_trait
 coroutine/issue-58888.rs	needs flags or an environment of its own
+coroutine/issue-69039.rs	needs unstable features: coroutines, coroutine_trait
+coroutine/issue-93161.rs	needs unstable features: never_type
+coroutine/iterator-count.rs	needs unstable features: coroutines, coroutine_trait
+coroutine/live-upvar-across-yield.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/match-bindings.rs	needs unstable features: coroutines
+coroutine/nested_coroutine.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/niche-in-coroutine.rs	needs unstable features: coroutines, stmt_expr_attributes
 coroutine/non-static-is-unpin.rs	has revisions
+coroutine/other-attribute-on-gen.rs	needs unstable features: gen_blocks, optimize_attribute, async_iterator
+coroutine/overlap-locals.rs	needs unstable features: coroutines, stmt_expr_attributes
+coroutine/panic-drops-resume.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/panic-drops.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/panic-safe.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/pin-box-coroutine.rs	needs unstable features: coroutines, coroutine_trait
+coroutine/postfix-yield.rs	needs unstable features: gen_blocks, coroutines, coroutine_trait, yield_expr, stmt_expr_attributes
+coroutine/reborrow-mut-upvar.rs	needs unstable features: coroutines
+coroutine/resume-after-return.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/resume-arg-size.rs	needs unstable features: coroutines, stmt_expr_attributes
+coroutine/resume-live-across-yield.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/size-moved-locals.rs	needs unstable features: coroutines, coroutine_trait
 coroutine/smoke-resume-args.rs	has revisions
 coroutine/smoke.rs	has revisions
+coroutine/static-coroutine.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
+coroutine/too-live-local-in-immovable-gen.rs	needs unstable features: coroutines
+coroutine/uninhabited-field.rs	needs unstable features: coroutine_trait, coroutines, stmt_expr_attributes, never_type
 coroutine/xcrate-reachable.rs	needs another crate
 coroutine/xcrate.rs	needs another crate
+coroutine/yield-in-args-rev.rs	needs unstable features: coroutines
+coroutine/yield-in-initializer.rs	needs unstable features: coroutines
+coroutine/yield-subtype.rs	needs unstable features: coroutines
 cross-crate/address-insignificant.rs	needs another crate
 cross-crate/associated-type-defaults.rs	needs another crate
 cross-crate/cci_borrow.rs	needs another crate
@@ -313,12 +473,39 @@ debuginfo/msvc-strip-symbols.rs	needs flags or an environment of its own
 definition-reachable/field-method.rs	needs another crate
 definition-reachable/nested-fn.rs	needs another crate
 definition-reachable/private-use.rs	needs another crate
+delegation/explicit-paths-in-traits-pass.rs	needs unstable features: fn_delegation
+delegation/explicit-paths-pass.rs	needs unstable features: fn_delegation
+delegation/explicit-paths-signature-pass.rs	needs unstable features: fn_delegation
+delegation/generics/free-fn-to-free-fn-pass.rs	needs unstable features: fn_delegation
+delegation/generics/free-fn-to-trait-method-pass.rs	needs unstable features: fn_delegation
 delegation/generics/generics-aux-pass.rs	needs another crate
+delegation/generics/impl-to-free-fn-pass.rs	needs unstable features: fn_delegation
+delegation/generics/impl-trait-to-trait-method-pass.rs	needs unstable features: fn_delegation
+delegation/generics/inherent-impl-to-trait-method-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/free-to-free-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/free-to-trait-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/impl-trait-to-free-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/impl-trait-to-trait-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/inherent-impl-to-free-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/inherent-impl-to-trait-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/trait-to-free-pass.rs	needs unstable features: fn_delegation
+delegation/generics/mapping/trait-to-trait-pass.rs	needs unstable features: fn_delegation
+delegation/generics/self-rename.rs	needs unstable features: fn_delegation
+delegation/generics/synth-params-ice-154780.rs	needs unstable features: fn_delegation
+delegation/generics/trait-method-to-other-pass.rs	needs unstable features: fn_delegation
+delegation/method-call-priority.rs	needs unstable features: fn_delegation
 delegation/recursive-delegation-pass.rs	needs another crate
+delegation/self-coercion.rs	needs unstable features: fn_delegation
+delegation/target-expr-pass.rs	needs unstable features: fn_delegation
+delegation/target-expression-removal-pass.rs	needs unstable features: fn_delegation
 deprecation/deprecated_main_function.rs	needs flags or an environment of its own
+deref/deref-mut-closure-drop-order.rs	needs unstable features: box_patterns
+derives/coercepointee/deriving-coerce-pointee.rs	needs unstable features: derive_coerce_pointee, arbitrary_self_types
 derives/derive-no-std.rs	needs another crate
+derives/deriving-from.rs	needs unstable features: derive_from
 dest-prop/skeptic-miscompile.rs	needs flags or an environment of its own
 dist/cranelift-x86_64-unknown-linux-gnu-dist.rs	is for some targets only
+drop/box-conditional-drop-allocator.rs	needs unstable features: allocator_api
 drop/drop_order_if_let_rescope.rs	needs flags or an environment of its own
 drop/drop_order_let_chain.rs	needs flags or an environment of its own
 drop/drop_order.rs	needs flags or an environment of its own
@@ -326,6 +513,9 @@ drop/drop-once-on-panic.rs	needs a capability of its own
 drop/drop-order-comparisons.rs	has revisions
 drop/drop-trait-enum.rs	needs a capability of its own
 drop/dropck-eyepatch-extern-crate.rs	needs another crate
+drop/dropck-eyepatch-reorder.rs	needs unstable features: dropck_eyepatch
+drop/dropck-eyepatch.rs	needs unstable features: dropck_eyepatch
+drop/dynamic-drop.rs	needs unstable features: coroutines, coroutine_trait, stmt_expr_attributes
 drop/enum-destructor-on-unwind.rs	needs a capability of its own
 drop/if-let-guards.rs	has revisions
 drop/if-let-super-let.rs	has revisions
@@ -334,7 +524,14 @@ drop/super-let-tail-expr-drop-order.rs	has revisions
 drop/tail-expr-drop-order.rs	needs another crate
 drop/terminate-in-initializer.rs	needs a capability of its own
 drop/use_inline_dtor.rs	needs another crate
+dropck/issue-24805-dropck-itemless.rs	needs unstable features: dropck_eyepatch
+dropck/issue-28498-ugeh-with-lifetime-param.rs	needs unstable features: dropck_eyepatch
+dropck/issue-28498-ugeh-with-passed-to-fn.rs	needs unstable features: dropck_eyepatch
+dropck/issue-28498-ugeh-with-trait-bound.rs	needs unstable features: dropck_eyepatch
+dst/dst-coerce-custom.rs	needs unstable features: unsize, coerce_unsized
 duplicate/inherent-impls-overlap-check/no-overlap.rs	needs another crate
+dyn-compatibility/metasized.rs	needs unstable features: sized_hierarchy
+dyn-compatibility/pointeesized.rs	needs unstable features: sized_hierarchy
 dyn-keyword/methods-with-mut-trait-and-polymorphic-objects-issue-8401.rs	needs another crate
 editions/edition-keywords-2015-2015.rs	needs another crate
 editions/edition-keywords-2015-2018.rs	needs another crate
@@ -344,17 +541,35 @@ editions/never-type-fallback.rs	has revisions
 eii/default/call_default_panics.rs	needs another crate
 eii/default/call_default.rs	needs another crate
 eii/default/call_impl.rs	needs another crate
+eii/default/local_crate_explicit.rs	needs unstable features: extern_item_impls
+eii/default/local_crate.rs	needs unstable features: extern_item_impls
+eii/duplicate/multiple_impls.rs	needs unstable features: extern_item_impls
+eii/eii_impl_with_contract.rs	needs unstable features: extern_item_impls, contracts
 eii/linking/codegen_cross_crate.rs	needs another crate
+eii/linking/codegen_single_crate.rs	needs unstable features: extern_item_impls
+eii/linking/same-symbol.rs	needs unstable features: extern_item_impls
 eii/privacy1.rs	needs another crate
 eii/static/cross_crate_decl.rs	needs another crate
 eii/static/cross_crate_def.rs	needs another crate
 eii/static/default_cross_crate_explicit.rs	needs another crate
 eii/static/default_cross_crate.rs	needs another crate
+eii/static/default_explicit.rs	needs unstable features: extern_item_impls
+eii/static/default.rs	needs unstable features: extern_item_impls
+eii/static/same_address.rs	needs unstable features: extern_item_impls
+eii/static/simple.rs	needs unstable features: extern_item_impls
 entry-point/imported_main_from_extern_crate.rs	needs another crate
 entry-point/imported_main_from_inner_mod.rs	has no `fn main() {`
 entry-point/imported_main_local_codegen.rs	needs another crate
+enum-discriminant/actually_not_an_enum-discriminant.rs	needs unstable features: core_intrinsics
+enum-discriminant/arbitrary_enum_discriminant.rs	needs unstable features: test
+enum-discriminant/discriminant_size.rs	needs unstable features: core_intrinsics
+enum-discriminant/discriminant_value.rs	needs unstable features: core_intrinsics
 enum-discriminant/issue-41394-rpass.rs	needs another crate
 enum-discriminant/issue-46519.rs	needs flags or an environment of its own
+enum-discriminant/issue-51582.rs	needs unstable features: core_intrinsics
+enum-discriminant/ptr_niche.rs	needs unstable features: rustc_attrs, pattern_types, pattern_type_macro
+enum-discriminant/repr128-get-discriminant-issue-43398.rs	needs unstable features: core_intrinsics
+enum-discriminant/repr128.rs	needs unstable features: core_intrinsics, discriminant_kind
 enum/issue-19340-1.rs	needs another crate
 enum/namespaced-enum-emulate-flat-xc.rs	needs another crate
 enum/namespaced-enum-glob-import-xcrate.rs	needs another crate
@@ -362,12 +577,22 @@ enum/namespaced-enums-xcrate.rs	needs another crate
 env-macro/env-env-overload.rs	needs flags or an environment of its own
 env-macro/env-env.rs	needs flags or an environment of its own
 env-macro/env-not-env.rs	needs flags or an environment of its own
+ergonomic-clones/closure/nested.rs	needs unstable features: ergonomic_clones
+ergonomic-clones/closure/once-move-out-on-heap.rs	needs unstable features: ergonomic_clones
 errors/pic-linker.rs	needs flags or an environment of its own
 errors/remap-path-prefix-macro.rs	has revisions
 explicit-tail-calls/become-cast-return.rs	doesn't apply to wasm, whose integers rust-js has
 explicit-tail-calls/become-indirect-return.rs	doesn't apply to wasm, whose integers rust-js has
+explicit-tail-calls/callee_is_track_caller_polymorphic.rs	needs unstable features: explicit_tail_calls
+explicit-tail-calls/callee_is_track_caller.rs	needs unstable features: explicit_tail_calls
+explicit-tail-calls/ctfe-collatz-multi-rec.rs	needs unstable features: explicit_tail_calls
+explicit-tail-calls/default-trait-method.rs	needs unstable features: explicit_tail_calls
+explicit-tail-calls/drop-order.rs	needs unstable features: explicit_tail_calls
+explicit-tail-calls/indexer.rs	needs unstable features: explicit_tail_calls
 explicit-tail-calls/indirect.rs	doesn't apply to wasm, whose integers rust-js has
+explicit-tail-calls/recursion-etc.rs	needs unstable features: explicit_tail_calls
 explicit-tail-calls/tailcc-no-signature-restriction.rs	has revisions
+expr/weird-exprs.rs	needs unstable features: coroutines
 extern/extern_fat_drop.rs	needs another crate
 extern/extern-calling-convention-test.rs	needs another crate
 extern/extern-methods.rs	is for some targets only
@@ -375,13 +600,19 @@ extern/extern-mod-ordering-exe.rs	needs another crate
 extern/extern-prelude-no-speculative.rs	needs flags or an environment of its own
 extern/extern-take-value.rs	needs another crate
 extern/extern-thiscall.rs	is for some targets only
+extern/extern-types-manual-sync-send.rs	needs unstable features: extern_types, sized_hierarchy
+extern/extern-types-pointer-cast.rs	needs unstable features: extern_types, sized_hierarchy
+extern/extern-types-thin-pointer.rs	needs unstable features: extern_types, sized_hierarchy
+extern/extern-types-trait-impl.rs	needs unstable features: extern_types, sized_hierarchy
 extern/extern-vectorcall.rs	has revisions
 extern/issue-10764-rpass.rs	has no `fn main() {`
+extern/issue-13655.rs	needs unstable features: fn_traits, unboxed_closures
 extern/issue-64655-allow-unwind-when-calling-panic-directly.rs	needs a capability of its own
 extern/issue-64655-extern-rust-must-allow-unwind.rs	needs a capability of its own
 extern/lgamma-linkage.rs	doesn't apply to wasm, whose integers rust-js has
 extern/no-mangle-associated-fn.rs	needs another crate
 feature-gates/feature-gate-public_private_dependencies.rs	needs another crate
+feature-gates/link-llvm-intrinsics-enabled.rs	needs unstable features: link_llvm_intrinsics
 field_representing_types/offset.rs	has revisions
 field_representing_types/traits.rs	has revisions
 float/classify-runtime-const.rs	has revisions
@@ -394,12 +625,18 @@ fmt/fmt_debug/full.rs	needs flags or an environment of its own
 fmt/fmt_debug/none.rs	needs flags or an environment of its own
 fmt/fmt_debug/shallow.rs	needs flags or an environment of its own
 fmt/format-macro-no-std.rs	doesn't apply to wasm, whose integers rust-js has
+fn_traits/call-unit-struct-impl-fn-once.rs	needs unstable features: unboxed_closures, fn_traits
+fn_traits/fn-trait-explicit-call.rs	needs unstable features: fn_traits
 for-loop-while/for-loop-no-std.rs	doesn't apply to wasm, whose integers rust-js has
+for-loop-while/loop-break-value.rs	needs unstable features: never_type
 foreign/foreign-fn-with-more-than-8-byte-arg-size.rs	needs a capability of its own
 foreign/foreign-truncated-arguments.rs	needs flags or an environment of its own
+foreign/foreign2.rs	needs unstable features: rustc_private
 function-pointer/function-pointer-comparison-issue-54685.rs	needs flags or an environment of its own
 functions-closures/fn-abi.rs	needs another crate
 functions-closures/parallel-codegen-closures.rs	needs flags or an environment of its own
+functions-closures/trivial-clone-closure.rs	needs unstable features: trivial_clone
+generic-associated-types/collections.rs	needs unstable features: associated_type_defaults
 generics/generic-default-type-params-cross-crate.rs	needs another crate
 generics/generic-impl-method-match-autoderef-18514.rs	needs another crate
 generics/issue-94923.rs	needs flags or an environment of its own
@@ -409,9 +646,17 @@ hygiene/cross-crate-codegen-attrs.rs	needs another crate
 hygiene/cross-crate-fields.rs	needs another crate
 hygiene/cross-crate-methods.rs	needs another crate
 hygiene/cross-crate-variants.rs	needs another crate
+hygiene/macro-metavars-legacy.rs	needs unstable features: rustc_attrs
+hygiene/macro-metavars-transparent.rs	needs unstable features: rustc_attrs
 hygiene/nested-dollar-crate.rs	needs another crate
+hygiene/specialization.rs	needs unstable features: decl_macro
 hygiene/xcrate.rs	needs another crate
 impl-trait/call_method_ambiguous.rs	has revisions
+impl-trait/equality-rpass.rs	needs unstable features: specialization
+impl-trait/example-calendar.rs	needs unstable features: step_trait, unboxed_closures
+impl-trait/impl_fn_associativity.rs	needs unstable features: impl_trait_in_fn_trait_return
+impl-trait/lifetimes.rs	needs unstable features: coroutines
+impl-trait/type-alias-generic-param.rs	needs unstable features: impl_trait_in_assoc_type
 impl-trait/xcrate_simple.rs	needs another crate
 impl-trait/xcrate.rs	needs another crate
 imports/extern-crate-alias-impl-method.rs	needs another crate
@@ -433,8 +678,18 @@ imports/unused-extern-crate.rs	needs another crate
 include-macros/normalization.rs	reads files beside it
 inference/inference_unstable.rs	needs another crate
 inference/issue-81522.rs	needs another crate
+intrinsics/always-gets-overridden.rs	needs unstable features: intrinsics
 intrinsics/const-eval-select-x86_64.rs	is for some targets only
+intrinsics/const-eval-select.rs	needs unstable features: const_eval_select, core_intrinsics
+intrinsics/intrinsic-alignment.rs	needs unstable features: rustc_attrs
+intrinsics/intrinsic-assume.rs	needs unstable features: core_intrinsics
+intrinsics/intrinsic-atomics.rs	needs unstable features: core_intrinsics
+intrinsics/intrinsic-fmuladd.rs	needs unstable features: core_intrinsics
 intrinsics/intrinsic-inline-cc.rs	needs another crate
+intrinsics/intrinsic-raw_eq-const.rs	needs unstable features: core_intrinsics
+intrinsics/intrinsic-unreachable.rs	needs unstable features: core_intrinsics
+intrinsics/intrinsic-volatile.rs	needs unstable features: core_intrinsics
+intrinsics/intrinsics-integer.rs	needs unstable features: core_intrinsics
 intrinsics/panic-uninitialized-zeroed.rs	has revisions
 io-checks/io-stdout-blocking-writes.rs	needs a capability of its own
 io-checks/stdout-stderr-separation.rs	needs a capability of its own
@@ -442,14 +697,22 @@ issues/issue-24687-embed-debuginfo/main.rs	needs another crate
 issues/issue-30018-panic.rs	needs a capability of its own
 issues/issue-33770.rs	needs a capability of its own
 issues/issue-37291/main.rs	needs another crate
+issues/issue-39827.rs	needs unstable features: core_intrinsics
 issues/issue-42210.rs	needs flags or an environment of its own
+issues/issue-45510.rs	needs unstable features: fn_traits, unboxed_closures
 issues/issue-45731.rs	needs flags or an environment of its own
+issues/issue-48006.rs	needs unstable features: step_trait
 issues/issue-49298.rs	is disabled
 issues/issue-50865-private-impl-trait/main.rs	needs another crate
 issues/issue-52140/main.rs	needs another crate
 issues/issue-52141/main.rs	needs another crate
 issues/issue-52705/main.rs	needs another crate
 iterators/fromrangeiter.rs	needs flags or an environment of its own
+iterators/generator_args.rs	needs unstable features: iter_macro, yield_expr
+iterators/generator_capture_fnonce.rs	needs unstable features: iter_macro, yield_expr
+iterators/generator_capture_no_lend.rs	needs unstable features: iter_macro, yield_expr
+iterators/generator_capture.rs	needs unstable features: iter_macro, yield_expr
+iterators/generator.rs	needs unstable features: iter_macro, yield_expr
 iterators/iter-count-overflow-debug.rs	is for some targets only
 iterators/iter-count-overflow-ndebug.rs	is for some targets only
 iterators/iter-filter-count-debug-check.rs	needs flags or an environment of its own
@@ -465,12 +728,14 @@ iterators/rangefrom-overflow-debug.rs	needs flags or an environment of its own
 iterators/rangefrom-overflow-ndebug.rs	needs flags or an environment of its own
 iterators/rangefrom-overflow-overflow-checks.rs	needs flags or an environment of its own
 iterators/skip-count-overflow.rs	is for some targets only
+label/label_break_value_desugared_break.rs	needs unstable features: try_blocks
 layout/randomize.rs	has revisions
 let-else/issue-99975.rs	needs flags or an environment of its own
 let-else/let-else-temporary-lifetime.rs	needs flags or an environment of its own
 lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs	reads files beside it
 lifetimes/issue-84604.rs	needs flags or an environment of its own
 lifetimes/lifetime-inference-across-mods.rs	needs another crate
+lifetimes/rvalue-lifetime-drop-timing.rs	needs unstable features: box_patterns
 lifetimes/tail-expr-lock-poisoning.rs	has revisions
 link-native-libs/issue-70093/link-directives.rs	needs flags or an environment of its own
 link-native-libs/issue-70093/link-native-libraries.rs	needs flags or an environment of its own
@@ -479,6 +744,7 @@ link-native-libs/link-cfg-works.rs	needs another crate
 linkage-attr/issue-12133-1.rs	needs another crate
 linkage-attr/issue-12133-2.rs	needs another crate
 linkage-attr/issue-12133-3.rs	needs another crate
+linkage-attr/link-section-placement.rs	needs unstable features: cfg_target_object_format
 linkage-attr/linkage-attr-does-not-panic-llvm-issue-33992.rs	doesn't apply to wasm, whose integers rust-js has
 linkage-attr/linkage1.rs	needs another crate
 linkage-attr/msvc-static-data-import.rs	needs another crate
@@ -490,9 +756,21 @@ linking/export-executable-symbols.rs	needs flags or an environment of its own
 linking/ld64-cross-compilation.rs	needs flags or an environment of its own
 linking/rlib-to-dylib-native-deps-inclusion-25185.rs	needs another crate
 lint/lint-cap.rs	needs flags or an environment of its own
+lint/must_not_suspend/generic.rs	needs unstable features: must_not_suspend
+lint/must_not_suspend/handled.rs	needs unstable features: must_not_suspend
+lint/must_not_suspend/mutex-guard-dropped-before-await.rs	needs unstable features: must_not_suspend
+lint/must_not_suspend/warn.rs	needs unstable features: must_not_suspend
 lint/test-allow-dead-extern-static-no-warning.rs	needs flags or an environment of its own
 lint/unused-qualification-in-derive-expansion.rs	needs another crate
 lint/warn-ctypes-inhibit.rs	needs flags or an environment of its own
+loop-match/break-to-block.rs	needs unstable features: loop_match
+loop-match/drop-in-match-arm.rs	needs unstable features: loop_match
+loop-match/loop-match.rs	needs unstable features: loop_match
+loop-match/macro.rs	needs unstable features: loop_match
+loop-match/nested.rs	needs unstable features: loop_match
+loop-match/or-patterns.rs	needs unstable features: loop_match
+loop-match/unwind.rs	needs unstable features: loop_match
+loop-match/valid-patterns.rs	needs unstable features: loop_match
 lto/all-crates.rs	needs flags or an environment of its own
 lto/debuginfo-lto.rs	needs another crate
 lto/dylib-works.rs	needs another crate
@@ -508,6 +786,9 @@ lto/thin-lto-inlines2.rs	needs flags or an environment of its own
 lto/weak-works.rs	needs flags or an environment of its own
 macros/assert-format-lazy.rs	needs flags or an environment of its own
 macros/attr-from-macro.rs	needs another crate
+macros/concat-bytes.rs	needs unstable features: concat_bytes
+macros/issue-44127.rs	needs unstable features: decl_macro
+macros/log_syntax-trace_macros-macro-locations.rs	needs unstable features: trace_macros, log_syntax
 macros/macro_with_super_2.rs	needs another crate
 macros/macro-comma-behavior-rpass.rs	needs flags or an environment of its own
 macros/macro-comma-support-rpass.rs	needs flags or an environment of its own
@@ -517,11 +798,22 @@ macros/macro-crate-nonterminal.rs	needs another crate
 macros/macro-export-inner-module.rs	needs another crate
 macros/macro-include-items.rs	reads files beside it
 macros/macro-meta-items.rs	needs flags or an environment of its own
+macros/macro-nested_expr.rs	needs unstable features: decl_macro
 macros/macro-quote-test.rs	needs another crate
+macros/macro-rules-attr-nested.rs	needs unstable features: macro_attr
+macros/macro-rules-attr.rs	needs unstable features: macro_attr
+macros/macro-rules-derive.rs	needs unstable features: macro_derive
 macros/macro-stability-rpass.rs	needs another crate
 macros/macro-with-attrs1.rs	needs flags or an environment of its own
 macros/macro-with-braces-in-expr-position.rs	needs a capability of its own
+macros/macros-in-extern.rs	needs unstable features: decl_macro
 macros/metavar_cross_edition_recursive_macros.rs	needs another crate
+macros/metavar-expressions/concat-allowed-operations.rs	needs unstable features: macro_metavar_expr_concat
+macros/metavar-expressions/concat-unicode-expansion.rs	needs unstable features: macro_metavar_expr_concat
+macros/metavar-expressions/count-and-length-are-distinct.rs	needs unstable features: macro_metavar_expr
+macros/metavar-expressions/dollar-dollar-has-correct-behavior.rs	needs unstable features: macro_metavar_expr
+macros/metavar-expressions/feature-gate-macro_metavar_expr.rs	needs unstable features: macro_metavar_expr
+macros/metavar-expressions/macro-expansion.rs	needs unstable features: macro_metavar_expr
 macros/paths-in-macro-invocations.rs	needs another crate
 macros/proc_macro.rs	needs another crate
 macros/rfc-2011-nicer-assert-messages/all-expr-kinds.rs	is for some targets only
@@ -532,12 +824,18 @@ macros/rfc-2011-nicer-assert-messages/feature-gate-generic_assert.rs	needs flags
 macros/stringify.rs	needs flags or an environment of its own
 macros/syntax-extension-cfg.rs	needs flags or an environment of its own
 macros/syntax-extension-source-utils.rs	reads files beside it
+marker_trait_attr/overlap-doesnt-conflict-with-specialization.rs	needs unstable features: marker_trait_attr, specialization
+marker_trait_attr/overlap-permitted-for-annotated-marker-traits.rs	needs unstable features: marker_trait_attr
 match/closure-in-match-guard.rs	needs flags or an environment of its own
 match/issue-115681.rs	needs flags or an environment of its own
 match/issue-26996.rs	is disabled
 match/issue-27021.rs	is disabled
+match/issue-42679.rs	needs unstable features: box_patterns
 match/match-float.rs	needs flags or an environment of its own
 match/match-str-proper-optimization.rs	needs flags or an environment of its own
+match/postfix-match/pf-match-chain.rs	needs unstable features: postfix_match
+match/postfix-match/postfix-match.rs	needs unstable features: postfix_match
+methods/call_method_unknown_referent2.rs	needs unstable features: arbitrary_self_types
 methods/method-lookup-order.rs	has revisions
 methods/method-self-arg-aux1.rs	needs another crate
 methods/method-self-arg-aux2.rs	needs another crate
@@ -569,7 +867,13 @@ mir/issue-74739.rs	needs flags or an environment of its own
 mir/issue-76740-copy-propagation.rs	needs flags or an environment of its own
 mir/issue-77002.rs	needs flags or an environment of its own
 mir/issue-78496.rs	needs flags or an environment of its own
+mir/mir_ascription_coercion.rs	needs unstable features: type_ascription
+mir/mir_calls_to_shims.rs	needs unstable features: fn_traits, never_type
+mir/mir_codegen_calls.rs	needs unstable features: fn_traits, test
+mir/mir_codegen_critical_edge.rs	needs unstable features: rustc_attrs
+mir/mir_coercions.rs	needs unstable features: coerce_unsized, unsize
 mir/mir_const_prop_identity.rs	needs flags or an environment of its own
+mir/mir_fat_ptr_drop.rs	needs unstable features: rustc_attrs
 mir/mir_match_guard_let_chains_drop_order.rs	has revisions
 mir/mir_overflow_off.rs	needs flags or an environment of its own
 mir/mir_refs_correct.rs	needs another crate
@@ -586,6 +890,7 @@ mir/null/place_without_read_zst.rs	needs flags or an environment of its own
 mir/null/place_without_read.rs	needs flags or an environment of its own
 mir/null/zero_sized_access.rs	needs flags or an environment of its own
 mir/static_fnptr.rs	needs flags or an environment of its own
+mir/validate-various-comparison-behavior.rs	needs unstable features: test
 mir/validate/needs-reveal-all.rs	needs flags or an environment of its own
 modules/issue-13872.rs	needs another crate
 modules/mod_dir_implicit_aux/mod.rs	has no `fn main() {`
@@ -606,6 +911,13 @@ modules/module-polymorphism3-files/float-template/inst_float.rs	has no `fn main(
 modules/special_module_name_ignore.rs	has modules in other files
 moves/bycopy_untupled.rs	has revisions
 moves/moves-based-on-type-capture-clause.rs	needs a capability of its own
+never_type/basic/impl-for-never.rs	needs unstable features: never_type
+never_type/basic/never-result.rs	needs unstable features: never_type
+never_type/basic/never-type-rvalues.rs	needs unstable features: never_type
+nll/borrowck-thread-local-static-mut-borrow-outlives-fn.rs	needs unstable features: thread_local
+nll/issue-48623-coroutine.rs	needs unstable features: coroutines
+no_std/no-core-edition2018-syntax.rs	needs unstable features: no_core
+no_std/no-core-with-explicit-std-core.rs	needs unstable features: no_core
 no_std/simple-runs.rs	needs flags or an environment of its own
 non_modrs_mods/foors_mod/inline/somename.rs	has no `fn main() {`
 non_modrs_mods/foors_mod/inner_foors_mod.rs	has no `fn main() {`
@@ -622,6 +934,9 @@ non_modrs_mods/non_modrs_mods.rs	has modules in other files
 non_modrs_mods/some_crazy_attr_mod_dir/arbitrary_name.rs	has no `fn main() {`
 non_modrs_mods/some_crazy_attr_mod_dir/inner_modrs_mod/innest.rs	has no `fn main() {`
 non_modrs_mods/some_crazy_attr_mod_dir/inner_modrs_mod/mod.rs	has no `fn main() {`
+numbers-arithmetic/f16-f128-lit.rs	needs unstable features: f16, f128
+numbers-arithmetic/float_math.rs	needs unstable features: core_intrinsics
+numbers-arithmetic/i128.rs	needs unstable features: test
 numbers-arithmetic/int-abs-overflow.rs	needs flags or an environment of its own
 numbers-arithmetic/issue-8460.rs	needs a capability of its own
 numbers-arithmetic/next-power-of-two-overflow-debug.rs	needs flags or an environment of its own
@@ -632,18 +947,32 @@ numbers-arithmetic/overflow-attribute-works-2.rs	needs flags or an environment o
 numbers-arithmetic/saturating-float-casts-wasm.rs	is for some targets only
 numbers-arithmetic/saturating-float-casts.rs	needs flags or an environment of its own
 numbers-arithmetic/shift-near-oflo.rs	needs flags or an environment of its own
+numbers-arithmetic/u128-as-f32.rs	needs unstable features: test
+numbers-arithmetic/u128.rs	needs unstable features: test
 offset-of/offset-of-slice-normalized.rs	has revisions
+offset-of/offset-of-slice.rs	needs unstable features: offset_of_slice
+or-patterns/box-patterns.rs	needs unstable features: box_patterns
+overloaded/issue-14958.rs	needs unstable features: fn_traits, unboxed_closures
 overloaded/overloaded-autoderef-xcrate.rs	needs another crate
+overloaded/overloaded-calls-param-vtables.rs	needs unstable features: unboxed_closures, fn_traits
+overloaded/overloaded-calls-simple.rs	needs unstable features: unboxed_closures, fn_traits
+overloaded/overloaded-calls-zero-args.rs	needs unstable features: unboxed_closures, fn_traits
+packed/issue-118537-field-offset-ice.rs	needs unstable features: layout_for_ptr
+packed/issue-118537-field-offset.rs	needs unstable features: layout_for_ptr
+packed/issue-46152.rs	needs unstable features: unsize, coerce_unsized
+packed/packed-struct-drop-aligned.rs	needs unstable features: coroutines, stmt_expr_attributes, coroutine_trait
 packed/packed-struct-size-xc.rs	needs another crate
 panic-handler/weak-lang-item-2.rs	needs another crate
 panic-runtime/abort-link-to-unwinding-crates.rs	needs flags or an environment of its own
 panic-runtime/abort.rs	needs flags or an environment of its own
 panic-runtime/link-to-abort.rs	needs flags or an environment of its own
+panic-runtime/link-to-unwind.rs	needs unstable features: panic_unwind
 panic-runtime/lto-abort.rs	needs flags or an environment of its own
 panic-runtime/lto-unwind.rs	needs flags or an environment of its own
 panics/abort-on-panic.rs	has revisions
 panics/alloc_error_hook-unwind.rs	is for some targets only
 panics/panic-abort-backtrace-without-debuginfo.rs	needs a capability of its own
+panics/panic-during-display-formatting.rs	needs unstable features: internal_output_capture
 panics/panic-handler-chain-update-hook.rs	needs a capability of its own
 panics/panic-handler-chain.rs	needs a capability of its own
 panics/panic-handler-flail-wildly.rs	needs a capability of its own
@@ -655,10 +984,24 @@ panics/unwind-force-no-unwind-tables.rs	needs flags or an environment of its own
 parallel-rustc/hello_world.rs	needs flags or an environment of its own
 parallel-rustc/read-stolen-value-issue-111520.rs	needs flags or an environment of its own
 parser/issues/issue-48508.rs	needs flags or an environment of its own
+pattern/bindings-after-at/box-patterns.rs	needs unstable features: box_patterns
+pattern/bindings-after-at/or-patterns-box-patterns.rs	needs unstable features: box_patterns
+pattern/box-pattern-nested.rs	needs unstable features: box_patterns
 pattern/cross-crate-enum-pattern.rs	needs another crate
+pattern/deref-patterns/basic.rs	needs unstable features: deref_patterns
 pattern/deref-patterns/bindings.rs	has revisions
 pattern/deref-patterns/branch.rs	has revisions
+pattern/deref-patterns/closure_capture.rs	needs unstable features: deref_patterns
+pattern/deref-patterns/deref-box.rs	needs unstable features: deref_patterns
+pattern/deref-patterns/implicit-cow-deref.rs	needs unstable features: deref_patterns
+pattern/deref-patterns/strings.rs	needs unstable features: deref_patterns
+pattern/match-struct-var-having-boxed-field.rs	needs unstable features: box_patterns
+pattern/mut_preserve_binding_mode_2024.rs	needs unstable features: mut_ref, ref_pat_eat_one_layer_2024
+pattern/rfc-3637-guard-patterns/macro-rules.rs	needs unstable features: guard_patterns
+pattern/skipped-ref-pats-issue-125058.rs	needs unstable features: ref_pat_eat_one_layer_2024
 pattern/tuple-struct-cross-crate.rs	needs another crate
+pin-ergonomics/pin-coercion.rs	needs unstable features: pin_ergonomics
+pin-ergonomics/pinned-drop.rs	needs unstable features: pin_ergonomics
 precondition-checks/cfg-ub-checks-default.rs	has revisions
 precondition-checks/cfg-ub-checks-no.rs	needs flags or an environment of its own
 precondition-checks/cfg-ub-checks-yes.rs	needs flags or an environment of its own
@@ -720,6 +1063,7 @@ process-termination/process-termination-simple.rs	needs a capability of its own
 process/core-run-destroy.rs	needs flags or an environment of its own
 process/env-args-reverse-iterator.rs	needs a capability of its own
 process/env-funky-keys.rs	doesn't apply to wasm, whose integers rust-js has
+process/env-null-vars.rs	needs unstable features: rustc_private
 process/exec-env.rs	needs flags or an environment of its own
 process/fds-are-cloexec.rs	is for some targets only
 process/inherit-env.rs	needs a capability of its own
@@ -756,11 +1100,26 @@ reachable/issue-11225-1.rs	needs another crate
 reachable/issue-11225-2.rs	needs another crate
 reachable/issue-11225-3.rs	needs another crate
 reachable/reachable-unnameable-type-alias.rs	is the standard library's own API
+reborrow/coerce_shared_consteval.rs	needs unstable features: reborrow
+reborrow/coerce-shared-extra-marker.rs	needs unstable features: reborrow
+reborrow/custom_marker_assign_deref.rs	needs unstable features: reborrow
+reborrow/custom_marker_coerce_shared_copy.rs	needs unstable features: reborrow
+reborrow/custom_marker_coerce_shared.rs	needs unstable features: reborrow
+reborrow/custom_marker_deref.rs	needs unstable features: reborrow
+reborrow/custom_marker.rs	needs unstable features: reborrow
+reborrow/custom_mut_coerce_shared.rs	needs unstable features: reborrow
+reborrow/custom_mut.rs	needs unstable features: reborrow
 recursion/many-statements-no-overflow.rs	needs flags or an environment of its own
+regions/regions-dependent-addr-of.rs	needs unstable features: box_patterns
+regions/regions-mock-codegen.rs	needs unstable features: allocator_api
 repr/repr_c_int_align.rs	needs flags or an environment of its own
 resolve/blind-item-mixed-crate-use-item.rs	needs another crate
+resolve/primitive-usage.rs	needs unstable features: f128, f16
 resolve/resolve-conflict-local-vs-glob-import.rs	needs another crate
 resolve/shadow-primitives.rs	needs another crate
+rfcs/rfc-1014-stdout-existential-crisis/rfc-1014-2.rs	needs unstable features: rustc_private
+rfcs/rfc-1014-stdout-existential-crisis/rfc-1014.rs	needs unstable features: rustc_private
+rfcs/rfc-1238-nonparametric-dropck/ugeh-ex1.rs	needs unstable features: dropck_eyepatch
 rfcs/rfc-1717-dllimport/1717-dllimport/library-override.rs	needs flags or an environment of its own
 rfcs/rfc-1937-termination-trait/termination-trait-for-box-dyn-error-ok.rs	has no `fn main() {`
 rfcs/rfc-1937-termination-trait/termination-trait-for-exitcode.rs	has no `fn main() {`
@@ -769,6 +1128,7 @@ rfcs/rfc-1937-termination-trait/termination-trait-for-result-box-error_ok.rs	has
 rfcs/rfc-1937-termination-trait/termination-trait-for-result.rs	has no `fn main() {`
 rfcs/rfc-1937-termination-trait/termination-trait-for-str-ok.rs	has no `fn main() {`
 rfcs/rfc-1937-termination-trait/termination-trait-in-test.rs	needs flags or an environment of its own
+rfcs/rfc-2005-default-binding-mode/box.rs	needs unstable features: box_patterns
 rfcs/rfc-2091-track-caller/call-chain.rs	has revisions
 rfcs/rfc-2091-track-caller/caller-location-fnptr-rt-ctfe-equiv.rs	needs flags or an environment of its own
 rfcs/rfc-2091-track-caller/caller-location-intrinsic.rs	has revisions
@@ -776,10 +1136,13 @@ rfcs/rfc-2091-track-caller/const-caller-location.rs	has revisions
 rfcs/rfc-2091-track-caller/intrinsic-wrapper.rs	has revisions
 rfcs/rfc-2091-track-caller/mir-inlined-macro.rs	has revisions
 rfcs/rfc-2091-track-caller/pass.rs	has revisions
+rfcs/rfc-2091-track-caller/shim-does-not-modify-symbol.rs	needs unstable features: rustc_attrs
 rfcs/rfc-2091-track-caller/std-panic-locations.rs	has revisions
 rfcs/rfc-2091-track-caller/track-caller-attribute.rs	has revisions
+rfcs/rfc-2091-track-caller/tracked-closure.rs	needs unstable features: stmt_expr_attributes, closure_track_caller, coroutine_trait, coroutines
 rfcs/rfc-2091-track-caller/tracked-fn-ptr-with-arg.rs	has revisions
 rfcs/rfc-2091-track-caller/tracked-fn-ptr.rs	has revisions
+rfcs/rfc-2151-raw-identifiers/macros.rs	needs unstable features: decl_macro
 rfcs/rfc-2294-if-let-guard/compare-drop-order.rs	has revisions
 rfcs/rfc-2294-if-let-guard/drop-order.rs	has revisions
 rfcs/rfc-2294-if-let-guard/scope.rs	has revisions
@@ -822,8 +1185,23 @@ sanitizer/issue-72154-address-lifetime-markers.rs	needs a capability of its own
 sanitizer/kcfi-c-variadic.rs	needs a capability of its own
 sanitizer/kcfi/fn-trait-objects.rs	needs a capability of its own
 sanitizer/memory-passing.rs	needs a capability of its own
+self/arbitrary_self_types_by_value_reborrow.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_lifetime_elision.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_niche_deshadowing.rs	needs unstable features: arbitrary_self_types, arbitrary_self_types_pointers, pin_ergonomics
+self/arbitrary_self_types_no_generics.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_pointers_and_wrappers.rs	needs unstable features: arbitrary_self_types, unsize, coerce_unsized, dispatch_from_dyn, rustc_attrs
+self/arbitrary_self_types_raw_pointer_struct.rs	needs unstable features: arbitrary_self_types_pointers
+self/arbitrary_self_types_raw_pointer_trait.rs	needs unstable features: arbitrary_self_types_pointers
+self/arbitrary_self_types_recursive_receiver.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_shadowing_val_constptr.rs	needs unstable features: arbitrary_self_types, arbitrary_self_types_pointers
+self/arbitrary_self_types_silly.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_stdlib_pointers.rs	needs unstable features: arbitrary_self_types, rustc_attrs
+self/arbitrary_self_types_struct_receiver_trait.rs	needs unstable features: arbitrary_self_types
+self/arbitrary_self_types_trait_receiver_trait.rs	needs unstable features: arbitrary_self_types
+self/arbitrary-self-types-dyn-receiver.rs	needs unstable features: arbitrary_self_types
 self/conflicting_inner.rs	has revisions
 self/conflicting_inner2.rs	has revisions
+self/dispatch_from_dyn_zst.rs	needs unstable features: unsize, dispatch_from_dyn, never_type
 self/explicit_self_xcrate_exe.rs	needs another crate
 sepcomp/sepcomp-cci.rs	needs flags or an environment of its own
 sepcomp/sepcomp-extern.rs	needs flags or an environment of its own
@@ -833,6 +1211,11 @@ sepcomp/sepcomp-lib-lto.rs	needs another crate
 sepcomp/sepcomp-lib.rs	needs another crate
 sepcomp/sepcomp-statics.rs	needs flags or an environment of its own
 sepcomp/sepcomp-unwind.rs	needs flags or an environment of its own
+share-trait/share-trait-arc.rs	needs unstable features: share_trait
+share-trait/share-trait-mpsc-sender.rs	needs unstable features: share_trait
+share-trait/share-trait-mpsc-sync-sender.rs	needs unstable features: share_trait
+share-trait/share-trait-rc.rs	needs unstable features: share_trait
+simd/array-type.rs	needs unstable features: repr_simd, core_intrinsics
 simd/generics.rs	has modules in other files
 simd/intrinsic/float-math-pass.rs	needs flags or an environment of its own
 simd/intrinsic/float-minmax-pass.rs	needs flags or an environment of its own
@@ -853,21 +1236,57 @@ simd/intrinsic/inlining-issue67557.rs	needs flags or an environment of its own
 simd/intrinsic/ptr-cast.rs	has modules in other files
 simd/intrinsic/splat.rs	has modules in other files
 simd/issue-105439.rs	needs flags or an environment of its own
+simd/issue-17170.rs	needs unstable features: repr_simd
+simd/issue-32947.rs	needs unstable features: repr_simd, test
 simd/issue-39720.rs	has modules in other files
 simd/issue-85915-simd-ptrs.rs	has modules in other files
 simd/issue-89193.rs	has modules in other files
+simd/libm_std_can_float.rs	needs unstable features: portable_simd
 simd/masked-load-store.rs	needs flags or an environment of its own
 simd/repr_packed.rs	has modules in other files
 simd/shuffle.rs	has revisions
 simd/simd-bitmask-notpow2.rs	needs flags or an environment of its own
 simd/simd-bitmask.rs	needs flags or an environment of its own
+simd/size-align.rs	needs unstable features: repr_simd
 simd/target-feature-mixup.rs	needs a capability of its own
+simd/type-generic-monomorphisation-extern-nonnull-ptr.rs	needs unstable features: extern_types, repr_simd
+simd/type-generic-monomorphisation-power-of-two.rs	needs unstable features: repr_simd, intrinsics
 specialization/cross-crate-defaults.rs	needs another crate
 specialization/defaultimpl/allowed-cross-crate.rs	needs another crate
+specialization/defaultimpl/projection.rs	needs unstable features: specialization
+specialization/defaultimpl/specialization-trait-item-not-implemented-rpass.rs	needs unstable features: specialization
+specialization/issue-50452.rs	needs unstable features: specialization
 specialization/specialization-allowed-cross-crate.rs	needs another crate
+specialization/specialization-assoc-fns.rs	needs unstable features: specialization
 specialization/specialization-basics.rs	has no `fn main() {`
 specialization/specialization-cross-crate-no-gate.rs	needs another crate
 specialization/specialization-cross-crate.rs	needs another crate
+specialization/specialization-default-methods.rs	needs unstable features: specialization
+specialization/specialization-on-projection.rs	needs unstable features: specialization
+specialization/specialization-projection-alias.rs	needs unstable features: specialization
+specialization/specialization-projection.rs	needs unstable features: specialization
+specialization/specialization-translate-projections-with-lifetimes.rs	needs unstable features: specialization
+specialization/specialization-translate-projections-with-params.rs	needs unstable features: specialization
+specialization/specialization-translate-projections.rs	needs unstable features: specialization
+specialization/trait-specialization-default-methods-55380.rs	needs unstable features: specialization
+specialization/transmute-specialization.rs	needs unstable features: specialization
+splat/run-splat.rs	needs unstable features: splat, tuple_trait
+splat/splat-255-limit-pass.rs	needs unstable features: splat
+splat/splat-assoc-fn-tuple-simple.rs	needs unstable features: splat
+splat/splat-async-fn-tuple.rs	needs unstable features: splat
+splat/splat-const-fn-tuple-generic.rs	needs unstable features: splat
+splat/splat-const-fn-tuple.rs	needs unstable features: splat
+splat/splat-fn-tuple-generic.rs	needs unstable features: splat, tuple_trait
+splat/splat-fn-tuple-simple.rs	needs unstable features: splat
+splat/splat-generics-complex-types.rs	needs unstable features: splat
+splat/splat-generics-everywhere.rs	needs unstable features: splat, tuple_trait
+splat/splat-generics-inside-tuple.rs	needs unstable features: splat
+splat/splat-method-tuple-simple.rs	needs unstable features: splat
+splat/splat-overload-at-home.rs	needs unstable features: splat, tuple_trait
+splat/splat-self.rs	needs unstable features: splat
+splat/splat-trait-tuple.rs	needs unstable features: splat
+splat/splat-unsafe-fn-tuple.rs	needs unstable features: splat
+splat/splat-where-clause.rs	needs unstable features: splat, tuple_trait
 static/nested_item_main.rs	needs another crate
 static/static-align.rs	needs flags or an environment of its own
 statics/check-recursion-foreign.rs	needs another crate
@@ -887,6 +1306,7 @@ std/windows-bat-args.rs	is for some targets only
 structs-enums/class-poly-methods-cross-crate.rs	needs another crate
 structs-enums/classes-cross-crate.rs	needs another crate
 structs-enums/empty-struct-braces.rs	needs another crate
+structs-enums/enum-null-pointer-opt.rs	needs unstable features: transparent_unions
 structs-enums/ivec-tag.rs	needs a capability of its own
 structs-enums/struct_variant_xc_match.rs	needs another crate
 structs-enums/struct_variant_xc.rs	needs another crate
@@ -898,7 +1318,16 @@ structs/cross-crate-newtype-struct-pat.rs	needs another crate
 structs/default-field-values/support.rs	needs another crate
 structs/newtype-struct-xc-2.rs	needs another crate
 structs/newtype-struct-xc.rs	needs another crate
+structs/rec-align-u32.rs	needs unstable features: rustc_attrs
+structs/rec-align-u64.rs	needs unstable features: rustc_attrs
 structs/unit-like-struct-drop-run.rs	needs a capability of its own
+supertrait-shadowing/assoc-const.rs	needs unstable features: supertrait_item_shadowing, min_generic_const_args
+supertrait-shadowing/assoc-type.rs	needs unstable features: supertrait_item_shadowing
+supertrait-shadowing/common-ancestor-2.rs	needs unstable features: supertrait_item_shadowing, min_generic_const_args
+supertrait-shadowing/common-ancestor-3.rs	needs unstable features: supertrait_item_shadowing, min_generic_const_args
+supertrait-shadowing/common-ancestor.rs	needs unstable features: supertrait_item_shadowing, min_generic_const_args
+supertrait-shadowing/out-of-scope.rs	needs unstable features: min_generic_const_args
+supertrait-shadowing/type-dependent.rs	needs unstable features: min_generic_const_args, supertrait_item_shadowing
 svh/svh-no-api-change-no-recompile.rs	needs another crate
 symbol-names/same-symbol-name-for-inner-statics-9188.rs	needs another crate
 target-feature/aarch64-neon-works.rs	is for some targets only
@@ -925,6 +1354,7 @@ test-attrs/tests-listing-format-default.rs	needs flags or an environment of its 
 test-attrs/tests-listing-format-json.rs	needs flags or an environment of its own
 test-attrs/tests-listing-format-terse.rs	needs flags or an environment of its own
 thread-local/spawn-hook-atexit.rs	is for some targets only
+thread-local/thread-local-static-reference-70673.rs	needs unstable features: thread_local
 thread-local/tls-dylib-access.rs	needs another crate
 thread-local/tls.rs	needs a capability of its own
 threads-sendsync/child-outlives-parent.rs	needs a capability of its own
@@ -972,16 +1402,24 @@ threads-sendsync/tls-try-with.rs	needs a capability of its own
 threads-sendsync/unwind-resource.rs	needs a capability of its own
 threads-sendsync/yield.rs	needs a capability of its own
 threads-sendsync/yield1.rs	needs a capability of its own
+traits/alias/basic.rs	needs unstable features: trait_alias
+traits/alias/bounds.rs	needs unstable features: trait_alias
 traits/alias/import-cross-crate.rs	needs another crate
+traits/alias/import.rs	needs unstable features: trait_alias
+traits/alias/object.rs	needs unstable features: trait_alias
 traits/anon_trait_static_method_exe.rs	needs another crate
 traits/bound/in-arc.rs	needs a capability of its own
 traits/conditional-model-fn.rs	needs another crate
+traits/const-traits/const-closure-fn-ptr-const-item.rs	needs unstable features: const_closures, const_trait_impl
 traits/const-traits/const-drop.rs	needs flags or an environment of its own
+traits/const-traits/specialization/const-default-const-specialized.rs	needs unstable features: const_trait_impl, min_specialization
+traits/const-traits/specialization/non-const-default-const-specialized.rs	needs unstable features: const_trait_impl, min_specialization
 traits/const-traits/trait-where-clause-run.rs	needs flags or an environment of its own
 traits/default-method-fn-call-9123.rs	needs another crate
 traits/default-method/xc-2.rs	needs another crate
 traits/default-method/xc.rs	needs another crate
 traits/dyn-any-prefer-vtable.rs	has revisions
+traits/final/dyn-compat.rs	needs unstable features: final_associated_functions
 traits/generic-cow-inference-regression.rs	has revisions
 traits/impl.rs	needs another crate
 traits/index-trait-multiple-impls-15734.rs	has revisions
@@ -991,20 +1429,55 @@ traits/inheritance/cross-trait-call-xc.rs	needs another crate
 traits/inheritance/overloading-xc-exe.rs	needs another crate
 traits/issue-24010.rs	has revisions
 traits/issue-33096.rs	needs flags or an environment of its own
+traits/negative-impls/negated-auto-traits-rpass.rs	needs unstable features: negative_impls
+traits/negative-impls/negative-impls-basic.rs	needs unstable features: negative_impls
 traits/next-solver/alias-bound-preference.rs	has revisions
 traits/next-solver/dyn-any-dont-prefer-impl.rs	needs flags or an environment of its own
+traits/overlap-permitted-for-marker-traits.rs	needs unstable features: marker_trait_attr
+traits/pointee-deduction.rs	needs unstable features: ptr_metadata
 traits/reservation-impl/ok.rs	has revisions
 traits/safety-ok-cc.rs	needs another crate
+traits/syntax-polarity.rs	needs unstable features: negative_impls
 traits/vtable/impossible-method.rs	has revisions
 traits/vtable/lack-of-implied-bounds-for-opaque-types-unsound.rs	has revisions
+transmute/transmute-zst-generics.rs	needs unstable features: transmute_generic_consts
+trivial-bounds/trivial-bounds-inconsistent-projection.rs	needs unstable features: trivial_bounds
+trivial-bounds/trivial-bounds-inconsistent-sized.rs	needs unstable features: trivial_bounds
+trivial-bounds/trivial-bounds-inconsistent-well-formed.rs	needs unstable features: trivial_bounds
+trivial-bounds/trivial-bounds-inconsistent.rs	needs unstable features: trivial_bounds
+try-block/issue-45124.rs	needs unstable features: try_blocks
+try-block/try-block-in-match.rs	needs unstable features: try_blocks
+try-block/try-block-in-return.rs	needs unstable features: try_blocks
+try-block/try-block.rs	needs unstable features: try_blocks
+try-trait/try-as-monad.rs	needs unstable features: try_trait_v2
+try-trait/try-operator-custom.rs	needs unstable features: try_trait_v2, try_trait_v2_residual
+try-trait/yeet-for-option.rs	needs unstable features: yeet_expr
+try-trait/yeet-for-result.rs	needs unstable features: yeet_expr
+type-alias-impl-trait/type-alias-nested-impl-trait.rs	needs unstable features: type_alias_impl_trait
 type/issue-94187-verbose-type-name.rs	has revisions
+type/type-ascription.rs	needs unstable features: type_ascription
 type/typeid-consistency.rs	needs another crate
 ufcs/ufcs-polymorphic-paths.rs	has no `fn main() {`
 unboxed-closures/cross-crate-generic-fn-in-closure.rs	needs another crate
+unboxed-closures/fn-traits-overloading-arity-18952.rs	needs unstable features: fn_traits, unboxed_closures
+unboxed-closures/manual-fnonce-impl-wrapper.rs	needs unstable features: unboxed_closures, fn_traits
+unboxed-closures/rust-call-shim-through-trait-box.rs	needs unstable features: unboxed_closures, fn_traits
 unboxed-closures/unboxed-closures-cross-crate.rs	needs another crate
+unboxed-closures/unboxed-closures-fn-as-fnmut-and-fnonce.rs	needs unstable features: unboxed_closures, fn_traits
+unboxed-closures/unboxed-closures-fnmut-as-fnonce.rs	needs unstable features: unboxed_closures, fn_traits
+unboxed-closures/unboxed-closures-infer-explicit-call-early.rs	needs unstable features: fn_traits
+unboxed-closures/unboxed-closures-infer-recursive-fn.rs	needs unstable features: fn_traits, unboxed_closures
+unboxed-closures/unboxed-closures-manual-impl.rs	needs unstable features: unboxed_closures, fn_traits
 unboxed-closures/unboxed-closures-unique-type-id.rs	needs flags or an environment of its own
+uniform-paths/basic-nested.rs	needs unstable features: decl_macro
 uniform-paths/issue-53691.rs	needs another crate
 uninhabited/uninhabited-type-layout-computation-88150.rs	needs flags or an environment of its own
 union/union-basic.rs	needs another crate
+unsized-locals/track-caller-vtable-shim.rs	needs unstable features: unsized_fn_params
+unsized-locals/unsized-exprs-rpass.rs	needs unstable features: unsized_fn_params
+unsized-locals/unsized-index.rs	needs unstable features: unsized_fn_params
+unsized-locals/unsized-parameters.rs	needs unstable features: unsized_fn_params
+unsized/unsized3-rpass.rs	needs unstable features: unsize, ptr_metadata
 unstable-feature-bound/unstable_impl_codegen.rs	needs another crate
+use/use.rs	needs unstable features: no_core
 where-clauses/where-clauses-cross-crate.rs	needs another crate
