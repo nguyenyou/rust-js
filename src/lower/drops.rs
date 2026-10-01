@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use rustc_hir::{BindingMode, ByRef, LangItem};
+use rustc_hir::{self as hir, BindingMode, ByRef, HirId, LangItem, Node};
 use rustc_middle::middle::region;
 use rustc_middle::mir::BinOp;
 use rustc_middle::thir::visit::{self, Visitor};
@@ -59,7 +59,7 @@ struct Owned<'tcx> {
     ty: Ty<'tcx>,
     flag: Option<String>,
     /// Each part moved somewhere, and its flag.
-    parts: Vec<(Path, String)>,
+    parts: Vec<(Path, Option<String>)>,
 }
 
 /// What a body does with its values that have destructors.
@@ -75,6 +75,10 @@ pub(super) struct Facts {
     /// place, borrowed or taken apart, and one made before an operand after
     /// it that can leave early, which a call then moves.
     temps: HashMap<ExprId, TempKind>,
+    /// What a pattern moves out of each temporary it takes apart, and
+    /// whether that's only on some paths, an arm's or an `if let`'s, which
+    /// flags its parts as a variable's are.
+    temp_parts: HashMap<ExprId, (Vec<Path>, bool)>,
     /// The parts of each owner that are moved somewhere, which get flags of
     /// their own, and each field that moves one, with its owner and part.
     parts: HashMap<LocalVarId, Vec<Path>>,
@@ -110,6 +114,8 @@ pub(super) struct Temp<'tcx> {
     flag: Option<String>,
     /// The operand it is, which must have been moved by the statement's end.
     operand: Option<ExprId>,
+    /// The parts a pattern moves out of it: on every path, or with a flag.
+    parts: Vec<(Path, Option<String>)>,
 }
 
 /// The statement being lowered, which a statement inside it saves and puts
@@ -160,6 +166,8 @@ pub(super) struct DropState<'tcx> {
     /// and why: an error only where the body drops one.
     unsupported_params: HashMap<u32, (Ty<'tcx>, &'static str)>,
     part_flags: HashMap<(LocalVarId, Path), String>,
+    /// The flags of each temporary's parts that a pattern moves on some paths.
+    temp_part_flags: HashMap<(usize, ExprId), Vec<(Path, String)>>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -486,7 +494,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         &mut self,
         value: Expr,
         ty: Ty<'tcx>,
-        parts: &[(Path, String)],
+        parts: &[(Path, Option<String>)],
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
@@ -494,9 +502,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.drop_value(value, ty, span, out);
         }
         let js_span = self.js_span(span);
+        // This part itself moved on every path: nothing of it is left.
+        if parts.iter().any(|(p, flag)| p.is_empty() && flag.is_none()) {
+            return Ok(());
+        }
         // This part itself moved, on some path: all of it only if it's owned.
-        if let Some((_, flag)) = parts.iter().find(|(p, _)| p.is_empty()) {
-            let rest: Vec<(Path, String)> = parts.iter().filter(|(p, _)| !p.is_empty()).cloned().collect();
+        if let Some((_, Some(flag))) = parts.iter().find(|(p, _)| p.is_empty()) {
+            let rest: Vec<(Path, Option<String>)> = parts.iter().filter(|(p, _)| !p.is_empty()).cloned().collect();
             let mut owned = Vec::new();
             self.drop_owned(value, ty, &rest, span, &mut owned)?;
             if !owned.is_empty() {
@@ -504,7 +516,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Ok(());
         }
-        let under = |step: (Option<u32>, usize)| -> Vec<(Path, String)> {
+        let under = |step: (Option<u32>, usize)| -> Vec<(Path, Option<String>)> {
             parts
                 .iter()
                 .filter(|(p, _)| p[0] == step)
@@ -644,7 +656,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.drop_state.flags.insert(var, flag.clone());
             flag
         });
-        let mut parts: Vec<(Path, String)> = Vec::new();
+        let mut parts: Vec<(Path, Option<String>)> = Vec::new();
         for path in facts.parts.get(&var).into_iter().flatten() {
             if parts.iter().any(|(p, _)| p == path) {
                 continue;
@@ -653,7 +665,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let flag = self.fresh(&format!("{base}${named}$live"));
             out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
             self.drop_state.part_flags.insert((var, path.clone()), flag.clone());
-            parts.push((path.clone(), flag));
+            parts.push((path.clone(), Some(flag)));
         }
         self.drop_state.registered.insert(var);
         self.drop_state.owned.push(Owned { value, ty, flag, parts });
@@ -753,10 +765,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// What `pat`, matched against `scrutinee`, a variable whose parts have
     /// flags, moves out of it: those parts' flags are cleared.
     pub(super) fn clear_parts(&mut self, scrutinee: ExprId, pat: &Pat<'tcx>, out: &mut Vec<Stmt>) {
+        let js_span = self.js_span(pat.span);
+        // A temporary's, taken apart (ADR 0131).
+        let key = std::ptr::from_ref(self.thir) as usize;
+        if let Some(flags) = self.drop_state.temp_part_flags.get(&(key, self.strip(scrutinee))) {
+            let flags = flags.clone();
+            for path in self.pattern_paths(pat).unwrap_or_default() {
+                if let Some((_, flag)) = flags.iter().find(|(p, _)| *p == path) {
+                    out.push(StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span));
+                }
+            }
+            return;
+        }
         let ExprKind::VarRef { id } = self.thir[self.strip(scrutinee)].kind else {
             return;
         };
-        let js_span = self.js_span(pat.span);
         for path in self.pattern_paths(pat).unwrap_or_default() {
             if let Some(flag) = self.drop_state.part_flags.get(&(id, path)) {
                 out.push(StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span));
@@ -767,6 +790,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Whether `var` owns a value with a destructor.
     pub(super) fn is_owner(&mut self, var: LocalVarId) -> R<bool> {
         Ok(self.drop_facts()?.owners.contains_key(&var))
+    }
+
+    /// Whether `e` is a temporary that a pattern takes apart (ADR 0131).
+    pub(super) fn takes_apart_temporary(&mut self, e: ExprId) -> R<bool> {
+        Ok(self.drop_facts()?.temp_parts.contains_key(&self.strip(e)))
     }
 
     /// Whether `e` is a temporary, and why.
@@ -804,10 +832,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 match tree.temporary_scope(self.thir[e].temp_scope_id).temp_lifetime {
                     // Never dropped, as a promoted constant isn't.
                     None => return Ok(Expr::var(&name)),
-                    Some(scope) if scope == statement => None,
-                    // `let r = &f();`: it lives as long as `r` does.
+                    Some(scope) if scope == statement || self.ends_with_statement(scope, statement) => None,
+                    // `let r = &f();`: it lives as long as `r` does, less what a
+                    // `let` moves out of it, `let (a, ref b) = (f(), g());` (ADR 0131).
                     Some(scope) if Some(scope) == rest => {
-                        self.own_value(Expr::var(&name), ty);
+                        let parts = match self.drop_facts()?.temp_parts.get(&e) {
+                            Some((_, true)) => return Err(self.unsupported(span, "a temporary with a destructor here")),
+                            Some((paths, false)) => paths.iter().map(|p| (p.clone(), None)).collect(),
+                            None => Vec::new(),
+                        };
+                        self.drop_state.owned.push(Owned {
+                            value: Expr::var(&name),
+                            ty,
+                            flag: None,
+                            parts,
+                        });
                         return Ok(Expr::var(&name));
                     }
                     Some(_) => return Err(self.unsupported(span, "a temporary with a destructor here")),
@@ -815,13 +854,54 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         };
         let operand = (kind == TempKind::Operand).then_some(e);
+        // What a pattern moves out of it (ADR 0131): a part moved on only
+        // some paths gets a flag, `tuple$0$live`, as a variable's does.
+        let mut parts: Vec<(Path, Option<String>)> = Vec::new();
+        if let Some((paths, flagged)) = self.drop_facts()?.temp_parts.get(&e) {
+            let mut flags = Vec::new();
+            for path in paths {
+                if parts.iter().any(|(p, _)| p == path) {
+                    continue;
+                }
+                let flag = flagged.then(|| {
+                    let flag = match self.path_name(ty, path) {
+                        named if named.is_empty() => self.fresh(&format!("{name}$live")),
+                        named => self.fresh(&format!("{name}${named}$live")),
+                    };
+                    out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
+                    flags.push((path.clone(), flag.clone()));
+                    flag
+                });
+                parts.push((path.clone(), flag));
+            }
+            self.drop_state.temp_part_flags.insert((key, e), flags);
+        }
         self.drop_state.statement.temps.push(Temp {
             name: name.clone(),
             ty,
             flag,
             operand,
+            parts,
         });
         Ok(Expr::var(&name))
+    }
+
+    /// Whether `scope` ends as `statement` does: an `if let`'s, whose
+    /// scrutinee's temporaries end with the `if` in Rust 2024, where the
+    /// `if` is the whole statement and has no `else` to run after them.
+    fn ends_with_statement(&self, scope: region::Scope, statement: region::Scope) -> bool {
+        if scope.data != region::ScopeData::IfThenRescope {
+            return false;
+        }
+        // The scope is the `then` block's, inside the `if`.
+        let owner = self.tcx.local_def_id_to_hir_id(self.body_owner.expect_local()).owner;
+        let then = HirId {
+            owner,
+            local_id: scope.local_id,
+        };
+        let id = self.tcx.parent_hir_id(then);
+        matches!(self.tcx.hir_node(id), Node::Expr(e) if matches!(e.kind, hir::ExprKind::If(_, _, None)))
+            && self.tcx.parent_hir_id(id).local_id == statement.local_id
     }
 
     /// Start lowering a statement whose temporaries end in `scopes`: its own,
@@ -889,11 +969,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(());
         }
         let (at, temp) = placed.remove(0);
-        // Through its declaration, and its flag's.
+        // Through its declaration, and its flags'.
         let mut end = at + 1;
-        if let Some(flag) = &temp.flag
-            && matches!(lowered.get(end).map(|s| &s.kind), Some(StmtKind::Let(n, _)) if n == flag)
-        {
+        let flags: Vec<&String> = temp
+            .flag
+            .iter()
+            .chain(temp.parts.iter().filter_map(|(_, f)| f.as_ref()))
+            .collect();
+        while matches!(lowered.get(end).map(|s| &s.kind), Some(StmtKind::Let(n, _)) if flags.contains(&n)) {
             end += 1;
         }
         let rest = lowered.split_off(end);
@@ -921,13 +1004,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         let mut drop = Vec::new();
-        self.drop_value(Expr::var(&temp.name), temp.ty, span, &mut drop)?;
+        self.drop_owned(Expr::var(&temp.name), temp.ty, &temp.parts, span, &mut drop)?;
         let js_span = self.js_span(span);
         let finally = match temp.flag {
             Some(flag) => vec![StmtKind::If(Expr::var(&flag), drop, None).at(js_span)],
             None => drop,
         };
-        if body.is_empty() {
+        // Nothing to leave by, as `x = temporary[0];`: the drops come after.
+        let cannot_leave = body
+            .iter()
+            .all(|s| matches!(&s.kind, StmtKind::Assign(Expr { kind: js::ExprKind::Var(_), .. }, value) if value.reads_same()));
+        if body.is_empty() || cannot_leave {
+            out.extend(body);
             out.extend(finally);
         } else {
             out.push(StmtKind::Try(body, finally).at(js_span));
@@ -1035,6 +1123,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             flag: None,
             parts: Vec::new(),
         });
+    }
+
+    /// `value`, a parameter `pat` takes apart, owned by the scope, less
+    /// what `pat` moves out of it, which is moved on every path (ADR 0131).
+    pub(super) fn own_rest(&mut self, value: Expr, ty: Ty<'tcx>, pat: &Pat<'tcx>) -> R<()> {
+        let paths = self
+            .pattern_paths(pat)
+            .ok_or_else(|| self.unsupported(pat.span, "moving part of a value with a destructor"))?;
+        self.drop_state.owned.push(Owned {
+            value,
+            ty,
+            flag: None,
+            parts: paths.into_iter().map(|p| (p, None)).collect(),
+        });
+        Ok(())
     }
 
     /// How many owners are in scope: where a new scope's start.
@@ -1479,6 +1582,14 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                     Taken::Nothing
                 }
             }
+            // `if let (Some(c), _) = b` moves the parts it binds, if it matches.
+            Some(ExprKind::Let { expr, pat }) if *expr == child && self.taken(pat) == Taken::Part => {
+                match self.cx.pattern_paths(pat) {
+                    Some(paths) => self.facts.parts.entry(var).or_default().extend(paths),
+                    None => self.problem(span, "moving part of a value with a destructor"),
+                }
+                return;
+            }
             Some(ExprKind::Let { expr, pat }) if *expr == child => self.taken(pat),
             Some(ExprKind::Closure(closure)) if closure.upvars.contains(&child) => {
                 self.problem(span, "a closure that captures a value with a destructor");
@@ -1550,9 +1661,24 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         self.cx.has_drops(self.thir[child].ty)
     }
 
+    /// What `pats`, the patterns a temporary `e` is matched against, move out
+    /// of it: the parts each binds by value. False if one moves a part a way
+    /// `pattern_paths` doesn't follow.
+    fn temp_taken_apart(&mut self, e: ExprId, pats: &mut dyn Iterator<Item = &Pat<'tcx>>, flagged: bool) -> bool {
+        let mut paths = Vec::new();
+        for pat in pats {
+            match self.cx.pattern_paths(pat) {
+                Some(found) => paths.extend(found),
+                None => return false,
+            }
+        }
+        self.facts.temp_parts.insert(e, (paths, flagged));
+        true
+    }
+
     /// A value with a destructor, made here, at the top of the walk: one
     /// borrowed, or taken apart, is a temporary, dropped at the end of its
-    /// statement, which isn't supported yet. So is one made before an
+    /// statement. So is one made before an
     /// operand after it that can leave early, which drops it as it leaves.
     fn value_made(&mut self, e: ExprId) {
         let (parent, child) = self.context();
@@ -1572,44 +1698,54 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         let taken = |finder: &Self, pats: &mut dyn Iterator<Item = &Pat<'tcx>>| {
             pats.map(|p| finder.taken(p)).any(|t| t != Taken::Nothing)
         };
-        let used_in_place =
-            match parent.map(|p| &self.thir[p].kind) {
-                // `let (a, _) = (x, y);` takes a temporary apart, and drops the rest.
-                None => {
-                    if self.lets.get(&child).is_some_and(|pat| {
-                        !matches!(pat.kind, PatKind::Wild | PatKind::Binding { subpattern: None, .. })
-                    }) {
-                        self.problem(span, "taking apart a temporary with a destructor");
-                    }
+        let used_in_place = match parent.map(|p| &self.thir[p].kind) {
+            // `let (a, _) = (x, y);` takes a temporary apart, and drops the rest.
+            // `let (a, _) = (x, y);` moves what it binds out of a temporary,
+            // which drops the rest as the statement ends.
+            None => {
+                let Some(&pat) = self.lets.get(&child) else {
+                    return;
+                };
+                if matches!(pat.kind, PatKind::Wild | PatKind::Binding { subpattern: None, .. }) {
                     return;
                 }
-                Some(ExprKind::Let { expr, pat }) if *expr == child => {
-                    if taken(self, &mut std::iter::once(&**pat)) {
-                        self.problem(span, "moving part of a temporary with a destructor");
-                        return;
-                    }
-                    true
-                }
-                Some(ExprKind::Match { scrutinee, arms, .. }) if *scrutinee == child => {
-                    if taken(self, &mut arms.iter().map(|&a| &*self.thir[a].pattern)) {
-                        self.problem(span, "moving part of a temporary with a destructor");
-                        return;
-                    }
-                    true
-                }
-                Some(
-                    ExprKind::Borrow { arg, .. }
-                    | ExprKind::RawBorrow { arg, .. }
-                    | ExprKind::Field { lhs: arg, .. }
-                    | ExprKind::Index { lhs: arg, .. }
-                    | ExprKind::Deref { arg },
-                ) => *arg == child,
-                Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
-                    self.problem(span, "a struct update from a value with a destructor");
+                if !self.temp_taken_apart(e, &mut std::iter::once(pat), false) {
+                    self.problem(span, "taking apart a temporary with a destructor");
                     return;
                 }
-                _ => false,
-            };
+                true
+            }
+            Some(ExprKind::Let { expr, pat }) if *expr == child => {
+                if taken(self, &mut std::iter::once(&**pat))
+                    && !self.temp_taken_apart(e, &mut std::iter::once(&**pat), true)
+                {
+                    self.problem(span, "moving part of a temporary with a destructor");
+                    return;
+                }
+                true
+            }
+            Some(ExprKind::Match { scrutinee, arms, .. }) if *scrutinee == child => {
+                if taken(self, &mut arms.iter().map(|&a| &*self.thir[a].pattern))
+                    && !self.temp_taken_apart(e, &mut arms.iter().map(|&a| &*self.thir[a].pattern), true)
+                {
+                    self.problem(span, "moving part of a temporary with a destructor");
+                    return;
+                }
+                true
+            }
+            Some(
+                ExprKind::Borrow { arg, .. }
+                | ExprKind::RawBorrow { arg, .. }
+                | ExprKind::Field { lhs: arg, .. }
+                | ExprKind::Index { lhs: arg, .. }
+                | ExprKind::Deref { arg },
+            ) => *arg == child,
+            Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
+                self.problem(span, "a struct update from a value with a destructor");
+                return;
+            }
+            _ => false,
+        };
         if used_in_place {
             self.facts.temps.insert(e, TempKind::Place);
         }

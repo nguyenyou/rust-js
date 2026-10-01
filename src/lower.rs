@@ -403,6 +403,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 cond, then, else_opt, ..
             } => {
                 let mut then_out = Vec::new();
+                // What an `if let` binds is its `then`'s, dropped as it ends.
+                let mark = self.owned_mark();
                 let cond = match self.thir[self.strip(cond)].kind {
                     ExprKind::Let {
                         expr: scrutinee,
@@ -410,7 +412,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     } => self.if_let(scrutinee, pat, &mut then_out, out)?,
                     _ => self.expr(cond, out)?,
                 };
-                self.stmt(then, dest, &mut then_out)?;
+                // Its bindings first, then the body their `finally` drops them after.
+                let mut body = Vec::new();
+                self.stmt(then, dest, &mut body)?;
+                self.close_scope(mark, body, self.thir[then].span, &mut then_out)?;
                 let else_out = match else_opt {
                     Some(els) => {
                         let mut else_out = Vec::new();

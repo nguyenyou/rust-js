@@ -356,6 +356,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 // apart where it is, below.
                 if self.place(init).is_none() && !self.is_control_flow(init) {
                     let value = self.expr(init, out)?;
+                    // A temporary taken apart binds each part on its own, so
+                    // its `try` can hold them (ADR 0131).
+                    if self.takes_apart_temporary(init)? {
+                        return self.destructure(pat, value, true, false, out);
+                    }
                     if let Some((pattern, mutable)) = self.js_pattern(pat) {
                         out.push(
                             StmtKind::Destructure {
@@ -450,6 +455,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some((place, _)) = self.place(e) {
             return Ok((place, false));
+        }
+        // A temporary taken apart is in a `const` of its own already, which
+        // owns what's left of it (ADR 0131).
+        if self.takes_apart_temporary(e)? {
+            return Ok((self.expr(e, out)?, true));
         }
         // `match (a, b)` tests `a` and `b` where they are. A part that isn't a
         // place that stays put goes in a `const` of its own, in order.
@@ -762,7 +772,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: js::Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
+        let mark = self.owned_mark();
         let levels = self.let_chain_levels(parts)?;
+        // One a later test fails after would have to be dropped before the
+        // `else`, with what's left of what it came from.
+        if self.owned_mark() > mark {
+            let span = self.thir[then].span;
+            return Err(self.unsupported(span, "a let chain that binds a value with a destructor"));
+        }
         let mut then_out = Vec::new();
         self.stmt(then, dest, &mut then_out)?;
         let else_out = match else_opt {
@@ -868,6 +885,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (subject, stable) = self.subject(scrutinee, &base, out)?;
         let mut bindings = Vec::new();
         let test = self.pattern_test(pat, &subject, &mut bindings)?;
+        // What it binds by value is moved out of the scrutinee (ADR 0098).
+        self.clear_parts(scrutinee, pat, then_out);
         self.bind_all(bindings, stable, items, self.js_span(pat.span), then_out)?;
         Ok(test.unwrap_or_else(|| Expr::bool(true)))
     }

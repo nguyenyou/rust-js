@@ -41,11 +41,8 @@ function main() {
   }
   const noisy$1 = make("b");
   let first;
-  try {
-    first = noisy$1[0];
-  } finally {
-    noisyDrop_drop(noisy$1);
-  }
+  first = noisy$1[0];
+  noisyDrop_drop(noisy$1);
   const noisy$2 = make("c");
   let empty;
   try {

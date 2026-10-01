@@ -134,7 +134,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             // `Props { initial, label }: Props` is `{ initial, label }`, as a
             // React component takes its props.
+            // One with a destructor is owned by the function, less what its
+            // pattern moves out: taken apart below (ADR 0131).
             if let Some(pat) = peeled
+                && !self.has_drops(param.ty)
                 && let Some((pattern, _)) = self.js_pattern(pat)
             {
                 names.push(pattern);
@@ -185,8 +188,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         name
                     }
                     // `(x, y): (i32, i32)`: take the whole value, then take it apart.
+                    // The function owns what the pattern leaves of it, `ref b`'s,
+                    // dropped after what it binds, as Rust drops them (ADR 0131).
                     _ => {
                         let name = self.fresh("param");
+                        if self.has_drops(param.ty) {
+                            self.own_rest(Expr::var(&name), param.ty, pat)?;
+                        }
                         self.destructure(pat, Expr::var(&name), true, false, out)?;
                         name
                     }

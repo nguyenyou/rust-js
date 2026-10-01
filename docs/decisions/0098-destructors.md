@@ -135,6 +135,9 @@ function main() {
     noisyDrop_drop(noisy);
   }
   ```
+
+  (Amended by ADR 0131: a statement that can't fail, as `first = noisy[0];`,
+  has its temporaries' drops straight after it, with no `try`.)
 - **A value made before an operand that may leave early is a temporary
   too,** `f(make(1), g())`: its flag clears as the call is made, after
   every operand, so a `g` that panics leaves it owned, and dropped.

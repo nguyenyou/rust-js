@@ -212,6 +212,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0128 std's iterator sources: `once` is an array, and `repeat` a JS iterator](decisions/0128-iterator-sources.md)
 - [0129 A range is a value: `{ start, end }`, iterated as its items](decisions/0129-range-values.md)
 - [0130 An `if let` is a value anywhere, and trait and std functions are values](decisions/0130-if-let-values-and-fn-items.md)
+- [0131 A temporary taken apart owns what its pattern leaves](decisions/0131-temporaries-taken-apart.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)
