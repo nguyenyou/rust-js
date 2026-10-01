@@ -1645,6 +1645,14 @@ export const mutations: Mutation[] = [
     replace: "        if false && save && check.when == When::Build {",
     tests: ["test/settings.test.ts", "-t", "only in a build"],
   },
+  {
+    name: "bitwise-operator-impls",
+    breaks: "a type's own `impl BitOr`, as a set of flags has, is refused, where `impl Add` isn't",
+    file: "src/lower/recognition.rs",
+    find: "        LangItem::BitOr,\n        LangItem::BitXor,",
+    replace: "        LangItem::BitXor,",
+    tests: ["test/corpus.test.ts", "-t", "bitwise_operators"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of
