@@ -32,3 +32,12 @@ pub fn from_frame(frame: &webapi::HtmlIFrameElement, e: &Event) -> (bool, f64) {
     let window_of = webapi::html_i_frame_element::content_window(frame);
     (js::object::is(&sender, &window_of), webapi::performance::now(window::performance(window)))
 }
+
+/// A canvas, which a library like canvas-confetti draws on: its size, set
+/// and read, `canvas.width = 320`.
+pub fn canvas_size() -> (u32, u32) {
+    let canvas = webapi::html_canvas_element::unchecked_from(document::create_element(document, "canvas"));
+    webapi::html_canvas_element::set_width(canvas, 320);
+    webapi::html_canvas_element::set_height(canvas, 200);
+    (webapi::html_canvas_element::width(canvas), webapi::html_canvas_element::height(canvas))
+}

@@ -27,4 +27,11 @@ export function from_frame(frame, e) {
   const windowOf = frame.contentWindow;
   return [Object.is(sender, windowOf), window.performance.now()];
 }
+
+export function canvas_size() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 200;
+  return [canvas.width, canvas.height];
+}
 //# sourceMappingURL=web_forms.js.map

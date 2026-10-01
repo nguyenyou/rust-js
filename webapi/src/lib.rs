@@ -4411,6 +4411,56 @@ pub mod html_i_frame_element {
     }
 }
 
+/// [`HTMLCanvasElement`](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement)
+pub struct HtmlCanvasElement(PhantomData<JsObject>);
+
+impl Deref for HtmlCanvasElement {
+    type Target = HtmlElement;
+
+    fn deref(&self) -> &HtmlElement {
+        // Never runs: rust-js compiles this `Deref` to the object itself.
+        unsafe { &*(self as *const Self as *const HtmlElement) }
+    }
+}
+
+pub mod html_canvas_element {
+    use super::*;
+
+    unsafe extern "Rust" {
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/HTMLCanvasElement)
+        #[link_name = "new HTMLCanvasElement"]
+        pub safe fn new() -> &'static HtmlCanvasElement;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/width)
+        #[link_name = "get width"]
+        pub safe fn width(this: &HtmlCanvasElement) -> u32;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/width)
+        #[link_name = "set width"]
+        pub safe fn set_width(this: &HtmlCanvasElement, value: u32);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/height)
+        #[link_name = "get height"]
+        pub safe fn height(this: &HtmlCanvasElement) -> u32;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/height)
+        #[link_name = "set height"]
+        pub safe fn set_height(this: &HtmlCanvasElement, value: u32);
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/toDataURL)
+        #[link_name = "toDataURL"]
+        pub safe fn to_data_url(this: &HtmlCanvasElement) -> String;
+
+        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/toDataURL)
+        #[link_name = "toDataURL"]
+        pub safe fn to_data_url_with_type(this: &HtmlCanvasElement, type_: &str) -> String;
+
+        /// Treats `this` as `HtmlCanvasElement` without checking that it is one.
+        #[link_name = "this"]
+        pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlCanvasElement;
+    }
+}
+
 /// [`Window`](https://developer.mozilla.org/docs/Web/API/Window)
 pub struct Window(PhantomData<JsObject>);
 
