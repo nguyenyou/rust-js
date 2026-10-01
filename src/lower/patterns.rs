@@ -19,16 +19,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// variables, and says whether one is `mut`. `None`, binding nothing, if a
     /// part is anything else, or needs a copy of its own (ADR 0020).
     pub(super) fn js_pattern(&mut self, pat: &Pat<'tcx>) -> Option<(js::Pattern, bool)> {
-        let PatKind::Leaf { subpatterns } = &pat.kind else {
-            return None;
+        // A struct's or a tuple's fields, or an array's first items, `[a, b,
+        // ..]`, which are `const [a, b] = xs` (ADR 0123): each by where it is.
+        let fields: Vec<(usize, &Pat<'tcx>)> = match &pat.kind {
+            PatKind::Leaf { subpatterns } => subpatterns.iter().map(|f| (f.field.as_usize(), &f.pattern)).collect(),
+            PatKind::Array { prefix, slice, suffix }
+                if suffix.is_empty() && slice.as_ref().is_none_or(|rest| matches!(rest.kind, PatKind::Wild)) =>
+            {
+                prefix.iter().enumerate().collect()
+            }
+            _ => return None,
         };
         // `(i, &x)`: a reference is the value (ADR 0023), so that part is `x`.
-        let parts: Vec<_> = subpatterns
-            .iter()
-            .map(|field| match without_refs(&field.pattern).kind {
+        let parts: Vec<_> = fields
+            .into_iter()
+            .map(|(i, field)| match without_refs(field).kind {
                 // A cell, a `&mut` to a number, is taken apart as a cell (ADR 0099).
-                _ if self.is_cell(field.pattern.ty) => None,
-                PatKind::Wild => Some((field.field.as_usize(), None)),
+                _ if self.is_cell(field.ty) => None,
+                PatKind::Wild => Some((i, None)),
                 PatKind::Binding {
                     name,
                     var,
@@ -37,12 +45,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     ty,
                     ..
                 } if self.unsupported_part(ty).is_none() && !(self.contains_mutated(ty) && self.is_copy(ty)) => {
-                    Some((field.field.as_usize(), Some((name, var, mutability == Mutability::Mut))))
+                    Some((i, Some((name, var, mutability == Mutability::Mut))))
                 }
                 _ => None,
             })
             .collect::<Option<_>>()?;
         let mutable = parts.iter().any(|(_, part)| part.is_some_and(|(_, _, m)| m));
+        if matches!(pat.kind, PatKind::Array { .. }) {
+            let mut items = Vec::new();
+            for (i, part) in parts {
+                items.resize(i + 1, None);
+                items[i] = part.map(|(name, var, m)| self.bind(var, name.as_str(), m));
+            }
+            // `[a, , ]` is `[a]`.
+            while items.last().is_some_and(Option::is_none) {
+                items.pop();
+            }
+            return Some((js::Pattern::Array(items), mutable));
+        }
         let pattern = match self.shape(pat.ty) {
             Shape::Array(tys) => {
                 let mut items = vec![None; tys.len()];
@@ -1068,6 +1088,51 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return Err(self.unsupported(pat.span, "bindings inside `|` patterns"));
                 }
                 Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::Or, a, b)))
+            }
+            // `[first, .., last]` (ADR 0123): a slice's length, then each item,
+            // `xs[0]` and `xs[xs.length - 1]`; an array's length is its type's,
+            // so its last is `xs[2]`. What `..` binds is the items it stands
+            // for, `xs.slice(1, xs.length - 1)`, a copy, as `&v[a..b]` is (ADR
+            // 0063): one to write through can't be.
+            PatKind::Array { prefix, slice, suffix } | PatKind::Slice { prefix, slice, suffix } => {
+                let length = match pat.ty.peel_refs().kind() {
+                    ty::Array(_, len) => len.try_to_target_usize(self.tcx).map(|n| n as i128),
+                    _ => None,
+                };
+                let count = Expr::member(subject.clone(), "length");
+                let (before, after) = (prefix.len() as i128, suffix.len() as i128);
+                let mut tests = Vec::new();
+                if matches!(pat.kind, PatKind::Slice { .. }) && !(slice.is_some() && before + after == 0) {
+                    let op = if slice.is_some() { Op::Ge } else { Op::Eq };
+                    tests.push(Expr::bin(op, count.clone(), Expr::int(before + after)));
+                }
+                // Where an item is, counted from the end: `xs[2]`, or `xs[xs.length - 1]`.
+                let from_end = |k: i128| match length {
+                    Some(n) => Expr::int(n - k),
+                    None => Expr::bin(Op::Sub, count.clone(), Expr::int(k)),
+                };
+                for (i, item) in prefix.iter().enumerate() {
+                    let place = Expr::index(subject.clone(), Expr::int(i as i128));
+                    tests.extend(self.pattern_test(item, &place, bindings)?);
+                }
+                for (j, item) in suffix.iter().enumerate() {
+                    let place = Expr::index(subject.clone(), from_end(after - j as i128));
+                    tests.extend(self.pattern_test(item, &place, bindings)?);
+                }
+                if let Some(rest) = slice {
+                    if let PatKind::Binding { mode, ty, .. } = &rest.kind
+                        && (matches!(mode.0, ByRef::Yes(_, Mutability::Mut)) || ty.is_ref() && ty.is_mutable_ptr())
+                    {
+                        return Err(self.unsupported(rest.span, "a `&mut` to part of a slice"));
+                    }
+                    let mut range = vec![Expr::int(before)];
+                    if after > 0 {
+                        range.push(from_end(after));
+                    }
+                    let part = Expr::call(Expr::member(subject.clone(), "slice"), range);
+                    tests.extend(self.pattern_test(rest, &part, bindings)?);
+                }
+                Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
             }
             _ => Err(self.unsupported(pat.span, "this pattern")),
         }

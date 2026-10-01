@@ -1774,6 +1774,22 @@ export const mutations: Mutation[] = [
     tests: ["test/serde.test.ts", "-t", "an f32 is written"],
   },
   {
+    name: "slice-pattern-length-at-least",
+    breaks: "`[one]` of a slice matches any slice it starts, not one of a single item",
+    file: "src/lower/patterns.rs",
+    find: "                    let op = if slice.is_some() { Op::Ge } else { Op::Eq };",
+    replace: "                    let op = Op::Ge;",
+    tests: ["test/corpus.test.ts", "-t", "slice_patterns"],
+  },
+  {
+    name: "slice-pattern-mut-rest",
+    breaks: "`[_, rest @ ..]` of a `&mut [T]` binds a copy, which what's written through it never reaches",
+    file: "src/lower/patterns.rs",
+    find: "                        return Err(self.unsupported(rest.span, \"a `&mut` to part of a slice\"));",
+    replace: "",
+    tests: ["test/diagnostics.test.ts", "-t", "a &mut rest of a slice pattern"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",

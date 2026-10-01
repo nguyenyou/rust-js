@@ -11,6 +11,8 @@ for (const [name, source, message, crate] of [
   ["unsupported type", 'pub fn f(x: u128) -> u128 { x }', "does not support"],
   // ADR 0122: an `f32`'s bits aren't yet: a NaN's payload is JS's to keep or not.
   ["an f32's bits", "pub fn f(x: f32) -> u32 { x.to_bits() }", "to_bits"],
+  // ADR 0123: what `..` binds is a copy, as `&v[a..b]` is (ADR 0063), so one to write through can't be.
+  ["a &mut rest of a slice pattern", "pub fn f(v: &mut [u32]) { if let [_, rest @ ..] = v { rest[0] = 1; } }", "a `&mut` to part of a slice"],
   ["camelCase fields that collide", '#![allow(non_snake_case)]\n#[rust_js::camel_case]\nconst _: () = ();\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["#[thread_local] static", "#![feature(thread_local)]\n#[thread_local] static N: std::cell::Cell<u32> = std::cell::Cell::new(0);\npub fn f() -> u32 { N.get() }", "does not support `#[thread_local]` statics"],
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
