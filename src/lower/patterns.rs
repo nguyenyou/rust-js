@@ -384,9 +384,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<()> {
         let mut bindings = Vec::new();
-        if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {
-            return Err(self.unsupported(pat.span, "this refutable pattern"));
-        }
+        // Irrefutable as rustc checks it, a parameter's, a `for`'s or a
+        // `let`'s: a test of one always holds, as `Ok(n) | Err(n)`'s does.
+        self.pattern_test(pat, &subject, &mut bindings)?;
         self.bind_all(bindings, stable, items, self.js_span(pat.span), out)
     }
 
@@ -1075,19 +1075,55 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::And, a, b)))
             }
+            // `Circle(r) | Sphere(r)` (ADR 0124): each alternative's test, and
+            // each binds the same names, as rustc checks. One each binds at
+            // the same place, `s._0`, is that place; one bound elsewhere in
+            // each, `(0, x) | (x, 0)`, is the place of the first that matched,
+            // `p[0] === 0 ? p[1] : p[0]`, the last needing no test.
             PatKind::Or { pats } => {
-                let before = bindings.len();
-                let mut tests = Vec::new();
+                let mut alternatives = Vec::new();
                 for p in pats {
-                    match self.pattern_test(p, subject, bindings)? {
-                        Some(t) => tests.push(t),
-                        None => return Ok(None),
-                    }
+                    let mut bound = Vec::new();
+                    let test = self.pattern_test(p, subject, &mut bound)?;
+                    alternatives.push((test, bound));
                 }
-                if bindings.len() != before {
-                    return Err(self.unsupported(pat.span, "bindings inside `|` patterns"));
+                for binding in alternatives[0].1.clone() {
+                    let places: Vec<(Option<Expr>, Expr)> = alternatives
+                        .iter()
+                        .map(|(test, bound)| {
+                            let place = bound
+                                .iter()
+                                .find(|b| b.var == binding.var)
+                                .map_or_else(|| binding.place.clone(), |b| b.place.clone());
+                            (test.clone(), place)
+                        })
+                        .collect();
+                    let place = if places.iter().all(|(_, place)| same_place(place, &binding.place)) {
+                        binding.place.clone()
+                    } else if binding.by_ref_mut {
+                        // A choice of places can't be written through.
+                        return Err(self.unsupported(
+                            pat.span,
+                            "a `ref mut` bound at another place in each alternative of a `|` pattern",
+                        ));
+                    } else {
+                        let mut places = places.into_iter().rev();
+                        let (_, last) = places.next().expect("a `|` pattern has alternatives");
+                        places.fold(last, |rest, (test, place)| match test {
+                            Some(test) => Expr::cond(test, place, rest),
+                            None => place,
+                        })
+                    };
+                    bindings.push(Binding { place, ..binding });
                 }
-                Ok(tests.into_iter().reduce(|a, b| Expr::bin(Op::Or, a, b)))
+                // `p | _` always matches.
+                if alternatives.iter().any(|(test, _)| test.is_none()) {
+                    return Ok(None);
+                }
+                Ok(alternatives
+                    .into_iter()
+                    .filter_map(|(test, _)| test)
+                    .reduce(|a, b| Expr::bin(Op::Or, a, b)))
             }
             // `[first, .., last]` (ADR 0123): a slice's length, then each item,
             // `xs[0]` and `xs[xs.length - 1]`; an array's length is its type's,
@@ -1136,5 +1172,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => Err(self.unsupported(pat.span, "this pattern")),
         }
+    }
+}
+
+/// Are two of a pattern's places the same one, as `s._0` of `Circle(r)` and
+/// of `Sphere(r)` is? Only what such places are made of is compared, the
+/// rest taken as different, which a choice of places stays right for.
+fn same_place(a: &Expr, b: &Expr) -> bool {
+    use js::ExprKind as K;
+    match (&a.kind, &b.kind) {
+        (K::Var(x), K::Var(y)) | (K::Str(x), K::Str(y)) => x == y,
+        (K::Num(x), K::Num(y)) => x == y,
+        (K::BigInt(x), K::BigInt(y)) => x == y,
+        (K::Member(x, m), K::Member(y, n)) => m == n && same_place(x, y),
+        (K::Index(x, i), K::Index(y, j)) => same_place(x, y) && same_place(i, j),
+        (K::Binary(op, x, i), K::Binary(other, y, j)) => op == other && same_place(x, y) && same_place(i, j),
+        (K::Call(f, xs), K::Call(g, ys)) => {
+            same_place(f, g) && xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| same_place(x, y))
+        }
+        _ => false,
     }
 }

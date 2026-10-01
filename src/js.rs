@@ -284,7 +284,7 @@ pub enum UnaryOp {
     BitNot,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Op {
     Or,
     And,

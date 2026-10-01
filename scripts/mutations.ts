@@ -1797,6 +1797,22 @@ export const mutations: Mutation[] = [
     tests: ["test/diagnostics.test.ts", "-t", "a &mut rest of a slice pattern"],
   },
   {
+    name: "or-binding-one-place",
+    breaks: "`(0, x) | (x, 0)` binds `x` where the first alternative has it, whichever matched",
+    file: "src/lower/patterns.rs",
+    find: "                    let place = if places.iter().all(|(_, place)| same_place(place, &binding.place)) {",
+    replace: "                    let place = if true || places.iter().all(|(_, place)| same_place(place, &binding.place)) {",
+    tests: ["test/corpus.test.ts","-t","or_bindings"],
+  },
+  {
+    name: "irrefutable-or-refused",
+    breaks: "`let (Ok(n) | Err(n)) = r;` is refused, as its test isn't empty, where rustc checked it always holds",
+    file: "src/lower/patterns.rs",
+    find: "        self.pattern_test(pat, &subject, &mut bindings)?;\n        self.bind_all(",
+    replace: "        if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {\n            return Err(self.unsupported(pat.span, \"this refutable pattern\"));\n        }\n        self.bind_all(",
+    tests: ["test/corpus.test.ts","-t","or_bindings"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",

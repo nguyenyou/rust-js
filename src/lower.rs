@@ -180,6 +180,7 @@ struct Locals {
 }
 
 /// A variable bound by a pattern, and the place in the subject it matched.
+#[derive(Clone)]
 struct Binding<'tcx> {
     var: LocalVarId,
     name: String,
