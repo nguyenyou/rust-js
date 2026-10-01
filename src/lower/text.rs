@@ -25,6 +25,8 @@ pub(super) enum TextOp {
     /// `c.to_uppercase()`: its `char`s, as JS's own mapping gives them (`ß` is `SS`).
     CharCase(bool),
     Lines,
+    /// `s.as_bytes()`: its UTF-8 bytes, a copy, as nothing writes through it (ADR 0126).
+    Bytes,
     /// `s.split(|c| ..)` and `s.contains(|c| ..)`: a closure as the pattern.
     SplitBy,
     ContainsBy,
@@ -105,6 +107,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             TextOp::Lines => {
                 self.runtime.insert(Helper::Lines);
                 Expr::call(Expr::var("$lines"), vec![arg()])
+            }
+            // `Array.from(new TextEncoder().encode(s))`: an array of `u8`s, as a
+            // slice of them is.
+            TextOp::Bytes => {
+                let encoder = Expr::new_(Expr::var("TextEncoder"), Vec::new());
+                let encoded = Expr::call(Expr::member(encoder, "encode"), vec![arg()]);
+                Expr::call(Expr::member(Expr::var("Array"), "from"), vec![encoded])
             }
             TextOp::Parse => {
                 let target = generic_args

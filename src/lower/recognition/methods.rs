@@ -32,6 +32,7 @@ pub(super) fn text(name: &str, char: bool, str: bool) -> Option<TextOp> {
         "is_digit" if char => TextOp::IsDigit,
         "split_whitespace" if str => TextOp::SplitWhitespace,
         "lines" if str => TextOp::Lines,
+        "as_bytes" if str => TextOp::Bytes,
         "parse" if str => TextOp::Parse,
         _ => return None,
     })

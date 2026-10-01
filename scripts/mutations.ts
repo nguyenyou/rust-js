@@ -1845,6 +1845,22 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","function_values"],
   },
   {
+    name: "byte-string-unknown",
+    breaks: "`b\"GET\"`, a byte string, is refused",
+    file: "src/lower.rs",
+    find: "            LitKind::ByteStr(ref bytes, _) =>",
+    replace: "            LitKind::ByteStr(ref bytes, _) if false =>",
+    tests: ["test/corpus.test.ts","-t","byte_strings"],
+  },
+  {
+    name: "as-bytes-utf16",
+    breaks: "`s.as_bytes()` is each UTF-16 unit, `é` one byte where UTF-8 has two",
+    file: "src/lower/text.rs",
+    find: "                Expr::call(Expr::member(Expr::var(\"Array\"), \"from\"), vec![encoded])\n            }",
+    replace: "                let _ = encoded;\n                Expr::call(Expr::member(Expr::var(\"Array\"), \"from\"), vec![arg(), Expr::arrow(vec![\"c\".into()], vec![crate::js::StmtKind::Return(Some(Expr::call(Expr::member(Expr::var(\"c\"), \"charCodeAt\"), vec![Expr::int(0)]))).at(crate::js::Span::NONE)])])\n            }",
+    tests: ["test/corpus.test.ts","-t","byte_strings"],
+  },
+  {
     name: "f32-digits-symmetric",
     breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
     file: "src/runtime/f32_digits.js",

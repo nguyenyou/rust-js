@@ -1199,6 +1199,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(num.wrap(num.literal(if neg { -n } else { n })))
             }
             LitKind::Byte(b) => Ok(Expr::int(b.into())),
+            // `b"GET"`, a `&[u8; 3]`: its bytes, `[71, 69, 84]`, as an array of
+            // `u8`s is (ADR 0126).
+            LitKind::ByteStr(ref bytes, _) => Ok(Expr::array(
+                bytes.as_byte_str().iter().map(|&b| Expr::int(b.into())).collect(),
+            )),
             LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F64) => {
                 let x: f64 = sym
                     .as_str()

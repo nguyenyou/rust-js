@@ -614,8 +614,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "back" if deque => Some(Std::SliceLast),
             "make_contiguous" if deque => Some(Std::Same),
             // A `Vec` is its array, and the whole of it the same array: what's
-            // written through `as_mut_slice()` is the `Vec`'s.
-            "as_slice" | "as_mut_slice" if adt("Vec") => Some(Std::Same),
+            // written through `as_mut_slice()` is the `Vec`'s. An array's is it too.
+            "as_slice" | "as_mut_slice" if adt("Vec") || owner.is_array() => Some(Std::Same),
             "drain" if adt("Vec") || deque => Some(Std::Text(TextOp::Drain)),
             "iter" | "iter_mut" if deque || heap => Some(Std::Same),
             "new" | "with_capacity" if deque || heap => Some(Std::VecNew),
