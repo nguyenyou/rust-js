@@ -6,6 +6,15 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { createNativeBuilder, findCompiler } from "@rust-js/build/build";
 import { parseManifest } from "@rust-js/build/manifest";
+import { writePatch } from "@rust-js/build/patch";
+
+/** The app Vite's `root` is of: the nearest directory with a `package.json`. */
+function appDir(root) {
+  for (let dir = root; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, "package.json"))) return dir;
+    if (dirname(dir) === dir) return undefined;
+  }
+}
 
 /**
  * @param {object} [options]
@@ -178,6 +187,17 @@ export default function rustJs({ crates = ["src/App.rs"], rustJs, compile: custo
       }
     },
     async buildStart() {
+      // The app's Cargo, and its editor, find the crates its npm packages
+      // have by a patch, which an install's `postinstall` writes, and Vite
+      // again as it starts: a crate installed twice stops it.
+      const app = appDir(root);
+      if (app) {
+        try {
+          writePatch(app);
+        } catch (error) {
+          this.error(`rust-js: ${error instanceof Error ? error.message : error}`);
+        }
+      }
       // The generated JS is committed, as ReScript recommends (ADR 0041), so
       // a checkout without rust-js still builds from it. With rust-js, the
       // Rust is always compiled, and an error is never hidden by an old file.

@@ -222,6 +222,44 @@ pub fn App() -> Element {
   await expect(build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: missing }), react()], logLevel: "silent" })).rejects.toThrow("no rust-js at");
 }, 60_000);
 
+// As it starts, Vite writes the patch that tells the app's Cargo, and its
+// editor, where the crates its npm packages have are; a crate installed
+// twice stops it, with who asked for each.
+test("Vite writes the app's patch as it starts, and stops at a crate installed twice", async () => {
+  buildReact();
+  const dir = fixture("vite-patch");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "index.html"), '<div id="root"></div><script type="module" src="/src/main.jsx"></script>');
+  writeFileSync(join(dir, "src/main.jsx"), 'import {createRoot} from "react-dom/client"; import {App} from "./App.jsx"; createRoot(document.getElementById("root")).render(<App/>);');
+  writeFileSync(join(dir, "src/App.rs"), `#![allow(non_snake_case)]
+use react::{Element, jsx};
+pub fn App() -> Element {
+    jsx! {
+        <p>{"Patched"}</p>
+    }
+}
+`);
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ private: true, dependencies: { "@x/a": "~0.0.1" } }));
+  const crate = (at: string, version: string) => {
+    mkdirSync(join(at, "src"), { recursive: true });
+    writeFileSync(join(at, "package.json"), JSON.stringify({ name: "@x/a", version, "rust-js": { crate: "zz-a" } }));
+    writeFileSync(join(at, "Cargo.toml"), `[package]\nname = "zz-a"\nversion = "${version}"\nedition = "2024"\n`);
+    writeFileSync(join(at, "src", "lib.rs"), "");
+  };
+  crate(join(dir, "node_modules", "@x", "a"), "0.0.1");
+  await build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], logLevel: "silent" });
+  expect(readFileSync(join(dir, ".cargo", "config.toml"), "utf8")).toContain('zz-a = { path = "node_modules/@x/a" }');
+
+  // Another package that asks for another version of it.
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ ...pkg, dependencies: { ...pkg.dependencies, "@x/b": "~0.0.1" } }));
+  mkdirSync(join(dir, "node_modules", "@x", "b"), { recursive: true });
+  writeFileSync(join(dir, "node_modules", "@x", "b", "package.json"), JSON.stringify({ name: "@x/b", version: "0.0.1", "rust-js": { crate: "zz-b" }, peerDependencies: { "@x/a": "~0.0.2" } }));
+  writeFileSync(join(dir, "node_modules", "@x", "b", "Cargo.toml"), `[package]\nname = "zz-b"\nversion = "0.0.1"\nedition = "2024"\n`);
+  crate(join(dir, "node_modules", "@x", "b", "node_modules", "@x", "a"), "0.0.2");
+  await expect(build({ root: dir, configFile: false, plugins: [rustJs({ rustJs: compiler }), react()], logLevel: "silent" })).rejects.toThrow("zz-a is installed twice");
+}, 120_000);
+
 // A crate's checks in Vite (ADR 0117): a build runs all of them, the server
 // those not only for a build; what one says, of the Rust, is Vite's warning.
 test("Vite runs a crate's checks, a build's all, the server's those for a save", async () => {
