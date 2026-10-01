@@ -1647,11 +1647,27 @@ export const mutations: Mutation[] = [
   },
   {
     name: "bitwise-operator-impls",
-    breaks: "a type's own `impl BitOr`, as a set of flags has, is refused, where `impl Add` isn't",
+    breaks: "a type's own `impl BitOrAssign`, as a set of flags has, is refused, where `impl AddAssign` isn't",
     file: "src/lower/recognition.rs",
-    find: "        LangItem::BitOr,\n        LangItem::BitXor,",
-    replace: "        LangItem::BitXor,",
+    find: "        LangItem::BitOrAssign,\n",
+    replace: "",
     tests: ["test/corpus.test.ts", "-t", "bitwise_operators"],
+  },
+  {
+    name: "generic-bitwise-operators",
+    breaks: "`a | b` of a `T: BitOr` in generic code is refused, where `a + b` of a `T: Add` isn't",
+    file: "src/lower/recognition.rs",
+    find: "        (LangItem::BitOr, Ok(BinOp::BitOr)),\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "generic_bitwise_operators"],
+  },
+  {
+    name: "dictionary-big-shift-amount",
+    breaks: "a dictionary's `Shl<u64>` of a `u32` shifts a JS number by a BigInt, which JS throws at",
+    file: "src/lower/traits.rs",
+    find: 'let b = super::numbers::shift_amount_of(op, Expr::var("b"), ty, tr.args.type_at(1));',
+    replace: 'let b = Expr::var("b");',
+    tests: ["test/corpus.test.ts", "-t", "generic_bitwise_operators"],
   },
 ];
 

@@ -419,6 +419,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             if let Some(target) = self.slot_place(place) {
                 let value = self.expr(args[1], out)?;
+                let value = self.shift_amount(op, value, place, args[1]);
                 let ty = self.thir[place].ty;
                 let value = self.binary(op, target.read(), value, None, ty, span)?;
                 target.write(value, self.js_span(span), out);
@@ -429,12 +430,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 // A trait call evaluates its receiver before its argument.
                 let target = self.prepare_map_place(slot, true, span, out)?;
                 let value = self.expr(args[1], out)?;
+                let value = self.shift_amount(op, value, place, args[1]);
                 let ty = self.thir[place].ty;
                 let value = self.binary(op, target.read(), value, None, ty, span)?;
                 target.write(value, self.js_span(span), out);
                 return Ok(Expr::undefined());
             }
             let value = self.expr(args[1], out)?;
+            let value = self.shift_amount(op, value, place, args[1]);
             let target = self.assignee(place)?;
             let ty = self.thir[place].ty;
             let current = self.binary(op, target.clone(), value, None, ty, span)?;
@@ -711,6 +714,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .expect("an operator's trait has a type")
                     .peel_refs();
                 let (l, r) = (arg(), arg());
+                // `a << &n` of an `i64` `n`: its type, the trait's `Rhs`.
+                let r = match generic_args.types().nth(1) {
+                    Some(rhs) => super::numbers::shift_amount_of(op, r, ty, rhs),
+                    None => r,
+                };
                 self.binary(op, l, r, None, ty, span)?
             }
             Std::UnaryOperator(op) => {

@@ -2,7 +2,7 @@
 
 import { $eq } from "@rust-js/runtime";
 
-var $flagsNot;
+var $flagsBitOr, $flagsBitAnd, $flagsBitXor, $flagsNot, $flagsShlU8, $flagsShrU32, $__a_FlagsBitOr;
 
 const Flags = {
   has(flags, other) {
@@ -100,10 +100,52 @@ function __a_FlagsBitOr_bitor(flags, other) {
   return [flags[0] | other[0]];
 }
 
+export function flagsBitOr() {
+  if ($flagsBitOr === undefined) {
+    $flagsBitOr = { bitor: flagsBitOr_bitor };
+  }
+  return $flagsBitOr;
+}
+
+export function flagsBitAnd() {
+  if ($flagsBitAnd === undefined) {
+    $flagsBitAnd = { bitand: flagsBitAnd_bitand };
+  }
+  return $flagsBitAnd;
+}
+
+export function flagsBitXor() {
+  if ($flagsBitXor === undefined) {
+    $flagsBitXor = { bitxor: flagsBitXor_bitxor };
+  }
+  return $flagsBitXor;
+}
+
 export function flagsNot() {
   if ($flagsNot === undefined) {
     $flagsNot = { not: flagsNot_not };
   }
   return $flagsNot;
+}
+
+export function flagsShlU8() {
+  if ($flagsShlU8 === undefined) {
+    $flagsShlU8 = { shl: flagsShlU8_shl };
+  }
+  return $flagsShlU8;
+}
+
+export function flagsShrU32() {
+  if ($flagsShrU32 === undefined) {
+    $flagsShrU32 = { shr: flagsShrU32_shr };
+  }
+  return $flagsShrU32;
+}
+
+export function __a_FlagsBitOr() {
+  if ($__a_FlagsBitOr === undefined) {
+    $__a_FlagsBitOr = { bitor: __a_FlagsBitOr_bitor };
+  }
+  return $__a_FlagsBitOr;
 }
 //# sourceMappingURL=case.js.map

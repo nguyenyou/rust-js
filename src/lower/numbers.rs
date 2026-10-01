@@ -432,14 +432,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// number, `Number(n & 63n)`, as JS won't shift a number by a BigInt.
     /// 63 keeps every width's own mask, which the shift then applies.
     pub(super) fn shift_amount(&self, op: BinOp, r: Expr, lhs: ExprId, rhs: ExprId) -> Expr {
-        let big = |e: ExprId| Num::of(self.thir[e].ty).is_some_and(Num::big);
-        if !matches!(op, BinOp::Shl | BinOp::Shr) || big(lhs) || !big(rhs) {
-            return r;
-        }
-        match r.as_bigint() {
-            Some(n) => Expr::int(n & 63),
-            None => Expr::call(Expr::var("Number"), vec![Expr::bin(Op::BitAnd, r, Expr::bigint(63))]),
-        }
+        shift_amount_of(op, r, self.thir[lhs].ty, self.thir[rhs].ty)
     }
 
     pub(super) fn bitwise(&self, op: Op, l: Expr, r: Expr, num: Num) -> Expr {
@@ -582,6 +575,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
 pub(super) fn mask_shift(r: Expr, num: Num) -> Expr {
     Expr::bin(Op::BitAnd, r, Expr::num(num.bits() - 1))
+}
+
+/// `shift_amount`, by the two types: a trait's, `Shl<i64>` of a `u32`, where
+/// there are no expressions, as in a dictionary (ADR 0108).
+pub(super) fn shift_amount_of<'tcx>(op: BinOp, r: Expr, lhs: Ty<'tcx>, rhs: Ty<'tcx>) -> Expr {
+    let big = |ty: Ty<'tcx>| Num::of(ty.peel_refs()).is_some_and(Num::big);
+    if !matches!(op, BinOp::Shl | BinOp::Shr) || big(lhs) || !big(rhs) {
+        return r;
+    }
+    match r.as_bigint() {
+        Some(n) => Expr::int(n & 63),
+        None => Expr::call(Expr::var("Number"), vec![Expr::bin(Op::BitAnd, r, Expr::bigint(63))]),
+    }
 }
 
 /// `BigInt(x)`, or of a literal, the BigInt literal.

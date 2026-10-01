@@ -14,14 +14,20 @@ an error too. Both are everyday generic Rust.
 ## Decision
 
 **A bound on an operator, `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg` or `Not`,
-or on `Into`, is a dictionary, as `Clone`'s is:** `total(values, zero,
-TAdd)`, and `a + b` of a `T` is `TAdd.add(a, b)`.
+the bitwise `BitAnd`, `BitOr`, `BitXor`, `Shl` or `Shr`, or on `Into`, is a
+dictionary, as `Clone`'s is:** `total(values, zero, TAdd)`, and `a + b` of
+a `T` is `TAdd.add(a, b)`.
 
 - **A number's is its own operator**, as `a + b` of one is: `{ add: (a, b)
   => (a + b) >>> 0 }` of a `u32`, `(a + b) & 255` of a `u8`, `$bigDiv` of an
   `i64`'s `/`. So it wraps, and divides, as it does outside generic code.
   One with the crate's type on either side, `impl Mul<V2> for f64`, is the
-  crate's impl.
+  crate's impl. A shift's amount may be of another type, `Shl<u64>` of a
+  `u32`: a BigInt amount is made a number, `a << Number(b & 63n)`, as JS
+  won't shift a number by one.
+- **Of a number and a reference to one, `a & &b`, as of two numbers:** std's
+  impl for references, as an iterator's `fold(0, |all, bit| all | bit)`
+  calls, and `c >>= &1u8`, are the number's own operator.
 - **The crate's type's is its impl's**, `vec2Add()`, `{ add: vec2Add_add }`,
   as any trait's dictionary is (ADR 0049).
 - **`Into<U>`'s is std's conversion**, which is often the value itself,

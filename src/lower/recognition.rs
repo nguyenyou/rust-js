@@ -387,6 +387,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     (LangItem::Mul, BinOp::Mul),
                     (LangItem::Div, BinOp::Div),
                     (LangItem::Rem, BinOp::Rem),
+                    (LangItem::BitAnd, BinOp::BitAnd),
+                    (LangItem::BitOr, BinOp::BitOr),
+                    (LangItem::BitXor, BinOp::BitXor),
+                    (LangItem::Shl, BinOp::Shl),
+                    (LangItem::Shr, BinOp::Shr),
                 ];
                 if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
                     return Some(Std::Operator(op));
@@ -398,6 +403,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     (LangItem::MulAssign, BinOp::Mul),
                     (LangItem::DivAssign, BinOp::Div),
                     (LangItem::RemAssign, BinOp::Rem),
+                    (LangItem::BitAndAssign, BinOp::BitAnd),
+                    (LangItem::BitOrAssign, BinOp::BitOr),
+                    (LangItem::BitXorAssign, BinOp::BitXor),
+                    (LangItem::ShlAssign, BinOp::Shl),
+                    (LangItem::ShrAssign, BinOp::Shr),
                 ];
                 if let Some(&(_, op)) = assigning.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
                     return Some(Std::AssignOperator(op));
@@ -1440,6 +1450,11 @@ pub(super) fn value_operator(tcx: TyCtxt<'_>, id: DefId) -> Option<Result<BinOp,
         (LangItem::Mul, Ok(BinOp::Mul)),
         (LangItem::Div, Ok(BinOp::Div)),
         (LangItem::Rem, Ok(BinOp::Rem)),
+        (LangItem::BitAnd, Ok(BinOp::BitAnd)),
+        (LangItem::BitOr, Ok(BinOp::BitOr)),
+        (LangItem::BitXor, Ok(BinOp::BitXor)),
+        (LangItem::Shl, Ok(BinOp::Shl)),
+        (LangItem::Shr, Ok(BinOp::Shr)),
         (LangItem::Neg, Err(UnOp::Neg)),
         (LangItem::Not, Err(UnOp::Not)),
     ]

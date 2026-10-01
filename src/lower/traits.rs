@@ -528,10 +528,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             let ty = ty.peel_refs();
             let (params, value) = match op {
-                Ok(op) => (
-                    vec!["a".into(), "b".into()],
-                    self.binary(op, Expr::var("a"), Expr::var("b"), None, ty, span)?,
-                ),
+                Ok(op) => {
+                    // A shift's amount of its own type, `Shl<u64>` of a `u32`.
+                    let b = super::numbers::shift_amount_of(op, Expr::var("b"), ty, tr.args.type_at(1));
+                    (
+                        vec!["a".into(), "b".into()],
+                        self.binary(op, Expr::var("a"), b, None, ty, span)?,
+                    )
+                }
                 Err(op) => (vec!["value".into()], self.unary(op, Expr::var("value"), ty, span)?),
             };
             // Its method, `add`, after its `Output`.
