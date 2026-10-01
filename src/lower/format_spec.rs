@@ -85,7 +85,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let text = match kind {
             Std::FmtRadix(radix) => {
-                let Some(num) = num.filter(|&n| n != Num::F64) else {
+                let Some(num) = num.filter(|&n| !n.float()) else {
                     return Err(self.unsupported(span, &format!("`{{:x}}` and the like of a `{ty}`")));
                 };
                 // A negative number's bits, as Rust shows them: `-1i32` is `ffffffff`.
@@ -135,7 +135,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // `{:.2}` of an `f64`: exact, and rounded as Rust rounds.
             _ if let Some(digits) = precision.clone()
-                && num == Some(Num::F64) =>
+                && num.is_some_and(Num::float) =>
             {
                 self.runtime.insert(Helper::ToFixed);
                 Expr::call(Expr::var("$toFixed"), vec![value, digits])

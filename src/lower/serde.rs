@@ -455,7 +455,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.emit(json, "bool", vec![value], out);
             return Ok(());
         }
-        if Num::of(ty).is_some_and(|n| n != Num::F64) {
+        // serde_json writes an `f32` with its own shortest digits: not yet (ADR 0122).
+        if Num::of(ty) == Some(Num::F32) {
+            return Err(self.unsupported(span, "an `f32` in JSON"));
+        }
+        if Num::of(ty).is_some_and(|n| !n.float()) {
             self.emit(json, "int", vec![value], out);
             return Ok(());
         }
@@ -608,7 +612,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_string_like(ty) {
             return Ok(key);
         }
-        if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
+        if ty.is_bool() || Num::of(ty).is_some_and(|n| !n.float()) {
             return Ok(Expr::call(Expr::var("String"), vec![key]));
         }
         Err(self.unsupported(span, &format!("a map key of `{ty}` in JSON")))

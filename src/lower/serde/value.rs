@@ -98,7 +98,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let x = self.expr(args[0], out)?;
                 Ok(Some(match json {
                     Json::Value => self.json_value_from(x, from, span)?,
-                    Json::Number if Num::of(from.peel_refs()).is_some_and(|n| n != Num::F64) => {
+                    Json::Number if Num::of(from.peel_refs()).is_some_and(|n| !n.float()) => {
                         self.use_value();
                         Expr::call(Expr::var("$jsonInt"), vec![x])
                     }

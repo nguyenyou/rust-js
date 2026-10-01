@@ -554,11 +554,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 );
                 // Rust's floating Sum starts at -0.0, preserving the sign of
                 // an empty sum and of a sequence containing only negative zero.
-                let zero = if num == Num::F64 {
-                    Expr::num(-0.0)
-                } else {
-                    num.literal(0)
-                };
+                let zero = if num.float() { Expr::num(-0.0) } else { num.literal(0) };
                 method(items, "reduce", vec![f, zero])
             }
             // `Array.from(s).join("")` is `s`.

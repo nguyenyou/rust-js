@@ -1717,6 +1717,46 @@ export const mutations: Mutation[] = [
     replace: "                if false && self.is_value_key(item) && !self.is_js_key(item) {",
     tests: ["test/serde.test.ts", "-t", "set of structs"],
   },
+  {
+    name: "f32-arithmetic-unrounded",
+    breaks: "an `f32`'s `+` is a double's, which may be no `f32` at all: ten tenths are 1.0000000149011612",
+    file: "src/lower/numbers.rs",
+    find: "            return Ok(if num == Num::F32 && op != BinOp::Rem {\n                num.wrap(e)\n",
+    replace: "            return Ok(if false {\n                num.wrap(e)\n",
+    tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
+  },
+  {
+    name: "f32-literal-unrounded",
+    breaks: "`0.1f32` is the double 0.1, which no `f32` is",
+    file: "src/lower/representation.rs",
+    find: "    if !v.is_finite() || shortest == f64::from(v) {",
+    replace: "    if true {\n        return Expr::num(shortest);\n    }\n    if !v.is_finite() || shortest == f64::from(v) {",
+    tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
+  },
+  {
+    name: "big-to-f32-through-f64",
+    breaks: "`n as f32` of a `u64` is rounded to an `f64` first, and then can't be told from a tie",
+    file: "src/lower/numbers.rs",
+    find: '                Ok(Expr::call(Expr::var("$bigToF32"), vec![v]))',
+    replace: '                Ok(target.wrap(Expr::call(Expr::var("Number"), vec![v])))',
+    tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
+  },
+  {
+    name: "powi-f32-rounded-once",
+    breaks: "`x.powi(n)` of an `f32` multiplies as doubles, where compiler-rt rounds each product",
+    file: "src/lower/numbers.rs",
+    find: "            NumOp::Powi if num == Num::F32 =>",
+    replace: "            NumOp::Powi if false && num == Num::F32 =>",
+    tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
+  },
+  {
+    name: "f32-digits-symmetric",
+    breaks: "an `f32` at a power of two is shown as if the gap below it were the gap above, as it isn't",
+    file: "src/runtime/f32_digits.js",
+    find: "  const below = fraction === 0 && exponentBits > 1 ? 1n : 2n;",
+    replace: "  const below = 2n;",
+    tests: ["test/corpus.test.ts", "-t", "f32_digits"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

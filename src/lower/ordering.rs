@@ -65,7 +65,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (a, _) = self.through_refs(a, ty);
         let (b, ty) = self.through_refs(b, ty);
         // `f64`'s `NaN` isn't ordered at all.
-        if partial && Num::of(ty) == Some(Num::F64) {
+        if partial && Num::of(ty).is_some_and(Num::float) {
             self.runtime.insert(Helper::PartialCmp);
             return Ok(Expr::call(Expr::var("$partialCmp"), vec![a, b]));
         }

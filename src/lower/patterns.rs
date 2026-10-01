@@ -960,7 +960,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Op::Lt
                 };
                 // A bound at the type's own end always holds: `n >= 0` of a `u32`.
-                if let Some(num) = Num::of(range.ty).filter(|&n| n != Num::F64) {
+                if let Some(num) = Num::of(range.ty).filter(|&n| !n.float()) {
                     let (min, max) = num.range();
                     lo = lo.filter(|lo| lo.as_int() != Some(min));
                     hi = hi.filter(|hi| !(range.end == RangeEnd::Included && hi.as_int() == Some(max)));

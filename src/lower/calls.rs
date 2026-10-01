@@ -695,7 +695,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::MaxOf(max) => {
                 let num = Num::of(self.thir[args[0]].ty.peel_refs());
-                let callee = if num == Some(Num::F64) {
+                let callee = if num.is_some_and(Num::float) {
                     self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
                     Expr::var(if max { "$f64Max" } else { "$f64Min" })
                 } else if num.is_some_and(Num::big) {

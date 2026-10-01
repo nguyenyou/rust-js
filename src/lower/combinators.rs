@@ -583,7 +583,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .ok_or_else(|| self.unsupported(span, "`binary_search` of this"))?;
                 // What `<` orders as `Ord` does: integers, `char`s, strings. Not
                 // a `&mut` to one, a cell (ADR 0099).
-                let ordered = !self.has_cell_layer(item) && (Num::of(item).is_some_and(|n| n != Num::F64))
+                let ordered = !self.has_cell_layer(item) && (Num::of(item).is_some_and(|n| !n.float()))
                     || item.is_char()
                     || item.is_bool()
                     || self.is_string_like(item);
@@ -658,7 +658,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let ty = ty.peel_refs();
         self.is_string_like(ty)
-            || Num::of(ty).is_some_and(|n| n != Num::F64)
+            || Num::of(ty).is_some_and(|n| !n.float())
             || ty.is_bool()
             || matches!(ty.kind(), ty::Adt(adt, _) if super::is_fieldless_enum(*adt))
     }

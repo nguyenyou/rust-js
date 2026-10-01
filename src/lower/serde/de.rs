@@ -104,6 +104,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if ty.is_bool() {
             return Ok(reader("bool"));
         }
+        if Num::of(ty) == Some(Num::F32) {
+            return Err(self.unsupported(span, "an `f32` in JSON"));
+        }
         // Named as serde names them in its messages: `u32`, `usize`.
         if Num::of(ty).is_some() {
             return Ok(reader(&ty.to_string()));

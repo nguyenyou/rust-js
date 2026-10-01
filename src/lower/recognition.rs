@@ -334,7 +334,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let name = tcx.item_name(def_id);
         if krate == sym::core
             && let Some(imp) = tcx.inherent_impl_of_assoc(def_id)
-            && Num::of(tcx.type_of(imp).instantiate_identity().skip_normalization()) == Some(Num::F64)
+            && Num::of(tcx.type_of(imp).instantiate_identity().skip_normalization()).is_some_and(Num::float)
         {
             match name.as_str() {
                 "max" => return Some(Std::MaxOf(true)),
@@ -564,8 +564,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 (None, None)
             };
             if let (Some(from), Some(to)) = (from_ty.and_then(|t| Num::of(t.peel_refs())), to_ty.and_then(Num::of))
-                && from != Num::F64
-                && to != Num::F64
+                && !from.float()
+                && !to.float()
             {
                 return Some(Std::TryFromInt { into });
             }
@@ -1069,6 +1069,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         match Num::of(from) {
             Some(Num::F64) => return Some(JsonConversion::Float),
+            // Not yet (ADR 0122).
+            Some(Num::F32) => return None,
             Some(_) => return Some(JsonConversion::Integer),
             None => {}
         }
@@ -1096,6 +1098,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         } else {
             match Num::of(other)? {
                 Num::F64 => Some("f64"),
+                // Not yet (ADR 0122).
+                Num::F32 => None,
                 n if n.signed() => Some("i64"),
                 _ => Some("u64"),
             }

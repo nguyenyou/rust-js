@@ -21,6 +21,11 @@ helpers! {
     Index,
     At,
     DisplayF64,
+    F32Digits,
+    DisplayF32,
+    DebugF32,
+    BigToF32,
+    PowiF32,
     F64Max,
     F64Min,
     Div,
@@ -244,6 +249,8 @@ impl Helper {
     fn dependencies(self) -> &'static [Helper] {
         match self {
             Helper::DebugF64 => &[Helper::DisplayF64],
+            Helper::DisplayF32 => &[Helper::F32Digits],
+            Helper::DebugF32 => &[Helper::F32Digits, Helper::DisplayF32],
             Helper::CmpIn => &[Helper::Cmp],
             Helper::CmpItems => &[Helper::Cmp],
             Helper::MaxBy => &[Helper::Some],
@@ -293,6 +300,87 @@ impl Helper {
                 "\nfunction $at(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return index;\n}\n"
             }
             Helper::DisplayF64 => include_str!("runtime/display_f64.js"),
+            Helper::F32Digits => include_str!("runtime/f32_digits.js"),
+            // An `f32` as Rust's `{}` shows it: its shortest digits, never with
+            // an exponent (ADR 0122).
+            Helper::DisplayF32 => {
+                r#"
+function $displayF32(value) {
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
+  if (value === 0) return sign + "0";
+  const [digits, point] = $f32Digits(Math.abs(value));
+  const body =
+    point <= 0
+      ? "0." + "0".repeat(-point) + digits
+      : point >= digits.length
+        ? digits + "0".repeat(point - digits.length)
+        : digits.slice(0, point) + "." + digits.slice(point);
+  return sign + body;
+}
+"#
+            }
+            // `{:?}`: with an exponent below `1e-4f32` and from `1e16f32`, and a
+            // `.0` on a whole number, as Rust's.
+            Helper::DebugF32 => {
+                r#"
+function $debugF32(value) {
+  const size = Math.abs(value);
+  if (Number.isFinite(value) && size !== 0 && (size < Math.fround(1e-4) || size >= Math.fround(1e16))) {
+    const [digits, point] = $f32Digits(size);
+    const mantissa = digits.length > 1 ? digits[0] + "." + digits.slice(1) : digits;
+    return (value < 0 ? "-" : "") + mantissa + "e" + (point - 1);
+  }
+  const text = $displayF32(value);
+  return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
+}
+"#
+            }
+            // `n as f32` of an `i64` or a `u64`: its nearest `f32`, rounded once,
+            // to 24 bits, a tie to the even one. `Number(n)` would round it to an
+            // `f64` first, which can make it a tie that isn't one.
+            Helper::BigToF32 => {
+                r#"
+function $bigToF32(n) {
+  const negative = n < 0n;
+  let size = negative ? -n : n;
+  const length = size.toString(2).length;
+  if (length > 24) {
+    const shift = BigInt(length - 24);
+    const rest = size & ((1n << shift) - 1n);
+    const half = 1n << (shift - 1n);
+    size >>= shift;
+    if (rest > half || (rest === half && (size & 1n) === 1n)) size++;
+    size <<= shift;
+  }
+  const x = Number(size);
+  return negative ? -x : x;
+}
+"#
+            }
+            // `x.powi(n)` of an `f32`: compiler-rt's `__powisf2`, which rounds
+            // each product to an `f32`, in its order.
+            Helper::PowiF32 => {
+                r#"
+function $powiF32(x, n) {
+  const reciprocal = n < 0;
+  let result = 1;
+  while (true) {
+    if (n & 1) {
+      result = Math.fround(result * x);
+    }
+    n = (n / 2) | 0;
+    if (n === 0) {
+      break;
+    }
+    x = Math.fround(x * x);
+  }
+  return reciprocal ? Math.fround(1 / result) : result;
+}
+"#
+            }
             Helper::F64Max => {
                 "\nfunction $f64Max(a, b) {\n  return Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.max(a, b);\n}\n"
             }

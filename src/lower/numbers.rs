@@ -72,10 +72,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             this.runtime.insert(helper);
             Expr::call(Expr::var(name), list)
         };
+        // An `f32`'s result is rounded to one, but for those that are exact
+        // already (ADR 0122).
+        let rounded = |e: Expr| if num == Num::F32 { num.wrap(e) } else { e };
         Ok(match op {
-            NumOp::Math(name) => {
+            NumOp::Math(name @ ("floor" | "ceil" | "trunc" | "abs")) => {
                 let list = values.collect();
                 math(name, list)
+            }
+            NumOp::Math(name) => {
+                let list = values.collect();
+                rounded(math(name, list))
             }
             NumOp::Abs => num.wrap(math("abs", vec![arg()])),
             // An `i32::MIN`'s is 2^31, which a `u32` holds.
@@ -92,8 +99,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let power = helper(self, Helper::Pow, "$pow", vec![arg(), arg()]);
                 if num == Num::I32 { power } else { num.wrap(power) }
             }
+            NumOp::Powi if num == Num::F32 => helper(self, Helper::PowiF32, "$powiF32", vec![arg(), arg()]),
             NumOp::Powi => helper(self, Helper::Powi, "$powi", vec![arg(), arg()]),
-            NumOp::Powf => Expr::bin(Op::Pow, arg(), arg()),
+            NumOp::Powf => rounded(Expr::bin(Op::Pow, arg(), arg())),
             NumOp::Round => helper(self, Helper::Round, "$round", vec![arg()]),
             NumOp::TotalCmp => helper(self, Helper::TotalCmp, "$totalCmp", vec![arg(), arg()]),
             NumOp::IsNan => number("isNaN", vec![arg()]),
@@ -315,16 +323,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
 
         let num = self.num(ty, span)?;
-        if num == Num::F64 {
+        if num.float() {
             let js_op = match op {
                 BinOp::Add => Op::Add,
                 BinOp::Sub => Op::Sub,
                 BinOp::Mul => Op::Mul,
                 BinOp::Div => Op::Div,
                 BinOp::Rem => Op::Rem,
-                _ => return Err(self.unsupported(span, "this operator on `f64`")),
+                _ => return Err(self.unsupported(span, &format!("this operator on `{ty}`"))),
             };
-            return Ok(Expr::bin(js_op, l, r));
+            // An `f32`'s is the exact one rounded to an `f32`, as Rust's is:
+            // a double's 53 bits hold it close enough to round once (ADR
+            // 0122). `%` of two is exact, and one already.
+            let e = Expr::bin(js_op, l, r);
+            return Ok(if num == Num::F32 && op != BinOp::Rem {
+                num.wrap(e)
+            } else {
+                e
+            });
         }
         if num.big() {
             return self.big_binary(op, l, r, known, num, span);
@@ -446,8 +462,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             UnOp::Not if ty.is_bool() => Ok(Expr::unary(UnaryOp::Not, a)),
             UnOp::Not => {
                 let num = self.num(ty, span)?;
-                if num == Num::F64 {
-                    return Err(self.unsupported(span, "`!` on `f64`"));
+                if num.float() {
+                    return Err(self.unsupported(span, &format!("`!` on `{ty}`")));
                 }
                 let e = Expr::unary(UnaryOp::BitNot, a);
                 Ok(if num.signed() { e } else { num.wrap(e) })
@@ -456,6 +472,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let num = self.num(ty, span)?;
                 // `-x` of a literal is just a negative literal, in range:
                 // `-129i8` is 127, as `-i8::MIN` is itself.
+                // A float's is exact, an `f32`'s one already, and `-0` isn't 0.
+                if num.float() {
+                    return Ok(Expr::unary(UnaryOp::Neg, a));
+                }
                 if let Some(n) = a.as_int().or_else(|| a.as_bigint()) {
                     return Ok(num.wrap(num.literal(-n)));
                 }
@@ -467,7 +487,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn cast(&mut self, v: Expr, from: Ty<'tcx>, to: Ty<'tcx>, span: Span) -> R<Expr> {
         let target = self.num(to, span)?;
-        if from.is_bool() && target != Num::F64 {
+        if from.is_bool() && !target.float() {
             return Ok(Expr::cond(v, target.literal(1), target.literal(0)));
         }
         // A `char` is its code point (ADR 0063), and a `u8` as a `char` its
@@ -476,7 +496,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let code = Expr::call(Expr::member(v, "codePointAt"), vec![Expr::int(0)]);
             let code = if target.big() { to_bigint(code) } else { code };
             let (lo, hi) = target.range();
-            return Ok(if target == Num::F64 || (lo <= 0 && hi >= 0x10ffff) {
+            return Ok(if target.float() || (lo <= 0 && hi >= 0x10ffff) {
                 code
             } else {
                 target.wrap(code)
@@ -495,7 +515,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let counting = discriminants.iter().enumerate().all(|(i, &(_, d))| d == i as i128);
             // Each one fits the target type, so there's nothing to wrap.
             let (lo, hi) = target.range();
-            let fits = target == Num::F64 || discriminants.iter().all(|&(_, d)| lo <= d && d <= hi);
+            let fits = target.float() || discriminants.iter().all(|&(_, d)| lo <= d && d <= hi);
             let repr = rustc_middle::ty::util::IntTypeExt::to_ty(&adt.repr().discr_type(), self.tcx);
             let repr = Num::of(repr).unwrap_or(Num::I32);
             // The discriminants as what they're read as: the target, if each
@@ -523,10 +543,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             (v, self.num(from, span)?)
         };
         match (source, target) {
-            (Num::F64, Num::F64) => Ok(v),
+            // An `f32` is an `f64` exactly, and an `f64` is its nearest `f32`
+            // (ADR 0122).
+            (Num::F64, Num::F64) | (Num::F32, Num::F32) | (Num::F32, Num::F64) => Ok(v),
+            (Num::F64, Num::F32) => Ok(target.wrap(v)),
             // `as` from float to int saturates (ADR 0086): `NaN` is 0, and the
-            // rest is truncated into range.
-            (Num::F64, _) => {
+            // rest is truncated into range. An `f32` is an `f64` exactly.
+            (Num::F32 | Num::F64, _) => {
                 let (lo, hi) = target.range();
                 let (helper, name) = if target.big() {
                     (Helper::F64ToBig, "$f64ToBig")
@@ -543,6 +566,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             (source, Num::F64) if source.big() => Ok(Expr::call(Expr::var("Number"), vec![v])),
             // Every other integer fits exactly in an f64.
             (_, Num::F64) => Ok(v),
+            // Its nearest `f32`, rounded once: through an `f64` it would be
+            // rounded twice, which can miss it (ADR 0122).
+            (source, Num::F32) if source.big() => {
+                self.runtime.insert(Helper::BigToF32);
+                Ok(Expr::call(Expr::var("$bigToF32"), vec![v]))
+            }
+            // Up to 16 bits, an `f32` holds it exactly; a 32-bit one, an `f64`
+            // does, rounded once.
+            (source, Num::F32) if source.bits() <= 16 => Ok(v),
+            (_, Num::F32) => Ok(target.wrap(v)),
             _ => {
                 let (lo, hi) = source.range();
                 let (tlo, thi) = target.range();

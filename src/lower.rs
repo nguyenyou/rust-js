@@ -72,7 +72,8 @@ use bindings::{Export, JsForm, is_binding, js_form, js_name};
 pub use pipeline::lower_crate;
 use recognition::Std;
 use representation::{
-    Num, char_value, const_js, eval_const, is_fieldless_enum, num_literal, ordering_value, static_value, variant_field,
+    Num, char_value, const_js, eval_const, f32_literal, is_fieldless_enum, num_literal, ordering_value, static_value,
+    variant_field,
 };
 pub use serde::{SerdeAttributes, attributes as serde_attributes};
 
@@ -1186,6 +1187,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .parse()
                     .expect("rustc validated the literal");
                 Ok(Expr::num(if neg { -x } else { x }))
+            }
+            // Read as an `f32`, as rustc reads it: nearest to the digits,
+            // rounded once (ADR 0122).
+            LitKind::Float(sym, _) if Num::of(ty) == Some(Num::F32) => {
+                let x: f32 = sym
+                    .as_str()
+                    .replace('_', "")
+                    .parse()
+                    .expect("rustc validated the literal");
+                Ok(f32_literal(if neg { -x } else { x }))
             }
             _ => Err(self.unsupported(span, "this literal")),
         }

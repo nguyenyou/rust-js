@@ -39,7 +39,7 @@ pub(super) fn text(name: &str, char: bool, str: bool) -> Option<TextOp> {
 
 /// Which `NumOp` a method of a number is.
 pub(super) fn number(name: &str, num: Num) -> Option<NumOp> {
-    let float = num == Num::F64;
+    let float = num.float();
     let signed = num.signed();
     Some(match name {
         "floor" | "ceil" | "trunc" | "sqrt" | "cbrt" | "exp" | "log10" | "log2" | "sin" | "cos" | "tan" | "asin"

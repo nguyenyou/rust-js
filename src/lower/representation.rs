@@ -27,7 +27,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn is_key(&self, ty: Ty<'tcx>, ordered: bool) -> bool {
         let peeled = ty.peel_refs();
         let primitive = !peeled.is_unit()
-            && Num::of(peeled) != Some(Num::F64)
+            && !Num::of(peeled).is_some_and(Num::float)
             && self.is_primitive_key(peeled)
             && !self.has_user_impl(self.partial_eq_trait(), peeled)
             && (!ordered || !self.has_user_impl(self.ord_trait(), peeled));
@@ -50,7 +50,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.is_primitive_key(ty)
             || self.option_of(ty).is_some_and(|inner| {
                 let inner = inner.peel_refs();
-                !self.boxed_payload(inner) && self.is_primitive_key(inner) && Num::of(inner) != Some(Num::F64)
+                !self.boxed_payload(inner) && self.is_primitive_key(inner) && !Num::of(inner).is_some_and(Num::float)
             })
     }
 
@@ -61,7 +61,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         seen.push(ty);
         match ty.kind() {
-            _ if Num::of(ty) == Some(Num::F64) => false,
+            _ if Num::of(ty).is_some_and(Num::float) => false,
             _ if ty.is_unit() => true,
             _ if self.is_primitive_key(ty) => !self.has_user_impl(self.partial_eq_trait(), ty),
             ty::Tuple(parts) => parts.iter().all(|t| self.compares_by_value(t, seen)),
@@ -867,9 +867,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 }
 
-/// Number representations. Up to 32 bits and `f64`, a plain JS number, and
-/// `i64` and `u64`, a BigInt (ADR 0086); the difference is how results are
-/// wrapped back into range.
+/// Number representations. Up to 32 bits, `f32` and `f64`, a plain JS number,
+/// and `i64` and `u64`, a BigInt (ADR 0086); the difference is how results
+/// are wrapped back into range, or for an `f32`, rounded to one (ADR 0122).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Num {
     I8,
@@ -880,7 +880,18 @@ pub(super) enum Num {
     U16,
     U32,
     U64,
+    F32,
     F64,
+}
+
+/// An `f32` as JS writes it: its shortest digits, `1.5`, where they're the
+/// number exactly, and else rounded to it, `Math.fround(0.1)` (ADR 0122).
+pub(super) fn f32_literal(v: f32) -> Expr {
+    let shortest: f64 = format!("{v:e}").parse().expect("Rust writes a float it reads");
+    if !v.is_finite() || shortest == f64::from(v) {
+        return Expr::num(f64::from(v));
+    }
+    Expr::call(Expr::member(Expr::var("Math"), "fround"), vec![Expr::num(shortest)])
 }
 
 impl Num {
@@ -895,6 +906,7 @@ impl Num {
             ty::Uint(ty::UintTy::U16) => Num::U16,
             ty::Uint(ty::UintTy::U32 | ty::UintTy::Usize) => Num::U32,
             ty::Uint(ty::UintTy::U64) => Num::U64,
+            ty::Float(ty::FloatTy::F32) => Num::F32,
             ty::Float(ty::FloatTy::F64) => Num::F64,
             _ => return None,
         })
@@ -904,9 +916,14 @@ impl Num {
         match self {
             Num::I8 | Num::U8 => 8,
             Num::I16 | Num::U16 => 16,
-            Num::I32 | Num::U32 => 32,
+            Num::I32 | Num::U32 | Num::F32 => 32,
             Num::I64 | Num::U64 | Num::F64 => 64,
         }
+    }
+
+    /// An `f32` or an `f64`: a JS number, not an integer (ADR 0122).
+    pub(super) fn float(self) -> bool {
+        matches!(self, Num::F32 | Num::F64)
     }
 
     pub(super) fn signed(self) -> bool {
@@ -938,7 +955,13 @@ impl Num {
     pub(super) fn wrap(self, e: Expr) -> Expr {
         // A constant is wrapped here, not in the JS: `Code::NotFound as u32`
         // is `404`, not `(404 + 0 | 0) >>> 0`.
-        if self != Num::F64
+        // An `f32` constant is rounded here too.
+        if self == Num::F32
+            && let js::ExprKind::Num(n) = e.kind
+        {
+            return f32_literal(n as f32);
+        }
+        if !self.float()
             && let Some(n) = const_int(&e)
         {
             let size = 1i128 << self.bits();
@@ -960,6 +983,8 @@ impl Num {
                 Expr::bin(Op::Shr, Expr::bin(Op::Shl, e, Expr::num(shift)), Expr::num(shift))
             }
             Num::U8 | Num::U16 => Expr::bin(Op::BitAnd, e, Expr::int(self.range().1)),
+            // The nearest `f32`: of an exact result, Rust's (ADR 0122).
+            Num::F32 => Expr::call(Expr::member(Expr::var("Math"), "fround"), vec![e]),
             Num::F64 => e,
         }
     }
@@ -1287,6 +1312,9 @@ pub(super) fn char_value(value: ty::Value<'_>) -> Option<char> {
 pub(super) fn num_literal(bits: u128, num: Num) -> Expr {
     if num == Num::F64 {
         return Expr::num(f64::from_bits(bits as u64));
+    }
+    if num == Num::F32 {
+        return f32_literal(f32::from_bits(bits as u32));
     }
     let unused = 128 - num.bits();
     let n = if num.signed() {

@@ -235,12 +235,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(shown) = self.json_value_display(value.clone(), ty, false) {
             return Ok(shown);
         }
-        if ty.is_bool() || Num::of(ty).is_some_and(|n| n != Num::F64) {
+        if ty.is_bool() || Num::of(ty).is_some_and(|n| !n.float()) {
             return Ok(shown_number(value));
         }
         if Num::of(ty) == Some(Num::F64) {
             self.runtime.insert(Helper::DisplayF64);
             return Ok(Expr::call(Expr::var("$displayF64"), vec![value]));
+        }
+        if Num::of(ty) == Some(Num::F32) {
+            self.runtime.insert(Helper::DisplayF32);
+            return Ok(Expr::call(Expr::var("$displayF32"), vec![value]));
         }
         let display = self.display_trait();
         if self.is_unknown(ty) {
@@ -299,6 +303,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if num == Some(Num::F64) {
             self.runtime.insert(Helper::DebugF64);
             return Ok(Expr::call(Expr::var("$debugF64"), vec![value]));
+        }
+        if num == Some(Num::F32) {
+            self.runtime.insert(Helper::DebugF32);
+            return Ok(Expr::call(Expr::var("$debugF32"), vec![value]));
         }
         if num.is_some() || ty.is_bool() {
             return Ok(shown_number(value));
