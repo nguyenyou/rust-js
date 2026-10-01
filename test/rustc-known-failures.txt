@@ -55,10 +55,9 @@ autoref-autoderef/deref-chain-method-calls-13264.rs	error: rust-js does not supp
 bench/issue-32062.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of type `*const usize` yet
 binding/match-beginning-vert.rs	error: rust-js does not support this expression yet
-binding/match-pipe-binding.rs	error: rust-js does not support bindings inside `|` patterns yet
+binding/match-pipe-binding.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 binding/match-ref-binding-in-guard-3256.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
-binding/or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 binding/order-drop-with-match.rs	error: rust-js does not support moving a value with a destructor here yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this expression yet
 binop/augmented-assignment.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -71,7 +70,7 @@ borrowck/call-and-ref-option-mutate.rs	error: rust-js does not support a `&mut` 
 borrowck/incorrect-loan-error-on-local-update-5550.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 borrowck/issue-29166.rs	error: rust-js does not support calling `std::slice::<impl [T]>::into_vec` yet
 borrowck/issue-46095.rs	error: rust-js does not support assigning to this place yet
-borrowck/issue-51348-multi-ref-mut-in-guard.rs	error: rust-js does not support bindings inside `|` patterns yet
+borrowck/issue-51348-multi-ref-mut-in-guard.rs	error: rust-js does not support a `ref mut` bound at another place in each alternative of a `|` pattern yet
 borrowck/pointer-reassignment-after-deref-78192.rs	error: rust-js does not support values of type `*const u32` yet
 borrowck/reborrow-in-match-ref-mut-option.rs	error: rust-js does not support values of type `&mut std::option::Option<&mut Foo>` yet
 borrowck/ref-mut-rebind-does-not-affect-outer.rs	error: rust-js does not support `ref mut` bindings to this type yet
@@ -322,7 +321,6 @@ layout/issue-112048-unsizing-field-order.rs	error: rust-js does not support a `G
 layout/issue-112048-unsizing-niche.rs	error: rust-js does not support this expression yet
 layout/null-pointer-optimization.rs	error: rust-js does not support `{:?}` of a `fn()` yet
 let-else/let-else-drop-order.rs	error: rust-js does not support calling `std::iter::once` yet
-let-else/let-else-run-pass.rs	error: rust-js does not support bindings inside `|` patterns yet
 lexer/crlf-in-byte-string-literal.rs	error: rust-js does not support this literal yet
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
@@ -330,7 +328,6 @@ lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexi
 lint/issue-20343.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 liveness/var-defined-after-early-return.rs	error: rust-js does not support values of type `(*const core::io::error::Custom) is !null` yet
 macros/colorful-write-macros.rs	error: rust-js does not support user implementations of this standard or external trait yet
-macros/macro-in-or-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
 macros/macro-pat-follow.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 macros/macro-variable-unused-reporting-5718.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 macros/try-macro.rs	error: rust-js does not support calling `std::convert::From::from` yet
@@ -374,12 +371,8 @@ numbers-arithmetic/integer-literal-suffix-inference-2.rs	error: rust-js does not
 object-lifetime/object-lifetime-default-from-ref-struct.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 object-lifetime/object-lifetime-default-from-rptr.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 offset-of/offset-of-tuple-nested.rs	error: rust-js does not support this expression yet
-or-patterns/bindings-runpass-1.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/bindings-runpass-2.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/for-loop.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/let-pattern.rs	error: rust-js does not support bindings inside `|` patterns yet
-or-patterns/search-via-bindings.rs	error: rust-js does not support bindings inside `|` patterns yet
+or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
+or-patterns/search-via-bindings.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 overloaded/fixup-deref-mut.rs	error: rust-js does not support values of type `*mut Point` yet
 overloaded/overloaded_deref_with_ref_pattern_issue15609.rs	error: rust-js does not support values of type `std::cell::RefMut<'_, i32>` yet
 overloaded/overloaded_deref_with_ref_pattern.rs	error: rust-js does not support `ref mut` bindings to this type yet
@@ -399,8 +392,6 @@ parser/macro/statement-boundaries.rs	error: rust-js does not support this expres
 parser/ranges-precedence.rs	error: rust-js does not support `==` on `std::ops::Range<i32>` yet
 parser/slowparse-bstring.rs	error: rust-js does not support this literal yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
-pattern/integer-range-binding.rs	error: rust-js does not support this refutable pattern yet
-pattern/issue-27320.rs	error: rust-js does not support bindings inside `|` patterns yet
 pattern/match-array-against-slice.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a temporary with a destructor yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
@@ -436,7 +427,6 @@ rfcs/rfc-2091-track-caller/file-is-nul-terminated.rs	error: rust-js does not sup
 rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
 rfcs/rfc-2091-track-caller/tracked-trait-impls.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support constants of type `&'static (dyn Tracked + 'static)` yet
-rfcs/rfc-2175-or-if-while-let/basic.rs	error: rust-js does not support bindings inside `|` patterns yet
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
 rfcs/rfc-2302-self-struct-ctor/rfc-2302-self-struct-ctor.rs	error: rust-js does not support this expression yet
 rfcs/rfc-2361-dbg-macro/dbg-macro-expected-behavior.rs	error: rust-js does not support `{:#?}` yet
