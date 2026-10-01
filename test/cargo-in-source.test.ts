@@ -29,6 +29,22 @@ test("a Cargo build's JS in source has each inline module where its file would b
   for (const file of files) expect(readFileSync(file, "utf8")).toContain(`//# sourceMappingURL=${basename(file)}.map`);
 }, 600_000);
 
+// A root of another name, the template's `[lib] path = "src/App.rs"`, is
+// `App.js` beside it, which names its own map, `App.js.map`, not the name
+// rust-js wrote it under, the build's `lib.js`: else the page's source maps
+// aren't found.
+test("a Cargo build's JS in source names its own map, for a root of another name", async () => {
+  const dir = fixture("cargo-in-source-root");
+  const src = join(dir, "src");
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(dir, "Cargo.toml"), '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2024"\n\n[lib]\npath = "src/App.rs"\n');
+  writeFileSync(join(src, "App.rs"), "pub fn answer() -> u32 {\n    42\n}\n");
+  const { js } = await checkCargo({ manifestPath: join(dir, "Cargo.toml"), toolchain: pin, compiler, offline: true, packageName: "app", inSource: true });
+  expect(js).toBe(join(src, "App.js"));
+  expect(readFileSync(js, "utf8")).toEndWith("//# sourceMappingURL=App.js.map\n");
+  expect(JSON.parse(readFileSync(`${js}.map`, "utf8")).file).toBe("App.js");
+}, 600_000);
+
 // A module where its file would be can be where the crate's root is:
 // `mod root { .. }` of a `[lib] path = "src/root.rs"`. Neither is written
 // over the other: it's an error, as rust-js's own `mod lib` of `lib.rs` is.

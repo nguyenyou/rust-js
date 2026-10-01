@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 import { fingerprint } from "./publish.js";
@@ -195,15 +195,20 @@ export function writeInSource(manifests) {
   for (const { modules } of manifests) {
     for (const { file, map } of modules) {
       const to = moved.get(file);
-      const text = readFileSync(file, "utf8").replace(/((?:from|import)\s*\(?\s*)"(\.{1,2}\/[^"]+)"/g, (whole, lead, spec) => {
-        const target = moved.get(resolve(dirname(file), spec));
-        if (!target) return whole;
-        const path = relative(dirname(to), target);
-        return `${lead}"${path.startsWith(".") ? path : `./${path}`}"`;
-      });
+      const text = readFileSync(file, "utf8")
+        .replace(/((?:from|import)\s*\(?\s*)"(\.{1,2}\/[^"]+)"/g, (whole, lead, spec) => {
+          const target = moved.get(resolve(dirname(file), spec));
+          if (!target) return whole;
+          const path = relative(dirname(to), target);
+          return `${lead}"${path.startsWith(".") ? path : `./${path}`}"`;
+        })
+        // Its map is beside it, by its name now, where a root of another
+        // name, `src/App.rs`'s, was written as the build's `lib.js`.
+        .replace(/^\/\/# sourceMappingURL=\S+$/m, `//# sourceMappingURL=${basename(to)}.map`);
       write(to, text);
       if (map && existsSync(map)) {
         const json = JSON.parse(readFileSync(map, "utf8"));
+        json.file = basename(to);
         json.sources = (json.sources ?? []).map((path) => relative(dirname(to), resolve(dirname(map), path)));
         write(`${to}.map`, JSON.stringify(json));
       }
