@@ -586,6 +586,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut test = self
                 .pattern_test(&arm.pattern, &subject, &mut bindings)?
                 .map(|t| t.or_at(pat_span));
+            if let Some(guard) = arm.guard {
+                self.check_guarded(guard, &bindings)?;
+            }
 
             // A guard is tested before the arm's body, where a binding that
             // isn't the place it names gets its `const`. So the guard reads
@@ -864,6 +867,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// The shape `as_matches` takes: `pat => true, _ => false`.
+    /// A guard is tried with each alternative of a `|` pattern that matches,
+    /// in turn, until it holds: `(a, _) | (_, a) if a > 10` of `(3, 42)`
+    /// takes the arm, with `a` 42. A binding at a choice of places is only
+    /// the first's, so a guard of it is an error (ADR 0124). One bound at the
+    /// same place in each is the same value, whichever alternative it's of.
+    fn check_guarded(&self, guard: ExprId, bindings: &[Binding<'tcx>]) -> R<()> {
+        if bindings.iter().any(|b| b.chosen) {
+            return Err(self.unsupported(
+                self.thir[guard].span,
+                "a guard of a `|` pattern binding a name at another place in each alternative",
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn is_matches(&self, arms: &[ArmId]) -> bool {
         let is_bool = |arm: ArmId, want: bool| matches!(self.thir[self.strip(self.thir[arm].body)].kind, ExprKind::Literal { lit, .. } if lit.node == LitKind::Bool(want));
         matches!(arms, &[first, rest] if is_bool(first, true) && is_bool(rest, false)
@@ -887,6 +905,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (subject, stable) = self.subject(scrutinee, "match", out)?;
         let mut bindings = Vec::new();
         let test = self.pattern_test(&self.thir[first].pattern, &subject, &mut bindings)?;
+        if let Some(guard) = self.thir[first].guard {
+            self.check_guarded(guard, &bindings)?;
+        }
         if !bindings.is_empty() && (!stable || bindings.iter().any(|b| b.mutable)) {
             return Err(self.unsupported(self.thir[first].pattern.span, "this binding in `matches!`"));
         }
@@ -949,6 +970,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     by_ref_mut,
                     whole: subpattern.is_some(),
                     place: subject.clone(),
+                    chosen: false,
                     ty: *ty,
                 });
                 // `x @ 1..=9`: bound, and tested by what's after the `@`.
@@ -1098,7 +1120,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             (test.clone(), place)
                         })
                         .collect();
-                    let place = if places.iter().all(|(_, place)| same_place(place, &binding.place)) {
+                    let same = places.iter().all(|(_, place)| same_place(place, &binding.place));
+                    let chosen = binding.chosen || !same;
+                    let place = if same {
                         binding.place.clone()
                     } else if binding.by_ref_mut {
                         // A choice of places can't be written through.
@@ -1114,7 +1138,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             None => place,
                         })
                     };
-                    bindings.push(Binding { place, ..binding });
+                    bindings.push(Binding {
+                        place,
+                        chosen,
+                        ..binding
+                    });
                 }
                 // `p | _` always matches.
                 if alternatives.iter().any(|(test, _)| test.is_none()) {

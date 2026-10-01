@@ -15,6 +15,9 @@ for (const [name, source, message, crate] of [
   ["a &mut rest of a slice pattern", "pub fn f(v: &mut [u32]) { if let [_, rest @ ..] = v { rest[0] = 1; } }", "a `&mut` to part of a slice"],
   // ADR 0124: a choice of places, `p[0] === 0 ? p[1] : p[0]`, can't be written through.
   ["a ref mut bound at two places of a | pattern", "pub fn f(p: &mut (i32, i32)) { if let (0, x) | (x, 0) = p { *x += 1; } }", "a `ref mut` bound at another place in each alternative of a `|` pattern"],
+  // A guard is tried with each alternative in turn, which a choice of places, the first's, isn't:
+  // `(3, 42)` takes this arm in Rust, with `a` 42 (rustc's issue-70413).
+  ["a guard of a | pattern binding at two places", "pub fn f(p: (i32, i32)) -> i32 { match p { (a, _) | (_, a) if a > 10 => a, _ => 0 } }", "a guard of a `|` pattern binding a name at another place in each alternative"],
   ["camelCase fields that collide", '#![allow(non_snake_case)]\n#[rust_js::camel_case]\nconst _: () = ();\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["#[thread_local] static", "#![feature(thread_local)]\n#[thread_local] static N: std::cell::Cell<u32> = std::cell::Cell::new(0);\npub fn f() -> u32 { N.get() }", "does not support `#[thread_local]` statics"],
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],

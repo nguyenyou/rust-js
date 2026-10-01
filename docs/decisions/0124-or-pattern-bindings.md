@@ -30,6 +30,16 @@ of the first that matched:**
 - **A `ref mut` bound at a choice of places is an error**: `p[0] === 0 ?
   p[1] : p[0]` can't be written through. One at the same place is that
   place, and writes it.
+- **A guard of a name bound at a choice of places is an error**: Rust tries
+  the guard with each alternative that matches, in turn, until it holds,
+  and with several `|`s each combination, left to right. `(a, _) | (_, a)
+  if a > 10` of `(3, 42)` takes the arm with `a` 42, where the first
+  alternative's, 3, alone wouldn't: found by rustc's
+  `issue-70413-no-unreachable-pat-and-guard.rs` and
+  `search-via-bindings.rs`, which this made wrong before it was. A name
+  bound at the same place is the same value in each, and its guard is
+  right. Trying each in turn, as Rust does, would be the arm once for each
+  combination, its body in each.
 - **A pattern rustc checked always matches**, a `let`'s, a parameter's or a
   `for`'s, binds without its test, as `Ok(n) | Err(n)` has one that always
   holds: it was an error, as a test was taken for a refutable pattern.

@@ -1800,8 +1800,8 @@ export const mutations: Mutation[] = [
     name: "or-binding-one-place",
     breaks: "`(0, x) | (x, 0)` binds `x` where the first alternative has it, whichever matched",
     file: "src/lower/patterns.rs",
-    find: "                    let place = if places.iter().all(|(_, place)| same_place(place, &binding.place)) {",
-    replace: "                    let place = if true || places.iter().all(|(_, place)| same_place(place, &binding.place)) {",
+    find: "                    let same = places.iter().all(|(_, place)| same_place(place, &binding.place));",
+    replace: "                    let same = true || places.iter().all(|(_, place)| same_place(place, &binding.place));",
     tests: ["test/corpus.test.ts","-t","or_bindings"],
   },
   {
@@ -1811,6 +1811,14 @@ export const mutations: Mutation[] = [
     find: "        self.pattern_test(pat, &subject, &mut bindings)?;\n        self.bind_all(",
     replace: "        if self.pattern_test(pat, &subject, &mut bindings)?.is_some() {\n            return Err(self.unsupported(pat.span, \"this refutable pattern\"));\n        }\n        self.bind_all(",
     tests: ["test/corpus.test.ts","-t","or_bindings"],
+  },
+  {
+    name: "or-guard-first-alternative",
+    breaks: "`(a, _) | (_, a) if a > 10` of `(3, 42)` tries the guard with the first alternative's `a`, 3, alone, and skips the arm Rust takes with 42",
+    file: "src/lower/patterns.rs",
+    find: "        if bindings.iter().any(|b| b.chosen) {",
+    replace: "        if false && bindings.iter().any(|b| b.chosen) {",
+    tests: ["test/diagnostics.test.ts","-t","a guard of a | pattern binding at two places"],
   },
   {
     name: "f32-digits-symmetric",

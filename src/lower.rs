@@ -191,6 +191,9 @@ struct Binding<'tcx> {
     /// `x @ ..`: it binds the whole value its subpattern binds parts of.
     whole: bool,
     place: Expr,
+    /// Its place is a choice of an `|` pattern's alternatives, `p[0] === 0 ?
+    /// p[1] : p[0]`, the first that matched (ADR 0124).
+    chosen: bool,
     ty: Ty<'tcx>,
 }
 
