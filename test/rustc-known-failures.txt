@@ -184,11 +184,6 @@ derives/deriving-with-repr-packed-3.rs	error: rust-js does not support values of
 derives/eq-ord/deriving-cmp-generic-enum.rs	error: rust-js does not support comparing `E<i32>`s yet
 derives/eq-ord/deriving-cmp-generic-struct-enum.rs	error: rust-js does not support comparing `ES<i32>`s yet
 destructuring-assignment/drop-order.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
-destructuring-assignment/nested_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
-destructuring-assignment/slice_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
-destructuring-assignment/struct_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
-destructuring-assignment/tuple_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
-destructuring-assignment/tuple_struct_destructure.rs	error: rust-js does not support this `let` pattern without a value yet
 drop/drop-count-assertion-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/drop-in-for-loop-destructure.rs	error: rust-js does not support `std::iter::IntoIterator::into_iter` of a value with a destructor yet
 drop/drop-noncopyable-raw-pointer.rs	error: rust-js does not support values of type `*const u8` yet
@@ -206,13 +201,12 @@ drop/issue-48962.rs	error: rust-js does not support moving a value with a destru
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support values of type `*mut std::option::Option<(S<'_>, S<'_>)>` yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `Holder<dyn Trait>`, whose last field is a `dyn` yet
 drop/nested-return-drop-order.rs	error: rust-js does not support a temporary with a destructor here yet
-drop/nondrop-cycle.rs	error: rust-js does not support this `let` pattern without a value yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support calling `std::cell::RefCell::<T>::into_inner` yet
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/trait-object-drop-10802.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support this `let` pattern without a value yet
+dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support values of type `*const NoisyDrop<&std::vec::Vec<i32>>` yet
 dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<<Resources as ResourcesTrait<'_>>::DescriptorSet>) is !null` yet
 dropck/issue-34053.rs	error: rust-js does not support a temporary with a destructor here yet
 dst/dst-coerce-rc.rs	error: rust-js does not support values of type `(*const std::rc::RcInner<i32>) is !null` yet
