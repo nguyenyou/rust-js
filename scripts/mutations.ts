@@ -558,7 +558,7 @@ export const mutations: Mutation[] = [
     breaks: "rustc writes a library's metadata where it's asked for, before its JS is published, and whether it is or not",
     file: "src/main.rs",
     find: "                    rewritten.push(format!(\"metadata={}\", staged.display()));\n",
-    replace: "                    rewritten.push(format!(\"metadata={}\", path.display()));\n                    std::fs::create_dir_all(stage.clone()).ok();\n                    std::fs::write(&staged, b\"\").ok();\n",
+    replace: "                    rewritten.push(format!(\"metadata={}\", path.display()));\n                    std::fs::create_dir_all(stage()).ok();\n                    std::fs::write(&staged, b\"\").ok();\n",
     tests: ["test/crates.test.ts", "-t", "neither is"],
   },
   {
@@ -582,7 +582,7 @@ export const mutations: Mutation[] = [
     breaks: "a method through a generic impl's dictionary is given its dictionaries, but not its drops",
     file: "src/lower/traits.rs",
     find: "                true => self.evidence_args(method, instance.args, span)?,\n",
-    replace: "                true => {\n                    let mut evidence = Vec::new();\n                    for bound in bounds(self.tcx, self.krate.foreign, method) {\n                        let bound = ty::EarlyBinder::bind(bound).instantiate(self.tcx, instance.args);\n                        evidence.push(self.dictionary(bound, span)?);\n                    }\n                    evidence\n                }\n",
+    replace: "                true => {\n                    let mut evidence = const_params(self.tcx, method)\n                        .into_iter()\n                        .map(|param| self.const_arg(instance.args.const_at(param.index as usize), span))\n                        .collect::<R<Vec<_>>>()?;\n                    for bound in bounds(self.tcx, self.krate.foreign, method) {\n                        let bound = ty::EarlyBinder::bind(self.tcx, bound)\n                            .instantiate(self.tcx, instance.args)\n                            .skip_normalization();\n                        evidence.push(self.dictionary(bound, span)?);\n                    }\n                    evidence\n                }\n",
     tests: ["test/corpus.test.ts", "-t", "drop_impl_dictionary"],
   },
   {
@@ -1465,7 +1465,7 @@ export const mutations: Mutation[] = [
     file: "src/main.rs",
     find: "    StableCrateId::new(\n        name,\n",
     replace: "    StableCrateId::new(\n        Symbol::intern(\"elsewhere\"),\n",
-    tests: ["test/jsx.test.ts","-t","JSX supports components across modules"],
+    tests: ["test/cargo-react.test.ts", "-t", "a component of a Cargo workspace using the react crate"],
   },
   {
     name: "js-type-of-struct-unrecognized",
@@ -1889,6 +1889,10 @@ function test(tests: string[], compiler: string, snapshots = false): { passed: b
   const p = withRuntime(compiler, () =>
     runSync([process.execPath, "test", ...tests], root, testTimeout, {
       RUST_JS_COMPILER: compiler,
+      // A compile that takes long, as an exponential one, is stopped, and
+      // its test fails, before the runner runs out of time on it, which
+      // would say nothing: a corpus case compiles in a second or two.
+      RUST_JS_COMPILE_TIMEOUT: "60000",
       ...(snapshots ? {} : { RUST_JS_SNAPSHOTS: "ignore" }),
     }),
   );
