@@ -61,3 +61,10 @@ built on the host it's for. Its one user develops on macOS, on Apple silicon.
 - **A release is a version bump**, of the compiler's `Cargo.toml` and each
   package's `package.json`, its runtime generated again, a release build,
   its distribution qualified, and each package published, in order.
+- **A release build is `bun run build:release`**, from 0.0.2, as Qualify's
+  is: `--remap-path-prefix=$HOME=~`, so the paths in its panic messages, of
+  Cargo's and rustup's sources, are `~/.cargo/..`, as Rust's own are
+  `/rustc/<commit>/..`, not the building machine's home. 0.0.1's binary has
+  them. The rpath `build.rs` gives it, where rustc's library is for
+  `target/debug/rust-js`, still names it: a binary run as it's installed,
+  by its launcher, is told where the library is.

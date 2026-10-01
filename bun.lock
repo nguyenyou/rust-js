@@ -74,15 +74,15 @@
     },
     "runtime": {
       "name": "@rust-js/runtime",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
     "tooling": {
       "name": "@rust-js/build",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
     "vite-plugin": {
       "name": "@rust-js/vite-plugin",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@rust-js/build": "workspace:*",
       },

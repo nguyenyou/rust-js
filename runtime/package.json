@@ -1,6 +1,6 @@
 {
   "name": "@rust-js/runtime",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "The helpers the JS rust-js writes imports, released with the compiler, as @rescript/runtime is with ReScript. See docs/decisions/0103-runtime-package.md.",
   "license": "MIT",
   "repository": {

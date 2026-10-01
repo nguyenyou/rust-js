@@ -55,8 +55,9 @@ jobs:
             target/release
           key: qualify-${{ matrix.host }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
           restore-keys: qualify-${{ matrix.host }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      # As a release is built: no path of the machine's home in it (ADR 0120).
       - name: Build rust-js
-        run: cargo build --release --locked
+        run: bun run build:release
       - name: Make the distribution
         run: bun run pack:distribution target/release/rust-js dist
       - name: Qualify it
