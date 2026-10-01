@@ -2,7 +2,7 @@
 # builtins/build.sh does, and rust-js reads its metadata (ADR 0102).
 [package]
 name = "rust-js-builtins"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "JS's language, as rust-js compiles Rust to it: promises, errors, regular expressions, JSON"
 license = "MIT"

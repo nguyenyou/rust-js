@@ -2,7 +2,7 @@
 # webapi/build.sh does, and rust-js reads its metadata (ADR 0024).
 [package]
 name = "rust-js-webapi"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "The web platform for rust-js programs: DOM bindings generated from WebIDL"
 license = "MIT"
@@ -16,7 +16,7 @@ name = "webapi"
 path = "src/lib.rs"
 
 [dependencies]
-js = { package = "rust-js-builtins", path = "../builtins", version = "0.1.0" }
+js = { package = "rust-js-builtins", path = "../builtins", version = "~0.0.1" }
 
 # rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
 [lints.rust]

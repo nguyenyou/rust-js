@@ -19,8 +19,8 @@ name = "react"
 path = "src/lib.rs"
 
 [dependencies]
-js = { package = "rust-js-builtins", path = "../builtins", version = "0.1.0" }
-webapi = { package = "rust-js-webapi", path = "../webapi", version = "0.1.0" }
+js = { package = "rust-js-builtins", path = "../builtins", version = "~0.0.1" }
+webapi = { package = "rust-js-webapi", path = "../webapi", version = "~0.0.1" }
 
 # rust-js compiles with `--cfg=rust_js` (ADR 0113): a `cfg` Cargo checks for.
 [lints.rust]

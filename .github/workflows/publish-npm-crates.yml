@@ -1,0 +1,43 @@
+# Publish the crates rust-js releases on npm, @rust-js/builtins and
+# @rust-js/webapi, as `bun run pack:npm-crates` packs them. Run it by hand
+# from the Actions tab. It publishes through npm's trusted publishing, with
+# provenance and no token, once each package's settings on npmjs.com trust
+# this workflow; a version already published is left as it is.
+name: Publish npm crates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      # npm 11.5 or later publishes by trusted publishing: Node 24's.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+
+      - name: Pack them
+        run: bun run pack:npm-crates dist-npm
+
+      - name: Publish each version not yet published
+        run: |
+          for name in builtins webapi; do
+            version=$(tar -xzf "dist-npm/$name.tgz" -O package/package.json | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)')
+            if npm view "@rust-js/$name@$version" version >/dev/null 2>&1; then
+              echo "@rust-js/$name@$version is published already"
+            else
+              npm publish "dist-npm/$name.tgz" --access public --provenance
+            fi
+          done
