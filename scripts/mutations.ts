@@ -1760,6 +1760,24 @@ function build(mutation?: Mutation): string | { problem: string } {
   return kept;
 }
 
+/** `run`, with the checkout's `@rust-js/runtime` the one `compiler` writes:
+ * the JS imports its helpers from the package (ADR 0103), so a helper's
+ * mutation is the package's too. The checkout's is put back after. One
+ * that writes none, as the control that compiles nothing, runs with the
+ * checkout's. */
+function withRuntime<T>(compiler: string, run: () => T): T {
+  const file = join(root, "runtime", "index.js");
+  const original = readFileSync(file, "utf8");
+  const written = runSync([compiler, "--runtime-module"], root, buildTimeout);
+  if (written.code !== 0 || stopped(written, buildTimeout)) return run();
+  writeFileSync(file, written.stdout);
+  try {
+    return run();
+  } finally {
+    writeFileSync(file, original);
+  }
+}
+
 const count = (output: string, what: string) => Number(new RegExp(String.raw`^ (\d+) ` + what + "$", "m").exec(output)?.[1] ?? 0);
 
 /** What a run of a mutant's tests says of it: `caught` by a test that
@@ -1780,10 +1798,12 @@ export function judge(p: Exit, output: string): "caught" | "survived" | "inconcl
 function test(tests: string[], compiler: string): { passed: boolean; ran: number; output: string; exit: Exit } {
   // What the JS does is what's checked: a corpus snapshot differs with
   // nearly any change to the compiler, a mutation's or not.
-  const p = runSync([process.execPath, "test", ...tests], root, testTimeout, {
-    RUST_JS_COMPILER: compiler,
-    RUST_JS_SNAPSHOTS: "ignore",
-  });
+  const p = withRuntime(compiler, () =>
+    runSync([process.execPath, "test", ...tests], root, testTimeout, {
+      RUST_JS_COMPILER: compiler,
+      RUST_JS_SNAPSHOTS: "ignore",
+    }),
+  );
   const output = p.stdout + p.stderr;
   return { passed: p.code === 0 && !stopped(p, testTimeout), ran: count(output, "pass") + count(output, "fail"), output, exit: p };
 }
