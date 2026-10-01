@@ -16,7 +16,6 @@ associated-consts/assoc-const-in-static-array-size.rs	error: rust-js does not su
 associated-consts/associated-const-type-parameters.rs	error: rust-js does not support a generic impl's constant of its parameters yet
 associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support this constant yet
 associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support this constant yet
-associated-type-bounds/enum-bounds.rs	error: rust-js does not support this expression yet
 associated-type-bounds/rpit.rs	error: rust-js: generated trait implementation name `aTr1` collides; put the implementations in separate modules
 associated-type-bounds/struct-bounds.rs	error: rust-js does not support values of type `<&str as Tr1>::As1` yet
 associated-type-bounds/union-bounds.rs	error: rust-js does not support values of type `_Un7<'_, '_, T>` yet
@@ -100,8 +99,6 @@ closures/2229_closure_analysis/run_pass/by_value.rs	error: rust-js does not supp
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
 closures/2229_closure_analysis/unresolvable-upvar-issue-87987.rs	error: rust-js does not support `{:#?}` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
-closures/closure_no_cap_coerce_many_run_pass.rs	error: rust-js does not support this expression yet
-closures/closure_no_cap_coerce_many_unsafe_1.rs	error: rust-js does not support this expression yet
 closures/closure-capture-after-clone.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 closures/closure-last-use-move.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 closures/closure-upvar-trait-caching.rs	error: rust-js does not support calling `std::iter::Iterator::inspect` yet
@@ -115,7 +112,6 @@ codegen/dont-roundup-dst-prefix-size-to-alignment.rs	error: rust-js does not sup
 codegen/dynamic-size-of-prefix-correctly-36278.rs	error: rust-js does not support `size_of_val` of a value without one size yet
 codegen/issue-101585-128bit-repeat.rs	error: rust-js does not support values of type `i128` yet
 codegen/issue-27859.rs	error: rust-js does not support calling `std::iter::ExactSizeIterator::len` yet
-codegen/issue-55976.rs	error: rust-js does not support this expression yet
 codegen/llvm-miscompile-metadata-invalidation-36023.rs	error: rust-js does not support calling `std::result::Result::<T, E>::as_ref` yet
 coercion/any-trait-object-debug-12744.rs	error: rust-js does not support `{:?}` of a `dyn std::any::Any` yet
 coercion/basic-ptr-coercions.rs	error: rust-js does not support values of type `*const isize` yet
@@ -163,7 +159,6 @@ consts/const-err-rpass.rs	error: rust-js does not support constants of type `*co
 consts/const-eval/issue-64908.rs	error: rust-js does not support `size_of` of a type parameter yet
 consts/const-eval/ptr_fragments.rs	error: rust-js does not support constants of type `std::mem::MaybeUninit<*const i32>` yet
 consts/const-eval/strlen.rs	error: rust-js does not support calling `core::str::<impl str>::as_bytes` yet
-consts/const-extern-fn/const-extern-fn.rs	error: rust-js does not support this expression yet
 consts/const-extern-function.rs	error: rust-js does not support statics of type `extern "C" fn()` yet
 consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn() -> isize>` yet
 consts/const-int-arithmetic.rs	error: rust-js does not support constants of type `i128` yet
@@ -269,7 +264,6 @@ for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
-functions-closures/closure_to_fn_coercion-expected-types.rs	error: rust-js does not support this expression yet
 functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support constants of type `fn(u8) -> u8` yet
 functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics of type `std::option::Option<fn(isize) -> isize>` yet
@@ -287,10 +281,9 @@ impl-trait/closure-in-impl-trait-arg.rs	error: rust-js does not support calling 
 impl-trait/closure-in-impl-trait.rs	error: rust-js does not support calling `std::iter::empty` yet
 impl-trait/example-st.rs	error: rust-js does not support this method of an `Option` of a generic type yet
 impl-trait/issues/issue-49685.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
-impl-trait/issues/issue-51185.rs	error: rust-js does not support this expression yet
+impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
-inference/lub-glb-with-unbound-infer-var.rs	error: rust-js does not support this expression yet
 inference/matcher-lifetime-inference-14919.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 inline-const/const-expr-basic.rs	error: rust-js does not support this expression yet
 inline-const/const-expr-lifetime.rs	error: rust-js does not support this expression yet
@@ -307,7 +300,6 @@ issues/issue-42552.rs	error: rust-js does not support values of type `<std::iter
 issues/issue-4541.rs	error: rust-js does not support calling `std::env::args` yet
 issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::Args` yet
 issues/issue-50415.rs	error: rust-js does not support calling `std::ops::RangeInclusive::<Idx>::new` yet
-issues/issue-5315.rs	error: rust-js does not support this expression yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
 iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
@@ -343,7 +335,7 @@ methods/method-two-trait-defer-resolution-1.rs	error: rust-js: generated trait i
 methods/method-two-trait-defer-resolution-2.rs	error: rust-js: generated trait implementation name `vecFoo` collides; put the implementations in separate modules
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
 methods/method-where-clause.rs	error: rust-js: generated trait implementation name `optionFoo` collides; put the implementations in separate modules
-mir/mir_adt_construction.rs	error: rust-js does not support this expression yet
+mir/mir_adt_construction.rs	error: rust-js does not support a temporary with a destructor here yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
 mir/mir_augmented_assignments.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 mir/mir_autoderef.rs	error: rust-js does not support this expression yet
@@ -459,7 +451,6 @@ structs-enums/enum-non-c-like-repr-int.rs	error: rust-js does not support values
 structs-enums/tag-align-dyn-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-dyn-variants.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-structs-enums/tuple-struct-constructor-pointer.rs	error: rust-js does not support this expression yet
 structs/struct-partial-move-1.rs	error: rust-js does not support a struct update from a value with a destructor yet
 structs/struct-partial-move-2.rs	error: rust-js does not support a struct update from a value with a destructor yet
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
@@ -519,7 +510,6 @@ typeck/nested-generic-traits-performance.rs	error: rust-js does not support a ge
 typeck/osstring-str-equality.rs	error: rust-js does not support calling `std::convert::From::from` yet
 typeck/type-name-intrinsic-usage-61894.rs	error: rust-js does not support calling `std::any::type_name` yet
 typeck/typeck_type_placeholder_1.rs	error: rust-js does not support statics of type `TestStruct` yet
-typeck/typeck-closure-to-unsafe-fn-ptr.rs	error: rust-js does not support this expression yet
 typeck/unify-return-ty.rs	error: rust-js does not support values of type `*const T` yet
 unboxed-closures/type-id-higher-rank.rs	error: rust-js does not support values of type `*const ()` yet
 unboxed-closures/unboxed-closures-drop.rs	error: rust-js does not support a closure that holds a value with a destructor yet
