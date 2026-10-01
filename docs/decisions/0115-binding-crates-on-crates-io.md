@@ -1,7 +1,12 @@
 # 0115. The binding crates are packaged for crates.io
 
-Status: Accepted: packaged and verified; not yet published. Extends
-[0113](0113-plain-rustc.md) and [0114](0114-app-cargo-toml.md).
+Status: Accepted: packaged and verified, and published to npm, not
+crates.io. Extends [0113](0113-plain-rustc.md) and
+[0114](0114-app-cargo-toml.md). [0118](0118-bindings-on-npm-only.md) puts
+npm in crates.io's place, as a binding is used only where its npm library
+is installed: each crate packaged so is an npm package's, and an app's
+`Cargo.toml` names it by version. [0116](0116-binding-versions.md) gives
+`builtins` and `webapi` versions of their own.
 
 ## Context
 
