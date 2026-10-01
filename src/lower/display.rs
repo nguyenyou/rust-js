@@ -9,7 +9,7 @@ use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol};
 
@@ -370,6 +370,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if self.range_kind(ty).is_some() {
             return self.range_debug(value, ty, span);
+        }
+        // `PhantomData<u8>`, its type's name as `type_name` gives it (ADR 0132).
+        if let ty::Adt(_, args) = ty.kind()
+            && self.is_lang_adt(ty, LangItem::PhantomData)
+            && !args.type_at(0).has_param()
+        {
+            let of = self
+                .tcx
+                .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args.type_at(0)));
+            let name = rustc_const_eval::util::type_name(self.tcx, of);
+            return Ok(Expr::str(format!("PhantomData<{name}>")));
         }
         match ty.kind() {
             // A constant is known: `Some(1.0)` is `"Some(1.0)"`, with no test.

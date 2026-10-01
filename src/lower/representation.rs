@@ -747,6 +747,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return None;
             }
             ty::Adt(..) if self.is_js_object(ty) => return None,
+            // A standard stream, and what writing to one gives: nothing JS
+            // needs, `undefined` (ADR 0132).
+            ty::Adt(..) if self.recognition().stream(ty).is_some() || self.recognition().is_io_unit_result(ty) => {
+                return None;
+            }
             // `{ message, line, column }` (ADR 0077), and `{ kind, value }` (ADR 0083).
             ty::Adt(..) if self.is_json_error(ty) || self.is_json_number(ty) => return None,
             // `dyn Debug` is the string it shows (ADR 0060).

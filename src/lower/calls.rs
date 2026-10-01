@@ -4,7 +4,7 @@ use super::bindings::{self, JsForm, is_binding, is_method, js_form, js_import};
 use super::combinators::{IterSource, StepOp};
 use super::drops::Drops;
 use super::numbers::NumOp;
-use super::recognition::{Catching, Std};
+use super::recognition::{Catching, Std, StreamOp};
 use super::representation::Num;
 use super::text::TextOp;
 use super::{FnCx, R, camel_case, global};
@@ -335,6 +335,51 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Std::Range(op) = known {
             return self.range_call(op, args, span, out);
+        }
+        // A standard stream holds nothing JS needs, and a write to one is
+        // `print!`'s (ADR 0132).
+        if let Std::Stream(op) = known {
+            let mut values = self.operands(args, out)?.into_iter();
+            if op != StreamOp::Open
+                && let Some(on) = values.next()
+                && on.has_effects()
+            {
+                out.push(StmtKind::Expr(on).at(self.js_span(span)));
+            }
+            return match op {
+                StreamOp::Write { error } => {
+                    let text = values.next().expect("a write's text");
+                    Ok(match without_newline(text) {
+                        Ok(line) => Expr::call(
+                            Expr::member(Expr::var("console"), if error { "error" } else { "log" }),
+                            vec![line],
+                        ),
+                        Err(text) => {
+                            self.runtime.insert(Helper::Print);
+                            Expr::call(Expr::var(if error { "$eprint" } else { "$print" }), vec![text])
+                        }
+                    })
+                }
+                _ => Ok(Expr::undefined()),
+            };
+        }
+        // rustc's name for the type, as a string; of a type parameter, which
+        // each caller's type names, it's an error.
+        if let Std::TypeName { of_val } = known {
+            let of = generic_args.type_at(0);
+            if of.has_param() {
+                return Err(self.unsupported(span, "`type_name` of a type parameter"));
+            }
+            if of_val {
+                let value = self.expr(args[0], out)?;
+                if value.has_effects() {
+                    out.push(StmtKind::Expr(value).at(self.js_span(span)));
+                }
+            }
+            let of = self
+                .tcx
+                .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(of));
+            return Ok(Expr::str(rustc_const_eval::util::type_name(self.tcx, of)));
         }
         if let Std::Comb(comb) = known {
             return self.comb_call(comb, args, generic_args, span, out);
@@ -1034,6 +1079,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::Map(_)
             | Std::Range(_)
+            | Std::Stream(_)
+            | Std::TypeName { .. }
             | Std::Comb(_)
             | Std::IterComb(_)
             | Std::Text(_)

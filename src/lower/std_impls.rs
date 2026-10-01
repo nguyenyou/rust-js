@@ -433,6 +433,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ if let Some(num) = Num::of(ty) => num.literal(0),
             ty::Bool => Expr::bool(false),
             ty::Char => Expr::str("\0"),
+            // `&str`'s is `""`, a slice's `[]`, and an array's its items'.
+            ty::Ref(_, inner, _) if inner.is_str() => Expr::str(""),
+            ty::Ref(_, inner, _) if inner.is_slice() => Expr::array(Vec::new()),
+            // A `Box<str>`'s and a `Box<[T]>`'s, and `PhantomData`, which holds nothing.
+            ty::Str => Expr::str(""),
+            ty::Slice(_) => Expr::array(Vec::new()),
+            _ if self.is_lang_adt(ty, LangItem::PhantomData) => Expr::undefined(),
+            ty::Array(item, len) => {
+                let len = len
+                    .try_to_target_usize(self.tcx)
+                    .ok_or_else(|| self.unsupported(span, &format!("`Default` of `{ty}`")))?;
+                Expr::array((0..len).map(|_| self.default_value(*item, span)).collect::<R<_>>()?)
+            }
             _ if ty.is_unit() || self.option_of(ty).is_some() => Expr::undefined(),
             _ if self.is_lang_adt(ty, LangItem::String) => Expr::str(""),
             _ if self.is_vec_like(ty) => Expr::array(Vec::new()),

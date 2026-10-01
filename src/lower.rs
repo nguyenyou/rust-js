@@ -1326,11 +1326,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A struct literal: `{ x: 1, y: 2 }`, or `[1, 2]` for a tuple struct.
     fn adt(&mut self, adt: &thir::AdtExpr<'tcx>, ty: Ty<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let variant = adt.adt_def.variant(adt.variant_index);
-        // A `fmt::Result` is always `Ok`, and nothing (ADR 0054).
-        if self.is_fmt_result(ty) {
+        // A `fmt::Result` is always `Ok`, and nothing (ADR 0054), and so is
+        // an `io::Result<()>` (ADR 0132).
+        if self.is_fmt_result(ty) || self.recognition().is_io_unit_result(ty) {
             return match variant.name.as_str() {
                 "Ok" => Ok(Expr::undefined()),
-                _ => Err(self.unsupported(span, "a `fmt::Error`")),
+                _ if self.is_fmt_result(ty) => Err(self.unsupported(span, "a `fmt::Error`")),
+                _ => Err(self.unsupported(span, "an `io::Error`")),
             };
         }
         // `Some(x)` is `x`, and `None` is `undefined` (ADR 0030).
@@ -1583,8 +1585,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     fn question(&mut self, question: ExprId, tried: ExprId, base: Option<&str>, out: &mut Vec<Stmt>) -> R<Expr> {
         let span = self.thir[question].span;
         let ty = self.thir[tried].ty;
-        // A write never fails (ADR 0054).
-        if self.is_fmt_result(ty) {
+        // A write never fails (ADR 0054, ADR 0132).
+        if self.is_fmt_result(ty) || self.recognition().is_io_unit_result(ty) {
             self.stmt(tried, &Dest::Discard, out)?;
             return Ok(Expr::undefined());
         }

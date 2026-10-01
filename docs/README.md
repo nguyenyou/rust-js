@@ -213,6 +213,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0129 A range is a value: `{ start, end }`, iterated as its items](decisions/0129-range-values.md)
 - [0130 An `if let` is a value anywhere, and trait and std functions are values](decisions/0130-if-let-values-and-fn-items.md)
 - [0131 A temporary taken apart owns what its pattern leaves](decisions/0131-temporaries-taken-apart.md)
+- [0132 A `Box` from its value, `Default` of a `&str`, `type_name`, and standard streams](decisions/0132-std-odds.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

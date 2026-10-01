@@ -584,6 +584,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_fmt_result(self.thir[scrutinee].ty) {
             return Err(self.unsupported(self.thir[scrutinee].span, "matching a `fmt::Result`"));
         }
+        if self.recognition().is_io_unit_result(self.thir[scrutinee].ty) {
+            return Err(self.unsupported(self.thir[scrutinee].span, "matching an `io::Result`"));
+        }
         // Evaluate the scrutinee once, unless it's a place that can be
         // tested where it is.
         let items = self.item_subject(scrutinee);

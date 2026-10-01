@@ -130,6 +130,15 @@ pub(super) enum Std {
     Text(TextOp),
     /// A range's method, or `a..=b` (ADR 0129).
     Range(RangeOp),
+    /// `any::type_name::<T>()`, and `type_name_of_val(&x)`: rustc's name for
+    /// `T`, a string (ADR 0132).
+    TypeName {
+        of_val: bool,
+    },
+    /// Standard output and error (ADR 0132): `io::stdout()` and its `lock()`,
+    /// which hold nothing JS needs, writes to one, and an `io::Result<()>`'s
+    /// `unwrap()`, as a write's is always `Ok`.
+    Stream(StreamOp),
     Number(NumOp),
     /// A `BinaryHeap`'s own methods (ADR 0068).
     Heap(HeapOp),
@@ -235,6 +244,18 @@ pub(super) enum Std {
     Reverse,
 }
 
+/// What a call does with a standard stream (ADR 0132).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum StreamOp {
+    /// `io::stdout()` and `io::stderr()`: `undefined`.
+    Open,
+    /// `stdout.lock()`, `out.flush()` and `write.unwrap()`: what it's called
+    /// on, run for its effects, and `undefined`.
+    Nothing,
+    /// `write!(out, ..)`: `print!` or `eprint!`.
+    Write { error: bool },
+}
+
 impl Std {
     /// Does it take an iterator, and so a range as an array?
     pub(super) fn takes_iterator(self) -> bool {
@@ -295,6 +316,19 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if tcx.is_lang_item(def_id, LangItem::RangeInclusiveNew) {
             return Some(Std::Range(RangeOp::New));
+        }
+        if tcx.crate_name(def_id.krate) == sym::std {
+            match tcx.def_path_str(def_id).as_str() {
+                "std::io::stdout" | "std::io::stderr" => return Some(Std::Stream(StreamOp::Open)),
+                _ => {}
+            }
+        }
+        if tcx.crate_name(def_id.krate) == sym::core {
+            match tcx.def_path_str(def_id).as_str() {
+                "std::any::type_name" => return Some(Std::TypeName { of_val: false }),
+                "std::any::type_name_of_val" => return Some(Std::TypeName { of_val: true }),
+                _ => {}
+            }
         }
         // std's iterator sources (ADR 0128), by path: most have no
         // diagnostic item.
@@ -578,6 +612,16 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     _ => None,
                 };
             }
+            // Writing to a standard stream (ADR 0132).
+            if let Some(error) = self.stream(ty.peel_refs())
+                && tcx.def_path_str(trait_) == "std::io::Write"
+            {
+                return match tcx.item_name(def_id).as_str() {
+                    "write_fmt" => Some(Std::Stream(StreamOp::Write { error })),
+                    "flush" => Some(Std::Stream(StreamOp::Nothing)),
+                    _ => None,
+                };
+            }
             // `v.extend(items)` (ADR 0062).
             if is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
                 return Some(Std::Comb(Comb::Extend));
@@ -607,6 +651,16 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             };
             if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty) {
                 if self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty) {
+                    return Some(Std::Same);
+                }
+                // Into a `Box`, which is its value (ADR 0023): `Box::from(x)`, and
+                // a `Vec`'s items as a boxed slice.
+                if let ty::Adt(_, boxed) = to_ty.kind()
+                    && to_ty.is_box()
+                    && (boxed.type_at(0) == from_ty
+                        || matches!((boxed.type_at(0).kind(), from_ty.kind()), (ty::Slice(item), ty::Adt(_, vec))
+                            if self.is_std_adt(from_ty, sym::Vec) && vec.type_at(0) == *item))
+                {
                     return Some(Std::Same);
                 }
                 // Into a BigInt from a number (ADR 0086), else the same.
@@ -796,6 +850,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "join" if owner.is_slice() => Std::Method("join"),
             "push_str" | "push" if string => Std::PushStr,
             "is_empty" if adt("Vec") || owner.is_slice() || owner.is_str() || string => Std::IsEmpty,
+            "lock" if self.stream(owner).is_some() => Std::Stream(StreamOp::Nothing),
             "contains" if range.is_some() => Std::Range(RangeOp::Contains),
             "start" if range == Some(RangeKind::Inclusive) => Std::Range(RangeOp::Bound("start")),
             "end" if range == Some(RangeKind::Inclusive) => Std::Range(RangeOp::Bound("end")),
@@ -844,6 +899,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "is_ok" if result => Std::IsOk(true),
             "is_err" if result => Std::IsOk(false),
             "ok" if result => Std::ResultOk,
+            // A write's `io::Result<()>` is always `Ok`, and nothing (ADR 0132).
+            "unwrap" | "expect"
+                if result
+                    && args.types().next().is_some_and(|t| t.is_unit())
+                    && args.types().nth(1).is_some_and(|e| self.is_io_error(e)) =>
+            {
+                Std::Stream(StreamOp::Nothing)
+            }
             "unwrap" | "expect" if result => Std::UnwrapOk,
             "unwrap_err" | "expect_err" if result => Std::UnwrapErr,
             "unwrap_or" if result => Std::ResultOr,
@@ -854,6 +917,29 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_string_like(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
         ty.is_str() || ty.is_char() || self.is_lang_adt(ty, LangItem::String)
+    }
+
+    /// Whether `ty` is standard output, or its lock, `Some(false)`, or
+    /// standard error, `Some(true)` (ADR 0132).
+    pub(super) fn stream(&self, ty: Ty<'tcx>) -> Option<bool> {
+        let ty::Adt(adt, _) = ty.kind() else { return None };
+        match self.tcx.def_path_str(adt.did()).as_str() {
+            "std::io::Stdout" | "std::io::StdoutLock" => Some(false),
+            "std::io::Stderr" | "std::io::StderrLock" => Some(true),
+            _ => None,
+        }
+    }
+
+    /// `io::Result<()>`, which a write gives: always `Ok`, as nothing rust-js
+    /// writes to fails (ADR 0132), and so nothing, as a `fmt::Result` is.
+    pub(super) fn is_io_unit_result(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(_, args) if self.is_std_adt(ty, sym::Result)
+            && args.type_at(0).is_unit()
+            && self.is_io_error(args.type_at(1)))
+    }
+
+    fn is_io_error(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Adt(error, _) if self.tcx.def_path_str(error.did()) == "std::io::Error")
     }
 
     /// Which of std's ranges `ty` is, if it's one (ADR 0129).
