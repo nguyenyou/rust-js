@@ -1669,6 +1669,14 @@ export const mutations: Mutation[] = [
     replace: 'let b = Expr::var("b");',
     tests: ["test/corpus.test.ts", "-t", "generic_bitwise_operators"],
   },
+  {
+    name: "reference-impl-name",
+    breaks: "an impl for `&'a str` is exported as rustc prints its type, `__a_strNamed`, not `refStrNamed`",
+    file: "src/lower/traits.rs",
+    find: "        ty::Ref(_, inner, mutability) => {",
+    replace: "        ty::Ref(_, inner, mutability) if false => {",
+    tests: ["test/traits.test.ts", "-t", "dictionaries are explicit"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

@@ -2,7 +2,7 @@
 
 import { $at, $index } from "@rust-js/runtime";
 
-var $_mut_i32Bump;
+var $refMutI32Bump;
 
 const Counter = {
   get_mut(counter) {
@@ -59,7 +59,7 @@ function main() {
         b = value;
       },
     },
-    _mut_i32Bump(),
+    refMutI32Bump(),
   );
   console.log(`${b}`);
 }
@@ -84,14 +84,14 @@ function gridIndexMutUsize_index_mut(grid, i) {
   };
 }
 
-function _mut_i32Bump_bump(self) {
+function refMutI32Bump_bump(self) {
   self.value = (self.value + 1) | 0;
 }
 
-function _mut_i32Bump() {
-  if ($_mut_i32Bump === undefined) {
-    $_mut_i32Bump = { bump: _mut_i32Bump_bump };
+function refMutI32Bump() {
+  if ($refMutI32Bump === undefined) {
+    $refMutI32Bump = { bump: refMutI32Bump_bump };
   }
-  return $_mut_i32Bump;
+  return $refMutI32Bump;
 }
 //# sourceMappingURL=case.js.map

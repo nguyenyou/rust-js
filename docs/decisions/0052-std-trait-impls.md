@@ -24,7 +24,7 @@ callers depend on. So before adding std traits, this ADR settles them.
 
 | | JS | Rule |
 |---|---|---|
-| An impl's dictionary | `circleShape()` | Lazy and cached. Named after the type, then the trait, then the trait's arguments: `metersFromF64`. Two impls whose names collide are an error. |
+| An impl's dictionary | `circleShape()` | Lazy and cached. Named after the type, then the trait, then the trait's arguments: `metersFromF64`. A reference is `ref`, or `refMut`, without its lifetime: `refFlagsBitOr` of `impl BitOr for &'a Flags`. Two impls whose names collide are an error. |
 | A dictionary | `{ area, name }` | A plain object of the trait's methods. A std trait's has only its required methods: `{ clone }`, `{ default }`, `{ eq }` ([0053](0053-partial-eq.md)). |
 | A generic function | `total(shapes, TShape)` | The dictionaries come after the value arguments, in the order the bounds are written, `where` clauses included. |
 | A trait object | `{ value, impl }` | |

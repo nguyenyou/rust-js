@@ -83,6 +83,9 @@ test("dictionaries are explicit, cached and usable from JavaScript", () => {
   expect(module.vecShape(module.vecShape(module.squareShape())).area([[[2]], [[3]]])).toBe(13);
   expect(module.circleLabeled().Shape()).toBe(module.circleShape());
   expect(module.largest([{ value: NaN, impl: module.f64Shape() }])).toBe(0);
+  // An impl for a reference, `impl<'a> Named<'a> for &'a str`, is named by
+  // it, `refStrNamed`, and not by the lifetime, which isn't in the JS.
+  expect(module.refStrNamed().get("hi")).toBe("hi");
   expect(output).toContain("circleShape_area(c)");
   // Its dictionary, then a drop for `T`, which `vecShape_area`, a generic
   // impl's method, passes on (ADR 0098).

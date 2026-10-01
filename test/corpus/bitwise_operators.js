@@ -2,7 +2,7 @@
 
 import { $eq } from "@rust-js/runtime";
 
-var $flagsBitOr, $flagsBitAnd, $flagsBitXor, $flagsNot, $flagsShlU8, $flagsShrU32, $__a_FlagsBitOr;
+var $flagsBitOr, $flagsBitAnd, $flagsBitXor, $flagsNot, $flagsShlU8, $flagsShrU32, $refFlagsBitOr;
 
 const Flags = {
   has(flags, other) {
@@ -23,7 +23,7 @@ function main() {
   console.log(
     `${flagsDebug_fmt(flagsNot_not([rw[0]]))} ${flagsDebug_fmt(flagsShlU8_shl([READ[0]], 2))} ${flagsDebug_fmt(flagsShrU32_shr([RUN[0]], 1))}`,
   );
-  console.log(`${flagsDebug_fmt(__a_FlagsBitOr_bitor([READ[0]], [RUN[0]]))}`);
+  console.log(`${flagsDebug_fmt(refFlagsBitOr_bitor([READ[0]], [RUN[0]]))}`);
   let f = [READ[0]];
   flagsBitOrAssign_bitor_assign(f, [RUN[0]]);
   console.log(`${flagsDebug_fmt([f[0]])}`);
@@ -96,7 +96,7 @@ function flagsShrAssignU32_shr_assign(flags, by) {
   flags[0] = flags[0] >>> (by & 7);
 }
 
-function __a_FlagsBitOr_bitor(flags, other) {
+function refFlagsBitOr_bitor(flags, other) {
   return [flags[0] | other[0]];
 }
 
@@ -142,10 +142,10 @@ export function flagsShrU32() {
   return $flagsShrU32;
 }
 
-export function __a_FlagsBitOr() {
-  if ($__a_FlagsBitOr === undefined) {
-    $__a_FlagsBitOr = { bitor: __a_FlagsBitOr_bitor };
+export function refFlagsBitOr() {
+  if ($refFlagsBitOr === undefined) {
+    $refFlagsBitOr = { bitor: refFlagsBitOr_bitor };
   }
-  return $__a_FlagsBitOr;
+  return $refFlagsBitOr;
 }
 //# sourceMappingURL=case.js.map

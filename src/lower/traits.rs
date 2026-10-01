@@ -323,10 +323,18 @@ fn evidence_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
 }
 
 /// A type as a word of a JS name: an ADT's own name, `Meters` of
-/// `Meters<T>`.
+/// `Meters<T>`; a reference's, `RefFlags` of `&'a Flags` and `RefMutI32`
+/// of `&mut i32`, with no lifetime, which isn't in the JS.
 fn type_word<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
     match ty.kind() {
         ty::Adt(adt, _) => tcx.item_name(adt.did()).to_string(),
+        ty::Ref(_, inner, mutability) => {
+            let inner = js_word(&type_word(tcx, *inner));
+            let mut chars = inner.chars();
+            let first = chars.next().map(|c| c.to_ascii_uppercase()).unwrap_or_default();
+            let kind = if mutability.is_mut() { "RefMut" } else { "Ref" };
+            format!("{kind}{first}{}", chars.as_str())
+        }
         _ => ty.to_string(),
     }
 }
