@@ -674,6 +674,17 @@ test("the webapi crate's bindings become plain JS", async () => {
 });
 
 
+// An element's constructor is WebIDL's `[HTMLConstructor]`, which only a
+// custom element's class can call: `new HTMLDivElement()` in a page throws
+// "Illegal constructor". So webapi binds none, and an element is made with
+// `document::create_element`. Other constructors, `new Event`, it binds.
+test("the webapi crate binds no element constructor, which a page can't call", () => {
+  const lib = readFileSync(join(root, "webapi", "src", "lib.rs"), "utf8");
+  expect(lib.match(/#\[link_name = "new HTML\w*"\]/g) ?? []).toEqual([]);
+  expect(lib).toContain('#[link_name = "new Event"]');
+  expect(lib).toContain('#[link_name = "new TextEncoder"]');
+});
+
 // ADR 0047: a type's methods are an object named after it.
 test("methods are their type's object of functions", async () => {
   const js = await Bun.file(join(target, "methods.js")).text();

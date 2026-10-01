@@ -436,7 +436,10 @@ function functionsOf(i: Interface): Fn[] {
 
   for (const [index, { member: m }] of i.members.entries()) {
     if (m.type === "constructor") {
-      if (!i.constructible) continue;
+      // `[HTMLConstructor]` is on an element's constructor now, where it was
+      // on its interface: only a custom element's class calls it, and `new`
+      // of it in a page throws "Illegal constructor".
+      if (!i.constructible || (m.extAttrs ?? []).some((a) => a.name === "HTMLConstructor")) continue;
       const found = signatures(m.arguments ?? []);
       if ("skip" in found) {
         skip(found.skip);

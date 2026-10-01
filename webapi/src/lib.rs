@@ -1496,10 +1496,6 @@ pub mod html_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/HTMLElement)
-        #[link_name = "new HTMLElement"]
-        pub safe fn new() -> &'static HtmlElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLElement/title)
         #[link_name = "get title"]
         pub safe fn title(this: &HtmlElement) -> String;
@@ -1775,10 +1771,6 @@ pub mod html_anchor_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLAnchorElement/HTMLAnchorElement)
-        #[link_name = "new HTMLAnchorElement"]
-        pub safe fn new() -> &'static HtmlAnchorElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLAnchorElement/download)
         #[link_name = "get download"]
         pub safe fn download(this: &HtmlAnchorElement) -> String;
@@ -1993,10 +1985,6 @@ pub mod html_button_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/HTMLButtonElement)
-        #[link_name = "new HTMLButtonElement"]
-        pub safe fn new() -> &'static HtmlButtonElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement/command)
         #[link_name = "get command"]
         pub safe fn command(this: &HtmlButtonElement) -> String;
@@ -2151,10 +2139,6 @@ pub mod html_div_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLDivElement/HTMLDivElement)
-        #[link_name = "new HTMLDivElement"]
-        pub safe fn new() -> &'static HtmlDivElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLDivElement/align)
         #[link_name = "get align"]
         pub safe fn align(this: &HtmlDivElement) -> String;
@@ -2185,10 +2169,6 @@ pub mod html_form_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLFormElement/HTMLFormElement)
-        #[link_name = "new HTMLFormElement"]
-        pub safe fn new() -> &'static HtmlFormElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLFormElement/acceptCharset)
         #[link_name = "get acceptCharset"]
         pub safe fn accept_charset(this: &HtmlFormElement) -> String;
@@ -2321,10 +2301,6 @@ pub mod html_heading_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLHeadingElement/HTMLHeadingElement)
-        #[link_name = "new HTMLHeadingElement"]
-        pub safe fn new() -> &'static HtmlHeadingElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLHeadingElement/align)
         #[link_name = "get align"]
         pub safe fn align(this: &HtmlHeadingElement) -> String;
@@ -2355,10 +2331,6 @@ pub mod html_image_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/HTMLImageElement)
-        #[link_name = "new HTMLImageElement"]
-        pub safe fn new() -> &'static HtmlImageElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLImageElement/alt)
         #[link_name = "get alt"]
         pub safe fn alt(this: &HtmlImageElement) -> String;
@@ -2576,10 +2548,6 @@ pub mod html_input_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/HTMLInputElement)
-        #[link_name = "new HTMLInputElement"]
-        pub safe fn new() -> &'static HtmlInputElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLInputElement/accept)
         #[link_name = "get accept"]
         pub safe fn accept(this: &HtmlInputElement) -> String;
@@ -3009,10 +2977,6 @@ pub mod html_label_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLabelElement/HTMLLabelElement)
-        #[link_name = "new HTMLLabelElement"]
-        pub safe fn new() -> &'static HtmlLabelElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLabelElement/form)
         #[link_name = "get form"]
         pub safe fn form(this: &HtmlLabelElement) -> Option<&'static HtmlFormElement>;
@@ -3051,10 +3015,6 @@ pub mod html_li_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/HTMLLIElement)
-        #[link_name = "new HTMLLIElement"]
-        pub safe fn new() -> &'static HtmlLiElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLLIElement/value)
         #[link_name = "get value"]
         pub safe fn value(this: &HtmlLiElement) -> i32;
@@ -3093,10 +3053,6 @@ pub mod html_o_list_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/HTMLOListElement)
-        #[link_name = "new HTMLOListElement"]
-        pub safe fn new() -> &'static HtmlOListElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOListElement/reversed)
         #[link_name = "get reversed"]
         pub safe fn reversed(this: &HtmlOListElement) -> bool;
@@ -3151,10 +3107,6 @@ pub mod html_option_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOptionElement/HTMLOptionElement)
-        #[link_name = "new HTMLOptionElement"]
-        pub safe fn new() -> &'static HtmlOptionElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOptionElement/disabled)
         #[link_name = "get disabled"]
         pub safe fn disabled(this: &HtmlOptionElement) -> bool;
@@ -3233,10 +3185,6 @@ pub mod html_output_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOutputElement/HTMLOutputElement)
-        #[link_name = "new HTMLOutputElement"]
-        pub safe fn new() -> &'static HtmlOutputElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLOutputElement/htmlFor)
         #[link_name = "get htmlFor"]
         pub safe fn html_for(this: &HtmlOutputElement) -> &'static DomTokenList;
@@ -3319,10 +3267,6 @@ pub mod html_paragraph_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLParagraphElement/HTMLParagraphElement)
-        #[link_name = "new HTMLParagraphElement"]
-        pub safe fn new() -> &'static HtmlParagraphElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLParagraphElement/align)
         #[link_name = "get align"]
         pub safe fn align(this: &HtmlParagraphElement) -> String;
@@ -3353,10 +3297,6 @@ pub mod html_select_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/HTMLSelectElement)
-        #[link_name = "new HTMLSelectElement"]
-        pub safe fn new() -> &'static HtmlSelectElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSelectElement/autocomplete)
         #[link_name = "get autocomplete"]
         pub safe fn autocomplete(this: &HtmlSelectElement) -> String;
@@ -3516,10 +3456,6 @@ pub mod html_span_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLSpanElement/HTMLSpanElement)
-        #[link_name = "new HTMLSpanElement"]
-        pub safe fn new() -> &'static HtmlSpanElement;
-
         /// Treats `this` as `HtmlSpanElement` without checking that it is one.
         #[link_name = "this"]
         pub safe fn unchecked_from(this: &EventTarget) -> &'static HtmlSpanElement;
@@ -3542,10 +3478,6 @@ pub mod html_text_area_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTextAreaElement/HTMLTextAreaElement)
-        #[link_name = "new HTMLTextAreaElement"]
-        pub safe fn new() -> &'static HtmlTextAreaElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTextAreaElement/autocomplete)
         #[link_name = "get autocomplete"]
         pub safe fn autocomplete(this: &HtmlTextAreaElement) -> String;
@@ -3763,10 +3695,6 @@ pub mod html_u_list_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/HTMLUListElement)
-        #[link_name = "new HTMLUListElement"]
-        pub safe fn new() -> &'static HtmlUListElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLUListElement/compact)
         #[link_name = "get compact"]
         pub safe fn compact(this: &HtmlUListElement) -> bool;
@@ -3805,10 +3733,6 @@ pub mod html_table_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableElement/HTMLTableElement)
-        #[link_name = "new HTMLTableElement"]
-        pub safe fn new() -> &'static HtmlTableElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableElement/deleteCaption)
         #[link_name = "deleteCaption"]
         pub safe fn delete_caption(this: &HtmlTableElement);
@@ -3963,10 +3887,6 @@ pub mod html_table_section_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableSectionElement/HTMLTableSectionElement)
-        #[link_name = "new HTMLTableSectionElement"]
-        pub safe fn new() -> &'static HtmlTableSectionElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableSectionElement/rows)
         #[link_name = "get rows"]
         pub safe fn rows(this: &HtmlTableSectionElement) -> &'static HtmlCollection;
@@ -4037,10 +3957,6 @@ pub mod html_table_row_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableRowElement/HTMLTableRowElement)
-        #[link_name = "new HTMLTableRowElement"]
-        pub safe fn new() -> &'static HtmlTableRowElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableRowElement/rowIndex)
         #[link_name = "get rowIndex"]
         pub safe fn row_index(this: &HtmlTableRowElement) -> i32;
@@ -4127,10 +4043,6 @@ pub mod html_table_cell_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableCellElement/HTMLTableCellElement)
-        #[link_name = "new HTMLTableCellElement"]
-        pub safe fn new() -> &'static HtmlTableCellElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLTableCellElement/colSpan)
         #[link_name = "get colSpan"]
         pub safe fn col_span(this: &HtmlTableCellElement) -> u32;
@@ -4269,10 +4181,6 @@ pub mod html_i_frame_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/HTMLIFrameElement)
-        #[link_name = "new HTMLIFrameElement"]
-        pub safe fn new() -> &'static HtmlIFrameElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLIFrameElement/src)
         #[link_name = "get src"]
         pub safe fn src(this: &HtmlIFrameElement) -> String;
@@ -4427,10 +4335,6 @@ pub mod html_canvas_element {
     use super::*;
 
     unsafe extern "Rust" {
-        /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/HTMLCanvasElement)
-        #[link_name = "new HTMLCanvasElement"]
-        pub safe fn new() -> &'static HtmlCanvasElement;
-
         /// [MDN](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/width)
         #[link_name = "get width"]
         pub safe fn width(this: &HtmlCanvasElement) -> u32;
