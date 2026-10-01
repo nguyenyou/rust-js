@@ -1677,6 +1677,22 @@ export const mutations: Mutation[] = [
     replace: "        ty::Ref(_, inner, mutability) if false => {",
     tests: ["test/traits.test.ts", "-t", "dictionaries are explicit"],
   },
+  {
+    name: "fused-iterator-impl",
+    breaks: "`impl FusedIterator for Countdown {}`, which runs nothing, is refused",
+    file: "src/lower/recognition.rs",
+    find: "        || tcx.is_lang_item(id, LangItem::FusedIterator)\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "fused_iterator"],
+  },
+  {
+    name: "fuse-unknown",
+    breaks: "`it.fuse()` is a std call rust-js doesn't know",
+    file: "src/lower/recognition.rs",
+    find: '                    "fuse" => Std::Fuse,\n',
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "fused_iterator"],
+  },
 ];
 
 // Where the mutated crate is built, and the compilers kept: one copy of

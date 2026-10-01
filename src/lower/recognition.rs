@@ -49,6 +49,9 @@ pub(super) enum Std {
     /// An iterator's `cloned()` and `copied()`: its items, each cloned if
     /// that could be told apart from sharing it (ADR 0052).
     Cloned,
+    /// An iterator's `fuse()`: the iterator, as an array and a JS iterator
+    /// chain end at their first `None` and stay ended (ADR 0055).
+    Fuse,
     /// `v[i]` of a `Vec`, `Index::index` or `IndexMut::index_mut`: `$index(v, i)`.
     Index,
     /// `Cell::new(x)` and `RefCell::new(x)`: `{ value: x }`.
@@ -242,6 +245,7 @@ impl Std {
                 | Std::Extreme(_)
                 | Std::Last
                 | Std::Cloned
+                | Std::Fuse
                 | Std::IterComb(_)
         )
     }
@@ -487,6 +491,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     "count" => Std::Len,
                     name if let Some(comb) = methods::iterator(name) => Std::IterComb(comb),
                     "copied" | "cloned" => Std::Cloned,
+                    "fuse" => Std::Fuse,
                     "collect" if collects_string() => Std::CollectString,
                     "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
                         let set = args.types().nth(1).is_some_and(|b| self.is_set(b));
@@ -1472,6 +1477,9 @@ pub(super) fn implementable(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'
         // An auto trait, as `Send`, `Sync`, `Unpin` or `UnwindSafe`, has no
         // items: its impl says what the type may be used for, and runs nothing.
         || tcx.trait_is_auto(id)
+        // A promise that `next` stays `None`, with no items either: `fuse()`
+        // is what it is without it (ADR 0055).
+        || tcx.is_lang_item(id, LangItem::FusedIterator)
         // Run where rustc drops a value (ADR 0098).
         || tcx.is_lang_item(id, LangItem::Drop)
 }

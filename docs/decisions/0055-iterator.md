@@ -49,6 +49,13 @@ $iterator(fibonacci(), fibonacciIterator_next).find((x) => x > 50)
   yields every item.
 - **An impl's `type Item` is allowed.** rustc works out what it is, so it
   needs no JS.
+- **`fuse()` is the iterator itself, and `impl FusedIterator` is allowed.**
+  A JS iterator chain ends at its first `done` and stays ended, as `for`
+  does, and so does an array: what `Fuse` makes of an iterator that starts
+  again after its `None`. `FusedIterator` has no items, and only promises
+  that. One that breaks the promise is fused all the same, which Rust's
+  `fuse()` wouldn't do for it, but only a direct `next()` on the `Fuse`
+  could tell, and that's an error below.
 - **Still errors:**
   - `DoubleEndedIterator` and other iterator traits, so no `rev()`;
   - `next()` on a generic `T: Iterator` (ADR 0061 has the rest of generic iterators);

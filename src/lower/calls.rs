@@ -637,6 +637,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Std::Last
             | Std::Cloned
+            | Std::Fuse
             | Std::ArrayMethod(_)
             | Std::Enumerate
             | Std::Rev

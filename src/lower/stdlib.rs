@@ -506,7 +506,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let items = match known {
             _ if !lazy => items,
-            Std::ArrayMethod(_) | Std::Enumerate | Std::Fold | Std::Sum | Std::Skip | Std::Take | Std::Cloned => items,
+            Std::ArrayMethod(_)
+            | Std::Enumerate
+            | Std::Fold
+            | Std::Sum
+            | Std::Skip
+            | Std::Take
+            | Std::Cloned
+            | Std::Fuse => items,
             _ => Expr::call(Expr::member(items, "toArray"), vec![]),
         };
         let mut rest = self.operands(&args[1..], out)?.into_iter();
@@ -651,6 +658,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     items
                 }
             }
+            Std::Fuse => items,
             // Sorting, in place (ADR 0036). JS's `sort()` compares as strings:
             // right for strings and `bool`s, and numbers need `a - b`.
             Std::Sort => {
