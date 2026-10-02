@@ -55,17 +55,7 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
             continue;
         }
         let params = &tcx.generics_of(id).own_params;
-        // A function's and an impl's are given their values (ADR 0107). Not
-        // a trait's, or a trait method's own, which its dictionary would be
-        // given too.
-        let reason = if params
-            .iter()
-            .any(|p| matches!(p.kind, ty::GenericParamDefKind::Const { .. }))
-            && (kind == DefKind::Trait
-                || (kind == DefKind::AssocFn && tcx.inherent_impl_of_assoc(id.to_def_id()).is_none()))
-        {
-            Some("const generics of traits and their methods")
-        } else if kind == DefKind::AssocFn
+        let reason = if kind == DefKind::AssocFn
             && tcx.inherent_impl_of_assoc(id.to_def_id()).is_none()
             && params
                 .iter()
@@ -120,6 +110,17 @@ pub(super) fn validate(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_, '_
 }
 
 /// `id`'s const parameters, its parent's first, as rustc numbers them.
+/// The indexes of `id`'s own const parameters, not its parent's: a trait
+/// method's, which a caller through a dictionary gives (ADR 0135).
+fn own_const_params(tcx: TyCtxt<'_>, id: DefId) -> Vec<u32> {
+    tcx.generics_of(id)
+        .own_params
+        .iter()
+        .filter(|param| matches!(param.kind, ty::GenericParamDefKind::Const { .. }))
+        .map(|param| param.index)
+        .collect()
+}
+
 fn const_params(tcx: TyCtxt<'_>, id: DefId) -> Vec<&ty::GenericParamDef> {
     let generics = tcx.generics_of(id);
     (0..generics.count())
@@ -218,8 +219,13 @@ pub(super) fn impl_name(tcx: TyCtxt<'_>, id: DefId) -> String {
         }
         let mut name = lower_first(&js_word(&full_type_word(tcx, tr.self_ty())));
         name.push_str(tcx.item_name(tr.def_id).as_str());
-        for arg in tr.args.types().skip(1) {
-            let word = js_word(&full_type_word(tcx, arg));
+        for arg in tr.args.iter().skip(1) {
+            // A const argument by its value, `Scaled10` of `Scaled<10>` (ADR 0135).
+            let word = match (arg.as_type(), arg.as_const()) {
+                (Some(ty), _) => js_word(&full_type_word(tcx, ty)),
+                (None, Some(c)) => js_word(&c.to_string()),
+                (None, None) => continue,
+            };
             let mut chars = word.chars();
             name.extend(chars.next().map(|c| c.to_ascii_uppercase()));
             name.extend(chars);
@@ -841,17 +847,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// dictionary, after its arguments: its own bounds' evidence, for this call
     /// (ADR 0106). None for one that isn't generic.
     fn own_evidence(&mut self, id: DefId, generic_args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
-        own_bounds(self.tcx, self.krate.foreign, id)
+        // Its own const parameters' values first, `repeat::<3>`'s `3` (ADR 0135).
+        let mut values = own_const_params(self.tcx, id)
             .into_iter()
-            .map(|bound| {
+            .map(|index| self.const_arg(generic_args.const_at(index as usize), span))
+            .collect::<R<Vec<_>>>()?;
+        for bound in own_bounds(self.tcx, self.krate.foreign, id) {
+            values.push(
                 self.dictionary(
                     ty::EarlyBinder::bind(self.tcx, bound)
                         .instantiate(self.tcx, generic_args)
                         .skip_normalization(),
                     span,
-                )
-            })
-            .collect()
+                )?,
+            );
+        }
+        Ok(values)
     }
 
     /// `evidence_args` of an impl's generic method, for its dictionary's entry:
@@ -867,7 +878,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
     ) -> R<Vec<Expr>> {
         let own = own_bounds(self.tcx, self.krate.foreign, method);
-        let mut values = Vec::new();
+        // Its const parameters' values first, the impl's and its own (ADR 0135).
+        let mut values = const_params(self.tcx, method)
+            .into_iter()
+            .map(|param| self.const_arg(args.const_at(param.index as usize), span))
+            .collect::<R<Vec<_>>>()?;
         for bound in bounds(self.tcx, self.krate.foreign, method) {
             let here = ty::EarlyBinder::bind(self.tcx, bound)
                 .instantiate(self.tcx, args)
@@ -1130,6 +1145,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 - usize::from(self.formatter_param(method).is_some());
             let mut params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
+            // Its own const parameters' values, given after its arguments
+            // (ADR 0135), for the method, as the trait method's are named.
+            let mark = self.const_params.len();
+            for index in own_const_params(self.tcx, item.def_id) {
+                if self.const_params.iter().any(|&(at, _)| at == index) {
+                    return Err(self.unsupported(span, "a trait method's const parameter here"));
+                }
+                let name = self.fresh(
+                    self.tcx
+                        .generics_of(item.def_id)
+                        .param_at(index as usize, self.tcx)
+                        .name
+                        .as_str(),
+                );
+                self.const_params.push((index, Expr::var(&name)));
+                params.push(name);
+            }
             // A generic method's own evidence is its caller's, after the arguments.
             let declared: Vec<_> = own_bounds(self.tcx, self.krate.foreign, item.def_id)
                 .into_iter()
@@ -1158,9 +1190,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // doesn't give: its dictionaries, then its drops (ADR 0098), which
             // are this impl's own.
             let evidence = match declared.is_empty() {
-                true => self.evidence_args(method, instance.args, span)?,
-                false => self.method_evidence(method, instance.args, &declared, &names, span)?,
+                true => self.evidence_args(method, instance.args, span),
+                false => self.method_evidence(method, instance.args, &declared, &names, span),
             };
+            self.const_params.truncate(mark);
+            let evidence = evidence?;
             params.extend(names);
             values.extend(evidence);
             // One that passes on just what it's given, in order, is the method.
@@ -1295,6 +1329,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             drops.insert(index as u32, name);
         }
+        // Its trait's const parameters are the impl's arguments for them, `10`
+        // of `Scaled<10>` or the impl's own `K`, and its own are given after
+        // its arguments (ADR 0135).
+        let mut consts = Vec::new();
+        let generics = self.tcx.generics_of(id);
+        for index in 0..generics.parent_count {
+            let param = generics.param_at(index, self.tcx);
+            if matches!(param.kind, ty::GenericParamDefKind::Const { .. }) {
+                consts.push((param.index, self.const_arg(args.const_at(index), span)?));
+            }
+        }
+        let mut const_names = Vec::new();
+        for index in own_const_params(self.tcx, id) {
+            let name = self.fresh(generics.param_at(index as usize, self.tcx).name.as_str());
+            consts.push((index, Expr::var(&name)));
+            const_names.push(name);
+        }
+        let outer_consts = std::mem::replace(&mut self.const_params, consts);
         let body = self.krate.bodies[&id];
         let nested = super::Nested::Default {
             evidence: specialized,
@@ -1305,7 +1357,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let enclosing = self.enter_body(body, id, nested)?;
         let mut rest = Vec::new();
-        let (mut params, is_async) = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest)?;
+        let signature = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest);
+        self.const_params = outer_consts;
+        let (mut params, is_async) = signature?;
+        params.extend(const_names.into_iter().map(Into::into));
         params.extend(own_params.into_iter().map(Into::into));
         // Only the drops it uses: most defaults drop nothing of their `Self`.
         let used = self.used_drops();

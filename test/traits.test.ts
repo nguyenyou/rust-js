@@ -177,7 +177,6 @@ for (const [name, source, diagnostic] of [
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   // A function's const parameter is given (ADR 0107); a trait's isn't yet.
-  ["const generic of a trait", `pub trait T<const N: usize> { fn f(&self) -> usize; }`, "const generics of traits"],
   // A `Drop` runs where rustc drops (ADR 0098), but not yet a closure's.
   ["Drop in a closure", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} } pub fn f() { let r = Resource; let c = move || { let _ = &r; }; c(); }`, "a closure that holds a value with a destructor"],
   // `Clone`, `Default` and `From` are supported (ADR 0052), but not all of them.

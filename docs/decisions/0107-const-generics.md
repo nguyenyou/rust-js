@@ -1,7 +1,7 @@
 # 0107. A const parameter is a value its caller gives
 
-Status: Accepted: a function's, a type's and an impl's const parameters. A
-trait's, a trait method's own, and generic const expressions are to come.
+Status: Accepted: a function's, a type's and an impl's const parameters; a trait's and a
+trait method's own by ADR 0135. Generic const expressions are to come.
 Extends [0049](0049-traits-and-generics.md) and [0106](0106-generic-traits.md).
 
 ## Context
@@ -30,6 +30,8 @@ dictionaries: `sum(values, N)`, `describe(values, N, TDebug)`.
   own**, `fn f<const N: usize>(&self)`, which its dictionary would be given
   too. In a default copied into an impl, a const argument may be the
   trait's or already the impl's, and its index can't tell which. An error.
+  (Done by ADR 0135, whose copied default is given its trait's values
+  alone, found where the impl's are known.)
 - **Not yet: a generic const expression**, `{ N + 1 }`, rustc's incomplete
   `generic_const_exprs`, which rust-js would compute itself. An error.
 
