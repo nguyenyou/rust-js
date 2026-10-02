@@ -10,7 +10,7 @@ use crate::js::{Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_ast::LitKind;
 use rustc_hir::LangItem;
-use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
+use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, PatKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
@@ -21,6 +21,37 @@ pub(super) enum Piece {
     Text(String),
     /// A placeholder: which of the arguments goes there, and its options.
     Argument(usize, Spec),
+}
+
+/// Whether `known` takes an iterator and iterates it, through
+/// `iterator_call`: a stage or a consumer.
+fn iterates(known: Std) -> bool {
+    is_adapter(known)
+        || matches!(
+            known,
+            Std::Collect
+                | Std::CollectString
+                | Std::Sum
+                | Std::Fold
+                | Std::Last
+                | Std::Position
+                | Std::Extreme(_)
+                | Std::ArrayMethod(_)
+                | Std::IterComb(_)
+                | Std::Len
+        )
+}
+
+/// A stage of a chain, as `mark_lazy_chain` weighs it.
+struct Stage {
+    at: ExprId,
+    /// Whether its own closure, or what it discards, does what can be seen.
+    own: bool,
+    impure: bool,
+    tells: bool,
+    zips: bool,
+    receiver: ExprId,
+    other: Option<ExprId>,
 }
 
 /// Whether `known` is an adapter, which makes an iterator of an iterator,
@@ -506,7 +537,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Whether `e`'s value is a JS iterator: a lazy type's, or a stage a
     /// chain's consumer made lazy.
     pub(super) fn is_lazy_value(&self, e: ExprId) -> bool {
-        self.is_lazy_iter(self.thir[e].ty) || self.lazy_stages.contains(&self.chain_key(e))
+        self.is_lazy_iter(self.thir[e].ty)
+            || self.lazy_stages.contains(&self.chain_key(e))
+            || matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if self.lazy_locals.contains(&id))
+    }
+
+    /// Whether every use of `var` iterates it: a loop over it, or a stage or
+    /// a consumer of it.
+    pub(super) fn iterated_only(&self, var: LocalVarId) -> bool {
+        let named = |e: ExprId| matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if id == var);
+        let uses = self
+            .thir
+            .exprs
+            .iter()
+            .filter(
+                |e| matches!(e.kind, ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if id == var),
+            )
+            .count();
+        let iterating = self
+            .thir
+            .exprs
+            .iter()
+            .filter(|e| match e.kind {
+                ExprKind::Call { fun, ref args, .. } => {
+                    args.first().is_some_and(|&a| named(a))
+                        && (self.std_fn(fun).is_some_and(iterates)
+                            || matches!(*self.thir[fun].ty.kind(), ty::FnDef(id, _) if self.tcx.is_lang_item(id, LangItem::IntoIterIntoIter)))
+                }
+                _ => false,
+            })
+            .count();
+        uses > 0 && uses == iterating
     }
 
     /// Rust runs each item of a chain through every stage before the next,
@@ -517,30 +578,61 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// (ADR 0139). `seen`: whether what ends the chain at `receiver`, a
     /// consumer or a loop, can tell.
     pub(super) fn mark_lazy_chain(&mut self, receiver: ExprId, seen: bool) {
-        // Its stages, the last first: each, whether its closure does what can
-        // be seen, whether it can tell, and its receiver.
-        let mut stages: Vec<(ExprId, bool, bool, ExprId)> = Vec::new();
+        let stages = self.chain_stages(receiver);
+        let Some(first) = stages.iter().rposition(|stage| stage.impure) else {
+            return;
+        };
+        // `zip` takes from its other side only when this one gives an item:
+        // that side's stages run as often as Rust's only lazily.
+        let zips = stages[first].zips;
+        if !seen && !zips && !stages[..first].iter().any(|stage| stage.tells) {
+            return;
+        }
+        for stage in &stages[..=first] {
+            self.lazy_stages.insert(self.chain_key(stage.at));
+            // What's chained or zipped on runs in its turn too.
+            if let Some(other) = stage.other {
+                self.mark_lazy_chain(other, true);
+            }
+        }
+        // A `chain` or a `zip` that does what can be seen only by its other
+        // side takes this side as it is.
+        if stages[first].own {
+            let start = self.chain_key(stages[first].receiver);
+            self.lazy_starts.insert(start);
+        }
+    }
+
+    /// A chain's stages, the last first: each, whether it does what can be
+    /// seen, whether it can tell, and its receiver; and for `chain` and `zip`,
+    /// the other side, which makes it do what can be seen if it does.
+    fn chain_stages(&self, receiver: ExprId) -> Vec<Stage> {
+        let mut stages = Vec::new();
         let mut at = self.chain_stage(receiver);
         while let ExprKind::Call { fun, ref args, .. } = self.thir[at].kind
             && let Some(known) = self.std_fn(fun)
             && is_adapter(known)
             && let Some(&inner) = args.first()
         {
-            let impure = self.impure(args.get(1).copied()) || self.discards_owned(known, inner).is_some();
-            stages.push((at, impure, impure || sensitive(known), inner));
+            let other = matches!(known, Std::IterComb(IterComb::Chain | IterComb::Zip))
+                .then(|| args.get(1).copied())
+                .flatten();
+            let other_impure = other.is_some_and(|o| self.chain_stages(o).iter().any(|stage| stage.impure));
+            let own =
+                (other.is_none() && self.impure(args.get(1).copied())) || self.discards_owned(known, inner).is_some();
+            let impure = own || other_impure;
+            stages.push(Stage {
+                at,
+                own,
+                impure,
+                tells: impure || sensitive(known),
+                zips: other_impure && known == Std::IterComb(IterComb::Zip),
+                receiver: inner,
+                other: other.filter(|_| other_impure),
+            });
             at = self.chain_stage(inner);
         }
-        let Some(first) = stages.iter().rposition(|&(_, impure, _, _)| impure) else {
-            return;
-        };
-        if !seen && !stages[..first].iter().any(|&(_, _, tells, _)| tells) {
-            return;
-        }
-        for &(e, ..) in &stages[..=first] {
-            self.lazy_stages.insert(self.chain_key(e));
-        }
-        let start = self.chain_key(stages[first].3);
-        self.lazy_starts.insert(start);
+        stages
     }
 
     /// `collect()` of a chain that owns its items (ADR 0098): `map`, `filter`
@@ -698,7 +790,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A stage of a chain its consumer found must be lazy (ADR 0139).
         let key = self.chain_key(receiver);
         let starts = !lazy && self.lazy_starts.contains(&key);
-        let lazy = lazy || self.lazy_stages.contains(&key);
+        let lazy = lazy || self.is_lazy_value(receiver);
         let (items, lazy) = if starts {
             (Expr::call(Expr::member(items, "values"), vec![]), true)
         } else {
@@ -711,6 +803,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ));
         }
         let discarded = self.discards_owned(known, receiver);
+        // A lazy side of a `chain` or a `zip` makes it lazy (ADR 0128): its
+        // helpers take either side as it is.
+        let lazy = lazy
+            || matches!(known, Std::IterComb(IterComb::Chain | IterComb::Zip))
+                && args.get(1).is_some_and(|&o| self.is_lazy_value(o));
         if let Std::IterComb(comb) = known {
             let mut rest = self.operands(&args[1..], out)?;
             if let Some(item) = discarded {

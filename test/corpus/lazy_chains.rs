@@ -6,6 +6,12 @@ fn noisy(tag: &str, x: i32) -> i32 {
     x
 }
 
+// A chain kept in a variable that's returned: who ends it isn't known here.
+fn doubled(v: &[i32]) -> impl Iterator<Item = i32> + '_ {
+    let it = v.iter().map(|&x| noisy("returned", x * 2));
+    it
+}
+
 fn main() {
     let v = vec![1, 2, 3, 4];
 
@@ -30,6 +36,27 @@ fn main() {
     let total: i32 = v.iter().map(|&x| noisy("sum", x)).sum();
     let count = v.iter().inspect(|x| println!("saw {}", x)).filter(|&&x| x > 2).count();
     println!("{} {}", total, count);
+
+    // A chain kept in a variable that's only iterated, and the other side of
+    // a `zip` or a `chain`, run in their turn too.
+    let kept = v.iter().map(|&x| noisy("kept", x));
+    for x in kept {
+        println!("kept body {}", x);
+    }
+    let counted = v.iter().filter(|&&x| noisy("counted", x) > 1);
+    println!("{}", counted.count());
+    let pairs: Vec<(i32, i32)> = v[..2]
+        .iter()
+        .map(|&x| noisy("left", x))
+        .zip(v.iter().map(|&x| noisy("right", x)))
+        .collect();
+    println!("{:?}", pairs);
+    let short: Vec<(i32, i32)> = v[..2].iter().copied().zip(v.iter().map(|&x| noisy("other", x))).collect();
+    println!("{:?}", short);
+    let back: Vec<i32> = doubled(&v).collect();
+    println!("{:?}", back);
+    let joined: Vec<i32> = v[..1].iter().copied().chain(v.iter().map(|&x| noisy("joined", x))).take(2).collect();
+    println!("{:?}", joined);
 
     // Closures that do nothing that can be seen keep arrays.
     let doubled: Vec<i32> = v.iter().map(|x| x * 2).filter(|x| x % 4 == 0).take(1).collect();

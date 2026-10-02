@@ -1159,7 +1159,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::call(Expr::member(v, "push"), vec![x])
             }
             // `count()` of a JS iterator (ADR 0055) takes all of it.
-            Std::Len if self.is_lazy_iter(self.thir[args[0]].ty) => {
+            Std::Len if self.is_lazy_value(args[0]) => {
                 let items = self.iter_source(arg(), self.thir[args[0]].ty, span, out)?;
                 Expr::member(Expr::call(Expr::member(items, "toArray"), vec![]), "length")
             }

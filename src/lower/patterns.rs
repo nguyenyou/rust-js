@@ -99,6 +99,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<()> {
+        // A chain kept in a variable: who ends it can't be told here, so it's
+        // lazy if a stage does what can be seen, when every use of it iterates
+        // it, and nothing that wants an array sees it (ADR 0139).
+        if let PatKind::Binding {
+            var,
+            mode: BindingMode(ByRef::No, _),
+            subpattern: None,
+            ..
+        } = pat.kind
+            && let Some(init) = init
+            && !self.stepped.contains(&var)
+            && self.iterated_only(var)
+        {
+            self.mark_lazy_chain(init, true);
+            if self.lazy_stages.contains(&self.chain_key(init)) {
+                self.lazy_locals.insert(var);
+            }
+        }
         // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,
         // which knows where it is (ADR 0071). A JS iterator knows already.
         if let PatKind::Binding {

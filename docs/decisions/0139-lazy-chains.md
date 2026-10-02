@@ -57,8 +57,18 @@ const kept = v
 - **What ends the chain decides.** The consumer, or the loop, is lowered
   before its stages, and marks the ones that must be lazy, from the first
   stage that does what can be seen. That stage's receiver starts the JS
-  iterator, `v.values()`. A chain whose value goes anywhere else, a
-  variable or an argument, is as it was.
+  iterator, `v.values()`. A chain whose value goes anywhere else, an
+  argument or a return value, is as it was.
+- **A chain kept in a variable** is lazy when a stage does what can be
+  seen and every use of the variable iterates it, a loop over it or a
+  stage or a consumer of it, since what ends it can't be told where it's
+  made: those uses take a JS iterator as it is. One that's returned,
+  passed on, or stepped with `next()` is as it was.
+- **`chain` and `zip` do what can be seen if their other side does**, and
+  when they're lazy, so is that side, from its own first such stage. A
+  `zip` whose other side does always is: it takes from that side only
+  when this one gives an item, and stops at the shorter. Their helpers
+  take either side as it is, an array or a JS iterator.
 - **A JS iterator's helpers are Rust's order**: `map`, `filter`, `take`,
   `drop`, `flatMap`, `find`, `some`, `every`, `reduce` and `forEach` take
   each item as far as it goes before the next. `find_map` given a closure
@@ -87,5 +97,6 @@ const kept = v
 
 - Chains whose closures print, change state or may panic, and loops over
   them, run in Rust's order.
-- A chain kept in a variable before it's consumed, and the other side of a
-  `zip` or a `chain`, are still arrays.
+- A chain kept in a variable that's returned or passed on, and stepped
+  with `next()`, is still an array. (Amended: a chain kept in a variable,
+  and the other side of a `zip` or a `chain`, were arrays.)
