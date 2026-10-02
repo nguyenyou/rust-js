@@ -4,7 +4,7 @@ import { $displayF64, $f64Max, $traitImpl } from "@rust-js/runtime";
 
 var $circleShape, $squareShape, $blobShape, $f64Shape, $vecShape, $circleLabeled;
 
-export function total(shapes, TShape, dropT) {
+export function total(shapes, TShape) {
   return shapes.map((s) => TShape.area(s)).reduce((a, b) => a + b, -0);
 }
 
@@ -53,8 +53,8 @@ function f64Shape_area(self) {
   return self;
 }
 
-function vecShape_area(vec, TShape, dropT) {
-  return total(vec, TShape, dropT);
+function vecShape_area(vec, TShape) {
+  return total(vec, TShape);
 }
 
 export function circleShape() {
@@ -85,12 +85,12 @@ export function f64Shape() {
   return $f64Shape;
 }
 
-export function vecShape(TShape, dropT) {
+export function vecShape(TShape) {
   if ($vecShape === undefined) {
     $vecShape = new WeakMap();
   }
-  return $traitImpl($vecShape, [TShape, dropT], () => ({
-    area: (arg0) => vecShape_area(arg0, TShape, dropT),
+  return $traitImpl($vecShape, [TShape], () => ({
+    area: (arg0) => vecShape_area(arg0, TShape),
     name: (self) => "shape",
   }));
 }

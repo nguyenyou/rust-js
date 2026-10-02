@@ -151,6 +151,22 @@ for (const name of readdirSync(pairs).sort()) {
   }, 300_000);
 }
 
+// A generic trait method is given no drop for its own type parameters (ADR
+// 0098), and a library with no destructor may have one: a consumer that
+// gives it a value with a destructor is refused, rather than never dropping it.
+test("a library's generic trait method given a value with a destructor is refused", () => {
+  const dir = fixture("generic-method-drop");
+  const lib = join(dir, "dep");
+  mkdirSync(lib, { recursive: true });
+  writeFileSync(join(dir, "dep.rs"), "pub trait Put {\n    fn put<B>(&self, b: B) -> u32;\n}\npub struct Sink;\nimpl Put for Sink {\n    fn put<B>(&self, _b: B) -> u32 {\n        1\n    }\n}\n");
+  writeFileSync(join(dir, "app.rs"), "use dep::Put;\nstruct Loud;\nimpl Drop for Loud {\n    fn drop(&mut self) {}\n}\npub fn main() -> u32 {\n    dep::Sink.put(Loud)\n}\n");
+  run([compiler, join(dir, "dep.rs"), "-o", join(lib, "lib.js"), "--library", "--manifest", join(lib, "lib.manifest.json"),
+    "--", "--crate-name", "dep", `--emit=metadata=${join(lib, "libdep.rmeta")}`]);
+  expect(() => run([compiler, join(dir, "app.rs"), "-o", join(dir, "app.js"), "--dependency", join(lib, "lib.manifest.json"),
+    "--", "--crate-name", "app", "--crate-type=lib", "--extern", `dep=${join(lib, "libdep.rmeta")}`]))
+    .toThrow("a generic trait method given a value with a destructor");
+}, 300_000);
+
 // A library's JS and its metadata are one build's (ADR 0100): rustc writes
 // the metadata where it's staged, and it's published with the JS, from one
 // plan, or neither is. Found in review, each: JS published beside metadata

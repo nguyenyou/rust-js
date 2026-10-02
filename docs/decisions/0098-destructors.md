@@ -193,6 +193,20 @@ function main() {
   then a default had dropped its `Self` with `T`'s drop. (Amended as it was done: decided first from
   the signatures, then from each method's body, each of which missed a
   way to drop one.)
+- **A trait's own type parameters, and its `Self`, are the impl's,** so a
+  call of a trait method given a value with a destructor for one is given
+  its drop by the impl's dictionary, made where the impl is chosen:
+  `sinkTakeA(noisyDrop_drop).take(sink, noisy)`, through a generic
+  function, a default, a `dyn` or a `T::make(a)` with no `self`. A generic
+  method's own type parameters aren't given one: those are an error where
+  a type may have a destructor, of the crate's own trait where it's
+  declared, and of a library's where it's called. (Amended: all of a
+  trait method's type parameters but `Self` were an error.)
+- **A crate with no destructor, and no library's, gives no drops**: no
+  value in it has one to run, so its generic impls take no `dropT`, and
+  a dictionary that takes nothing else is one object. A library still
+  does, as its consumers' values may have one. (Amended: every generic
+  impl took one.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of

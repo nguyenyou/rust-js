@@ -159,7 +159,7 @@ function catDescribe_describe(cat) {
   return `[${catDescribe_name(cat)}]`;
 }
 
-function tLabeled_label(self, TDisplay, dropT) {
+function tLabeled_label(self, TDisplay) {
   return `#${TDisplay.fmt(self)}`;
 }
 
@@ -193,12 +193,12 @@ export function catDescribe() {
   return $catDescribe;
 }
 
-export function tLabeled(TDisplay, dropT) {
+export function tLabeled(TDisplay) {
   if ($tLabeled === undefined) {
     $tLabeled = new WeakMap();
   }
-  return $traitImpl($tLabeled, [TDisplay, dropT], () => ({
-    label: (arg0) => tLabeled_label(arg0, TDisplay, dropT),
+  return $traitImpl($tLabeled, [TDisplay], () => ({
+    label: (arg0) => tLabeled_label(arg0, TDisplay),
   }));
 }
 //# sourceMappingURL=versions.js.map

@@ -226,11 +226,11 @@ function cDebug_fmt(c) {
   return `C { n: ${c.n} }`;
 }
 
-function checkedDeref_deref(checked, dropT) {
+function checkedDeref_deref(checked) {
   return checked.value;
 }
 
-function checkedDerefMut_deref_mut(checked, dropT) {
+function checkedDerefMut_deref_mut(checked) {
   return {
     get value() {
       return checked.value;

@@ -493,6 +493,12 @@ fn drop_params<'tcx>(
     library: bool,
 ) -> HashMap<DefId, Vec<u32>> {
     let mut given: HashSet<(DefId, u32)> = HashSet::new();
+    // A crate with no destructor of its own, and none of a library's, has
+    // no value to drop: what's below would give drops nothing calls. A
+    // library's consumers may have one.
+    if !library && !super::traits::may_have_destructors(tcx, foreign) {
+        return HashMap::new();
+    }
     // A trait impl's methods are called through its dictionary, or resolved
     // where they're called, by callers the walk below can't see (ADRs 0098,
     // 0100), and what one drops needn't be in its own body: a helper it lends

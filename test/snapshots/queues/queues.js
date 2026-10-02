@@ -236,7 +236,7 @@ function gridIndex_usize__usize__index(grid, [r, c]) {
   return $index(grid.cells, ((Math.imul(r, grid.w) >>> 0) + c) >>> 0);
 }
 
-function labeledDisplay_fmt(labeled, TDisplay, dropT) {
+function labeledDisplay_fmt(labeled, TDisplay) {
   return `${labeled.label}=${TDisplay.fmt(labeled.value)}`;
 }
 
@@ -248,12 +248,12 @@ function taskPartialOrd_partial_cmp(task, other) {
   return taskOrd_cmp(task, other);
 }
 
-export function labeledDisplay(TDisplay, dropT) {
+export function labeledDisplay(TDisplay) {
   if ($labeledDisplay === undefined) {
     $labeledDisplay = new WeakMap();
   }
-  return $traitImpl($labeledDisplay, [TDisplay, dropT], () => ({
-    fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay, dropT),
+  return $traitImpl($labeledDisplay, [TDisplay], () => ({
+    fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay),
   }));
 }
 

@@ -504,7 +504,7 @@ function figureDisplay_fmt(figure) {
   }
 }
 
-function labeledDisplay_fmt(labeled, TDisplay, dropT) {
+function labeledDisplay_fmt(labeled, TDisplay) {
   return `${labeled.label}: ${TDisplay.fmt(labeled.value)}`;
 }
 
@@ -524,7 +524,7 @@ function fibonacciIterator_next(fibonacci$1) {
   return a;
 }
 
-function repeatIterator_next(repeat, TClone, dropT) {
+function repeatIterator_next(repeat, TClone) {
   if (repeat.times === 0) {
     return undefined;
   }
@@ -644,12 +644,12 @@ export function figureDisplay() {
   return $figureDisplay;
 }
 
-export function labeledDisplay(TDisplay, dropT) {
+export function labeledDisplay(TDisplay) {
   if ($labeledDisplay === undefined) {
     $labeledDisplay = new WeakMap();
   }
-  return $traitImpl($labeledDisplay, [TDisplay, dropT], () => ({
-    fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay, dropT),
+  return $traitImpl($labeledDisplay, [TDisplay], () => ({
+    fmt: (arg0) => labeledDisplay_fmt(arg0, TDisplay),
   }));
 }
 

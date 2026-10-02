@@ -18,29 +18,25 @@ export function entry() {
   main();
 }
 
-function tNamed_name(self, TDebug, dropT) {
+function tNamed_name(self, TDebug) {
   return TDebug.fmt(self);
 }
 
-function tShout_shout(self, TNamed, dropT) {
+function tShout_shout(self, TNamed) {
   return TNamed.name(self).toUpperCase();
 }
 
-function tNamed(TDebug, dropT) {
+function tNamed(TDebug) {
   if ($tNamed === undefined) {
     $tNamed = new WeakMap();
   }
-  return $traitImpl($tNamed, [TDebug, dropT], () => ({
-    name: (arg0) => tNamed_name(arg0, TDebug, dropT),
-  }));
+  return $traitImpl($tNamed, [TDebug], () => ({ name: (arg0) => tNamed_name(arg0, TDebug) }));
 }
 
-function tShout(TNamed, dropT) {
+function tShout(TNamed) {
   if ($tShout === undefined) {
     $tShout = new WeakMap();
   }
-  return $traitImpl($tShout, [TNamed, dropT], () => ({
-    shout: (arg0) => tShout_shout(arg0, TNamed, dropT),
-  }));
+  return $traitImpl($tShout, [TNamed], () => ({ shout: (arg0) => tShout_shout(arg0, TNamed) }));
 }
 //# sourceMappingURL=case.js.map

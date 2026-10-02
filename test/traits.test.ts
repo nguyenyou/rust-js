@@ -87,9 +87,9 @@ test("dictionaries are explicit, cached and usable from JavaScript", () => {
   // it, `refStrNamed`, and not by the lifetime, which isn't in the JS.
   expect(module.refStrNamed().get("hi")).toBe("hi");
   expect(output).toContain("circleShape_area(c)");
-  // Its dictionary, then a drop for `T`, which `vecShape_area`, a generic
-  // impl's method, passes on (ADR 0098).
-  expect(output).toMatch(/function total\(shapes, TShape, dropT\)/);
+  // Its dictionary, and no drop for `T`: nothing in a crate with no
+  // destructor has one to drop (ADR 0098).
+  expect(output).toMatch(/function total\(shapes, TShape\)/);
   expect(output).not.toContain("function shape_name"); // defaults are copied into dictionaries
   // No IIFEs: an upcast of a variable reads it twice, a conversion to the same
   // trait is the pair itself, and a receiver with effects is one `const`.
