@@ -8,7 +8,6 @@ array-slice-vec/destructure-array-1.rs	error: rust-js does not support moving pa
 array-slice-vec/issue-18425.rs	error: rust-js does not support `[x; N]` of a value that isn't `Copy` yet
 array-slice-vec/slice_binary_search.rs	error: rust-js does not support calling `core::slice::<impl [T]>::binary_search_by_key` yet
 array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support values of type `std::option::Option<&Z>` yet
-array-slice-vec/vec-tail-matching.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 associated-consts/assoc-const-in-static-array-size.rs	error: rust-js does not support statics of type `[u8; S::N]` yet
 associated-consts/associated-const-type-parameters.rs	error: rust-js does not support a generic impl's constant of its parameters yet
 associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support this constant yet
@@ -58,7 +57,6 @@ borrowck/borrowck-closures-slice-patterns-ok.rs	error: rust-js does not support 
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support a `&mut` to part of a slice yet
 borrowck/borrowck-unsafe-static-mutable-borrows.rs	error: rust-js does not support `&mut` references to a `static mut` yet
 borrowck/call-and-ref-option-mutate.rs	error: rust-js does not support a `&mut` of this in a variable yet
-borrowck/incorrect-loan-error-on-local-update-5550.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 borrowck/issue-29166.rs	error: rust-js does not support calling `std::slice::<impl [T]>::into_vec` yet
 borrowck/issue-46095.rs	error: rust-js does not support assigning to this place yet
 borrowck/issue-51348-multi-ref-mut-in-guard.rs	error: rust-js does not support a `ref mut` bound at another place in each alternative of a `|` pattern yet
@@ -87,7 +85,6 @@ closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js d
 closures/2229_closure_analysis/migrations/precise_no_migrations.rs	error: rust-js does not support a closure that holds a value with a destructor yet
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
-closures/closure-last-use-move.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 closures/explicit-return-in-closure-and-outer-fn.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
 closures/once-move-out-on-heap.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 closures/region-obligations-closure-and-projection.rs	error: rust-js does not support values of type `*mut u8` yet
@@ -129,7 +126,6 @@ consts/const-closure-fn-trait-object.rs	error: rust-js does not support constant
 consts/const-err-rpass.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/const-eval/issue-64908.rs	error: rust-js does not support `size_of` of a type parameter yet
 consts/const-eval/ptr_fragments.rs	error: rust-js does not support constants of type `std::mem::MaybeUninit<*const i32>` yet
-consts/const-eval/strlen.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 consts/const-extern-function.rs	error: rust-js does not support statics of type `extern "C" fn()` yet
 consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn() -> isize>` yet
 consts/const-int-arithmetic.rs	error: rust-js does not support constants of type `i128` yet
@@ -256,7 +252,6 @@ layout/null-pointer-optimization.rs	error: rust-js does not support `{:?}` of a 
 let-else/let-else-drop-order.rs	error: rust-js does not support a `&mut` of this in a variable yet
 lifetimes/any-lifetime-escape-higher-rank.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::downcast_ref` yet
 lifetimes/rvalue-cleanup-shortcircuit.rs	error: rust-js does not support calling `std::env::args` yet
-lifetimes/temporary-lifetime-extension.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
 lint/issue-20343.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 liveness/var-defined-after-early-return.rs	error: rust-js does not support values of type `(*const core::io::error::Custom) is !null` yet
 macros/colorful-write-macros.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -282,7 +277,7 @@ mir/reset-discriminant-drop-flag-on-partial-move.rs	error: rust-js does not supp
 moves/issue-22536-copy-mustnt-zero.rs	error: rust-js does not support values of type `<Res as Resources>::Buffer` yet
 never_type/regress/never-as-function-argument.rs	error: rust-js does not support calling `std::process::exit` yet
 never_type/regress/never-type-fallback-option.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
-nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
+nll/issue-24535-allow-mutable-borrow-in-match-guard.rs	error: rust-js does not support `&mut` to a `I` yet
 nll/issue-47589.rs	error: rust-js does not support values of type `<Resources as ResourcesTrait<'_>>::DescriptorSet` yet
 nll/issue-48623-closure.rs	error: rust-js does not support a `&mut` of this in a variable yet
 nll/issue-53123-raw-pointer-cast.rs	error: rust-js does not support values of type `*mut T` yet
@@ -316,7 +311,7 @@ process/env-vars.rs	error: rust-js does not support iterating over `std::env::Va
 ptr_ops/ptr-swap-overlapping-regions.rs	error: rust-js does not support calling `std::ptr::swap` yet
 ptr_ops/ptr-write-bool-representation.rs	error: rust-js does not support calling `std::ptr::write` yet
 ptr_ops/raw-pointer-type-basic.rs	error: rust-js does not support values of type `*const isize` yet
-range/range_inclusive.rs	error: rust-js does not support indexing or slicing a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units
+range/range_inclusive.rs	error: rust-js does not support calling `std::iter::Iterator::size_hint` yet
 raw-ref-op/raw-ref-op.rs	error: rust-js does not support values of type `*const i32` yet
 reborrow/reborrow-mutable-reference.rs	error: rust-js does not support values of type `&mut std::option::Option<&mut Foo>` yet
 recursion/instantiable.rs	error: rust-js does not support values of type `*const foo` yet
@@ -345,14 +340,12 @@ self/dyn-compatibility-sized-self-by-value-self.rs	error: rust-js does not suppo
 self/dyn-compatibility-sized-self-generic-method.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
-self/string-self-append.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
 statics/static-lazy-init-with-arena-set.rs	error: rust-js does not support statics of type `*const ArenaSet<std::vec::Vec<u8>>` yet
 statics/static-recursive.rs	error: rust-js does not support statics of type `*const u8` yet
 stdlib-unit-tests/raw-fat-ptr.rs	error: rust-js does not support values of type `*const [u8]` yet
 str/char-escape-unicode.rs	error: rust-js does not support iterating over `std::char::EscapeUnicode` yet
-str/nul-char-equivalence.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 structs-enums/align-struct.rs	error: rust-js does not support this expression yet
 structs-enums/enum-alignment.rs	error: rust-js does not support this expression yet
 structs-enums/enum-non-c-like-repr-c-and-int.rs	error: rust-js does not support values of type `(u32) is 0..=999999999` yet
