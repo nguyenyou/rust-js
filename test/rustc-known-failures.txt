@@ -111,19 +111,11 @@ collections/hashmap/hashmap-path-key.rs	error: rust-js does not support values o
 collections/vecdeque-append-operation-54477.rs	error: rust-js does not support calling `std::collections::VecDeque::<T, A>::append` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this `const` block yet
 const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support `type_name` of a type parameter yet
-const-generics/defaults/rp_impl_trait.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/defaults/trait_objects.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/dyn-supertraits.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/issues/issue-70125-1.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/issues/issue-70125-2.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/min_const_generics/macro.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/min_const_generics/type_and_const_defaults.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type_of_anon_const.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type-dependent/issue-61936.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type-dependent/issue-63695.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type-dependent/issue-69816.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type-dependent/issue-70507.rs	error: rust-js does not support const generics of traits and their methods yet
-const-generics/type-dependent/issue-71805.rs	error: rust-js does not support const generics of traits and their methods yet
+const-generics/dyn-supertraits.rs	error: rust-js does not support implementation evidence for `<dyn Bar<3> as Foo<3>>` yet
+const-generics/type-dependent/issue-61936.rs	error: rust-js does not support calling `std::mem::zeroed` yet
+const-generics/type-dependent/issue-69816.rs	error: rust-js does not support `Default` of `[<T as std::iter::Iterator>::Item; N]` yet
+const-generics/type-dependent/issue-70507.rs	error: rust-js does not support calling `core::slice::<impl [T]>::split_at` yet
+const-generics/type-dependent/issue-71805.rs	error: rust-js does not support values of type `&mut I` yet
 const-generics/uninferred-consts-during-codegen-1.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
 const-generics/uninferred-consts-during-codegen-2.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
@@ -240,7 +232,7 @@ functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not su
 functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support constants of type `fn(u8) -> u8` yet
 functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics of type `std::option::Option<fn(isize) -> isize>` yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support const generics of traits and their methods yet
+generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/generic-associated-type-bounds.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/issue-76826.rs	error: rust-js does not support generic associated types yet
