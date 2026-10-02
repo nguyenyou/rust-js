@@ -20,7 +20,7 @@ associated-types/assoc-type-layout-unsized-allowed-sized-used.rs	error: rust-js 
 associated-types/assoc-type-projection-in-default-method.rs	error: rust-js does not support implementation evidence for `<I as DigitCollection>` yet
 associated-types/associated-item-long-paths.rs	error: rust-js does not support `size_of` of a type parameter yet
 associated-types/associated-types-binding-in-trait.rs	error: rust-js does not support iterating over `<T as BitIter>::Iter` yet
-associated-types/associated-types-conditional-dispatch.rs	error: rust-js does not support a generic function given a value with a destructor yet
+associated-types/associated-types-conditional-dispatch.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 associated-types/associated-types-doubleendediterator-object.rs	error: rust-js does not support values of type `dyn std::iter::DoubleEndedIterator<Item = isize>` yet
 associated-types/associated-types-enum-field-named.rs	error: rust-js does not support values of type `<K as UnifyKey>::Value` yet
 associated-types/associated-types-enum-field-numbered.rs	error: rust-js does not support values of type `<K as UnifyKey>::Value` yet
@@ -232,7 +232,6 @@ impl-trait/issues/issue-49685.rs	error: rust-js does not support values of type 
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
-inference/matcher-lifetime-inference-14919.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32::<impl f32>::mul_add` yet
 intrinsics/volatile-composite-types.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
 issues/issue-30081.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
@@ -245,7 +244,7 @@ issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::A
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
 iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
-iterators/iter-map-fold-type-length.rs	error: rust-js does not support `std::iter::Iterator::next` of a value with a destructor yet
+iterators/iter-map-fold-type-length.rs	error: rust-js does not support `&mut` to a `I` yet
 layout/aggregate-lang/struct-offsets.rs	error: rust-js does not support values of type `u128` yet
 layout/issue-112048-unsizing-field-order.rs	error: rust-js does not support a `GcNode<dyn std::fmt::Debug>`, whose last field is a `dyn` yet
 layout/null-pointer-optimization.rs	error: rust-js does not support `{:?}` of a `fn()` yet
@@ -261,7 +260,6 @@ match/match-ref-mut-stability.rs	error: rust-js does not support values of type 
 match/struct-reference-patterns-12285.rs	error: rust-js does not support values of type `std::option::Option<&S>` yet
 methods/inherent-method-resolution-on-deref-type-53843.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 methods/method-mut-self-modifies-mut-slice-lvalue.rs	error: rust-js does not support `&mut` to a `&mut [u8]` yet
-methods/method-recursive-blanket-impl.rs	error: rust-js does not support a generic function given a value with a destructor yet
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
 mir/mir_adt_construction.rs	error: rust-js does not support a temporary with a destructor here yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
@@ -316,7 +314,6 @@ raw-ref-op/raw-ref-op.rs	error: rust-js does not support values of type `*const 
 reborrow/reborrow-mutable-reference.rs	error: rust-js does not support values of type `&mut std::option::Option<&mut Foo>` yet
 recursion/instantiable.rs	error: rust-js does not support values of type `*const foo` yet
 recursion/recursive-struct-with-raw-pointer-field.rs	error: rust-js does not support values of type `*mut [Loopy; 1]` yet
-regions/regions-early-bound-lifetime-in-assoc-fn.rs	error: rust-js does not support a generic function given a value with a destructor yet
 regions/regions-issue-21422.rs	error: rust-js does not support values of type `*const &u8` yet
 regions/regions-no-bound-in-argument-cleanup.rs	error: rust-js does not support dropping `std::option::Option<T>` yet
 regions/regions-static-bound-rpass.rs	error: rust-js does not support values of type `&mut &()` yet
@@ -387,11 +384,10 @@ traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `si
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support implementation evidence for `<dyn Q as Q>` yet
 traits/object/dyn-iter-box-and-ref-impl-iter.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = i32>` yet
-traits/object/exclusion.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 traits/object/iterator-methods-on-boxed-trait-object.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = i32>` yet
 traits/object/lifetime-first.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-traits/superdefault-generics.rs	error: rust-js does not support a generic function given a value with a destructor yet
+traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<Point<S> as Positioned<S>>` yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
 traits/trait-upcasting/basic.rs	error: rust-js does not support `{:?}` of a `dyn Baz` yet
 traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
@@ -405,7 +401,6 @@ try-trait/try-operator-various-contexts.rs	error: rust-js does not support `pars
 type-inference/issue-113283-alllocator-trait-eq.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
 type/type-name-basic.rs	error: rust-js does not support `type_name` of a type parameter yet
 typeck/issue-18937-1.rs	error: rust-js does not support values of type `*mut [U]` yet
-typeck/nested-generic-traits-performance.rs	error: rust-js does not support a generic function given a value with a destructor yet
 typeck/osstring-str-equality.rs	error: rust-js does not support calling `std::convert::From::from` yet
 typeck/type-name-intrinsic-usage-61894.rs	error: rust-js does not support `type_name` of a type parameter yet
 typeck/typeck_type_placeholder_1.rs	error: rust-js does not support statics of type `TestStruct` yet
