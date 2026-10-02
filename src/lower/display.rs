@@ -13,6 +13,26 @@ use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol};
 
+/// Whether `{:?}` is pretty, `{:#?}` (ADR 0137): never, always, or as a
+/// writer function's `alternate` says.
+#[derive(Clone)]
+pub(super) enum Pretty {
+    Plain,
+    Always,
+    When(Expr),
+}
+
+impl Pretty {
+    /// The JS value that says: `false`, `true`, or the variable.
+    pub(super) fn alternate(&self) -> Expr {
+        match self {
+            Pretty::Plain => Expr::bool(false),
+            Pretty::Always => Expr::bool(true),
+            Pretty::When(alternate) => alternate.clone(),
+        }
+    }
+}
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn display_trait(&self) -> DefId {
         self.recognition().display_trait()
@@ -50,10 +70,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(PatKind::Wild) => (None, self.fresh("f")),
             _ => return Err(self.unsupported(span, "this `Formatter` parameter")),
         };
+        // Whether it's pretty, `{:#?}`, where the crate shows anything so (ADR 0137).
+        let mut js_params = js_params;
+        let alternate = self.krate.pretty_debug.then(|| {
+            let alternate = self.fresh("alternate");
+            js_params.push(alternate.as_str().into());
+            Expr::var(&alternate)
+        });
         let mut body_out = Vec::new();
         let previous = self.writer.replace((var, name.clone()));
+        let previous_alternate = std::mem::replace(&mut self.writer_alternate, alternate);
         let lowered = self.stmt(body, &Dest::Discard, &mut body_out);
         self.writer = previous;
+        self.writer_alternate = previous_alternate;
         lowered?;
         // Each way through writes once: each is a `return` of what it writes.
         if let Some(returns) = as_returns(&body_out, &name) {
@@ -122,65 +151,87 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let operation = self
             .recognition()
             .write_call(def_id, self.krate.fns.contains_key(&def_id));
-        let mut values = self.operands(&others, out)?;
+        // Its `&dyn Debug` arguments show as pretty as this writer is (ADR 0137).
+        let pretty = self.writer_pretty();
+        let outer = std::mem::replace(&mut self.dyn_debug, pretty.clone());
+        let values = self.operands(&others, out);
+        self.dyn_debug = outer;
+        let mut values = values?;
         let written = match operation {
             // `write!(f, ..)` is `f.write_fmt(format_args!(..))`, which is a string (ADR 0034).
             WriteCall::Text => values.remove(0),
             WriteCall::Display => {
                 let ty = generic_args.type_at(0);
-                self.display_string(values.remove(0), ty, span)?
+                self.display_string_with(values.remove(0), ty, span, &pretty)?
             }
             WriteCall::Debug => {
                 let ty = generic_args.type_at(0);
-                self.debug_string(values.remove(0), ty, span)?
+                self.debug_string_with(values.remove(0), ty, span, &pretty)?
             }
             // More than five fields: arrays of their names and strings.
             WriteCall::StructFields => {
                 self.runtime.insert(Helper::DebugFields);
+                values.extend(self.writer_alternate.clone());
                 Expr::call(Expr::var("$debugFields"), values)
             }
             WriteCall::TupleFields => {
                 let (type_name, items) = (values.remove(0), values.remove(0));
-                let joined = Expr::call(Expr::member(items, "join"), vec![Expr::str(", ")]);
-                join(vec![type_name, Expr::str("("), joined, Expr::str(")")])
+                let items = self.once(items, out);
+                let joined = Expr::call(Expr::member(items.clone(), "join"), vec![Expr::str(", ")]);
+                let plain = join(vec![type_name.clone(), Expr::str("("), joined, Expr::str(")")]);
+                let open = join(vec![type_name, Expr::str("(")]);
+                self.pretty_or_parts(&pretty, plain, open, items, Expr::str(")"))
             }
             // A derived `Debug`'s body (ADR 0060): its fields are strings
             // already, each a `&dyn Debug` (`debug_dyn`).
             WriteCall::Struct => {
                 let type_name = values.remove(0);
-                let mut parts = vec![type_name, Expr::str(" { ")];
+                let mut parts = vec![type_name.clone(), Expr::str(" { ")];
+                let mut shown = Vec::new();
                 let mut first = true;
                 while values.len() >= 2 {
                     let (field, value) = (values.remove(0), values.remove(0));
+                    let value = self.once(value, out);
                     if !first {
                         parts.push(Expr::str(", "));
                     }
                     first = false;
-                    parts.extend([field, Expr::str(": "), value]);
+                    parts.extend([field.clone(), Expr::str(": "), value.clone()]);
+                    shown.push(join(vec![field, Expr::str(": "), value]));
                 }
                 parts.push(Expr::str(" }"));
-                join(parts)
+                let open = join(vec![type_name, Expr::str(" {")]);
+                self.pretty_or_parts(&pretty, join(parts), open, Expr::array(shown), Expr::str("}"))
             }
             WriteCall::Tuple => {
                 let type_name = values.remove(0);
-                let mut parts = vec![type_name, Expr::str("(")];
+                let mut parts = vec![type_name.clone(), Expr::str("(")];
+                let mut shown = Vec::new();
                 for (i, value) in values.drain(..).enumerate() {
+                    let value = self.once(value, out);
                     if i > 0 {
                         parts.push(Expr::str(", "));
                     }
-                    parts.push(value);
+                    parts.push(value.clone());
+                    shown.push(value);
                 }
                 parts.push(Expr::str(")"));
-                join(parts)
+                let open = join(vec![type_name, Expr::str("(")]);
+                self.pretty_or_parts(&pretty, join(parts), open, Expr::array(shown), Expr::str(")"))
             }
+            // Another writer, given this one's `Formatter`: as pretty as it is.
             WriteCall::Function => {
+                values.extend(self.writer_alternate.clone());
                 values.extend(self.evidence_args(def_id, generic_args, span)?);
                 Expr::call(self.fn_ref(def_id), values)
             }
-            WriteCall::Trait => match self.trait_call(def_id, generic_args, values, span, out)? {
-                Some(call) => call,
-                None => return Err(self.unsupported(span, "this call")),
-            },
+            WriteCall::Trait => {
+                values.extend(self.writer_alternate.clone());
+                match self.trait_call(def_id, generic_args, values, span, out)? {
+                    Some(call) => call,
+                    None => return Err(self.unsupported(span, "this call")),
+                }
+            }
             _ => {
                 let what = format!("calling `{}`", self.tcx.def_path_str(def_id));
                 return Err(self.unsupported(span, &what));
@@ -259,11 +310,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         for (_, args, _) in &steps {
             list.extend(args[1..].iter().copied());
         }
-        let mut values = self.operands(&list, out)?.into_iter();
+        // As pretty as this writer is, `&dyn Debug`s and entries too (ADR 0137).
+        let pretty = self.writer_pretty();
+        let outer = std::mem::replace(&mut self.dyn_debug, pretty.clone());
+        let values = self.operands(&list, out);
+        self.dyn_debug = outer;
+        let mut values = values?.into_iter();
         let type_name = match kind {
             "DebugStruct" | "DebugTuple" => Some(values.next().expect("a type's name")),
             _ => None,
         };
+        #[derive(Clone)]
         enum Part {
             One(Expr),
             Many(Expr),
@@ -300,11 +357,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let items = self.iter_source(items, iterable, span, out)?;
                     let shown = if kind == "DebugMap" {
                         let pair = Expr::var("entry");
-                        let key = self.debug_string(Expr::index(pair.clone(), Expr::int(0)), tys[0], span)?;
-                        let value = self.debug_string(Expr::index(pair, Expr::int(1)), tys[1], span)?;
+                        let key =
+                            self.debug_string_with(Expr::index(pair.clone(), Expr::int(0)), tys[0], span, &pretty)?;
+                        let value = self.debug_string_with(Expr::index(pair, Expr::int(1)), tys[1], span, &pretty)?;
                         join(vec![key, Expr::str(": "), value])
                     } else {
-                        self.debug_string(Expr::var("entry"), tys[0], span)?
+                        self.debug_string_with(Expr::var("entry"), tys[0], span, &pretty)?
                     };
                     let each = Expr::arrow(
                         vec!["entry".into()],
@@ -356,6 +414,41 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let all = arrays.fold(first, |all, next| Expr::call(Expr::member(all, "concat"), vec![next]));
             Expr::call(Expr::member(all, "join"), vec![Expr::str(", ")])
         };
+        // Pretty: each part on a line of its own, an array of them, as `entries`
+        // may give none (ADR 0137).
+        let array = {
+            let mut arrays: Vec<Expr> = Vec::new();
+            let mut ones: Vec<Expr> = Vec::new();
+            for part in parts.clone() {
+                match part {
+                    Part::One(e) => ones.push(e),
+                    Part::Many(e) => {
+                        if !ones.is_empty() {
+                            arrays.push(Expr::array(std::mem::take(&mut ones)));
+                        }
+                        arrays.push(e);
+                    }
+                }
+            }
+            if !ones.is_empty() || arrays.is_empty() {
+                arrays.push(Expr::array(ones));
+            }
+            let mut arrays = arrays.into_iter();
+            let first = arrays.next().expect("a part");
+            arrays.fold(first, |all, next| Expr::call(Expr::member(all, "concat"), vec![next]))
+        };
+        let pretty_open = match kind {
+            "DebugStruct" => type_name.clone().map(|name| join(vec![name, Expr::str(" {")])),
+            "DebugTuple" => type_name.clone().map(|name| join(vec![name, Expr::str("(")])),
+            "DebugList" => Some(Expr::str("[")),
+            _ => Some(Expr::str("{")),
+        };
+        let pretty_close = match kind {
+            "DebugTuple" => ")",
+            "DebugList" => "]",
+            _ => "}",
+        };
+        let has_parts = !parts.is_empty();
         let rest = non_exhaustive.then_some("..");
         let empty = parts.is_empty() && !non_exhaustive;
         let written = match kind {
@@ -388,6 +481,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
         };
+        let written = match (&pretty, has_parts, pretty_open) {
+            (Pretty::Plain, _, _) | (_, false, _) | (_, _, None) => written,
+            (_, true, Some(open)) => {
+                self.runtime.insert(Helper::Pretty);
+                let mut list = vec![open, array, Expr::str(pretty_close)];
+                if non_exhaustive {
+                    list.push(Expr::bool(true));
+                }
+                let pretty_form = Expr::call(Expr::var("$pretty"), list);
+                match &pretty {
+                    Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form, written),
+                    _ => pretty_form,
+                }
+            }
+        };
         let target = Expr::var(&written_to);
         let js_span = self.js_span(span);
         out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, written)).at(js_span));
@@ -406,6 +514,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `{}` of a `ty` value: the string itself, `String(x)`, `$displayF64(x)`,
     /// a hand-written `fmt`'s string, or `TDisplay.fmt(x)` in generic code.
     pub(super) fn display_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        self.display_string_with(value, ty, span, &Pretty::Plain)
+    }
+
+    /// `display_string`, of a `{:#}` or not, which only the crate's own
+    /// `fmt` can tell (ADR 0137).
+    pub(super) fn display_string_with(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let (value, ty) = self.through_refs(value, ty);
         // `Box`, `Rc` and a `RefCell`'s `borrow()` show what they hold, as
         // they are it in JS.
@@ -454,12 +568,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let dictionary = self
                 .evidence_for(tr)
                 .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
-            return Ok(Expr::call(Expr::member(dictionary, "fmt"), vec![value]));
+            let mut list = vec![value];
+            list.extend(self.alternate_arg(pretty));
+            return Ok(Expr::call(Expr::member(dictionary, "fmt"), list));
         }
         if self.has_user_impl(display, ty) {
             let fmt = self.tcx.associated_item_def_ids(display)[0];
             let args = self.tcx.mk_args(&[self.tcx.erase_and_anonymize_regions(ty).into()]);
-            return self.impl_call(fmt, args, vec![value], span);
+            return self.writer_call(fmt, args, value, pretty, span);
         }
         Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")))
     }
@@ -492,9 +608,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `(1, "a")`, `[1.0, 2.5]`, a call of a `Debug` impl of the crate's own,
     /// derived or not, or `TDebug.fmt(x)` in generic code.
     pub(super) fn debug_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        self.debug_string_with(value, ty, span, &Pretty::Plain)
+    }
+
+    /// `debug_string`, plain or pretty, `{:#?}` (ADR 0137): a part of a
+    /// value is shown as the value is.
+    pub(super) fn debug_string_with(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let (value, ty) = self.through_refs(value, ty);
         // serde_json's own, `Object {"a": Number(1)}` (ADR 0083).
-        if let Some(shown) = self.json_value_debug(value.clone(), ty) {
+        if let Some(shown) = self.json_value_debug(value.clone(), ty, pretty) {
             return Ok(shown);
         }
         let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
@@ -554,7 +676,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let dictionary = self
                 .evidence_for(tr)
                 .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
-            return Ok(Expr::call(Expr::member(dictionary, "fmt"), vec![value]));
+            let mut list = vec![value];
+            list.extend(self.alternate_arg(pretty));
+            return Ok(Expr::call(Expr::member(dictionary, "fmt"), list));
         }
         // A fieldless enum is its variant's name (ADR 0013), which is what a
         // derived `Debug` shows.
@@ -568,10 +692,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.has_user_impl(debug, ty) {
             let fmt = self.tcx.associated_item_def_ids(debug)[0];
             let args = self.args_of(debug, ty);
-            return self.impl_call(fmt, args, vec![value], span);
+            return self.writer_call(fmt, args, value, pretty, span);
         }
         if self.range_kind(ty).is_some() {
-            return self.range_debug(value, ty, span);
+            return self.range_debug(value, ty, span, pretty);
         }
         // `PhantomData<u8>`, its type's name as `type_name` gives it (ADR 0132).
         if let ty::Adt(_, args) = ty.kind()
@@ -593,8 +717,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if matches!(value.kind, js::ExprKind::Undefined | js::ExprKind::Null) {
                     return Ok(Expr::str("None"));
                 }
-                let shown = self.debug_string(value, inner, span)?;
-                Ok(join(vec![Expr::str("Some("), shown, Expr::str(")")]))
+                let shown = self.debug_string_with(value, inner, span, pretty)?;
+                let plain = join(vec![Expr::str("Some("), shown.clone(), Expr::str(")")]);
+                Ok(self.pretty_or(pretty, plain, "Some(", Expr::array(vec![shown]), ")"))
             }
             _ if let Some(inner) = self.option_of(ty) => {
                 let inside = if self.boxed_payload(inner) {
@@ -602,8 +727,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 } else {
                     Expr::var("value")
                 };
-                let shown = self.debug_string(inside, inner, span)?;
-                let some = join(vec![Expr::str("Some("), shown, Expr::str(")")]);
+                let shown = self.debug_string_with(inside, inner, span, pretty)?;
+                let plain = join(vec![Expr::str("Some("), shown.clone(), Expr::str(")")]);
+                let some = self.pretty_or(pretty, plain, "Some(", Expr::array(vec![shown]), ")");
                 let none = Expr::bin(Op::LooseEq, Expr::var("value"), Expr::null());
                 let f = Expr::arrow(
                     vec!["value".into()],
@@ -614,74 +740,97 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Tuple(tys) => {
                 let tys: Vec<Ty<'tcx>> = tys.to_vec();
                 let mut parts = vec![Expr::str("(")];
+                let mut items = Vec::new();
                 for (i, &t) in tys.iter().enumerate() {
                     if i > 0 {
                         parts.push(Expr::str(", "));
                     }
-                    parts.push(self.debug_string(Expr::index(Expr::var("tuple"), Expr::int(i as i128)), t, span)?);
+                    let item =
+                        self.debug_string_with(Expr::index(Expr::var("tuple"), Expr::int(i as i128)), t, span, pretty)?;
+                    parts.push(item.clone());
+                    items.push(item);
                 }
                 if tys.len() == 1 {
                     parts.push(Expr::str(","));
                 }
                 parts.push(Expr::str(")"));
+                let shown = self.pretty_or(pretty, join(parts), "(", Expr::array(items), ")");
                 let f = Expr::arrow(
                     vec!["tuple".into()],
-                    vec![StmtKind::Return(Some(join(parts))).at(js::Span::NONE)],
+                    vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
                 );
                 Ok(self.applied(f, value))
             }
-            ty::Array(item, _) | ty::Slice(item) => self.debug_items(value, *item, "[", "]", span),
-            ty::Adt(_, args) if self.is_vec_like(ty) => self.debug_items(value, args.type_at(0), "[", "]", span),
+            ty::Array(item, _) | ty::Slice(item) => self.debug_items(value, *item, "[", "]", span, pretty),
+            ty::Adt(_, args) if self.is_vec_like(ty) => {
+                self.debug_items(value, args.type_at(0), "[", "]", span, pretty)
+            }
             ty::Adt(_, args) if self.is_reverse(ty) => {
-                let shown = self.debug_string(Expr::index(value, Expr::int(0)), args.type_at(0), span)?;
-                Ok(join(vec![Expr::str("Reverse("), shown, Expr::str(")")]))
+                let shown = self.debug_string_with(Expr::index(value, Expr::int(0)), args.type_at(0), span, pretty)?;
+                let plain = join(vec![Expr::str("Reverse("), shown.clone(), Expr::str(")")]);
+                Ok(self.pretty_or(pretty, plain, "Reverse(", Expr::array(vec![shown]), ")"))
             }
             ty::Adt(_, args) if self.shows_inside(ty) => {
-                self.debug_string(value, args.types().next().expect("what it holds"), span)
+                self.debug_string_with(value, args.types().next().expect("what it holds"), span, pretty)
             }
             // An atomic shows what it holds.
-            ty::Adt(_, args) if std("Atomic") => self.debug_string(Expr::member(value, "value"), args.type_at(0), span),
+            ty::Adt(_, args) if std("Atomic") => {
+                self.debug_string_with(Expr::member(value, "value"), args.type_at(0), span, pretty)
+            }
             ty::Adt(_, args) if std("Cell") || std("RefCell") => {
-                let name = if std("Cell") {
-                    "Cell { value: "
-                } else {
-                    "RefCell { value: "
-                };
-                let shown = self.debug_string(Expr::member(value, "value"), args.type_at(0), span)?;
-                Ok(join(vec![Expr::str(name), shown, Expr::str(" }")]))
+                let name = if std("Cell") { "Cell" } else { "RefCell" };
+                let shown = self.debug_string_with(Expr::member(value, "value"), args.type_at(0), span, pretty)?;
+                let plain = join(vec![
+                    Expr::str(format!("{name} {{ value: ")),
+                    shown.clone(),
+                    Expr::str(" }"),
+                ]);
+                let field = join(vec![Expr::str("value: "), shown]);
+                Ok(self.pretty_or(pretty, plain, &format!("{name} {{"), Expr::array(vec![field]), "}"))
             }
             ty::Adt(_, args) if self.is_set(ty) => {
                 let items = self.in_order_of(value, ty, span)?;
-                self.debug_items(items, args.type_at(0), "{", "}", span)
+                self.debug_items(items, args.type_at(0), "{", "}", span, pretty)
             }
             ty::Adt(_, args) if self.is_map(ty) => {
                 let value = self.in_order_of(value, ty, span)?;
                 let (key, item) = (args.type_at(0), args.type_at(1));
-                let key = self.debug_string(Expr::var("key"), key, span)?;
-                let item = self.debug_string(Expr::var("value"), item, span)?;
+                let key = self.debug_string_with(Expr::var("key"), key, span, pretty)?;
+                let item = self.debug_string_with(Expr::var("value"), item, span, pretty)?;
                 let pair = join(vec![key, Expr::str(": "), item]);
                 let f = Expr::arrow(
                     vec![js::Pattern::Array(vec![Some("key".into()), Some("value".into())])],
                     vec![StmtKind::Return(Some(pair)).at(js::Span::NONE)],
                 );
                 let entries = Expr::call(Expr::member(Expr::var("Array"), "from"), vec![value]);
-                let shown = Expr::call(
-                    Expr::member(Expr::call(Expr::member(entries, "map"), vec![f]), "join"),
-                    vec![Expr::str(", ")],
-                );
-                Ok(join(vec![Expr::str("{"), shown, Expr::str("}")]))
+                let mapped = Expr::call(Expr::member(entries, "map"), vec![f]);
+                let shown = Expr::call(Expr::member(mapped.clone(), "join"), vec![Expr::str(", ")]);
+                let plain = join(vec![Expr::str("{"), shown, Expr::str("}")]);
+                Ok(self.pretty_or(pretty, plain, "{", mapped, "}"))
             }
             ty::Adt(_, args) if std("Result") => {
                 let inside = || Expr::member(Expr::var("result"), "_0");
-                let ok = self.debug_string(inside(), args.type_at(0), span)?;
-                let err = self.debug_string(inside(), args.type_at(1), span)?;
+                let ok = self.debug_string_with(inside(), args.type_at(0), span, pretty)?;
+                let err = self.debug_string_with(inside(), args.type_at(1), span, pretty)?;
                 let f = Expr::arrow(
                     vec!["result".into()],
                     vec![
                         StmtKind::Return(Some(Expr::cond(
                             Expr::bin(Op::Eq, Expr::member(Expr::var("result"), "TAG"), Expr::str("Ok")),
-                            join(vec![Expr::str("Ok("), ok, Expr::str(")")]),
-                            join(vec![Expr::str("Err("), err, Expr::str(")")]),
+                            self.pretty_or(
+                                pretty,
+                                join(vec![Expr::str("Ok("), ok.clone(), Expr::str(")")]),
+                                "Ok(",
+                                Expr::array(vec![ok]),
+                                ")",
+                            ),
+                            self.pretty_or(
+                                pretty,
+                                join(vec![Expr::str("Err("), err.clone(), Expr::str(")")]),
+                                "Err(",
+                                Expr::array(vec![err]),
+                                ")",
+                            ),
                         )))
                         .at(js::Span::NONE),
                     ],
@@ -693,8 +842,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// A sequence's `{:?}`: `"[" + items.map((item) => ..).join(", ") + "]"`.
-    fn debug_items(&mut self, items: Expr, item: Ty<'tcx>, open: &str, close: &str, span: Span) -> R<Expr> {
-        let shown = self.debug_string(Expr::var("item"), item, span)?;
+    fn debug_items(
+        &mut self,
+        items: Expr,
+        item: Ty<'tcx>,
+        open: &str,
+        close: &str,
+        span: Span,
+        pretty: &Pretty,
+    ) -> R<Expr> {
+        let shown = self.debug_string_with(Expr::var("item"), item, span, pretty)?;
         let f = Expr::arrow(
             vec!["item".into()],
             vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
@@ -704,11 +861,93 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             items
         };
-        let joined = Expr::call(
-            Expr::member(Expr::call(Expr::member(items, "map"), vec![f]), "join"),
-            vec![Expr::str(", ")],
-        );
-        Ok(join(vec![Expr::str(open), joined, Expr::str(close)]))
+        let mapped = Expr::call(Expr::member(items, "map"), vec![f]);
+        let joined = Expr::call(Expr::member(mapped.clone(), "join"), vec![Expr::str(", ")]);
+        let plain = join(vec![Expr::str(open), joined, Expr::str(close)]);
+        Ok(self.pretty_or(pretty, plain, open, mapped, close))
+    }
+
+    /// How pretty what this writer shows is (ADR 0137): as its `alternate`
+    /// says, or plain where the crate's writers don't take one.
+    pub(super) fn writer_pretty(&self) -> Pretty {
+        match &self.writer_alternate {
+            Some(alternate) => Pretty::When(alternate.clone()),
+            None => Pretty::Plain,
+        }
+    }
+
+    /// `value`, in a `const` first if it may run code, which a plain and a
+    /// pretty form would each run.
+    fn once(&mut self, value: Expr, out: &mut Vec<Stmt>) -> Expr {
+        if self.writer_alternate.is_none() || value.reads_same() {
+            value
+        } else {
+            self.spill("shown", value, out)
+        }
+    }
+
+    /// `pretty_or`, of an `open` and a `close` that are expressions.
+    fn pretty_or_parts(&mut self, pretty: &Pretty, plain: Expr, open: Expr, items: Expr, close: Expr) -> Expr {
+        let mut pretty_form = || {
+            self.runtime.insert(Helper::Pretty);
+            Expr::call(Expr::var("$pretty"), vec![open.clone(), items.clone(), close.clone()])
+        };
+        match pretty {
+            Pretty::Plain => plain,
+            Pretty::Always => pretty_form(),
+            Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form(), plain),
+        }
+    }
+
+    /// `plain`, or, pretty, `$pretty(open, items, close)` of the same parts:
+    /// each on a line of its own, indented, and ended by a comma (ADR 0137).
+    fn pretty_or(&mut self, pretty: &Pretty, plain: Expr, open: &str, items: Expr, close: &str) -> Expr {
+        let mut pretty_form = || {
+            self.runtime.insert(Helper::Pretty);
+            Expr::call(
+                Expr::var("$pretty"),
+                vec![Expr::str(open), items.clone(), Expr::str(close)],
+            )
+        };
+        match pretty {
+            Pretty::Plain => plain,
+            Pretty::Always => pretty_form(),
+            Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form(), plain),
+        }
+    }
+
+    /// What a writer function is given after its value, where the crate's
+    /// take whether they're pretty (ADR 0137): `true`, `false`, or the
+    /// variable that says.
+    pub(super) fn alternate_arg(&self, pretty: &Pretty) -> Option<Expr> {
+        self.krate.pretty_debug.then(|| pretty.alternate())
+    }
+
+    /// A call of the crate's own `fmt`, `Debug`'s or `Display`'s, given
+    /// whether it's pretty where it takes it (ADR 0137), but left out of a
+    /// plain one that takes nothing after it.
+    pub(super) fn writer_call(
+        &mut self,
+        method: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+        value: Expr,
+        pretty: &Pretty,
+        span: Span,
+    ) -> R<Expr> {
+        let args = self.tcx.erase_and_anonymize_regions(args);
+        let instance = self
+            .resolve_instance(method, args)?
+            .filter(|i| self.is_rust_fn(i.def_id()))
+            .ok_or_else(|| self.unsupported(span, "this implementation"))?;
+        let evidence = self.evidence_args(instance.def_id(), instance.args, span)?;
+        let mut values = vec![value];
+        if let Some(alternate) = self.alternate_arg(pretty)
+            && (!evidence.is_empty() || !matches!(pretty, Pretty::Plain))
+        {
+            values.push(alternate);
+        }
+        values.extend(evidence);
+        Ok(Expr::call(self.fn_ref(instance.def_id()), values))
     }
 
     /// `Box<T>`, `Rc<T>`, `Ref<T>` and `RefMut<T>`: shown as their `T`,

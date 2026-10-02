@@ -559,10 +559,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let partial_ord = tr.def_id == self.partial_ord_trait();
         if (default || clone || eq || display || debug || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
             if debug {
+                // Given whether it's pretty, where the crate's writers are (ADR 0137).
+                let (params, pretty): (Vec<js::Pattern>, _) = match self.krate.pretty_debug {
+                    true => (
+                        vec!["value".into(), "alternate".into()],
+                        super::display::Pretty::When(Expr::var("alternate")),
+                    ),
+                    false => (vec!["value".into()], super::display::Pretty::Plain),
+                };
                 let mut body = Vec::new();
-                let shown = self.debug_string(Expr::var("value"), ty, span)?;
+                let shown = self.debug_string_with(Expr::var("value"), ty, span, &pretty)?;
                 body.push(StmtKind::Return(Some(shown)).at(js::Span::NONE));
-                let fmt = Expr::arrow(vec!["value".into()], body);
+                let fmt = Expr::arrow(params, body);
                 return Ok(Expr::object(vec![Prop::Field("fmt".into(), fmt)]));
             }
             if ord || partial_ord {
@@ -966,7 +974,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // A `&dyn Debug` is the string it shows (ADR 0060).
         if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
-            return self.debug_string(value, self.pointee(source), span);
+            let pretty = self.dyn_debug.clone();
+            return self.debug_string_with(value, self.pointee(source), span, &pretty);
         }
         // `&Fat<Bar>` to `&Fat<dyn ToBar>`: the struct's last field would
         // be a `dyn`'s value and impl, or a `dyn Debug`'s string, which it
@@ -1142,7 +1151,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .skip_binder()
                 .inputs()
                 .len()
-                - usize::from(self.formatter_param(method).is_some());
+                - usize::from(self.formatter_param(method).is_some())
+                // A writer's `alternate`, where the crate's take one (ADR 0137).
+                + usize::from(self.krate.pretty_debug && self.formatter_param(method).is_some());
             let mut params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
             // Its own const parameters' values, given after its arguments

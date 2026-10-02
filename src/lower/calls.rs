@@ -224,6 +224,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Err(self.unsupported(span, "methods of a `fmt::Result`"));
         }
+        // `f.alternate()`: whether this writer is pretty, `{:#?}` (ADR 0137).
+        if self.tcx.item_name(def_id).as_str() == "alternate"
+            && self.tcx.def_path_str(def_id).starts_with("std::fmt::Formatter")
+        {
+            return self
+                .writer_alternate
+                .clone()
+                .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"));
+        }
         // `cmp::max(a, b)` of what isn't a number: `Ord::max(a, b)`'s (ADR 0136).
         if self.std_fn(fun).is_none()
             && let Some(name) = match self.tcx.def_path_str(def_id).as_str() {

@@ -358,10 +358,12 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
   if ("skip" in s) return { test, status: "skip", reason: s.skip };
   const dir = mkdtempSync(join(work, "case-"));
   try {
+    // Both compiled as at the test's own path, which `file!()` and `dbg!` print.
+    const at = (from: string) => `--remap-path-prefix=${from}=${dirname(test)}`;
     // Natively, as rust-js takes Rust: the release profile, where arithmetic wraps.
     const binary = join(dir, "native");
     const build = await run(
-      ["rustc", `--edition=${s.edition}`, "-Coverflow-checks=off", "-Awarnings", file, "-o", binary],
+      ["rustc", `--edition=${s.edition}`, "-Coverflow-checks=off", "-Awarnings", at(dirname(file)), file, "-o", binary],
       dirname(file),
       120_000,
     );
@@ -386,7 +388,7 @@ export async function runTest(ui: string, file: string, listedChanging: Set<stri
     const lib = join(dir, basename(file));
     writeFileSync(lib, `${source}\n/// The test's main, for the JS to call.\npub fn entry() {\n    main()\n}\n`);
     const js = join(dir, "case.js");
-    const compiled = await run([rustJs, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings"], dir, 120_000);
+    const compiled = await run([rustJs, lib, "-o", js, "--", `--edition=${s.edition}`, "-Awarnings", at(dir)], dir, 120_000);
     if (failed(compiled, 120_000)) {
       // Its first error, if it's rust-js's rejection; what crashed, if not,
       // even after a rejection.

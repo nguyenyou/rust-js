@@ -58,6 +58,7 @@ pub fn lower_crate<'tcx>(
         changed_vecs,
         drop_params,
         generic_consts,
+        pretty_debug,
     } = analyze_crate(tcx, all_bodies, dependencies, export_library)?;
     // A library exports what its consumers can reach (ADR 0100).
     if export_library {
@@ -125,6 +126,7 @@ pub fn lower_crate<'tcx>(
         imports: &import_names,
         trait_impls: &trait_impls,
         serde_attrs,
+        pretty_debug,
     };
     let mut work: Vec<(DefId, Option<&Body<'tcx>>)> = bodies
         .iter()
@@ -178,6 +180,8 @@ pub fn lower_crate<'tcx>(
             runtime: HashSet::new(),
             jsx: false,
             writer: None,
+            writer_alternate: None,
+            dyn_debug: super::display::Pretty::Plain,
             codec_params: Vec::new(),
             stepped: body.map_or_else(HashSet::new, |body| body.facts.stepped.clone()),
             cloning: Vec::new(),

@@ -94,6 +94,7 @@ helpers! {
     RangeFromNext,
     AsciiCase,
     Append,
+    Pretty,
     CharRange,
     TryFromInt,
     Print,
@@ -281,6 +282,7 @@ impl Helper {
             Helper::SomeAt => &[Helper::Some],
             Helper::Pop => &[Helper::Some],
             Helper::Iterator => &[Helper::SomeValue],
+            Helper::DebugFields => &[Helper::Pretty],
             Helper::Successors | Helper::FromFn => &[Helper::SomeValue],
             Helper::RemEuclid => &[Helper::Rem],
             Helper::DivEuclid => &[Helper::Div],
@@ -295,6 +297,7 @@ impl Helper {
                 Helper::BigToF32,
             ],
             Helper::JsonValue => &[
+                Helper::Pretty,
                 Helper::SortedEntries,
                 Helper::Cmp,
                 Helper::ToJson,
@@ -727,6 +730,19 @@ function $charRange(start, end, inclusive = false) {
 }
 "#
             }
+            // `{:#?}`'s parts (ADR 0137): each on a line of its own, indented by
+            // four spaces, its own lines too, and ended by a comma; none, `[]`.
+            Helper::Pretty => {
+                r#"
+function $pretty(open, items, close, rest = false) {
+  if (items.length === 0) {
+    return open + (rest ? ".." : "") + close;
+  }
+  const lines = items.map((item) => "    " + item.replaceAll("\n", "\n    ") + ",\n").join("");
+  return open + "\n" + lines + (rest ? "    ..\n" : "") + close;
+}
+"#
+            }
             // ASCII's letters only, as Rust's `to_ascii_lowercase` changes them.
             Helper::AsciiCase => {
                 r#"
@@ -815,8 +831,9 @@ function $debugStr(s, quote = '"') {
             // fields' names, and their strings (ADR 0060).
             Helper::DebugFields => {
                 r#"
-function $debugFields(name, fields, values) {
-  return name + " { " + fields.map((field, i) => field + ": " + values[i]).join(", ") + " }";
+function $debugFields(name, fields, values, alternate = false) {
+  const shown = fields.map((field, i) => field + ": " + values[i]);
+  return alternate ? $pretty(name + " {", shown, "}") : name + " { " + shown.join(", ") + " }";
 }
 "#
             }

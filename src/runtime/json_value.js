@@ -70,16 +70,22 @@ function $jsonNumberText(n) {
 }
 
 // serde_json's `Debug`: `Null`, `Bool(true)`, `Number(1)`, `String("a")`,
-// `Array [..]` and `Object {..}`.
-function $debugJsonValue(value) {
+// `Array [..]` and `Object {..}`, whose parts `{:#?}` puts on lines of their
+// own, as a `Vec`'s and a map's.
+function $debugJsonValue(value, alternate = false) {
   if (value === "Null") return "Null";
   const { TAG: tag, _0: inner } = value;
   if (tag === "Bool") return `Bool(${inner})`;
   if (tag === "Number") return $debugJsonNumber(inner);
   if (tag === "String") return `String(${$debugStr(inner)})`;
-  if (tag === "Array") return `Array [${inner.map($debugJsonValue).join(", ")}]`;
-  const entries = $sortedEntries(inner, $cmp).map(([key, item]) => `${$debugStr(key)}: ${$debugJsonValue(item)}`);
-  return `Object {${entries.join(", ")}}`;
+  if (tag === "Array") {
+    const items = inner.map((item) => $debugJsonValue(item, alternate));
+    return alternate ? "Array " + $pretty("[", items, "]") : `Array [${items.join(", ")}]`;
+  }
+  const entries = $sortedEntries(inner, $cmp).map(
+    ([key, item]) => `${$debugStr(key)}: ${$debugJsonValue(item, alternate)}`,
+  );
+  return alternate ? "Object " + $pretty("{", entries, "}") : `Object {${entries.join(", ")}}`;
 }
 function $debugJsonNumber(n) {
   return `Number(${$jsonNumberText(n)})`;

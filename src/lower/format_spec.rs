@@ -2,6 +2,7 @@
 //! apply where Rust applies them: numbers, strings, `char`s and `bool`s pad,
 //! and a `fmt` that writes with `write!` ignores them, as it does in Rust.
 
+use super::display::Pretty;
 use super::recognition::Std;
 use super::representation::Num;
 use super::{FnCx, R};
@@ -156,10 +157,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::FmtDisplay if spec.alternate && self.json_type(ty).is_some() => self
                 .json_value_display(value.clone(), ty, true)
                 .map_or_else(|| self.display_string(value, ty, span), Ok)?,
+            // `{:#}` of the crate's own `Display`, which may ask (ADR 0137).
+            Std::FmtDisplay if spec.alternate => self.display_string_with(value, ty, span, &Pretty::Always)?,
             Std::FmtDisplay => self.display_string(value, ty, span)?,
-            // `{:#?}` breaks lines and indents: not yet.
-            _ if spec.alternate => return Err(self.unsupported(span, "`{:#?}`")),
-            // By the type (ADR 0060): `1.0`, `Some(1)`, `Point { x: 1.0 }`.
+            // By the type (ADR 0060): `1.0`, `Some(1)`, `Point { x: 1.0 }`;
+            // `{:#?}` on lines of their own, indented (ADR 0137).
+            _ if spec.alternate => self.debug_string_with(value, ty, span, &Pretty::Always)?,
             _ => self.debug_string(value, ty, span)?,
         };
         let text = if spec.plus && num.is_some() {

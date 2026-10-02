@@ -5,6 +5,7 @@
 //! `"i"`nteger or `"f"`loat, as serde_json keeps one.
 
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
+use crate::lower::display::Pretty;
 use crate::lower::recognition::{Json, JsonCall, JsonConversion, JsonMethod};
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R};
@@ -154,11 +155,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `{:?}` of a `Value` or a `Number`, as serde_json writes one:
     /// `Object {"a": Number(1)}`.
-    pub(in crate::lower) fn json_value_debug(&mut self, value: Expr, ty: Ty<'tcx>) -> Option<Expr> {
+    pub(in crate::lower) fn json_value_debug(&mut self, value: Expr, ty: Ty<'tcx>, pretty: &Pretty) -> Option<Expr> {
         let json = self.json_type(ty)?;
         self.use_value();
         Some(match json {
-            Json::Value => Expr::call(Expr::var("$debugJsonValue"), vec![value]),
+            // Pretty as `{:#?}` asks (ADR 0137).
+            Json::Value if matches!(pretty, Pretty::Plain) => Expr::call(Expr::var("$debugJsonValue"), vec![value]),
+            Json::Value => Expr::call(Expr::var("$debugJsonValue"), vec![value, pretty.alternate()]),
             Json::Number => Expr::call(Expr::var("$debugJsonNumber"), vec![value]),
             Json::Map => return None,
         })

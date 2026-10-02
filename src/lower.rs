@@ -293,6 +293,8 @@ struct CrateFacts<'a, 'tcx> {
     trait_impls: &'a [DefId],
     /// `#[serde(..)]` attributes, from the expanded crate (ADR 0077).
     serde_attrs: &'a serde::SerdeAttributes,
+    /// Do its `Debug` functions take whether to be pretty (ADR 0137)?
+    pretty_debug: bool,
 }
 
 /// Dependencies recorded by one function (including copied trait bodies and
@@ -335,6 +337,13 @@ struct FnCx<'a, 'tcx> {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
     writer: Option<(Option<LocalVarId>, String)>,
+    /// In such a function of a crate that shows anything pretty (ADR 0137):
+    /// the parameter that says whether it's `{:#?}`.
+    writer_alternate: Option<Expr>,
+    /// How a `&dyn Debug` made here shows its value: pretty as its writer's
+    /// `alternate` says, while a derived `Debug`'s or a builder's
+    /// arguments are lowered (ADR 0137), plain anywhere else.
+    dyn_debug: display::Pretty,
     /// In a generic type's derived `serialize` or `deserialize` (ADR
     /// 0080): each type parameter, and the parameter that writes or reads it.
     codec_params: Vec<(Ty<'tcx>, String)>,

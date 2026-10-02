@@ -891,6 +891,14 @@ export function $append(items, other) {
   other.length = 0;
 }
 
+export function $pretty(open, items, close, rest = false) {
+  if (items.length === 0) {
+    return open + (rest ? ".." : "") + close;
+  }
+  const lines = items.map((item) => "    " + item.replaceAll("\n", "\n    ") + ",\n").join("");
+  return open + "\n" + lines + (rest ? "    ..\n" : "") + close;
+}
+
 export function $charRange(start, end, inclusive = false) {
   const items = [];
   const last = end.codePointAt(0) - (inclusive ? 0 : 1);
@@ -3123,16 +3131,22 @@ export function $jsonNumberText(n) {
 }
 
 // serde_json's `Debug`: `Null`, `Bool(true)`, `Number(1)`, `String("a")`,
-// `Array [..]` and `Object {..}`.
-export function $debugJsonValue(value) {
+// `Array [..]` and `Object {..}`, whose parts `{:#?}` puts on lines of their
+// own, as a `Vec`'s and a map's.
+export function $debugJsonValue(value, alternate = false) {
   if (value === "Null") return "Null";
   const { TAG: tag, _0: inner } = value;
   if (tag === "Bool") return `Bool(${inner})`;
   if (tag === "Number") return $debugJsonNumber(inner);
   if (tag === "String") return `String(${$debugStr(inner)})`;
-  if (tag === "Array") return `Array [${inner.map($debugJsonValue).join(", ")}]`;
-  const entries = $sortedEntries(inner, $cmp).map(([key, item]) => `${$debugStr(key)}: ${$debugJsonValue(item)}`);
-  return `Object {${entries.join(", ")}}`;
+  if (tag === "Array") {
+    const items = inner.map((item) => $debugJsonValue(item, alternate));
+    return alternate ? "Array " + $pretty("[", items, "]") : `Array [${items.join(", ")}]`;
+  }
+  const entries = $sortedEntries(inner, $cmp).map(
+    ([key, item]) => `${$debugStr(key)}: ${$debugJsonValue(item, alternate)}`,
+  );
+  return alternate ? "Object " + $pretty("{", entries, "}") : `Object {${entries.join(", ")}}`;
 }
 export function $debugJsonNumber(n) {
   return `Number(${$jsonNumberText(n)})`;
@@ -3709,8 +3723,9 @@ export function $debugStr(s, quote = '"') {
   return out + quote;
 }
 
-export function $debugFields(name, fields, values) {
-  return name + " { " + fields.map((field, i) => field + ": " + values[i]).join(", ") + " }";
+export function $debugFields(name, fields, values, alternate = false) {
+  const shown = fields.map((field, i) => field + ": " + values[i]);
+  return alternate ? $pretty(name + " {", shown, "}") : name + " { " + shown.join(", ") + " }";
 }
 
 export function $plus(text) {

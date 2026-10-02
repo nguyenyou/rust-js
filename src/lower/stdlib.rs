@@ -1,6 +1,7 @@
 //! Lower standard-library formatting and iterator behavior. Recognition is separate.
 
 use super::combinators::IterComb;
+use super::display::Pretty;
 use super::format_spec::Spec;
 use super::representation::Num;
 use super::{FnCx, R, Std};
@@ -12,7 +13,8 @@ use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
-use rustc_span::{ErrorGuaranteed, Span, Symbol, sym};
+use rustc_span::{Span, Symbol, sym};
+use std::collections::HashSet;
 
 /// A piece of a `format_args!` template.
 pub(super) enum Piece {
@@ -39,75 +41,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.recognition().classify(def_id, args)
     }
 
-    /// A `format_args!` template, decoded (its encoding is documented in
-    /// core's `fmt::Arguments`): literal pieces prefixed by their length, and
-    /// a byte with the top two bits set for each placeholder, which names an
-    /// argument by its place in the array of them.
+    /// A `format_args!` template, decoded (`decode_template`).
     fn decode_template(&self, template: &[u8], span: Span) -> R<Vec<Piece>> {
-        let bad = |what: &str| self.unsupported(span, what);
-        let byte = |i: usize| template.get(i).copied().ok_or_else(|| bad("this format string"));
-        let u16_at = |i: usize| Ok::<usize, ErrorGuaranteed>(u16::from_le_bytes([byte(i)?, byte(i + 1)?]) as usize);
-        let piece = |from: usize, len: usize| {
-            let bytes = template
-                .get(from..from + len)
-                .ok_or_else(|| bad("this format string"))?;
-            Ok::<Piece, ErrorGuaranteed>(Piece::Text(String::from_utf8_lossy(bytes).into_owned()))
-        };
-        let (mut pieces, mut i, mut next) = (Vec::new(), 0, 0);
-        loop {
-            let b = byte(i)?;
-            i += 1;
-            match b {
-                0 => break,
-                1..=0x7f => {
-                    pieces.push(piece(i, b as usize)?);
-                    i += b as usize;
-                }
-                0x80 => {
-                    let len = u16_at(i)?;
-                    pieces.push(piece(i + 2, len)?);
-                    i += 2 + len;
-                }
-                _ if b & 0xc0 == 0xc0 => {
-                    // Then, if its bits say so: flags, width, precision, and
-                    // which argument (ADR 0058).
-                    let mut spec = Spec::plain();
-                    if b & 0b1 != 0 {
-                        let flags = u32::from_le_bytes([byte(i)?, byte(i + 1)?, byte(i + 2)?, byte(i + 3)?]);
-                        spec = Spec::from_flags(flags);
-                        i += 4;
-                    }
-                    // An indirect one is the index of the argument that holds it.
-                    if b & 0b10 != 0 {
-                        let field = u16_at(i)?;
-                        match b & 0b1_0000 != 0 {
-                            true => spec.width_from = Some(field),
-                            false => spec.width = Some(field as u16),
-                        }
-                        i += 2;
-                    }
-                    if b & 0b100 != 0 {
-                        let field = u16_at(i)?;
-                        match b & 0b10_0000 != 0 {
-                            true => spec.precision_from = Some(field),
-                            false => spec.precision = Some(field as u16),
-                        }
-                        i += 2;
-                    }
-                    let index = if b & 0b1000 != 0 {
-                        let k = u16_at(i)?;
-                        i += 2;
-                        k
-                    } else {
-                        next
-                    };
-                    next = index + 1;
-                    pieces.push(Piece::Argument(index, spec));
-                }
-                _ => return Err(bad("this format string")),
-            }
-        }
-        Ok(pieces)
+        decode_template(template).ok_or_else(|| self.unsupported(span, "this format string"))
     }
 
     /// The string a template makes: its pieces, with `items` (the arguments,
@@ -284,7 +220,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn lower_format_args(&mut self, f: FormatArgs<'tcx>, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
         let in_order = self.in_order(&f, span);
         let shown = self.shown(&f, span).unwrap_or_default();
-        let mut values = self.operands(&f.values, out)?;
+        // `{:#?}` of a `&dyn Debug` made here, as `dbg!` makes one: made pretty
+        // (ADR 0137). One made elsewhere is the string it showed there.
+        let mut pretty_dyn = HashSet::new();
+        let mut plain_dyn = HashSet::new();
+        for piece in self.decode_template(&f.template, span)? {
+            if let Piece::Argument(slot, spec) = piece
+                && let Some(&(value, kind, ty)) = f.slots.get(slot)
+                && kind == Std::FmtDebug
+                && self.is_dyn_debug(ty)
+            {
+                match spec.alternate {
+                    true => pretty_dyn.insert(value),
+                    false => plain_dyn.insert(value),
+                };
+            }
+        }
+        if !pretty_dyn.is_empty() {
+            let made_here = pretty_dyn.iter().all(|&i| {
+                matches!(
+                    self.thir[self.strip(f.values[i])].kind,
+                    ExprKind::PointerCoercion { .. }
+                )
+            });
+            if !made_here || !plain_dyn.is_empty() {
+                return Err(self.unsupported(span, "`{:#?}` of a `&dyn Debug` made elsewhere"));
+            }
+        }
+        let pretty = if pretty_dyn.is_empty() {
+            Pretty::Plain
+        } else {
+            Pretty::Always
+        };
+        let outer = std::mem::replace(&mut self.dyn_debug, pretty);
+        let values = self.operands(&f.values, out);
+        self.dyn_debug = outer;
+        let mut values = values?;
         let effects = values.iter().any(Expr::has_effects);
         let named: Vec<bool> = (0..values.len())
             .map(|i| {
@@ -758,4 +729,72 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => unreachable!("not an iterator's method"),
         })
     }
+}
+
+/// A `format_args!` template, decoded (its encoding is documented in core's
+/// `fmt::Arguments`): literal pieces prefixed by their length, and a byte
+/// with the top two bits set for each placeholder, which names an argument by
+/// its place in the array of them. `None` if it isn't one.
+pub(super) fn decode_template(template: &[u8]) -> Option<Vec<Piece>> {
+    let byte = |i: usize| template.get(i).copied();
+    let u16_at = |i: usize| Some(u16::from_le_bytes([byte(i)?, byte(i + 1)?]) as usize);
+    let piece = |from: usize, len: usize| {
+        let bytes = template.get(from..from + len)?;
+        Some(Piece::Text(String::from_utf8_lossy(bytes).into_owned()))
+    };
+    let (mut pieces, mut i, mut next) = (Vec::new(), 0, 0);
+    loop {
+        let b = byte(i)?;
+        i += 1;
+        match b {
+            0 => break,
+            1..=0x7f => {
+                pieces.push(piece(i, b as usize)?);
+                i += b as usize;
+            }
+            0x80 => {
+                let len = u16_at(i)?;
+                pieces.push(piece(i + 2, len)?);
+                i += 2 + len;
+            }
+            _ if b & 0xc0 == 0xc0 => {
+                // Then, if its bits say so: flags, width, precision, and
+                // which argument (ADR 0058).
+                let mut spec = Spec::plain();
+                if b & 0b1 != 0 {
+                    let flags = u32::from_le_bytes([byte(i)?, byte(i + 1)?, byte(i + 2)?, byte(i + 3)?]);
+                    spec = Spec::from_flags(flags);
+                    i += 4;
+                }
+                // An indirect one is the index of the argument that holds it.
+                if b & 0b10 != 0 {
+                    let field = u16_at(i)?;
+                    match b & 0b1_0000 != 0 {
+                        true => spec.width_from = Some(field),
+                        false => spec.width = Some(field as u16),
+                    }
+                    i += 2;
+                }
+                if b & 0b100 != 0 {
+                    let field = u16_at(i)?;
+                    match b & 0b10_0000 != 0 {
+                        true => spec.precision_from = Some(field),
+                        false => spec.precision = Some(field as u16),
+                    }
+                    i += 2;
+                }
+                let index = if b & 0b1000 != 0 {
+                    let k = u16_at(i)?;
+                    i += 2;
+                    k
+                } else {
+                    next
+                };
+                next = index + 1;
+                pieces.push(Piece::Argument(index, spec));
+            }
+            _ => return None,
+        }
+    }
+    Some(pieces)
 }

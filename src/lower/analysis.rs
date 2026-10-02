@@ -8,7 +8,7 @@ use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::mir::BorrowKind;
-use rustc_middle::thir::{ExprId, ExprKind, Thir};
+use rustc_middle::thir::{ExprId, ExprKind, LocalVarId, Thir};
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
@@ -92,6 +92,9 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
     /// for (ADR 0098), by their indices.
     pub drop_params: HashMap<DefId, Vec<u32>>,
     pub generic_consts: HashSet<DefId>,
+    /// Whether the crate shows anything with `{:#?}`, or asks a `Formatter`
+    /// if it's alternate: then its `Debug` functions take whether (ADR 0137).
+    pub pretty_debug: bool,
 }
 
 pub(super) fn analyze_crate<'a, 'tcx>(
@@ -248,6 +251,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let changed_vecs = changed_vecs(tcx, all_bodies);
     let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
     let generic_consts = generic_consts(tcx, all_bodies);
+    let pretty_debug = uses_pretty_debug(tcx, all_bodies);
 
     Some(AnalyzedCrate {
         bodies,
@@ -270,6 +274,92 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         changed_vecs,
         drop_params,
         generic_consts,
+        pretty_debug,
+    })
+}
+
+/// Does any body show a value with `{:#?}`, a `Debug` argument's alternate
+/// placeholder, or call `Formatter::alternate` (ADR 0137)? Another
+/// alternate placeholder, `{:#}` or `{:#x}`, is no reason; one whose
+/// argument can't be told is taken to be.
+fn uses_pretty_debug(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
+    all_bodies.iter().any(|body| {
+        let thir = &body.thir;
+        let through = |mut e: ExprId| loop {
+            e = strip(thir, e);
+            match thir[e].kind {
+                ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } => e = arg,
+                _ => break e,
+            }
+        };
+        // The `let`s a `format_args!` keeps its arguments' array in.
+        let lets: HashMap<LocalVarId, ExprId> = thir
+            .stmts
+            .iter()
+            .filter_map(|stmt| match &stmt.kind {
+                rustc_middle::thir::StmtKind::Let {
+                    pattern,
+                    initializer: Some(init),
+                    ..
+                } => match pattern.kind {
+                    rustc_middle::thir::PatKind::Binding { var, .. } => Some((var, *init)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        thir.exprs.iter().any(|expr| {
+            let ExprKind::Call { fun, ref args, .. } = expr.kind else {
+                return false;
+            };
+            let &ty::FnDef(id, _) = thir[fun].ty.kind() else {
+                return false;
+            };
+            let name = tcx.item_name(id);
+            let path = tcx.def_path_str(id);
+            if name.as_str() == "alternate" && path.starts_with("std::fmt::Formatter") {
+                return true;
+            }
+            if name.as_str() != "new" || !path.starts_with("std::fmt::Arguments") || args.len() != 2 {
+                return false;
+            }
+            let ExprKind::Literal { lit, .. } = thir[through(args[0])].kind else {
+                return false;
+            };
+            let rustc_ast::LitKind::ByteStr(ref bytes, _) = lit.node else {
+                return false;
+            };
+            let Some(pieces) = super::stdlib::decode_template(bytes.as_byte_str()) else {
+                return false;
+            };
+            let alternates: Vec<usize> = pieces
+                .iter()
+                .filter_map(|piece| match piece {
+                    super::stdlib::Piece::Argument(index, spec) if spec.alternate => Some(*index),
+                    _ => None,
+                })
+                .collect();
+            if alternates.is_empty() {
+                return false;
+            }
+            let array = match thir[through(args[1])].kind {
+                ExprKind::VarRef { id } => lets.get(&id).map(|&init| through(init)),
+                _ => Some(through(args[1])),
+            };
+            let Some(ExprKind::Array { fields }) = array.map(|a| &thir[a].kind) else {
+                return true;
+            };
+            alternates.iter().any(|&index| {
+                let Some(&field) = fields.get(index) else { return true };
+                match thir[through(field)].kind {
+                    ExprKind::Call { fun, .. } => match thir[fun].ty.kind() {
+                        &ty::FnDef(made_by, _) => tcx.item_name(made_by).as_str().starts_with("new_debug"),
+                        _ => true,
+                    },
+                    _ => true,
+                }
+            })
+        })
     })
 }
 

@@ -2,7 +2,7 @@
 //! and so is `a..=b`; `a..` is `{ start: a }`. Iterated, a range is its
 //! items: an array, or for `a..`, which never ends, a JS iterator.
 
-use super::display::join;
+use super::display::{Pretty, join};
 use super::representation::Num;
 use super::{FnCx, R};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
@@ -162,7 +162,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// `{:?}` of a range: its bounds', around its dots, `1..4` or `..=4`.
-    pub(super) fn range_debug(&mut self, range: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+    pub(super) fn range_debug(&mut self, range: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let kind = self.range_kind(ty).expect("a range");
         let index = self.range_index(ty);
         let shown = |this: &mut Self, parts: Vec<Expr>| -> R<Expr> {
@@ -170,11 +170,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut pieces = Vec::new();
             if matches!(kind, RangeKind::Exclusive | RangeKind::Inclusive | RangeKind::From) {
                 let start = parts.next().expect("a start");
-                pieces.push(this.debug_string(start, index.expect("a bound's type"), span)?);
+                pieces.push(this.debug_string_with(start, index.expect("a bound's type"), span, pretty)?);
             }
             pieces.push(Expr::str(kind.dots()));
             if let Some(end) = parts.next() {
-                pieces.push(this.debug_string(end, index.expect("a bound's type"), span)?);
+                pieces.push(this.debug_string_with(end, index.expect("a bound's type"), span, pretty)?);
             }
             Ok(join(pieces))
         };
