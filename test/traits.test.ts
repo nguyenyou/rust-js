@@ -176,9 +176,13 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 for (const [name, source, diagnostic] of [
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
-  // A function's const parameter is given (ADR 0107); a trait's isn't yet.
-  // A `Drop` runs where rustc drops (ADR 0098), but not yet a closure's.
-  ["Drop in a closure", `pub struct Resource; impl Drop for Resource { fn drop(&mut self) {} } pub fn f() { let r = Resource; let c = move || { let _ = &r; }; c(); }`, "a closure that holds a value with a destructor"],
+  // A closure's drop drops the variables it took, where it's made (ADR 0098):
+  // not part of one, nor where JS can't see them, nor given away by value
+  // where a call may consume it without its body dropping them.
+  ["closure holding part of a value", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub fn f() { let t = (R, R); let c = move || { let _a = t.0; }; c(); }`, "a closure that holds part of a value with a destructor"],
+  ["closure made in a block", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub fn f() { let c = { let r = R; move || { let _r = &r; } }; c(); }`, "a closure that holds a value with a destructor, made here"],
+  ["Fn closure given away", `pub struct R; impl Drop for R { fn drop(&mut self) {} } fn g<F: FnOnce()>(f: F) { f() } pub fn f() { let r = R; let c = move || { let _r = &r; }; c(); g(c); }`, "given away without being called once"],
+  ["closure assigned", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub fn f() { let r = R; let c; c = move || drop(r); c(); }`, "assigning a closure that holds a value with a destructor"],
   // `Clone`, `Default` and `From` are supported (ADR 0052), but not all of them.
   ["clone_from", `#[derive(Clone)] pub struct P { pub v: Vec<u32> } pub fn f(a: &mut P, b: &P) { a.clone_from(b); }`, "calling \`std::clone::Clone::clone_from\`"],
   // A `&dyn Debug` is the string it shows (ADR 0060): one made plain is shown plain (ADR 0137).

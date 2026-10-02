@@ -207,6 +207,42 @@ function main() {
   a dictionary that takes nothing else is one object. A library still
   does, as its consumers' values may have one. (Amended: every generic
   impl took one.)
+- **A closure that takes a value with a destructor by value holds it:**
+  the variable it took is moved into it, where it's made, and the
+  closure's drop drops what it holds, in the order it took them, through
+  the variables themselves, which a JS arrow shares. A closure called once,
+  whose body moves what it holds, owns it in its body, as a function owns
+  its parameters: what it doesn't move is dropped as the call ends, after
+  its parameters, in a `finally`. One that only reads or writes what it
+  holds drops it where its own scope ends, or a generic function's `dropF`
+  does:
+
+  ```rust
+  let tick = move || drop(a);
+  call_once(move || x.len());
+  ```
+
+  ```js
+  const tick = () => {
+    let a$live = true;
+    try {
+      a$live = false;
+      noisyDrop_drop(a);
+    } finally {
+      if (a$live) noisyDrop_drop(a);
+    }
+  };
+  call_once(() => ..., (value) => { noisyDrop_drop(x); });
+  ```
+
+  Its drop sees what it took only where JS sees those variables: it's
+  made for a `let` or a call, and an error made anywhere else, as a
+  block's value, assigned, or dropped outside the body it's made in. One
+  that isn't called once by its own body, `Fn` or `FnMut`, isn't given to
+  a call by value, which may consume it without its body dropping what it
+  holds. One that takes part of a value, `t.0`, is an error. rustc's own
+  walk of a body doesn't reach a closure's captures: the facts walk them
+  itself. (Amended: a closure that held one was an error.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of
@@ -221,8 +257,7 @@ function main() {
 
 **Rejected for now, with an error that says so:** an `Rc`, an `Arc` or a
 thread-local holding a value with a destructor (it runs when the last
-reference goes, which JS doesn't count), a closure that captures one by
-value, and a `dyn Trait` of one.
+reference goes, which JS doesn't count), and a `dyn Trait` of one.
 
 ## Why
 
@@ -288,7 +323,7 @@ value, and a `dyn Trait` of one.
   a condition or a block's tail, one made in a branch of its statement, one
   taken apart or partly moved, an `if let` that moves part of a value, a
   struct update from one, a `let x;` without its value, and `async` code
-  or a closure that owns one are errors until they're done.
+  that owns one are errors until they're done.
 - A generic function given a value with a destructor has a JS parameter
   more than its Rust one has, as its dictionaries are (ADR 0052). A JS
   caller of an exported one passes none, and the drop doesn't run: a Rust

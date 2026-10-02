@@ -166,6 +166,9 @@ pub(super) struct DropState<'tcx> {
     /// and why: an error only where the body drops one.
     unsupported_params: HashMap<u32, (Ty<'tcx>, &'static str)>,
     part_flags: HashMap<(LocalVarId, Path), String>,
+    /// Each closure made here that holds a value with a destructor: the body
+    /// it's made in, and the variables it holds, which its drop drops.
+    closures: HashMap<DefId, (DefId, Vec<(Expr, Ty<'tcx>)>)>,
     /// The flags of each temporary's parts that a pattern moves on some paths.
     temp_part_flags: HashMap<(usize, ExprId), Vec<(Path, String)>>,
 }
@@ -195,6 +198,49 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     pub(super) fn has_drops(&self, ty: Ty<'tcx>) -> bool {
         self.drops(ty) == Drops::Runs
+    }
+
+    /// What a closure takes by value that has a destructor: each variable,
+    /// and its type, in the order its drop drops them. None if it takes
+    /// part of one, or is another crate's.
+    pub(super) fn held(&self, closure: DefId) -> Option<Vec<(LocalVarId, Ty<'tcx>)>> {
+        let local = closure.as_local()?;
+        let mut held = Vec::new();
+        for captured in self.tcx.closure_captures(local) {
+            let ty = captured.place.ty();
+            if captured.is_by_ref() || self.drops(ty) == Drops::Nothing {
+                continue;
+            }
+            if !captured.place.projections.is_empty() {
+                return None;
+            }
+            held.push((LocalVarId(captured.get_root_variable()), ty));
+        }
+        Some(held)
+    }
+
+    fn takes_whole(&self, closure: DefId) -> bool {
+        self.held(closure).is_some()
+    }
+
+    /// A closure, at `closure`, made here: the places its drop drops.
+    pub(super) fn closure_made(&mut self, closure: DefId, places: Vec<(Expr, Ty<'tcx>)>) {
+        self.drop_state.closures.insert(closure, (self.body_owner, places));
+    }
+
+    /// The variables of the body being lowered that a closure flags as its
+    /// own as it's lowered, given back once it is.
+    pub(super) fn take_flags(&mut self, vars: &[LocalVarId]) -> Vec<(LocalVarId, Option<String>)> {
+        vars.iter().map(|&v| (v, self.drop_state.flags.remove(&v))).collect()
+    }
+
+    pub(super) fn give_flags(&mut self, flags: Vec<(LocalVarId, Option<String>)>) {
+        for (var, flag) in flags {
+            match flag {
+                Some(flag) => self.drop_state.flags.insert(var, flag),
+                None => self.drop_state.flags.remove(&var),
+            };
+        }
     }
 
     /// Each type is walked once and cached, so a type whose parts double at
@@ -234,9 +280,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let found = match ty.kind() {
             ty::Tuple(items) => all(self, &mut items.iter(), walk),
             ty::Array(item, _) | ty::Slice(item) => self.drops_in(*item, walk),
-            ty::Closure(_, args) => match all(self, &mut args.as_closure().upvar_tys().iter(), walk) {
-                Drops::Nothing => Drops::Nothing,
-                _ => Drops::Unsupported(ty, "a closure that holds a value with a destructor"),
+            // What it holds, which it took whole: its drop drops that. Part of
+            // one, `t.0`, would need its own flags.
+            ty::Closure(def_id, args) => match all(self, &mut args.as_closure().upvar_tys().iter(), walk) {
+                Drops::Runs if self.takes_whole(*def_id) => Drops::Runs,
+                Drops::Runs => Drops::Unsupported(ty, "a closure that holds part of a value with a destructor"),
+                found => found,
             },
             ty::Adt(_, args) if ty.is_box() || self.is_vec_like(ty) => self.drops_in(args.type_at(0), walk),
             // A type parameter a caller gives a drop function for.
@@ -401,6 +450,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() => self.drop_in(value, args.type_at(0), span, made, out)?,
             ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, made, out)?,
+            // What a closure holds: the variables it took, where it was made.
+            // Only there, or in a closure made inside it, can JS see them.
+            ty::Closure(def_id, _) => {
+                let Some((made_in, places)) = self.drop_state.closures.get(def_id).cloned() else {
+                    return Err(self.unsupported(span, "dropping a closure that holds a value with a destructor here"));
+                };
+                if !std::iter::successors(Some(self.body_owner), |&d| self.tcx.opt_parent(d)).any(|d| d == made_in) {
+                    return Err(self.unsupported(span, "dropping a closure that holds a value with a destructor here"));
+                }
+                for (place, ty) in places {
+                    self.drop_in(place, ty, span, made, out)?;
+                }
+            }
             // `dropT?.(value)`: the caller's drop, if its `T` has one.
             ty::Param(param) => {
                 self.drop_state.used_drops.insert(param.index);
@@ -1176,6 +1238,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// variable can be dropped where it's made: `noisyDrop_drop(["x"])`.
     pub(super) fn drops_once(&self, ty: Ty<'tcx>) -> bool {
         match ty.kind() {
+            // Its drop drops what it holds, not the function.
+            ty::Closure(..) => true,
             ty::Adt(_, args) if ty.is_box() => self.drops_once(args.type_at(0)),
             ty::Adt(adt, args) => {
                 self.tcx
@@ -1243,7 +1307,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A part moved out, `pair.a`: its flag.
         let flag = if let Some((var, path)) = facts.part_moves.get(&e) {
             self.drop_state.part_flags.get(&(*var, path.clone())).cloned()
-        } else if let ExprKind::VarRef { id } = self.thir[e].kind
+        } else if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } = self.thir[e].kind
             && facts.moves.contains(&e)
         {
             self.drop_state.flags.get(&id).cloned()
@@ -1426,6 +1490,14 @@ fn find_facts<'a, 'tcx>(cx: &FnCx<'a, 'tcx>) -> Facts {
         lets: HashMap::new(),
         facts: Facts::default(),
     };
+    // A closure called once, that moves what it holds, owns what it took,
+    // and drops what it didn't move as its call ends.
+    if let Some(held) = finder.consumed() {
+        let span = cx.tcx.def_span(cx.body_owner);
+        for (var, _) in held {
+            finder.facts.owners.insert(var, span);
+        }
+    }
     for param in &thir.params {
         if let Some(pat) = &param.pat {
             finder.visit_pat(pat);
@@ -1498,6 +1570,68 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
 
     fn problem(&mut self, span: Span, what: &str) {
         self.facts.problems.push((span, what.to_string()));
+    }
+
+    /// What the body, if it's a closure's that's called once, holds that
+    /// has a destructor.
+    fn consumed(&self) -> Option<Vec<(LocalVarId, Ty<'tcx>)>> {
+        let closure = self.cx.body_owner;
+        if !self.cx.tcx.is_closure_like(closure) {
+            return None;
+        }
+        let ty = self.cx.tcx.type_of(closure).instantiate_identity().skip_normalization();
+        let ty::Closure(_, args) = ty.kind() else { return None };
+        if args.as_closure().kind() != ty::ClosureKind::FnOnce {
+            return None;
+        }
+        self.cx.held(closure)
+    }
+
+    /// A closure that holds a value with a destructor drops it through the
+    /// variables it took, which JS sees only where they're seen: it's made
+    /// for a `let` or a call, and written over nowhere. One its own body
+    /// doesn't call once isn't given to a call by value, which may consume it.
+    fn closure_checked(&mut self, expr: &ThirExpr<'tcx>) {
+        match expr.kind {
+            ExprKind::Closure(_) => match self.cx.drops(expr.ty) {
+                Drops::Nothing => {}
+                Drops::Unsupported(t, what) => self.problem(expr.span, &describe(t, what)),
+                Drops::Runs => {
+                    let (parent, child) = self.context();
+                    let placed = match parent.map(|p| &self.thir[p].kind) {
+                        None => self.lets.contains_key(&child),
+                        Some(ExprKind::Call { args, .. }) => args.contains(&child),
+                        _ => false,
+                    };
+                    if !placed {
+                        self.problem(expr.span, "a closure that holds a value with a destructor, made here");
+                    }
+                }
+            },
+            ExprKind::Call { ref args, .. } if args.iter().any(|&a| self.borrowing_closure(self.thir[a].ty)) => {
+                self.problem(
+                    expr.span,
+                    "a closure that holds a value with a destructor, given away without being called once",
+                );
+            }
+            ExprKind::Assign { lhs, .. }
+                if self.thir[lhs].ty.walk().any(|part| {
+                    part.as_type()
+                        .is_some_and(|t| matches!(t.kind(), ty::Closure(..)) && self.cx.drops(t) != Drops::Nothing)
+                }) =>
+            {
+                self.problem(expr.span, "assigning a closure that holds a value with a destructor");
+            }
+            _ => {}
+        }
+    }
+
+    /// Whether `ty` is a closure that holds a value with a destructor, which
+    /// a call it's given by value may consume, though it isn't called once
+    /// by its own body: what that drops, the call doesn't (ADR 0098).
+    fn borrowing_closure(&self, ty: Ty<'tcx>) -> bool {
+        matches!(ty.kind(), ty::Closure(_, args) if args.as_closure().kind() != ty::ClosureKind::FnOnce)
+            && self.cx.has_drops(ty)
     }
 
     fn taken(&self, pat: &Pat<'tcx>) -> Taken {
@@ -1591,10 +1725,6 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                 return;
             }
             Some(ExprKind::Let { expr, pat }) if *expr == child => self.taken(pat),
-            Some(ExprKind::Closure(closure)) if closure.upvars.contains(&child) => {
-                self.problem(span, "a closure that captures a value with a destructor");
-                return;
-            }
             Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
                 self.problem(span, "a struct update from a value with a destructor");
                 return;
@@ -1810,7 +1940,11 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
         let id = self.id(expr);
         self.stack.push(id);
         match expr.kind {
-            ExprKind::VarRef { id: var } if self.facts.owners.contains_key(&var) => self.owner_used(id, var),
+            ExprKind::VarRef { id: var } | ExprKind::UpvarRef { var_hir_id: var, .. }
+                if self.facts.owners.contains_key(&var) =>
+            {
+                self.owner_used(id, var);
+            }
             _ if !is_place(&expr.kind) && self.holds_drops(expr) => self.value_made(id),
             ExprKind::PointerCoercion {
                 cast: PointerCoercion::Unsize,
@@ -1840,6 +1974,14 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
                 self.problem(expr.span, "a `dyn` of a value with a destructor");
             }
             _ => {}
+        }
+        self.closure_checked(expr);
+        // What a closure takes, which rustc's walk doesn't reach: a capture by
+        // value moves it in.
+        if let ExprKind::Closure(ref closure) = expr.kind {
+            for &upvar in closure.upvars.iter() {
+                self.visit_expr(&self.thir[upvar]);
+            }
         }
         // A generic trait method's own type parameter, given a value with a
         // destructor, would need to be given its drop, as a generic function

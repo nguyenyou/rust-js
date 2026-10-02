@@ -256,6 +256,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             shadowed.push((path.clone(), self.captures.insert(path, snapshot)));
         }
 
+        // What it takes by value that has a destructor is moved into it, and
+        // its drop drops that, where it's made (ADR 0098). Called once, by
+        // a body that moves what it holds, the body owns it.
+        let mut held = Vec::new();
+        if let ty::UpvarArgs::Closure(args) = closure.args
+            && let closure_ty = ty::Ty::new_closure(self.tcx, closure.closure_id.to_def_id(), args)
+            && self.has_drops(closure_ty)
+        {
+            let captures = self.tcx.closure_captures(closure.closure_id);
+            for (captured, &upvar) in captures.iter().zip(closure.upvars.iter()) {
+                let ty = captured.place.ty();
+                if captured.is_by_ref() || !self.has_drops(ty) {
+                    continue;
+                }
+                self.moved(upvar, out)?;
+                let Some((place, _)) = self.place(upvar) else {
+                    return Err(self.unsupported(self.thir[upvar].span, "capturing this value with a destructor"));
+                };
+                held.push((thir::LocalVarId(captured.get_root_variable()), place, ty));
+            }
+            self.closure_made(
+                closure.closure_id.to_def_id(),
+                held.iter().map(|(_, place, ty)| (place.clone(), *ty)).collect(),
+            );
+            if args.as_closure().kind() != ty::ClosureKind::FnOnce {
+                held.clear();
+            }
+        }
+
         // Lower the body as if it were a function of its own, then come back.
         // Its names are its own: once it's lowered, a sibling closure or later
         // code may use them again (`v.some((x) => ..)`, `v.every((x) => ..)`).
@@ -286,6 +315,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "an `async` block that owns a value with a destructor"));
         }
         let mark = self.owned_mark();
+        // What it holds, dropped after its parameters, in the order it took
+        // them: owners of its own, whose flags are its own.
+        let flags = self.take_flags(&held.iter().map(|&(var, _, _)| var).collect::<Vec<_>>());
+        for (var, place, ty) in held.into_iter().rev() {
+            self.own(var, place, ty, span, &mut stmts)?;
+        }
         // The first parameter is the closure itself, which JS doesn't need.
         let params = if block {
             Vec::new()
@@ -321,6 +356,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         self.close_scope(mark, lowered, span, &mut stmts)?;
         self.leave_body(enclosing)?;
+        self.give_flags(flags);
         for (path, previous) in shadowed {
             match previous {
                 Some(var) => self.captures.insert(path, var),
