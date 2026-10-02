@@ -316,7 +316,7 @@ export const mutations: Mutation[] = [
   {
     name: "drops-walk-uncached",
     breaks: "what a type drops is found again for each path to it, which takes exponential time",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/types.rs",
     find: "            self.drop_state.cache.borrow_mut().insert(ty, found);\n",
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "nested_generic_types"],
@@ -348,7 +348,7 @@ export const mutations: Mutation[] = [
   {
     name: "drop-let-value-context",
     breaks: "a `let`'s value is taken as moved whatever its pattern, so `let _ = x` moves `x`",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "            if self.lets.contains_key(&child) {\n                return (None, child);\n            }\n",
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "drop_params"],
@@ -356,7 +356,7 @@ export const mutations: Mutation[] = [
   {
     name: "drop-deref-temporary",
     breaks: "a temporary dereferenced in place, as a method call through a returned `Box`, is never dropped",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "                | ExprKind::Index { lhs: arg, .. }\n                | ExprKind::Deref { arg },\n",
     replace: "                | ExprKind::Index { lhs: arg, .. },\n",
     tests: ["test/corpus.test.ts", "-t", "drop_deref_temporary"],
@@ -380,7 +380,7 @@ export const mutations: Mutation[] = [
   {
     name: "unsize-array-as-dyn",
     breaks: "an array unsized to a slice is taken for a `dyn`, and rejected",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "matches!(to.kind(), ty::Dynamic(..)) && self.cx.drops(from) != Drops::Nothing",
     replace: "matches!(to.kind(), ty::Dynamic(..) | ty::Slice(_)) && self.cx.drops(from) != Drops::Nothing",
     tests: ["test/corpus.test.ts", "-t", "drop_temporaries"],
@@ -500,7 +500,7 @@ export const mutations: Mutation[] = [
   {
     name: "library-drop-skipped",
     breaks: "a library's type's destructor isn't run by a crate that drops a value of it",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/types.rs",
     find: "        drop.is_local() || self.krate.foreign.item(drop).is_some()\n",
     replace: "        drop.is_local()\n",
     tests: ["test/crates.test.ts", "-t", "two crates: drop"],
@@ -918,7 +918,7 @@ export const mutations: Mutation[] = [
   {
     name: "rc-dyn-drop-unchecked",
     breaks: "`Rc<dyn Send>` of a value with a destructor compiles, and the destructor never runs",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: ".find(|(to, _)| matches!(to.kind(), ty::Dynamic(..)))",
     replace: ".find(|_| false)",
     tests: ["test/diagnostics.test.ts", "-t", "Rc<dyn> of a value with a destructor"],
@@ -1190,7 +1190,7 @@ export const mutations: Mutation[] = [
   {
     name: "projection-drops-nothing",
     breaks: "an associated type's value is taken to have nothing to drop where a type has a destructor, and its destructor never runs",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/types.rs",
     find: "            ) if self.is_unknown(ty) => match self.may_have_destructors() {\n",
     replace: "            ) if self.is_unknown(ty) => match false {\n",
     tests: ["test/diagnostics.test.ts","-t","associated type"],
@@ -2187,7 +2187,7 @@ export const mutations: Mutation[] = [
   {
     name: "temp-taken-apart-refused",
     breaks: "`let (x, _) = (make(3), make(4));` is refused",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "                if !self.temp_taken_apart(e, &mut std::iter::once(pat), false) {",
     replace: "                if true {",
     tests: ["test/corpus.test.ts","-t","temporaries_taken_apart"],
@@ -2195,7 +2195,7 @@ export const mutations: Mutation[] = [
   {
     name: "let-temp-parts-flagged",
     breaks: "a `let` taking a temporary apart flags the parts it always moves: right, but not the JS a person writes",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "                if !self.temp_taken_apart(e, &mut std::iter::once(pat), false) {",
     replace: "                if !self.temp_taken_apart(e, &mut std::iter::once(pat), true) {",
     tests: ["test/corpus.test.ts","-t","temporaries_taken_apart"],
@@ -2666,7 +2666,7 @@ export const mutations: Mutation[] = [
   {
     name: "trait-params-refused",
     breaks: "a trait's own type parameter given a value with a destructor is refused, though its impl's dictionary is given the drop",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "            && args[self.cx.tcx.generics_of(trait_id).count()..]",
     replace: "            && args[1..]",
     tests: ["test/corpus.test.ts", "-t", "trait_param_drops"],
@@ -2674,7 +2674,7 @@ export const mutations: Mutation[] = [
   {
     name: "method-params-not-refused",
     breaks: "a library's generic trait method given a value with a destructor is given no drop, and never drops it",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "            self.problem(expr.span, \"a generic trait method given a value with a destructor\");",
     replace: "            let _ = expr;",
     tests: ["test/crates.test.ts", "-t", "generic trait method given"],
@@ -2699,7 +2699,7 @@ export const mutations: Mutation[] = [
   {
     name: "closure-body-owns-nothing",
     breaks: "a closure called once doesn't own what it took: what it moves is dropped again as its call ends",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "        self.cx.held(closure)\n    }",
     replace: "        None\n    }",
     tests: ["test/corpus.test.ts", "-t", "closure_drops"],
@@ -2739,7 +2739,7 @@ export const mutations: Mutation[] = [
   {
     name: "closure-made-anywhere",
     breaks: "a closure that holds a value with a destructor is made where its drop can't see what it took",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "                    if !placed {",
     replace: "                    if false && !placed {",
     tests: ["test/traits.test.ts", "-t", "closure made in a block"],
@@ -2747,7 +2747,7 @@ export const mutations: Mutation[] = [
   {
     name: "fn-closure-given-away",
     breaks: "an `Fn` closure that holds a value with a destructor is given to a call that consumes it, and never drops it",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "        matches!(ty.kind(), ty::Closure(_, args) if args.as_closure().kind() != ty::ClosureKind::FnOnce)",
     replace: "        false",
     tests: ["test/traits.test.ts", "-t", "Fn closure given away"],
@@ -2755,7 +2755,7 @@ export const mutations: Mutation[] = [
   {
     name: "closure-assigned",
     breaks: "a closure that holds a value with a destructor is assigned where its drop can't see what it took",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "                self.problem(expr.span, \"assigning a closure that holds a value with a destructor\");",
     replace: "                let _ = expr;",
     tests: ["test/traits.test.ts", "-t", "closure assigned"],
@@ -2763,7 +2763,7 @@ export const mutations: Mutation[] = [
   {
     name: "closure-part-taken",
     breaks: "a closure that takes part of a value with a destructor is taken as holding it whole",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/types.rs",
     find: "                Drops::Runs if self.takes_whole(*def_id) => Drops::Runs,",
     replace: "                Drops::Runs if true || self.takes_whole(*def_id) => Drops::Runs,",
     tests: ["test/traits.test.ts", "-t", "closure holding part"],
@@ -2904,7 +2904,7 @@ export const mutations: Mutation[] = [
   {
     name: "for-desugar-walked",
     breaks: "a `for` loop's `iter` and `next()`, which its lowering doesn't write, are taken as owners",
-    file: "src/lower/drops.rs",
+    file: "src/lower/drops/facts.rs",
     find: "        if let Some(f) = self.cx.body_query().as_for(id) {",
     replace: "        if let Some(f) = self.cx.body_query().as_for(id).filter(|_| false) {",
     tests: ["test/corpus.test.ts", "-t", "loop_drops"],

@@ -76,6 +76,14 @@ test("effects analysis cannot access emission state", () => {
   expect(source).not.toMatch(/\bfn\s+\w+\s*\([^)]*&mut\s+self/);
 });
 
+// What a body does with its values that have destructors is found before
+// it's lowered (ADR 0098): the walk reads the function's context, and
+// neither writes JS nor changes what lowering keeps.
+test("the destructors' facts are found without emitting", () => {
+  const source = read("src/lower/drops/facts.rs");
+  expect(source).not.toMatch(/crate::js|runtime::|&mut\s+FnCx|\bdrop_state\b/);
+});
+
 // Recognition is what the rest asks: it asks neither the destructors'
 // analysis nor the effects one, which ask it.
 test("recognition depends on neither destructors nor effects", () => {
