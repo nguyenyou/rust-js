@@ -240,9 +240,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             Pretty::Always
         };
-        let outer = std::mem::replace(&mut self.dyn_debug, pretty);
+        let outer = std::mem::replace(&mut self.writing.dyn_debug, pretty);
         let values = self.operands(&f.values, out);
-        self.dyn_debug = outer;
+        self.writing.dyn_debug = outer;
         let mut values = values?;
         let effects = values.iter().any(Expr::has_effects);
         let named: Vec<bool> = (0..values.len())

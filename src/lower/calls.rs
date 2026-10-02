@@ -237,7 +237,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && self.tcx.def_path_str(def_id).starts_with("std::fmt::Formatter")
         {
             return self
-                .writer_alternate
+                .writing
+                .alternate
                 .clone()
                 .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"));
         }
@@ -282,7 +283,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let drained = args
             .first()
-            .is_some_and(|&a| self.owned_drains.contains(&self.chain_key(a)));
+            .is_some_and(|&a| self.chains.drains.contains(&self.chain_key(a)));
         let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;
         let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
             ty::Ref(_, inner, Mutability::Mut) => holds_drops(inner),
@@ -1274,7 +1275,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         id: DefId,
         generic_args: ty::GenericArgsRef<'tcx>,
     ) -> R<Option<(DefId, ty::GenericArgsRef<'tcx>)>> {
-        let generic_args = match self.self_args {
+        let generic_args = match self.given.self_args {
             Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
                 .instantiate(self.tcx, args)
                 .skip_normalization(),
@@ -1566,7 +1567,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(trait_id) => match self.impl_method(def_id, generic_args)? {
                 Some((method, method_args)) => (method, method_args, None),
                 None if self.is_rust_trait(trait_id) => {
-                    let generic_args = match self.self_args {
+                    let generic_args = match self.given.self_args {
                         Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
                             .instantiate(self.tcx, args)
                             .skip_normalization(),

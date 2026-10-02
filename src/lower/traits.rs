@@ -442,7 +442,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut params: Vec<js::Pattern> = Vec::new();
         for param in const_params(self.tcx, id) {
             let name = self.fresh(param.name.as_str());
-            self.const_params.push((param.index, Expr::var(&name)));
+            self.given.const_params.push((param.index, Expr::var(&name)));
             params.push(name.into());
         }
         params.extend(bounds(self.tcx, self.krate.foreign, id).into_iter().map(|tr| {
@@ -454,7 +454,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None => format!("{}{}", evidence_word(self.tcx, tr.self_ty()), trait_word(self.tcx, tr)),
             };
             let name = self.fresh(&js_word(&name));
-            self.evidence.push((tr, Expr::var(&name)));
+            self.given.evidence.push((tr, Expr::var(&name)));
             js::Pattern::from(name)
         }));
         // Then a drop function for each type parameter a caller gives a value
@@ -475,6 +475,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(c));
         let value = match c.kind() {
             ty::ConstKind::Param(p) => self
+                .given
                 .const_params
                 .iter()
                 .find(|&&(index, _)| index == p.index)
@@ -504,7 +505,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The dictionary for `tr` among those this function was given, or
     /// a supertrait's of one.
     pub(super) fn evidence_for(&self, tr: ty::TraitRef<'tcx>) -> Option<Expr> {
-        self.evidence
+        self.given
+            .evidence
             .iter()
             .find_map(|(bound, value)| self.super_evidence(*bound, tr, value.clone()))
             .or_else(|| self.item_evidence(tr))
@@ -742,7 +744,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // In a copied default, `Self` is the impl's type: a call on it
         // resolves to the impl's method, called directly.
-        let generic_args = match self.self_args {
+        let generic_args = match self.given.self_args {
             Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
                 .instantiate(self.tcx, args)
                 .skip_normalization(),
@@ -974,7 +976,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // A `&dyn Debug` is the string it shows (ADR 0060).
         if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
-            let pretty = self.dyn_debug.clone();
+            let pretty = self.writing.dyn_debug.clone();
             return self.debug_string_with(value, self.pointee(source), span, &pretty);
         }
         // `&Fat<Bar>` to `&Fat<dyn ToBar>`: the struct's last field would
@@ -1158,9 +1160,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
             // Its own const parameters' values, given after its arguments
             // (ADR 0135), for the method, as the trait method's are named.
-            let mark = self.const_params.len();
+            let mark = self.given.const_params.len();
             for index in own_const_params(self.tcx, item.def_id) {
-                if self.const_params.iter().any(|&(at, _)| at == index) {
+                if self.given.const_params.iter().any(|&(at, _)| at == index) {
                     return Err(self.unsupported(span, "a trait method's const parameter here"));
                 }
                 let name = self.fresh(
@@ -1170,7 +1172,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .name
                         .as_str(),
                 );
-                self.const_params.push((index, Expr::var(&name)));
+                self.given.const_params.push((index, Expr::var(&name)));
                 params.push(name);
             }
             // A generic method's own evidence is its caller's, after the arguments.
@@ -1204,7 +1206,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 true => self.evidence_args(method, instance.args, span),
                 false => self.method_evidence(method, instance.args, &declared, &names, span),
             };
-            self.const_params.truncate(mark);
+            self.given.const_params.truncate(mark);
             let evidence = evidence?;
             params.extend(names);
             values.extend(evidence);
@@ -1240,7 +1242,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             // Keyed by a const parameter's value first, a number, which only a
             // `Map` holds (ADR 0107).
-            let map = if self.const_params.is_empty() { "WeakMap" } else { "Map" };
+            let map = if self.given.const_params.is_empty() {
+                "WeakMap"
+            } else {
+                "Map"
+            };
             body.push(
                 StmtKind::If(
                     undefined,
@@ -1254,10 +1260,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // parameters' values, its dictionaries, and its drops, which may be
             // none.
             let keys = Expr::array(
-                self.const_params
+                self.given
+                    .const_params
                     .iter()
                     .map(|(_, value)| value.clone())
-                    .chain(self.evidence.iter().map(|(_, value)| value.clone()))
+                    .chain(self.given.evidence.iter().map(|(_, value)| value.clone()))
                     .chain(self.given_drops().iter().map(|name| Expr::var(name)))
                     .collect(),
             );
@@ -1357,7 +1364,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             consts.push((index, Expr::var(&name)));
             const_names.push(name);
         }
-        let outer_consts = std::mem::replace(&mut self.const_params, consts);
+        let outer_consts = std::mem::replace(&mut self.given.const_params, consts);
         let body = self.krate.bodies[&id];
         let nested = super::Nested::Default {
             evidence: specialized,
@@ -1369,7 +1376,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let enclosing = self.enter_body(body, id, nested)?;
         let mut rest = Vec::new();
         let signature = self.lower_signature(id, &body.thir.params.raw, body.expr, &mut rest);
-        self.const_params = outer_consts;
+        self.given.const_params = outer_consts;
         let (mut params, is_async) = signature?;
         params.extend(const_names.into_iter().map(Into::into));
         params.extend(own_params.into_iter().map(Into::into));

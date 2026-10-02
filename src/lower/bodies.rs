@@ -444,8 +444,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     drops: self.swap_drops(drops, unsupported),
                     names: self.names.clone(),
                     locals: std::mem::take(&mut self.locals),
-                    evidence: std::mem::replace(&mut self.evidence, evidence),
-                    self_args: self.self_args.replace(self_args),
+                    evidence: std::mem::replace(&mut self.given.evidence, evidence),
+                    self_args: self.given.self_args.replace(self_args),
                     typing_env: std::mem::replace(&mut self.typing_env, typing_env),
                 }))
             }
@@ -484,8 +484,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 } = *scope;
                 self.names = names;
                 self.locals = locals;
-                self.evidence = evidence;
-                self.self_args = self_args;
+                self.given.evidence = evidence;
+                self.given.self_args = self_args;
                 self.typing_env = typing_env;
                 self.restore_drops(drops);
             }

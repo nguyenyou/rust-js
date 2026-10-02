@@ -313,12 +313,8 @@ struct FnCx<'a, 'tcx> {
     dependencies: RefCell<Dependencies>,
     tcx: TyCtxt<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
-    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
-    /// Each const parameter the function is given, by its index: `N` (ADR 0107).
-    const_params: Vec<(u32, Expr)>,
-    /// In a trait's default body copied into an impl (ADR 0049): the impl's
-    /// arguments for the trait's parameters, `Self` among them.
-    self_args: Option<ty::GenericArgsRef<'tcx>>,
+    /// What the generic item being lowered is given, besides its arguments.
+    given: Given<'tcx>,
     /// While lowering a closure: the places it captured into snapshots.
     captures: HashMap<(LocalVarId, Vec<usize>), Var>,
     thir: &'a Thir<'tcx>,
@@ -336,29 +332,10 @@ struct FnCx<'a, 'tcx> {
     runtime: HashSet<Helper>,
     /// Whether this function makes JSX.
     jsx: bool,
-    /// In a function that writes to a `Formatter` (ADR 0054): its variable,
-    /// and the JS string that stands for it.
-    writer: Option<(Option<LocalVarId>, String)>,
-    /// In such a function of a crate that shows anything pretty (ADR 0137):
-    /// the parameter that says whether it's `{:#?}`.
-    writer_alternate: Option<Expr>,
-    /// The stages of iterator chains that are JS iterators, though their
-    /// types aren't lazy, and the receivers that start one (ADR 0139), by
-    /// their body's THIR and their expression.
-    lazy_stages: HashSet<(usize, ExprId)>,
-    lazy_starts: HashSet<(usize, ExprId)>,
-    /// The stages of chains that `collect` drains of owned items (ADR 0098),
-    /// which std calls' check of what they take lets through.
-    owned_drains: HashSet<(usize, ExprId)>,
-    /// The variables that hold a lazy chain, which every use iterates (ADR 0139).
-    lazy_locals: HashSet<LocalVarId>,
-    /// How a `&dyn Debug` made here shows its value: pretty as its writer's
-    /// `alternate` says, while a derived `Debug`'s or a builder's
-    /// arguments are lowered (ADR 0137), plain anywhere else.
-    dyn_debug: display::Pretty,
-    /// In a generic type's derived `serialize` or `deserialize` (ADR
-    /// 0080): each type parameter, and the parameter that writes or reads it.
-    codec_params: Vec<(Ty<'tcx>, String)>,
+    /// What writing to a `Formatter` knows (ADRs 0054, 0137).
+    writing: display::Writing,
+    /// What this function's iterator chains are, beyond their types.
+    chains: iterators::Chains,
     /// Locals that `next()` is called on (ADR 0071): an iterator over an
     /// array that's stepped through, a `$iter` object that knows where it is.
     stepped: HashSet<LocalVarId>,
@@ -367,22 +344,55 @@ struct FnCx<'a, 'tcx> {
     cloning: Vec<(Ty<'tcx>, String)>,
     /// The item being lowered: what `fn_ref` records as using its target.
     item: DefId,
-    /// What `unsupported_in` found of each struct and enum it looked into, so
-    /// one met again, along another path through a type, isn't walked again:
-    /// `Foo2(Foo1, Foo1)` of `Foo1(Foo0, Foo0)` is walked once, not 2^n times.
-    representable: RefCell<HashMap<Ty<'tcx>, Option<Ty<'tcx>>>>,
-    /// While `unsupported_in` walks a type: how far out, among the types it's
-    /// inside, is the one a walk took as fine, being inside itself.
-    assumed: Cell<usize>,
-    /// What `contains_mutated` and `needs_clone_in` found of each type, for
-    /// the same reason, and how far out `needs_clone_in` assumed.
-    mutated_types: RefCell<HashMap<Ty<'tcx>, bool>>,
-    clones: RefCell<HashMap<Ty<'tcx>, bool>>,
-    clone_assumed: Cell<usize>,
+    /// What walks of types found, each walked once.
+    walks: TypeWalks<'tcx>,
     /// What's dropped, and where (ADR 0098).
     drop_state: drops::DropState<'tcx>,
     /// Whose body `thir` is: its scope tree says where temporaries end.
     body_owner: DefId,
+}
+
+/// What the generic item being lowered is given, besides its arguments.
+#[derive(Default)]
+struct Given<'tcx> {
+    /// Its dictionaries, for its bounds (ADR 0049).
+    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+    /// Each const parameter it's given, by its index: `N` (ADR 0107).
+    const_params: Vec<(u32, Expr)>,
+    /// In a trait's default body copied into an impl (ADR 0049): the impl's
+    /// arguments for the trait's parameters, `Self` among them.
+    self_args: Option<ty::GenericArgsRef<'tcx>>,
+    /// In a generic type's derived `serialize` or `deserialize` (ADR
+    /// 0080): each type parameter, and the parameter that writes or reads it.
+    codec_params: Vec<(Ty<'tcx>, String)>,
+}
+
+/// What walks of types found, kept so a type met again, along another path
+/// through a type, isn't walked again: `Foo2(Foo1, Foo1)` of `Foo1(Foo0,
+/// Foo0)` is walked once, not 2^n times.
+struct TypeWalks<'tcx> {
+    /// What `unsupported_in` found of each struct and enum it looked into.
+    representable: RefCell<HashMap<Ty<'tcx>, Option<Ty<'tcx>>>>,
+    /// While `unsupported_in` walks a type: how far out, among the types it's
+    /// inside, is the one a walk took as fine, being inside itself.
+    assumed: Cell<usize>,
+    /// What `contains_mutated` and `needs_clone_in` found of each type, and
+    /// how far out `needs_clone_in` assumed.
+    mutated: RefCell<HashMap<Ty<'tcx>, bool>>,
+    clones: RefCell<HashMap<Ty<'tcx>, bool>>,
+    clone_assumed: Cell<usize>,
+}
+
+impl Default for TypeWalks<'_> {
+    fn default() -> Self {
+        TypeWalks {
+            representable: RefCell::new(HashMap::new()),
+            assumed: Cell::new(usize::MAX),
+            mutated: RefCell::new(HashMap::new()),
+            clones: RefCell::new(HashMap::new()),
+            clone_assumed: Cell::new(usize::MAX),
+        }
+    }
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -460,7 +470,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.lower_match(scrutinee, arms, dest, out)
             }
             // A function that writes to a `Formatter` returns what it wrote (ADR 0054).
-            ExprKind::Return { value } if let Some((_, name)) = self.writer.clone() => {
+            ExprKind::Return { value } if let Some((_, name)) = self.writing.writer.clone() => {
                 if let Some(v) = value {
                     self.stmt(v, &Dest::Discard, out)?;
                 }

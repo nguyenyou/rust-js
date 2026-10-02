@@ -8,15 +8,31 @@ use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
-use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
+use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, PatKind};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol};
 
 /// Whether `{:?}` is pretty, `{:#?}` (ADR 0137): never, always, or as a
 /// writer function's `alternate` says.
-#[derive(Clone)]
+/// What writing to a `Formatter` knows (ADRs 0054, 0137).
+#[derive(Default)]
+pub(super) struct Writing {
+    /// In a function that writes to a `Formatter` (ADR 0054): its variable,
+    /// and the JS string that stands for it.
+    pub(super) writer: Option<(Option<LocalVarId>, String)>,
+    /// In such a function of a crate that shows anything pretty (ADR 0137):
+    /// the parameter that says whether it's `{:#?}`.
+    pub(super) alternate: Option<Expr>,
+    /// How a `&dyn Debug` made here shows its value: pretty as its writer's
+    /// `alternate` says, while a derived `Debug`'s or a builder's
+    /// arguments are lowered (ADR 0137), plain anywhere else.
+    pub(super) dyn_debug: Pretty,
+}
+
+#[derive(Clone, Default)]
 pub(super) enum Pretty {
+    #[default]
     Plain,
     Always,
     When(Expr),
@@ -78,11 +94,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Expr::var(&alternate)
         });
         let mut body_out = Vec::new();
-        let previous = self.writer.replace((var, name.clone()));
-        let previous_alternate = std::mem::replace(&mut self.writer_alternate, alternate);
+        let previous = self.writing.writer.replace((var, name.clone()));
+        let previous_alternate = std::mem::replace(&mut self.writing.alternate, alternate);
         let lowered = self.stmt(body, &Dest::Discard, &mut body_out);
-        self.writer = previous;
-        self.writer_alternate = previous_alternate;
+        self.writing.writer = previous;
+        self.writing.alternate = previous_alternate;
         lowered?;
         // Each way through writes once: each is a `return` of what it writes.
         if let Some(returns) = as_returns(&body_out, &name) {
@@ -136,7 +152,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let Some(i) = self.formatter_param(def_id) else {
             return Ok(None);
         };
-        let Some((var, name)) = self.writer.clone() else {
+        let Some((var, name)) = self.writing.writer.clone() else {
             return Err(self.unsupported(span, "a `Formatter` outside a `fmt`"));
         };
         if var.is_none() || self.formatter_var(args[i]) != var {
@@ -153,9 +169,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .write_call(def_id, self.krate.fns.contains_key(&def_id));
         // Its `&dyn Debug` arguments show as pretty as this writer is (ADR 0137).
         let pretty = self.writer_pretty();
-        let outer = std::mem::replace(&mut self.dyn_debug, pretty.clone());
+        let outer = std::mem::replace(&mut self.writing.dyn_debug, pretty.clone());
         let values = self.operands(&others, out);
-        self.dyn_debug = outer;
+        self.writing.dyn_debug = outer;
         let mut values = values?;
         let written = match operation {
             // `write!(f, ..)` is `f.write_fmt(format_args!(..))`, which is a string (ADR 0034).
@@ -171,7 +187,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // More than five fields: arrays of their names and strings.
             WriteCall::StructFields => {
                 self.runtime.insert(Helper::DebugFields);
-                values.extend(self.writer_alternate.clone());
+                values.extend(self.writing.alternate.clone());
                 Expr::call(Expr::var("$debugFields"), values)
             }
             WriteCall::TupleFields => {
@@ -221,12 +237,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // Another writer, given this one's `Formatter`: as pretty as it is.
             WriteCall::Function => {
-                values.extend(self.writer_alternate.clone());
+                values.extend(self.writing.alternate.clone());
                 values.extend(self.evidence_args(def_id, generic_args, span)?);
                 Expr::call(self.fn_ref(def_id), values)
             }
             WriteCall::Trait => {
-                values.extend(self.writer_alternate.clone());
+                values.extend(self.writing.alternate.clone());
                 match self.trait_call(def_id, generic_args, values, span, out)? {
                     Some(call) => call,
                     None => return Err(self.unsupported(span, "this call")),
@@ -298,7 +314,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         steps.reverse();
         let (start_args, _) = start;
-        let Some((var, written_to)) = self.writer.clone() else {
+        let Some((var, written_to)) = self.writing.writer.clone() else {
             return Err(self.unsupported(span, "a `Formatter` outside a `fmt`"));
         };
         if var.is_none() || self.formatter_var(start_args[0]) != var {
@@ -312,9 +328,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // As pretty as this writer is, `&dyn Debug`s and entries too (ADR 0137).
         let pretty = self.writer_pretty();
-        let outer = std::mem::replace(&mut self.dyn_debug, pretty.clone());
+        let outer = std::mem::replace(&mut self.writing.dyn_debug, pretty.clone());
         let values = self.operands(&list, out);
-        self.dyn_debug = outer;
+        self.writing.dyn_debug = outer;
         let mut values = values?.into_iter();
         let type_name = match kind {
             "DebugStruct" | "DebugTuple" => Some(values.next().expect("a type's name")),
@@ -870,7 +886,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// How pretty what this writer shows is (ADR 0137): as its `alternate`
     /// says, or plain where the crate's writers don't take one.
     pub(super) fn writer_pretty(&self) -> Pretty {
-        match &self.writer_alternate {
+        match &self.writing.alternate {
             Some(alternate) => Pretty::When(alternate.clone()),
             None => Pretty::Plain,
         }
@@ -879,7 +895,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `value`, in a `const` first if it may run code, which a plain and a
     /// pretty form would each run.
     fn once(&mut self, value: Expr, out: &mut Vec<Stmt>) -> Expr {
-        if self.writer_alternate.is_none() || value.reads_same() {
+        if self.writing.alternate.is_none() || value.reads_same() {
             value
         } else {
             self.spill("shown", value, out)

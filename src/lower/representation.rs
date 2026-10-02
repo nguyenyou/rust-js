@@ -287,7 +287,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// an object `Self` is the object, though a `&mut Self` parameter is the
     /// dictionary's box (ADR 0099).
     pub(super) fn makes_cell(&self, pointee: Ty<'tcx>) -> bool {
-        let pointee = match self.self_args {
+        let pointee = match self.given.self_args {
             Some(args) => ty::EarlyBinder::bind(self.tcx, pointee)
                 .instantiate(self.tcx, args)
                 .skip_normalization(),
@@ -450,11 +450,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn contains_mutated(&self, ty: Ty<'tcx>) -> bool {
         // Each type once: a type met along two paths isn't walked twice. It
         // ends at a `Box`, which is `Other`, so no answer depends on another.
-        if let Some(&mutated) = self.mutated_types.borrow().get(&ty) {
+        if let Some(&mutated) = self.walks.mutated.borrow().get(&ty) {
             return mutated;
         }
         let mutated = self.contains_mutated_uncached(ty);
-        self.mutated_types.borrow_mut().insert(ty, mutated);
+        self.walks.mutated.borrow_mut().insert(ty, mutated);
         mutated
     }
 
@@ -553,6 +553,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn copy(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
         if self.is_unknown(ty)
             && let Some((_, dictionary)) = self
+                .given
                 .evidence
                 .iter()
                 .find(|(tr, _)| tr.self_ty() == ty && self.tcx.is_lang_item(tr.def_id, LangItem::Copy))
@@ -822,18 +823,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => {}
         }
-        if let Some(&found) = self.representable.borrow().get(&ty) {
+        if let Some(&found) = self.walks.representable.borrow().get(&ty) {
             return found;
         }
         // Inside itself, `Tree` in `Box<Tree>`: fine, if it is where it's
         // being walked further out, so what's found under that is only as
         // sure as the walk out there is.
         if let Some(at) = seen.iter().position(|&t| t == ty) {
-            self.assumed.set(self.assumed.get().min(at));
+            self.walks.assumed.set(self.walks.assumed.get().min(at));
             return None;
         }
         let depth = seen.len();
-        let outer = self.assumed.replace(usize::MAX);
+        let outer = self.walks.assumed.replace(usize::MAX);
         seen.push(ty);
         let found = match (ty.kind(), self.shape(ty)) {
             // An enum with fields (ADR 0033): every variant's fields.
@@ -850,12 +851,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => Some(ty),
         };
         seen.pop();
-        let assumed = self.assumed.get();
-        self.assumed.set(outer.min(assumed));
+        let assumed = self.walks.assumed.get();
+        self.walks.assumed.set(outer.min(assumed));
         // What it can't be is sure; that it's fine is, unless the walk under
         // it took a type further out as fine.
         if found.is_some() || assumed >= depth {
-            self.representable.borrow_mut().insert(ty, found);
+            self.walks.representable.borrow_mut().insert(ty, found);
         }
         found
     }

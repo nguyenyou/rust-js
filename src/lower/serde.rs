@@ -383,10 +383,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// codec's parameter, or a generic function's evidence for its bound,
     /// `T: Serialize` or `T: DeserializeOwned` (ADR 0081).
     fn serde_evidence(&self, ty: Ty<'tcx>, serialize: bool) -> Option<Expr> {
-        if let Some((_, name)) = self.codec_params.iter().find(|(t, _)| *t == ty) {
+        if let Some((_, name)) = self.given.codec_params.iter().find(|(t, _)| *t == ty) {
             return Some(Expr::var(name));
         }
-        self.evidence
+        self.given
+            .evidence
             .iter()
             .find(|(tr, _)| tr.self_ty() == ty && serde_trait(self.tcx, tr.def_id) == Some(serialize))
             .map(|(_, evidence)| evidence.clone())
@@ -396,12 +397,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// parameters, `writeT` or `readT` (ADR 0080): their names, which the
     /// codec's type parameters now stand for.
     fn codec_params(&mut self, args: ty::GenericArgsRef<'tcx>, prefix: &str) -> Vec<js::Pattern> {
-        self.codec_params = Vec::new();
+        self.given.codec_params = Vec::new();
         let mut params = Vec::new();
         for t in args.types() {
             if let ty::Param(p) = t.kind() {
                 let name = self.fresh(&format!("{prefix}{}", p.name));
-                self.codec_params.push((t, name.clone()));
+                self.given.codec_params.push((t, name.clone()));
                 params.push(name.into());
             }
         }

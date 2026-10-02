@@ -113,8 +113,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && self.iterated_only(var)
         {
             self.mark_lazy_chain(init, true);
-            if self.lazy_stages.contains(&self.chain_key(init)) {
-                self.lazy_locals.insert(var);
+            if self.chains.lazy.contains(&self.chain_key(init)) {
+                self.chains.locals.insert(var);
             }
         }
         // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,

@@ -13,6 +13,7 @@ use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty;
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
+use std::collections::HashSet;
 
 /// Whether `known` takes an iterator and iterates it, through
 /// `iterator_call`: a stage or a consumer.
@@ -31,6 +32,21 @@ fn iterates(known: Std) -> bool {
                 | Std::IterComb(_)
                 | Std::Len
         )
+}
+
+/// What a function's iterator chains are, beyond their types, each stage by
+/// its body's THIR and its expression.
+#[derive(Default)]
+pub(super) struct Chains {
+    /// The stages that are JS iterators, though their types aren't lazy
+    /// (ADR 0139), and the receivers that start one.
+    pub(super) lazy: HashSet<(usize, ExprId)>,
+    pub(super) starts: HashSet<(usize, ExprId)>,
+    /// The stages of chains that `collect` drains of owned items (ADR 0098),
+    /// which std calls' check of what they take lets through.
+    pub(super) drains: HashSet<(usize, ExprId)>,
+    /// The variables that hold a lazy chain, which every use iterates.
+    pub(super) locals: HashSet<LocalVarId>,
 }
 
 /// A stage of a chain, as `mark_lazy_chain` weighs it.
@@ -245,8 +261,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// chain's consumer made lazy.
     pub(super) fn is_lazy_value(&self, e: ExprId) -> bool {
         self.is_lazy_iter(self.thir[e].ty)
-            || self.lazy_stages.contains(&self.chain_key(e))
-            || matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if self.lazy_locals.contains(&id))
+            || self.chains.lazy.contains(&self.chain_key(e))
+            || matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if self.chains.locals.contains(&id))
     }
 
     /// Whether every use of `var` iterates it: a loop over it, or a stage or
@@ -296,7 +312,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return;
         }
         for stage in &stages[..=first] {
-            self.lazy_stages.insert(self.chain_key(stage.at));
+            self.chains.lazy.insert(self.chain_key(stage.at));
             // What's chained or zipped on runs in its turn too.
             if let Some(other) = stage.other {
                 self.mark_lazy_chain(other, true);
@@ -306,7 +322,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // side takes this side as it is.
         if stages[first].own {
             let start = self.chain_key(stages[first].receiver);
-            self.lazy_starts.insert(start);
+            self.chains.starts.insert(start);
         }
     }
 
@@ -370,14 +386,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => return,
             }
         }
-        self.owned_drains.extend(stages);
+        self.chains.drains.extend(stages);
     }
 
     /// Whether `known`, at `receiver`, a stage of a drained chain, discards
     /// items it owns, which it then drops: `filter`'s and `skip_while`'s.
     fn discards_owned(&self, known: Std, receiver: ExprId) -> Option<ty::Ty<'tcx>> {
         if !matches!(known, Std::ArrayMethod("filter") | Std::IterComb(IterComb::SkipWhile))
-            || !self.owned_drains.contains(&self.chain_key(receiver))
+            || !self.chains.drains.contains(&self.chain_key(receiver))
         {
             return None;
         }
@@ -449,7 +465,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // `find_map(f)` is a `map` that stops at the first `Some`.
             if known == Std::IterComb(IterComb::FindMap) && self.impure(closure) {
                 let key = self.chain_key(receiver);
-                self.lazy_starts.insert(key);
+                self.chains.starts.insert(key);
             }
         }
         let items = match self.thir[self.strip(receiver)].kind {
@@ -498,7 +514,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let lazy = self.is_lazy_iter(receiver_ty);
         // A stage of a chain its consumer found must be lazy (ADR 0139).
         let key = self.chain_key(receiver);
-        let starts = !lazy && self.lazy_starts.contains(&key);
+        let starts = !lazy && self.chains.starts.contains(&key);
         let lazy = lazy || self.is_lazy_value(receiver);
         let (items, lazy) = if starts {
             (Expr::call(Expr::member(items, "values"), vec![]), true)

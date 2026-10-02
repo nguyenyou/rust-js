@@ -9,7 +9,6 @@ use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::def_id::{DefId, LocalModDefId};
-use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Retained functions and their dependencies, grouped for output.
@@ -162,9 +161,7 @@ pub fn lower_crate<'tcx>(
         let mut cx = FnCx {
             tcx,
             typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
-            evidence: Vec::new(),
-            const_params: Vec::new(),
-            self_args: None,
+            given: Default::default(),
             krate: &crate_facts,
             dependencies: Default::default(),
             captures: HashMap::new(),
@@ -179,22 +176,12 @@ pub fn lower_crate<'tcx>(
             loops: Vec::new(),
             runtime: HashSet::new(),
             jsx: false,
-            writer: None,
-            writer_alternate: None,
-            lazy_stages: HashSet::new(),
-            lazy_starts: HashSet::new(),
-            owned_drains: HashSet::new(),
-            lazy_locals: HashSet::new(),
-            dyn_debug: super::display::Pretty::Plain,
-            codec_params: Vec::new(),
+            writing: Default::default(),
+            chains: Default::default(),
             stepped: body.map_or_else(HashSet::new, |body| body.facts.stepped.clone()),
             cloning: Vec::new(),
             item: def_id,
-            representable: RefCell::new(HashMap::new()),
-            assumed: Cell::new(usize::MAX),
-            mutated_types: RefCell::new(HashMap::new()),
-            clones: RefCell::new(HashMap::new()),
-            clone_assumed: Cell::new(usize::MAX),
+            walks: Default::default(),
             drop_state: Default::default(),
             body_owner: def_id,
         };
