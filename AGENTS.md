@@ -100,8 +100,21 @@ scripts/linux-vm.sh 'cargo build --release && bun scripts/rustc-suite.ts drop/ c
 It starts the VM if it isn't running, syncs this checkout into the VM's own
 copy, uncommitted edits too, and runs the command there. The VM's `target/`
 and `node_modules/` are its own. Use it for named rustc tests or
-directories, the corpus, and a few mutations. The workflow above stays the
-record of all of rustc's tests and of their known failures: bless there.
+directories, the corpus, and a few mutations.
+
+All of rustc's tests take about a minute there, so check a change against
+the known failures in the VM before pushing it:
+
+```bash
+scripts/linux-vm.sh 'cargo build --release && bun scripts/rustc-suite.ts'
+```
+
+On an Arm VM, expect one difference, and ignore it:
+`abi/abi-sysv64-arg-passing.rs`, which is x86-only (`ignore-aarch64`), is
+reported "newly with a native answer", since the workflow's x86 machines
+can't link it natively. Anything else the check reports is the change's.
+The workflow above stays the record of rustc's tests and their known
+failures: bless there, and commit the lists it writes.
 
 To set the VM up once, on Apple Silicon:
 
