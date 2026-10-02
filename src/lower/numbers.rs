@@ -25,6 +25,8 @@ pub(super) enum NumOp {
     CheckedPow,
     Powi,
     Powf,
+    /// `x.exp2()`: `2 ** x`, as `powf` is (ADR 0136).
+    Exp2,
     Round,
     /// `a.total_cmp(&b)`: IEEE 754's total order, as Rust has it.
     TotalCmp,
@@ -102,6 +104,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             NumOp::Powi if num == Num::F32 => helper(self, Helper::PowiF32, "$powiF32", vec![arg(), arg()]),
             NumOp::Powi => helper(self, Helper::Powi, "$powi", vec![arg(), arg()]),
             NumOp::Powf => rounded(Expr::bin(Op::Pow, arg(), arg())),
+            NumOp::Exp2 => rounded(Expr::bin(Op::Pow, Expr::num(2.0), arg())),
             NumOp::Round => helper(self, Helper::Round, "$round", vec![arg()]),
             NumOp::TotalCmp => helper(self, Helper::TotalCmp, "$totalCmp", vec![arg(), arg()]),
             NumOp::IsNan => number("isNaN", vec![arg()]),

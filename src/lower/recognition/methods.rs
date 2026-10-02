@@ -70,6 +70,9 @@ pub(super) fn number(name: &str, num: Num) -> Option<NumOp> {
             })
         }
         "ln" if float => NumOp::Math("log"),
+        "exp_m1" if float => NumOp::Math("expm1"),
+        "ln_1p" if float => NumOp::Math("log1p"),
+        "exp2" if float => NumOp::Exp2,
         "abs" if float => NumOp::Math("abs"),
         "abs" if signed => NumOp::Abs,
         "unsigned_abs" if signed => NumOp::UnsignedAbs,
@@ -171,6 +174,7 @@ pub(super) fn iterator(name: &str) -> Option<IterComb> {
         "nth" => IterComb::Nth,
         "find_map" => IterComb::FindMap,
         "partition" => IterComb::Partition,
+        "inspect" => IterComb::Inspect,
         "unzip" => IterComb::Unzip,
         _ => return None,
     })

@@ -878,6 +878,19 @@ export function $rangeFromNext(range) {
   return range.start++;
 }
 
+export function $asciiCase(text, upper = false) {
+  return upper
+    ? text.replace(/[a-z]+/g, (letters) => letters.toUpperCase())
+    : text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+}
+
+export function $append(items, other) {
+  for (const item of other) {
+    items.push(item);
+  }
+  other.length = 0;
+}
+
 export function $charRange(start, end, inclusive = false) {
   const items = [];
   const last = end.codePointAt(0) - (inclusive ? 0 : 1);

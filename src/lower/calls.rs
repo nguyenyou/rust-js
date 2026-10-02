@@ -15,8 +15,8 @@ use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
-use rustc_span::Span;
 use rustc_span::def_id::DefId;
+use rustc_span::{Span, sym};
 use std::collections::HashSet;
 
 /// How an argument is given to a function that takes boxes (`call_with_boxes`).
@@ -103,6 +103,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "comparing `&mut`s"));
         }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
+            return Ok(written);
+        }
+        if let Some(written) = self.debug_builder(def_id, args, span, out)? {
             return Ok(written);
         }
         if self.is_rust_fn(def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
@@ -221,6 +224,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Err(self.unsupported(span, "methods of a `fmt::Result`"));
         }
+        // `cmp::max(a, b)` of what isn't a number: `Ord::max(a, b)`'s (ADR 0136).
+        if self.std_fn(fun).is_none()
+            && let Some(name) = match self.tcx.def_path_str(def_id).as_str() {
+                "std::cmp::max" | "core::cmp::max" => Some("max"),
+                "std::cmp::min" | "core::cmp::min" => Some("min"),
+                _ => None,
+            }
+        {
+            let ord = self.tcx.get_diagnostic_item(sym::Ord).expect("std has `Ord`");
+            let method = self
+                .tcx
+                .associated_item_def_ids(ord)
+                .iter()
+                .copied()
+                .find(|&id| self.tcx.item_name(id).as_str() == name)
+                .expect("`Ord` has `max` and `min`");
+            let values = self.operands(args, out)?;
+            if let Some(call) = self.trait_call(method, generic_args, values, span, out)? {
+                return Ok(call);
+            }
+        }
         let Some(known) = self.std_fn(fun) else {
             // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
             if let Some(string) = self
@@ -326,6 +350,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::ArrayMethod("find")
                     | Std::Extreme(_)
                     | Std::Step(StepOp::Next | StepOp::Peek)
+                    // The old value, as it's kept: boxed already.
+                    | Std::OptionTake
+                    | Std::OptionReplace
             )
         {
             return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));
@@ -522,14 +549,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::AssertFailed);
             return Ok(Expr::call(Expr::var("$assertFailed"), values));
         }
-        if matches!(known, Std::Swap | Std::Replace) {
+        if matches!(
+            known,
+            Std::Swap | Std::Replace | Std::OptionTake | Std::OptionReplace | Std::MemTake
+        ) {
             return self.swap_or_replace(known, args, discarded, span, out);
         }
         let mut values = self.operands(args, out)?.into_iter();
         let mut arg = || values.next().expect("rustc checked the arguments");
         let js_span = self.js_span(span);
         Ok(match known {
-            Std::Swap | Std::Replace => unreachable!("lowered from their places, above"),
+            Std::Swap | Std::Replace | Std::OptionTake | Std::OptionReplace | Std::MemTake => {
+                unreachable!("lowered from their places, above")
+            }
             // An `Rc` is the JS reference itself: the garbage collector does
             // its counting, so a clone is the same object.
             Std::Same => arg(),
@@ -977,6 +1009,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
             Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
             Std::VecNew => Expr::array(vec![]),
+            Std::AsciiCase { upper } => {
+                self.runtime.insert(Helper::AsciiCase);
+                let mut list = vec![arg()];
+                if upper {
+                    list.push(Expr::bool(true));
+                }
+                Expr::call(Expr::var("$asciiCase"), list)
+            }
+            Std::AsciiEq => {
+                self.runtime.insert(Helper::AsciiCase);
+                let (a, b) = (arg(), arg());
+                Expr::bin(
+                    Op::Eq,
+                    Expr::call(Expr::var("$asciiCase"), vec![a]),
+                    Expr::call(Expr::var("$asciiCase"), vec![b]),
+                )
+            }
+            Std::Append => {
+                self.runtime.insert(Helper::Append);
+                Expr::call(Expr::var("$append"), vec![arg(), arg()])
+            }
             Std::OptionIter => {
                 let item = self
                     .option_of(self.thir[args[0]].ty.peel_refs())
@@ -1155,6 +1208,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Swap => {
                 let b = self.mut_place(args[1], span)?;
                 (b.clone(), Some(b))
+            }
+            // `None`, and what's in a `Some`, boxed where a generic one is
+            // (ADR 0051).
+            Std::OptionTake => (Expr::undefined(), None),
+            Std::OptionReplace => {
+                let value = self.expr(args[1], out)?;
+                let item = self
+                    .option_of(self.thir[args[0]].ty.peel_refs())
+                    .expect("an `Option` has a `T`");
+                let value = if self.boxed_payload(item) {
+                    self.some(value)
+                } else {
+                    value
+                };
+                (value, None)
+            }
+            Std::MemTake => {
+                let ty = self.thir[args[0]].ty.peel_refs();
+                (self.default_value(ty, span)?, None)
             }
             _ => (self.expr(args[1], out)?, None),
         };

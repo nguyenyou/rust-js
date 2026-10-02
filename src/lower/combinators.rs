@@ -72,6 +72,8 @@ pub(super) enum IterComb {
     Partition,
     /// `unzip()` into two `Vec`s: `$unzip(pairs)`.
     Unzip,
+    /// `inspect(f)`: `map((item) => { f(item); return item; })` (ADR 0136).
+    Inspect,
 }
 
 /// One of std's iterator sources (ADR 0128): `once` and `empty` are
@@ -847,6 +849,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 } else {
                     Expr::index(items, n)
                 }
+            }
+            IterComb::Inspect => {
+                let f = next();
+                let f = if matches!(f.kind, js::ExprKind::Var(_)) {
+                    f
+                } else {
+                    self.spill("inspect", f, out)
+                };
+                let item = Expr::var("item");
+                let each = Expr::arrow(
+                    vec!["item".into()],
+                    vec![
+                        StmtKind::Expr(Expr::call(f, vec![item.clone()])).at(js::Span::NONE),
+                        StmtKind::Return(Some(item)).at(js::Span::NONE),
+                    ],
+                );
+                method(items, "map", vec![each])
             }
             IterComb::Partition => {
                 let items = if lazy {

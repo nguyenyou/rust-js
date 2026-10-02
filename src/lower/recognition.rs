@@ -103,6 +103,20 @@ pub(super) enum Std {
     /// each written in turn.
     Swap,
     Replace,
+    /// `opt.take()`, `opt.replace(v)` and `mem::take(&mut x)`: `mem::replace`
+    /// with `None`, `Some(v)` and `x`'s default (ADR 0136).
+    OptionTake,
+    OptionReplace,
+    MemTake,
+    /// `s.to_ascii_lowercase()`: only ASCII's letters, `$asciiCase(s)`,
+    /// unlike JS's `toLowerCase` (ADR 0136).
+    AsciiCase {
+        upper: bool,
+    },
+    /// `a.eq_ignore_ascii_case(b)`.
+    AsciiEq,
+    /// `v.append(&mut other)`: `$append(v, other)`, which empties `other`.
+    Append,
     /// `println!` and `print!`, or with `error`, `eprintln!` and
     /// `eprint!`: `console.log(..)` of a line (ADR 0087).
     Print {
@@ -313,6 +327,21 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_replace") {
             return Some(Std::Replace);
+        }
+        if tcx.crate_name(def_id.krate) == sym::core && tcx.def_path_str(def_id) == "std::mem::take" {
+            return Some(Std::MemTake);
+        }
+        // `cmp::max(a, b)` of numbers is `a.max(b)`'s (ADR 0136); of anything
+        // else, the call is lowered as `Ord::max`'s.
+        if tcx.crate_name(def_id.krate) == sym::core
+            && let Some(max) = match tcx.def_path_str(def_id).as_str() {
+                "std::cmp::max" | "core::cmp::max" => Some(true),
+                "std::cmp::min" | "core::cmp::min" => Some(false),
+                _ => None,
+            }
+            && self_ty.and_then(Num::of).is_some_and(|num| !num.float())
+        {
+            return Some(Std::MaxOf(max));
         }
         if tcx.is_lang_item(def_id, LangItem::RangeInclusiveNew) {
             return Some(Std::Range(RangeOp::New));
@@ -859,7 +888,16 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 Std::Range(RangeOp::IsEmpty)
             }
             "as_ref" | "as_mut" if option => Std::Pointee,
+            // A reference is the value (ADR 0023): what's in the `Result` is.
+            "as_ref" if result => Std::Same,
+            "into_inner" if adt("Cell") || adt("RefCell") => Std::CellGet,
+            "to_ascii_lowercase" if owner.is_str() => Std::AsciiCase { upper: false },
+            "to_ascii_uppercase" if owner.is_str() => Std::AsciiCase { upper: true },
+            "eq_ignore_ascii_case" if owner.is_str() || owner.is_char() => Std::AsciiEq,
+            "append" if adt("Vec") || adt("VecDeque") => Std::Append,
             "is_some" if option => Std::IsSome,
+            "take" if option => Std::OptionTake,
+            "replace" if option => Std::OptionReplace,
             "iter" if option => Std::OptionIter,
             "copied" | "cloned" if option => Std::OptionCloned,
             "is_none" if option => Std::IsNone,

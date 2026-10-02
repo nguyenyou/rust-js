@@ -192,6 +192,208 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(Some(Expr::undefined()))
     }
 
+    /// `f.debug_struct("P").field("x", &self.x).finish()`, and the other
+    /// builders' `finish` (ADR 0136): what the chain writes, as one string,
+    /// as a derived `Debug`'s is: `P { x: 1 }`. A builder kept in a variable,
+    /// which its calls write to in turn, is an error.
+    pub(super) fn debug_builder(
+        &mut self,
+        def_id: DefId,
+        args: &[ExprId],
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Option<Expr>> {
+        let finish = self.tcx.item_name(def_id);
+        let non_exhaustive = match finish.as_str() {
+            "finish" => false,
+            "finish_non_exhaustive" => true,
+            _ => return Ok(None),
+        };
+        let Some(owner) = self.tcx.inherent_impl_of_assoc(def_id) else {
+            return Ok(None);
+        };
+        let owner = self.tcx.type_of(owner).instantiate_identity().skip_normalization();
+        let ty::Adt(owner, _) = owner.kind() else {
+            return Ok(None);
+        };
+        let kind = match self.tcx.def_path_str(owner.did()).as_str() {
+            "std::fmt::DebugStruct" => "DebugStruct",
+            "std::fmt::DebugTuple" => "DebugTuple",
+            "std::fmt::DebugList" => "DebugList",
+            "std::fmt::DebugSet" => "DebugSet",
+            "std::fmt::DebugMap" => "DebugMap",
+            _ => return Ok(None),
+        };
+        // From `finish`'s receiver back to the `Formatter`'s method that made it.
+        let mut steps: Vec<(String, Vec<ExprId>, ty::GenericArgsRef<'tcx>)> = Vec::new();
+        let mut at = args[0];
+        let start = loop {
+            let mut e = self.strip(at);
+            while let ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } = self.thir[e].kind {
+                e = self.strip(arg);
+            }
+            let ExprKind::Call { fun, ref args, .. } = self.thir[e].kind else {
+                return Err(self.unsupported(span, "a `Debug` builder kept in a variable"));
+            };
+            let &ty::FnDef(id, generic_args) = self.thir[self.strip(fun)].ty.kind() else {
+                return Err(self.unsupported(span, "this `Debug` builder"));
+            };
+            let name = self.tcx.item_name(id).to_string();
+            if name.starts_with("debug_") {
+                break (args.to_vec(), id);
+            }
+            at = args[0];
+            steps.push((name, args.to_vec(), generic_args));
+        };
+        steps.reverse();
+        let (start_args, _) = start;
+        let Some((var, written_to)) = self.writer.clone() else {
+            return Err(self.unsupported(span, "a `Formatter` outside a `fmt`"));
+        };
+        if var.is_none() || self.formatter_var(start_args[0]) != var {
+            return Err(self.unsupported(span, "this `Formatter`"));
+        }
+        // Each part, in the order Rust writes them: a name, then one string for
+        // each field or entry, or an array of them for `entries(items)`.
+        let mut list = start_args[1..].to_vec();
+        for (_, args, _) in &steps {
+            list.extend(args[1..].iter().copied());
+        }
+        let mut values = self.operands(&list, out)?.into_iter();
+        let type_name = match kind {
+            "DebugStruct" | "DebugTuple" => Some(values.next().expect("a type's name")),
+            _ => None,
+        };
+        enum Part {
+            One(Expr),
+            Many(Expr),
+        }
+        let mut parts = Vec::new();
+        for (name, args, generic_args) in &steps {
+            // A `&dyn Debug` is the string it shows already (ADR 0060).
+            let debug_of = |this: &mut Self, value: Expr, at: ExprId| -> R<Expr> {
+                match this.is_dyn_debug(this.thir[at].ty) {
+                    true => Ok(value),
+                    false => this.debug_string(value, this.thir[at].ty, span),
+                }
+            };
+            let part = match (kind, name.as_str()) {
+                ("DebugStruct", "field") => {
+                    let (field, value) = (values.next().expect("a name"), values.next().expect("a value"));
+                    let shown = debug_of(self, value, args[2])?;
+                    Part::One(join(vec![field, Expr::str(": "), shown]))
+                }
+                ("DebugTuple", "field") | ("DebugList" | "DebugSet", "entry") => {
+                    let value = values.next().expect("a value");
+                    Part::One(debug_of(self, value, args[1])?)
+                }
+                ("DebugMap", "entry") => {
+                    let (key, value) = (values.next().expect("a key"), values.next().expect("a value"));
+                    let key = debug_of(self, key, args[1])?;
+                    let value = debug_of(self, value, args[2])?;
+                    Part::One(join(vec![key, Expr::str(": "), value]))
+                }
+                ("DebugList" | "DebugSet" | "DebugMap", "entries") => {
+                    let items = values.next().expect("the entries");
+                    let tys: Vec<Ty<'tcx>> = generic_args.types().collect();
+                    let iterable = *tys.last().expect("the entries' type");
+                    let items = self.iter_source(items, iterable, span, out)?;
+                    let shown = if kind == "DebugMap" {
+                        let pair = Expr::var("entry");
+                        let key = self.debug_string(Expr::index(pair.clone(), Expr::int(0)), tys[0], span)?;
+                        let value = self.debug_string(Expr::index(pair, Expr::int(1)), tys[1], span)?;
+                        join(vec![key, Expr::str(": "), value])
+                    } else {
+                        self.debug_string(Expr::var("entry"), tys[0], span)?
+                    };
+                    let each = Expr::arrow(
+                        vec!["entry".into()],
+                        vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
+                    );
+                    Part::Many(Expr::call(Expr::member(Expr::var("Array"), "from"), vec![items, each]))
+                }
+                _ => return Err(self.unsupported(span, &format!("a `Debug` builder's `{name}`"))),
+            };
+            parts.push(part);
+        }
+        // The parts, comma separated: in place when each is one string, else
+        // an array of them joined, as `entries` may give none.
+        let separated = |parts: Vec<Part>, extra: Option<&str>| -> Expr {
+            let mut parts = parts;
+            if let Some(extra) = extra {
+                parts.push(Part::One(Expr::str(extra)));
+            }
+            if parts.iter().all(|p| matches!(p, Part::One(_))) {
+                let mut pieces = Vec::new();
+                for (i, part) in parts.into_iter().enumerate() {
+                    if i > 0 {
+                        pieces.push(Expr::str(", "));
+                    }
+                    if let Part::One(e) = part {
+                        pieces.push(e);
+                    }
+                }
+                return join(pieces);
+            }
+            let mut arrays: Vec<Expr> = Vec::new();
+            let mut ones: Vec<Expr> = Vec::new();
+            for part in parts {
+                match part {
+                    Part::One(e) => ones.push(e),
+                    Part::Many(e) => {
+                        if !ones.is_empty() {
+                            arrays.push(Expr::array(std::mem::take(&mut ones)));
+                        }
+                        arrays.push(e);
+                    }
+                }
+            }
+            if !ones.is_empty() {
+                arrays.push(Expr::array(ones));
+            }
+            let mut arrays = arrays.into_iter();
+            let first = arrays.next().expect("a part");
+            let all = arrays.fold(first, |all, next| Expr::call(Expr::member(all, "concat"), vec![next]));
+            Expr::call(Expr::member(all, "join"), vec![Expr::str(", ")])
+        };
+        let rest = non_exhaustive.then_some("..");
+        let empty = parts.is_empty() && !non_exhaustive;
+        let written = match kind {
+            "DebugStruct" | "DebugTuple" if empty => type_name.expect("a type's name"),
+            "DebugStruct" => {
+                let inside = separated(parts, rest);
+                join(vec![
+                    type_name.expect("a type's name"),
+                    Expr::str(" { "),
+                    inside,
+                    Expr::str(" }"),
+                ])
+            }
+            "DebugTuple" => {
+                let inside = separated(parts, rest);
+                join(vec![
+                    type_name.expect("a type's name"),
+                    Expr::str("("),
+                    inside,
+                    Expr::str(")"),
+                ])
+            }
+            _ => {
+                let (open, close) = if kind == "DebugList" { ("[", "]") } else { ("{", "}") };
+                if empty {
+                    Expr::str(format!("{open}{close}"))
+                } else {
+                    let inside = separated(parts, rest);
+                    join(vec![Expr::str(open), inside, Expr::str(close)])
+                }
+            }
+        };
+        let target = Expr::var(&written_to);
+        let js_span = self.js_span(span);
+        out.push(StmtKind::Assign(target.clone(), Expr::bin(Op::Add, target, written)).at(js_span));
+        Ok(Some(Expr::undefined()))
+    }
+
     /// The variable a `Formatter` argument is: `f`, or `&mut *f`.
     fn formatter_var(&self, e: ExprId) -> Option<thir::LocalVarId> {
         match self.thir[self.strip(e)].kind {

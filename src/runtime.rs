@@ -92,6 +92,8 @@ helpers! {
     RangeNext,
     RangeNextBack,
     RangeFromNext,
+    AsciiCase,
+    Append,
     CharRange,
     TryFromInt,
     Print,
@@ -722,6 +724,27 @@ function $charRange(start, end, inclusive = false) {
     }
   }
   return items;
+}
+"#
+            }
+            // ASCII's letters only, as Rust's `to_ascii_lowercase` changes them.
+            Helper::AsciiCase => {
+                r#"
+function $asciiCase(text, upper = false) {
+  return upper
+    ? text.replace(/[a-z]+/g, (letters) => letters.toUpperCase())
+    : text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+}
+"#
+            }
+            // `v.append(&mut other)`: `other`'s items, moved, which leaves it empty.
+            Helper::Append => {
+                r#"
+function $append(items, other) {
+  for (const item of other) {
+    items.push(item);
+  }
+  other.length = 0;
 }
 "#
             }
