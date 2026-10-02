@@ -444,7 +444,7 @@ export const mutations: Mutation[] = [
   {
     name: "range-search-unborrowed",
     breaks: "a search on a range, `(0..n).all(f)`, is called on the range's `{ start, end }`, not its items",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            } if (self.is_lang_adt(self.reveal(self.thir[arg].ty), LangItem::Range)\n",
     replace: "            } if false && (self.is_lang_adt(self.reveal(self.thir[arg].ty), LangItem::Range)\n",
     tests: ["test/corpus.test.ts", "-t", "range_searches"],
@@ -1935,7 +1935,7 @@ export const mutations: Mutation[] = [
   {
     name: "chained-iterator-raw",
     breaks: "an iterator of the crate's own, chained on, is its struct, not its items",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                rest[0] = self.iter_source(other, self.thir[args[1]].ty, span, out)?;",
     replace: "                rest[0] = other;",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
@@ -1975,7 +1975,7 @@ export const mutations: Mutation[] = [
   {
     name: "collected-literal-copied",
     breaks: "`std::iter::empty().collect()` is `[].slice()`, a copy of a new array",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                    js::ExprKind::Array(_) => true,\n",
     replace: "",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
@@ -1992,7 +1992,7 @@ export const mutations: Mutation[] = [
   {
     name: "range-value-not-items",
     breaks: "a range kept as a value is iterated as its object, which has no items",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        if self.range_kind(ty).is_some() {\n            return self.range_items(value, ty, span, out);",
     replace: "        if false && self.range_kind(ty).is_some() {\n            return self.range_items(value, ty, span, out);",
     tests: ["test/corpus.test.ts","-t","range_values"],
@@ -2041,7 +2041,7 @@ export const mutations: Mutation[] = [
   {
     name: "range-any-param-items",
     breaks: "a range given where any `T: Clone` goes is its items, not the range",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        if self.range_kind(ty.peel_refs()).is_none() {\n            return false;\n        }",
     replace: "        if self.range_kind(ty.peel_refs()).is_some() {\n            return true;\n        }",
     tests: ["test/corpus.test.ts","-t","range_values"],
@@ -2049,7 +2049,7 @@ export const mutations: Mutation[] = [
   {
     name: "char-range-written-numeric",
     breaks: "`('a'..'e').collect()` is `$range`, of numbers, which gives none",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                if self.is_lang_adt(receiver_ty, LangItem::Range)\n                    && self.range_index(receiver_ty).and_then(Num::of).is_some() =>",
     replace: "                if self.is_lang_adt(receiver_ty, LangItem::Range) =>",
     tests: ["test/corpus.test.ts","-t","range_values"],
@@ -2569,7 +2569,7 @@ export const mutations: Mutation[] = [
   {
     name: "format-dyn-debug-plain",
     breaks: "a `&dyn Debug` made in a format's arguments for its `{:#?}`, as `dbg!` makes one, is shown plain",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/format_args.rs",
     find: "        } else {\n            Pretty::Always\n        };",
     replace: "        } else {\n            Pretty::Plain\n        };",
     tests: ["test/corpus.test.ts", "-t", "pretty_debug"],
@@ -2577,7 +2577,7 @@ export const mutations: Mutation[] = [
   {
     name: "kept-dyn-debug-pretty",
     breaks: "`{:#?}` of a `&dyn Debug` made elsewhere, already a plain string, is shown plain",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/format_args.rs",
     find: "            if !made_here || !plain_dyn.is_empty() {",
     replace: "            if false && (!made_here || !plain_dyn.is_empty()) {",
     tests: ["test/traits.test.ts", "-t", "kept &dyn Debug"],
@@ -2771,7 +2771,7 @@ export const mutations: Mutation[] = [
   {
     name: "lazy-chains-off",
     breaks: "a chain whose stages do what can be seen runs every item through each stage before the next, not Rust's order",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        let Some(first) = stages.iter().rposition(|stage| stage.impure) else {",
     replace: "        let Some(first) = None::<usize> else {",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2779,7 +2779,7 @@ export const mutations: Mutation[] = [
   {
     name: "lazy-chain-unseen",
     breaks: "what ends a chain, a loop or a consumer that stops early, isn't taken as telling the order",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        if !seen && !zips && !stages[..first].iter().any(|stage| stage.tells) {",
     replace: "        if !zips && !stages[..first].iter().any(|stage| stage.tells) {",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2787,7 +2787,7 @@ export const mutations: Mutation[] = [
   {
     name: "lazy-chains-always",
     breaks: "a chain with a stage that does what can be seen is lazy though nothing can tell: right, but not the JS a person writes",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        if !seen && !zips && !stages[..first].iter().any(|stage| stage.tells) {\n            return;\n        }",
     replace: "",
     tests: ["test/snapshots.test.ts"],
@@ -2804,7 +2804,7 @@ export const mutations: Mutation[] = [
   {
     name: "find-map-eager",
     breaks: "`find_map` with a closure that does what can be seen calls it for every item",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            if known == Std::IterComb(IterComb::FindMap) && self.impure(closure) {",
     replace: "            if false {",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2812,7 +2812,7 @@ export const mutations: Mutation[] = [
   {
     name: "position-drains",
     breaks: "`position` of a lazy chain takes all of it first",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            | Std::Fuse\n            | Std::Position => items,",
     replace: "            | Std::Fuse => items,",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2820,7 +2820,7 @@ export const mutations: Mutation[] = [
   {
     name: "rev-not-telling",
     breaks: "`rev` after a closure that does what can be seen runs it front to back, where Rust runs it from the end",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        Std::Take\n            | Std::Rev\n            | Std::Position",
     replace: "        Std::Take\n            | Std::Position",
     tests: ["test/traits.test.ts", "-t", "rev after"],
@@ -2837,7 +2837,7 @@ export const mutations: Mutation[] = [
   {
     name: "any-argument-callable",
     breaks: "a stage's argument that isn't a closure, as `skip(1)`'s, is taken as one that may do anything",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            callable && !self.recognition().is_pure_fn(ty)",
     replace: "            !self.recognition().is_pure_fn(ty)",
     tests: ["test/snapshots.test.ts"],
@@ -2920,7 +2920,7 @@ export const mutations: Mutation[] = [
   {
     name: "drain-any-chain",
     breaks: "a chain `collect()` doesn't drain, as one with `take`, is let through, and what's left never dropped",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                Some(Std::Same) => {\n                    let source = self.reveal(self.thir[inner].ty);\n                    if !(source.is_array() || self.is_vec_like(source)) {\n                        return;\n                    }\n                    break;\n                }\n                _ => return,",
     replace: "                Some(Std::Same) => {\n                    let source = self.reveal(self.thir[inner].ty);\n                    if !(source.is_array() || self.is_vec_like(source)) {\n                        return;\n                    }\n                    break;\n                }\n                _ => at = self.chain_stage(inner),",
     tests: ["test/traits.test.ts", "-t", "collect after take"],
@@ -2928,7 +2928,7 @@ export const mutations: Mutation[] = [
   {
     name: "discarded-kept",
     breaks: "what `filter` and `skip_while` discard of owned items is never dropped",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            .filter(|&item| self.has_drops(item))",
     replace: "            .filter(|_| false)",
     tests: ["test/corpus.test.ts", "-t", "collect_drops"],
@@ -2936,7 +2936,7 @@ export const mutations: Mutation[] = [
   {
     name: "skipped-kept-dropped",
     breaks: "`skip_while` drops what it keeps, not what it skips",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                rest[0] = self.dropping_discarded(test, item, true, span, out)?;",
     replace: "                rest[0] = self.dropping_discarded(test, item, false, span, out)?;",
     tests: ["test/corpus.test.ts", "-t", "collect_drops"],
@@ -2944,7 +2944,7 @@ export const mutations: Mutation[] = [
   {
     name: "discard-not-seen",
     breaks: "a stage that drops what it discards isn't taken as doing what can be seen: its drops run before the other stages'",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "(other.is_none() && self.impure(args.get(1).copied())) || self.discards_owned(known, inner).is_some();",
     replace: "(other.is_none() && self.impure(args.get(1).copied()));",
     tests: ["test/corpus.test.ts", "-t", "collect_drops"],
@@ -2952,7 +2952,7 @@ export const mutations: Mutation[] = [
   {
     name: "other-side-ignored",
     breaks: "a `chain` or a `zip` whose other side does what can be seen isn't taken as doing so",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            let other_impure = other.is_some_and(|o| self.chain_stages(o).iter().any(|stage| stage.impure));",
     replace: "            let other_impure = false;",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2960,7 +2960,7 @@ export const mutations: Mutation[] = [
   {
     name: "other-side-eager",
     breaks: "the other side of a lazy `chain` or `zip` runs every item through each stage first",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "                self.mark_lazy_chain(other, true);",
     replace: "                let _ = other;",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2968,7 +2968,7 @@ export const mutations: Mutation[] = [
   {
     name: "zip-not-forcing",
     breaks: "a `zip` whose other side does what can be seen takes all of that side, where Rust stops at the shorter",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        let zips = stages[first].zips;",
     replace: "        let zips = false;",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2984,7 +2984,7 @@ export const mutations: Mutation[] = [
   {
     name: "kept-chain-any-use",
     breaks: "a chain kept in a variable is lazy though it's returned, where an array is wanted",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "        uses > 0 && uses == iterating",
     replace: "        uses > 0",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
@@ -2992,7 +2992,7 @@ export const mutations: Mutation[] = [
   {
     name: "lazy-local-unknown",
     breaks: "a variable that holds a lazy chain is taken as an array where it's used",
-    file: "src/lower/stdlib.rs",
+    file: "src/lower/iterators.rs",
     find: "            || matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if self.lazy_locals.contains(&id))",
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],

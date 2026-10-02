@@ -329,13 +329,13 @@ fn uses_pretty_debug(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
             let rustc_ast::LitKind::ByteStr(ref bytes, _) = lit.node else {
                 return false;
             };
-            let Some(pieces) = super::stdlib::decode_template(bytes.as_byte_str()) else {
+            let Some(pieces) = super::format_args::decode_template(bytes.as_byte_str()) else {
                 return false;
             };
             let alternates: Vec<usize> = pieces
                 .iter()
                 .filter_map(|piece| match piece {
-                    super::stdlib::Piece::Argument(index, spec) if spec.alternate => Some(*index),
+                    super::format_args::Piece::Argument(index, spec) if spec.alternate => Some(*index),
                     _ => None,
                 })
                 .collect();

@@ -44,7 +44,9 @@ mod calls;
 mod combinators;
 mod display;
 mod drops;
+mod format_args;
 mod format_spec;
+mod iterators;
 mod jsx;
 mod jsx_api;
 mod library;
@@ -61,7 +63,6 @@ mod representation;
 mod serde;
 mod sources;
 mod std_impls;
-mod stdlib;
 mod text;
 mod traits;
 

@@ -37,6 +37,14 @@ enum Callee<'tcx> {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Which std function `fun` is, if rust-js knows what it means in JS.
+    pub(super) fn std_fn(&self, fun: ExprId) -> Option<Std> {
+        let &ty::FnDef(def_id, args) = self.thir[self.strip(fun)].ty.kind() else {
+            return None;
+        };
+        self.recognition().classify(def_id, args)
+    }
+
     /// A call to one of our functions (local or imported by name),
     /// to JS (ADR 0021), or to one of the std functions rust-js knows (ADR 0023).
     pub(super) fn call(
