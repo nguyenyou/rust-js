@@ -37,14 +37,14 @@ associated-types/issue-23208.rs	error: rust-js does not support implementation e
 associated-types/issue-47139-1.rs	error: rust-js does not support this method of an `Option` of a generic type yet
 associated-types/issue-47139-2.rs	error: rust-js does not support this method of an `Option` of a generic type yet
 associated-types/issue-54467.rs	error: rust-js does not support values of type `<<() as Stream>::Error as ParseError<char>>::Output` yet
-associated-types/nested-fnonce-output-projection.rs	error: rust-js does not support values of type `<{closure@<case>/nested-fnonce-output-projection.rs:13:21: 13:23} as std::ops::FnOnce<()>>::Output` yet
+associated-types/nested-fnonce-output-projection.rs	error: rust-js does not support values of type `<{closure@associated-types/nested-fnonce-output-projection.rs:13:21: 13:23} as std::ops::FnOnce<()>>::Output` yet
 associated-types/object-method-numbering.rs	error: rust-js does not support implementation evidence for `<dyn SomeTrait<SomeType = i32> as SomeTrait>` yet
 associated-types/recursive-enum-with-assoc-type-selfref.rs	error: rust-js does not support values of type `<BP as Parameters>::SelfRef` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support labeled blocks yet
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
-autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::boxed::Box<{closure@<case>/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>) is !null` yet
+autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::boxed::Box<{closure@autoref-autoderef/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>) is !null` yet
 autoref-autoderef/deref-chain-method-calls-13264.rs	error: rust-js does not support values of type `*const Node` yet
 binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of type `*const usize` yet
 binding/match-pipe-binding.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
@@ -86,7 +86,6 @@ closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does n
 closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 closures/2229_closure_analysis/migrations/precise_no_migrations.rs	error: rust-js does not support a closure that holds a value with a destructor yet
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
-closures/2229_closure_analysis/unresolvable-upvar-issue-87987.rs	error: rust-js does not support `{:#?}` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
 closures/closure-last-use-move.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
 closures/explicit-return-in-closure-and-outer-fn.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
@@ -244,7 +243,7 @@ issues/issue-30081.rs	error: rust-js does not support values of type `std::optio
 issues/issue-34503.rs	error: rust-js does not support comparing `main::X`s yet
 issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_raw_parts` yet
 issues/issue-42148.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
-issues/issue-42552.rs	error: rust-js does not support values of type `<std::iter::Map<std::slice::Iter<'_, i32>, {closure@<case>/issue-42552.rs:28:39: 28:42}> as std::iter::Iterator>::Item` yet
+issues/issue-42552.rs	error: rust-js does not support values of type `<std::iter::Map<std::slice::Iter<'_, i32>, {closure@issues/issue-42552.rs:28:39: 28:42}> as std::iter::Iterator>::Item` yet
 issues/issue-4541.rs	error: rust-js does not support calling `std::env::args` yet
 issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::Args` yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
@@ -337,7 +336,6 @@ rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support a
 rfcs/rfc-2091-track-caller/tracked-trait-impls.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support constants of type `&'static (dyn Tracked + 'static)` yet
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
-rfcs/rfc-2361-dbg-macro/dbg-macro-expected-behavior.rs	error: rust-js does not support `{:#?}` yet
 rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<std::option::Option<i32>>>` yet
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
