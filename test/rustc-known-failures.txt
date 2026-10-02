@@ -53,7 +53,6 @@ binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
 binding/order-drop-with-match.rs	error: rust-js does not support moving a value with a destructor here yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this expression yet
 binop/augmented-assignment.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-block-result/blocks-without-results-11709.rs	error: rust-js does not support calling `std::option::Option::<T>::take` yet
 borrowck/borrowck-borrow-from-expr-block.rs	error: rust-js does not support values of type `*const isize` yet
 borrowck/borrowck-closures-slice-patterns-ok.rs	error: rust-js does not support a `&mut` to part of a slice yet
 borrowck/borrowck-slice-pattern-element-loan-rpass.rs	error: rust-js does not support a `&mut` to part of a slice yet
@@ -90,7 +89,6 @@ closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not su
 closures/2229_closure_analysis/unresolvable-upvar-issue-87987.rs	error: rust-js does not support `{:#?}` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
 closures/closure-last-use-move.rs	error: rust-js does not support `len()` of a string: Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works
-closures/closure-upvar-trait-caching.rs	error: rust-js does not support calling `std::iter::Iterator::inspect` yet
 closures/explicit-return-in-closure-and-outer-fn.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
 closures/once-move-out-on-heap.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 closures/region-obligations-closure-and-projection.rs	error: rust-js does not support values of type `*mut u8` yet
@@ -101,14 +99,12 @@ codegen/dont-roundup-dst-prefix-size-to-alignment.rs	error: rust-js does not sup
 codegen/dynamic-size-of-prefix-correctly-36278.rs	error: rust-js does not support `size_of_val` of a value without one size yet
 codegen/issue-101585-128bit-repeat.rs	error: rust-js does not support values of type `i128` yet
 codegen/issue-27859.rs	error: rust-js does not support calling `std::iter::ExactSizeIterator::len` yet
-codegen/llvm-miscompile-metadata-invalidation-36023.rs	error: rust-js does not support calling `std::result::Result::<T, E>::as_ref` yet
 coercion/any-trait-object-debug-12744.rs	error: rust-js does not support `{:?}` of a `dyn std::any::Any` yet
 coercion/basic-ptr-coercions.rs	error: rust-js does not support values of type `*const isize` yet
 coercion/box-dyn-to-ref-dyn.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
 coercion/coerce-overloaded-autoderef.rs	error: rust-js does not support `&mut` to a `&mut &mut std::boxed::Box<T>` yet
 coercion/unsafe-coercion.rs	error: rust-js does not support this expression yet
 collections/hashmap/hashmap-path-key.rs	error: rust-js does not support values of type `&std::path::Path` yet
-collections/vecdeque-append-operation-54477.rs	error: rust-js does not support calling `std::collections::VecDeque::<T, A>::append` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this `const` block yet
 const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support `type_name` of a type parameter yet
 const-generics/dyn-supertraits.rs	error: rust-js does not support implementation evidence for `<dyn Bar<3> as Foo<3>>` yet
@@ -116,8 +112,6 @@ const-generics/type-dependent/issue-61936.rs	error: rust-js does not support cal
 const-generics/type-dependent/issue-69816.rs	error: rust-js does not support `Default` of `[<T as std::iter::Iterator>::Item; N]` yet
 const-generics/type-dependent/issue-70507.rs	error: rust-js does not support calling `core::slice::<impl [T]>::split_at` yet
 const-generics/type-dependent/issue-71805.rs	error: rust-js does not support values of type `&mut I` yet
-const-generics/uninferred-consts-during-codegen-1.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
-const-generics/uninferred-consts-during-codegen-2.rs	error: rust-js does not support calling `std::fmt::DebugList::<'a, 'b>::finish` yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
 consts/cast-discriminant-zst-enum.rs	error: rust-js does not support constants of type `i128` yet
 consts/const_constructor/const-construct-call.rs	error: rust-js does not support constants of type `std::panic::AssertUnwindSafe<(std::option::Option<i32>, std::result::Result<i32, bool>)>` yet
@@ -193,7 +187,7 @@ drop/issue-48962.rs	error: rust-js does not support moving a value with a destru
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support values of type `*mut std::option::Option<(S<'_>, S<'_>)>` yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `Holder<dyn Trait>`, whose last field is a `dyn` yet
 drop/nested-return-drop-order.rs	error: rust-js does not support a temporary with a destructor here yet
-drop/or-pattern-drop-order.rs	error: rust-js does not support calling `std::cell::RefCell::<T>::into_inner` yet
+drop/or-pattern-drop-order.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/same-alloca-reassigned-match-binding-16151.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
@@ -213,8 +207,6 @@ enum-discriminant/niche-prefer-zero.rs	error: rust-js does not support calling `
 enum/enum-clike-ffi-as-int.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 enum/enum-univariant-repr.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 expr/compound-assignment/eval-order.rs	error: rust-js does not support assigning to this place yet
-extern/extern-prelude-core.rs	error: rust-js does not support calling `core::cmp::min` yet
-extern/extern-prelude-std.rs	error: rust-js does not support calling `std::cmp::min` yet
 fn/dyn-fn-alignment.rs	error: rust-js does not support values of type `*const A` yet
 for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support a temporary with a destructor here yet
 for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling `std::mem::zeroed` yet
@@ -246,7 +238,7 @@ impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::c
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
 inference/matcher-lifetime-inference-14919.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32::<impl f32>::exp2` yet
+intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32::<impl f32>::mul_add` yet
 intrinsics/volatile-composite-types.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
 issues/issue-30081.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 issues/issue-34503.rs	error: rust-js does not support comparing `main::X`s yet
@@ -316,12 +308,10 @@ packed/packed-struct-address-of-element.rs	error: rust-js does not support value
 packed/packed-struct-generic-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expression yet
-packed/packed-struct-vec.rs	error: rust-js does not support calling `std::fmt::DebugStruct::<'a, 'b>::finish` yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a value with a destructor yet
 pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
-pattern/premature-match-scrutinee-temporary-drop-10683.rs	error: rust-js does not support calling `std::str::<impl str>::to_ascii_lowercase` yet
 privacy/pub-extern-privacy.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 process/env-vars.rs	error: rust-js does not support iterating over `std::env::VarsOs` yet
 ptr_ops/ptr-swap-overlapping-regions.rs	error: rust-js does not support calling `std::ptr::swap` yet
