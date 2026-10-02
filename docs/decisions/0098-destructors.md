@@ -243,6 +243,32 @@ function main() {
   holds. One that takes part of a value, `t.0`, is an error. rustc's own
   walk of a body doesn't reach a closure's captures: the facts walk them
   itself. (Amended: a closure that held one was an error.)
+- **A loop that owns its items owns each for a time round**, as a function
+  owns its parameter: its binding's, an unnamed one's for `_`, or what a
+  pattern leaves of it, dropped as the round ends, by `continue` and
+  `break` too, in a `finally` inside the loop. What it iterates, a `Vec`,
+  an array, an `Option` or `iter::once(x)`, or their `into_iter()`, is
+  walked as a JS iterator, `items`, and a `finally` around the loop drops
+  what `items` hasn't reached, in order, as Rust's iterator does when it's
+  dropped:
+
+  ```js
+  const items = v.values();
+  try {
+    for (const n of items) {
+      try { .. } finally { noisyDrop_drop(n); }
+    }
+  } finally {
+    for (const left of items) noisyDrop_drop(left);
+  }
+  ```
+
+  A loop over an iterator of the crate's own owns each item the same way,
+  and drops nothing else. A loop over an adapter of owned items, and over
+  an iterator that holds a value with a destructor itself, is an error.
+  rustc writes a loop with an `iter` variable and a `next()` its lowering
+  doesn't: the facts see the loop as it's lowered. (Amended: a loop's item
+  that owned one was an error.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of

@@ -1,6 +1,8 @@
 //! Loop lowering and labels: preserve control flow and iteration order.
 
 use super::body_queries::ForLoop;
+use super::combinators::IterSource;
+use super::drops::Drops;
 use super::ranges::RangeKind;
 use super::representation::Num;
 use super::{Dest, FnCx, Loop, R, Std, Var, fresh_in, is_enumerate_pair, std_impls, without_refs};
@@ -84,6 +86,37 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         if let Some((items, range)) = self.mut_items(&f) {
             return self.index_loop(f, label_base, items, range, span, out);
+        }
+        // A loop that owns its items (ADR 0098): each is its pattern's, as a
+        // parameter is, for a time round, and those it hasn't reached when it
+        // leaves early are dropped. What it iterates is a `Vec`, an array or
+        // an `Option`, or `iter::once(x)`, which is `[x]`: `into_iter()` of
+        // one is the same.
+        let owns_items = self.has_drops(f.pat.ty);
+        let mut f = f;
+        let mut once = None;
+        if owns_items {
+            while let ExprKind::Call { fun, ref args, .. } = self.thir[self.strip(f.head)].kind {
+                match self.std_fn(fun) {
+                    Some(Std::Same | Std::OptionIter) if args.len() == 1 => f.head = args[0],
+                    Some(Std::IterSource(IterSource::Once)) => {
+                        once = Some(args[0]);
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+            let source = self.reveal(self.thir[f.head].ty);
+            let owned_source = once.is_some()
+                || source.is_array()
+                || self.is_vec_like(source)
+                || self.is_lang_adt(source, LangItem::Option);
+            if !owned_source && self.drops(source) != Drops::Nothing {
+                return Err(self.unsupported(
+                    self.thir[f.head].span,
+                    "a loop over an iterator that holds a value with a destructor",
+                ));
+            }
         }
         let head_ty = self.reveal(self.thir[f.head].ty);
         let head_span = self.thir[f.head].span;
@@ -172,7 +205,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // Its body runs between items: a chain's stages that do what can be
             // seen run lazily (ADR 0139).
             self.mark_lazy_chain(f.head, true);
-            let head = self.iter_value(f.head, out)?;
+            let head = match once {
+                Some(value) => Expr::array(vec![self.expr(value, out)?]),
+                None => self.iter_value(f.head, out)?,
+            };
             let head = match option {
                 Some(item) => self.option_items(head, item, out),
                 None => head,
@@ -188,7 +224,34 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut mutable = false;
         // `for &x in &v`: a reference is the value (ADR 0023).
         let pat = without_refs(f.pat);
+        let mark = self.owned_mark();
         let name = match &pat.kind {
+            // An owned item: its binding's, or an unnamed one's, or what its
+            // pattern leaves, as a parameter's is (ADR 0098).
+            PatKind::Binding {
+                name,
+                var,
+                mode: BindingMode(ByRef::No, m),
+                subpattern: None,
+                ty,
+                ..
+            } if owns_items => {
+                mutable = *m == Mutability::Mut;
+                let name = self.bind(*var, name.as_str(), mutable);
+                self.own(*var, Expr::var(&name), *ty, f.pat.span, &mut body)?;
+                js::Pattern::Name(name)
+            }
+            PatKind::Wild if owns_items => {
+                let name = self.fresh("item");
+                self.own_value(Expr::var(&name), f.pat.ty);
+                js::Pattern::Name(name)
+            }
+            _ if owns_items => {
+                let name = self.fresh("item");
+                self.own_rest(Expr::var(&name), f.pat.ty, f.pat)?;
+                self.destructure(f.pat, Expr::var(&name), true, false, &mut body)?;
+                js::Pattern::Name(name)
+            }
             PatKind::Binding {
                 name,
                 var,
@@ -225,6 +288,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => it,
         });
+        // What it hasn't reached when it leaves early is dropped, in order:
+        // the rest of the JS iterator it walks (ADR 0098).
+        let mut rest = None;
+        let iterable = match iterable {
+            Some(it) if owns_items && !self.is_lazy_value(f.head) => {
+                let items = self.spill("items", Expr::call(Expr::member(it, "values"), vec![]), out);
+                rest = Some(items.clone());
+                Some(items)
+            }
+            it => it,
+        };
 
         self.loops.push(Loop {
             scope: f.scope,
@@ -232,7 +306,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             label: None,
             dest: Dest::Discard,
         });
-        self.stmt(f.body, &Dest::Discard, &mut body)?;
+        if owns_items {
+            let mut inner = Vec::new();
+            self.stmt(f.body, &Dest::Discard, &mut inner)?;
+            self.close_scope(mark, inner, self.thir[f.body].span, &mut body)?;
+        } else {
+            self.stmt(f.body, &Dest::Discard, &mut body)?;
+        }
         let label = self.loops.pop().unwrap().label;
         out.push(
             match (iterable, start_end) {
@@ -265,6 +345,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             .at(span),
         );
+        if let Some(items) = rest {
+            let left = self.fresh("left");
+            let mut drop = Vec::new();
+            self.drop_value(Expr::var(&left), f.pat.ty, head_span, &mut drop)?;
+            let walk = StmtKind::ForOf {
+                label: None,
+                pattern: js::Pattern::Name(left),
+                mutable: false,
+                iterable: items,
+                body: drop,
+            }
+            .at(span);
+            let looped = out.pop().expect("the loop");
+            out.push(StmtKind::Try(vec![looped], vec![walk]).at(span));
+        }
         Ok(())
     }
 

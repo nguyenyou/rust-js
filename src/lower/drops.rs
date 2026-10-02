@@ -2022,6 +2022,16 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
     fn visit_expr(&mut self, expr: &'a ThirExpr<'tcx>) {
         let id = self.id(expr);
         self.stack.push(id);
+        // A `for` loop is what it iterates, its item, which its pattern owns
+        // each time round as a parameter would, and its body: not the `iter`
+        // and `next()` rustc writes it with, which its lowering doesn't.
+        if let Some(f) = self.cx.body_query().as_for(id) {
+            self.visit_expr(&self.thir[f.head]);
+            self.visit_pat(f.pat);
+            self.visit_expr(&self.thir[f.body]);
+            self.stack.pop();
+            return;
+        }
         match expr.kind {
             ExprKind::VarRef { id: var } | ExprKind::UpvarRef { var_hir_id: var, .. }
                 if self.facts.owners.contains_key(&var) =>

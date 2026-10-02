@@ -176,6 +176,11 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 for (const [name, source, diagnostic] of [
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
+  // A loop that owns its items drops what it hasn't reached (ADR 0098): of a
+  // `Vec`, an array or an `Option`, not yet of an adapter, nor through an
+  // iterator of the crate's own that holds one.
+  ["loop over an adapter of owned items", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub fn f(v: Vec<R>) { for r in v.into_iter().rev() { let _ = r; } }`, "a loop over an iterator that holds a value with a destructor"],
+  ["loop over an iterator holding one", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub struct It(R, u8); impl Iterator for It { type Item = R; fn next(&mut self) -> Option<R> { None } } pub fn f(it: It) { for r in it { let _ = r; } }`, "a loop over an iterator that holds a value with a destructor"],
   // A chain whose stages do what can be seen runs lazily (ADR 0139), and a JS
   // iterator can't run from its other end, as `rev` would have it.
   ["rev after a closure with effects", `pub fn f(v: &[i32]) -> Vec<i32> { v.iter().map(|x| { println!("{}", x); *x }).rev().collect() }`, "\`rev\` of a lazy iterator"],
