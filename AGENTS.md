@@ -84,3 +84,40 @@ tests, is fine locally: the suite keeps each native program it builds in
 `target/native-cache/`, so a second run builds and scans none of them
 ([ADR 0104](docs/decisions/0104-parallel-tests.md)). Start the workflow, share the run's link, and read
 its results when it has finished.
+
+### A Linux VM on macOS
+
+A Linux VM on the same Mac doesn't scan its binaries. Run in one, the same
+rustc tests took about a twenty-fifth of the time they took on macOS (the
+`drop` directory: 1 second against 23), with the same verdicts. So where a
+[Tart](https://tart.run) VM is set up, run tests that build native programs
+there, through [`scripts/linux-vm.sh`](scripts/linux-vm.sh):
+
+```bash
+scripts/linux-vm.sh 'cargo build --release && bun scripts/rustc-suite.ts drop/ closures/'
+```
+
+It starts the VM if it isn't running, syncs this checkout into the VM's own
+copy, uncommitted edits too, and runs the command there. The VM's `target/`
+and `node_modules/` are its own. Use it for named rustc tests or
+directories, the corpus, and a few mutations. The workflow above stays the
+record of all of rustc's tests and of their known failures: bless there.
+
+To set the VM up once, on Apple Silicon:
+
+```bash
+brew install openai/tools/tart
+tart clone ghcr.io/cirruslabs/ubuntu:latest rustjs
+tart set rustjs --cpu 10 --memory 24576 --disk-size 200
+scripts/linux-vm.sh true   # boots it, with this checkout shared
+```
+
+Then, in the VM (`tart exec rustjs bash -l`), install what the workflows
+use: `build-essential`, `pkg-config` and `rsync` from apt; rustup, with the
+toolchain and components [rust-toolchain.toml](rust-toolchain.toml) pins;
+the Bun version the workflows set up, in `~/.bun`; and Node 24. Mount the
+shared checkout at boot with an `/etc/fstab` line for `/mnt/shared`
+(`virtiofs`). Two things a managed network may need, or downloads fail or
+hang: a TLS-inspecting proxy's root certificate in the VM's
+`/usr/local/share/ca-certificates`, and a smaller MTU, such as 1280 in a
+netplan file, where a tunnel drops full-size packets.
