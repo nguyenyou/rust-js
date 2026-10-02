@@ -82,7 +82,6 @@ cast/supported-cast.rs	error: rust-js does not support values of type `*const st
 cast/trait-object-cast-segfault-4333.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
 closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does not support constants of type `*const i32` yet
 closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
-closures/2229_closure_analysis/migrations/precise_no_migrations.rs	error: rust-js does not support a closure that holds a value with a destructor yet
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
 closures/explicit-return-in-closure-and-outer-fn.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
@@ -406,9 +405,6 @@ typeck/type-name-intrinsic-usage-61894.rs	error: rust-js does not support `type_
 typeck/typeck_type_placeholder_1.rs	error: rust-js does not support statics of type `TestStruct` yet
 typeck/unify-return-ty.rs	error: rust-js does not support values of type `*const T` yet
 unboxed-closures/type-id-higher-rank.rs	error: rust-js does not support values of type `*const ()` yet
-unboxed-closures/unboxed-closures-drop.rs	error: rust-js does not support a closure that holds a value with a destructor yet
-unboxed-closures/unboxed-closures-infer-fnonce-move.rs	error: rust-js does not support a closure that holds a value with a destructor yet
-unboxed-closures/unboxed-closures-infer-fnonce.rs	error: rust-js does not support a closure that holds a value with a destructor yet
 union/union_destructure.rs	error: rust-js does not support values of type `Foo` yet
 union/union-align.rs	error: rust-js does not support values of type `U16` yet
 union/union-const-codegen.rs	error: rust-js does not support constants of type `U` yet
