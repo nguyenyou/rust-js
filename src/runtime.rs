@@ -958,8 +958,12 @@ function $min(items) {
             Helper::Position => {
                 r#"
 function $position(items, found) {
-  const i = items.findIndex(found);
-  return i < 0 ? undefined : i;
+  let i = 0;
+  for (const item of items) {
+    if (found(item)) return i;
+    i++;
+  }
+  return undefined;
 }
 "#
             }

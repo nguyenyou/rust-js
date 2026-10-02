@@ -1,6 +1,6 @@
 # 0036. An iterator is a JS array; `Ordering` is -1, 0 or 1
 
-Status: Accepted. Extends [0025](0025-vec-loops-refcell-mut.md), where a
+Status: Accepted; a chain whose stages do what can be seen is lazy ([0139](0139-lazy-chains.md)). Extends [0025](0025-vec-loops-refcell-mut.md), where a
 `Vec` is a JS array and `for` loops over one.
 
 ## Context

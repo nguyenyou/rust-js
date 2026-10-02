@@ -176,6 +176,9 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 for (const [name, source, diagnostic] of [
   // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
   ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
+  // A chain whose stages do what can be seen runs lazily (ADR 0139), and a JS
+  // iterator can't run from its other end, as `rev` would have it.
+  ["rev after a closure with effects", `pub fn f(v: &[i32]) -> Vec<i32> { v.iter().map(|x| { println!("{}", x); *x }).rev().collect() }`, "\`rev\` of a lazy iterator"],
   // A closure's drop drops the variables it took, where it's made (ADR 0098):
   // not part of one, nor where JS can't see them, nor given away by value
   // where a call may consume it without its body dropping them.

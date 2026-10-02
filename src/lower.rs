@@ -340,6 +340,11 @@ struct FnCx<'a, 'tcx> {
     /// In such a function of a crate that shows anything pretty (ADR 0137):
     /// the parameter that says whether it's `{:#?}`.
     writer_alternate: Option<Expr>,
+    /// The stages of iterator chains that are JS iterators, though their
+    /// types aren't lazy, and the receivers that start one (ADR 0139), by
+    /// their body's THIR and their expression.
+    lazy_stages: HashSet<(usize, ExprId)>,
+    lazy_starts: HashSet<(usize, ExprId)>,
     /// How a `&dyn Debug` made here shows its value: pretty as its writer's
     /// `alternate` says, while a derived `Debug`'s or a builder's
     /// arguments are lowered (ADR 0137), plain anywhere else.
@@ -1858,6 +1863,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             typing_env: self.typing_env,
             trait_impls: self.krate.trait_impls,
             foreign: self.krate.foreign,
+            closures: self.krate.closures,
         }
     }
 }

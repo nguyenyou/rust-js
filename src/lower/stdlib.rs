@@ -23,6 +23,47 @@ pub(super) enum Piece {
     Argument(usize, Spec),
 }
 
+/// Whether `known` is an adapter, which makes an iterator of an iterator,
+/// rather than a consumer, which ends one.
+fn is_adapter(known: Std) -> bool {
+    matches!(
+        known,
+        Std::ArrayMethod("map" | "filter")
+            | Std::Enumerate
+            | Std::Rev
+            | Std::Skip
+            | Std::Take
+            | Std::Cloned
+            | Std::Fuse
+            | Std::IterComb(
+                IterComb::FilterMap
+                    | IterComb::Scan
+                    | IterComb::FlatMap
+                    | IterComb::Flatten
+                    | IterComb::Zip
+                    | IterComb::Chain
+                    | IterComb::TakeWhile
+                    | IterComb::SkipWhile
+                    | IterComb::StepBy
+                    | IterComb::Inspect
+            )
+    )
+}
+
+/// Whether `known` stops before its iterator ends, so a stage before it
+/// that does what can be seen runs fewer times in Rust than over an array,
+/// or, as `rev` does, runs it from the other end.
+fn sensitive(known: Std) -> bool {
+    matches!(
+        known,
+        Std::Take
+            | Std::Rev
+            | Std::Position
+            | Std::ArrayMethod("find" | "some" | "every")
+            | Std::IterComb(IterComb::TakeWhile | IterComb::Zip | IterComb::FindMap | IterComb::Nth)
+    )
+}
+
 /// A `format_args!`, taken apart (`as_format_args`).
 pub(super) struct FormatArgs<'tcx> {
     template: Vec<u8>,
@@ -439,6 +480,69 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .ok()
     }
 
+    /// A chain's stage, by its body and its expression: what a consumer
+    /// that takes it by `&mut`, as `find` does, borrows.
+    pub(super) fn chain_key(&self, e: ExprId) -> (usize, ExprId) {
+        (std::ptr::from_ref(self.thir) as usize, self.chain_stage(e))
+    }
+
+    fn chain_stage(&self, e: ExprId) -> ExprId {
+        match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } => self.strip(arg),
+            _ => self.strip(e),
+        }
+    }
+
+    /// Whether a closure or function given to a stage may do what can be
+    /// seen, or panic.
+    fn impure(&self, f: Option<ExprId>) -> bool {
+        f.is_some_and(|f| {
+            let ty = self.thir[f].ty.peel_refs();
+            let callable = ty.is_fn() || matches!(ty.kind(), ty::Closure(..) | ty::Param(_));
+            callable && !self.recognition().is_pure_fn(ty)
+        })
+    }
+
+    /// Whether `e`'s value is a JS iterator: a lazy type's, or a stage a
+    /// chain's consumer made lazy.
+    pub(super) fn is_lazy_value(&self, e: ExprId) -> bool {
+        self.is_lazy_iter(self.thir[e].ty) || self.lazy_stages.contains(&self.chain_key(e))
+    }
+
+    /// Rust runs each item of a chain through every stage before the next,
+    /// and a JS array runs every item through each stage before the next:
+    /// the same, unless a stage that does what can be seen is followed by
+    /// one that can tell, one that does too, or stops early. Then the chain
+    /// from that stage on is a JS iterator, whose helpers are Rust's order
+    /// (ADR 0139). `seen`: whether what ends the chain at `receiver`, a
+    /// consumer or a loop, can tell.
+    pub(super) fn mark_lazy_chain(&mut self, receiver: ExprId, seen: bool) {
+        // Its stages, the last first: each, whether its closure does what can
+        // be seen, whether it can tell, and its receiver.
+        let mut stages: Vec<(ExprId, bool, bool, ExprId)> = Vec::new();
+        let mut at = self.chain_stage(receiver);
+        while let ExprKind::Call { fun, ref args, .. } = self.thir[at].kind
+            && let Some(known) = self.std_fn(fun)
+            && is_adapter(known)
+            && let Some(&inner) = args.first()
+        {
+            let impure = self.impure(args.get(1).copied());
+            stages.push((at, impure, impure || sensitive(known), inner));
+            at = self.chain_stage(inner);
+        }
+        let Some(first) = stages.iter().rposition(|&(_, impure, _, _)| impure) else {
+            return;
+        };
+        if !seen && !stages[..first].iter().any(|&(_, _, tells, _)| tells) {
+            return;
+        }
+        for &(e, ..) in &stages[..=first] {
+            self.lazy_stages.insert(self.chain_key(e));
+        }
+        let start = self.chain_key(stages[first].3);
+        self.lazy_starts.insert(start);
+    }
+
     pub(super) fn iterator_call(
         &mut self,
         known: Std,
@@ -462,6 +566,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => args[0],
         };
         let receiver_ty = self.reveal(self.thir[receiver].ty);
+        // A consumer, which ends a chain, says which of its stages run lazily.
+        if !is_adapter(known) {
+            let closure = args.get(1).copied();
+            self.mark_lazy_chain(receiver, sensitive(known) || self.impure(closure));
+            // `find_map(f)` is a `map` that stops at the first `Some`.
+            if known == Std::IterComb(IterComb::FindMap) && self.impure(closure) {
+                let key = self.chain_key(receiver);
+                self.lazy_starts.insert(key);
+            }
+        }
         let items = match self.thir[self.strip(receiver)].kind {
             ExprKind::Adt(ref range)
                 if self.is_lang_adt(receiver_ty, LangItem::Range)
@@ -506,8 +620,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // and those that stop early, like `find`. Anything else takes all of
         // it, as an array (ADR 0055).
         let lazy = self.is_lazy_iter(receiver_ty);
+        // A stage of a chain its consumer found must be lazy (ADR 0139).
+        let key = self.chain_key(receiver);
+        let starts = !lazy && self.lazy_starts.contains(&key);
+        let lazy = lazy || self.lazy_stages.contains(&key);
+        let (items, lazy) = if starts {
+            (Expr::call(Expr::member(items, "values"), vec![]), true)
+        } else {
+            (items, lazy)
+        };
         if lazy && known == Std::Rev {
-            return Err(self.unsupported(span, "`rev` of an iterator of the crate's own"));
+            return Err(self.unsupported(
+                span,
+                "`rev` of a lazy iterator: one of the crate's own, or after a closure whose effects can be seen",
+            ));
         }
         if let Std::IterComb(comb) = known {
             let mut rest = self.operands(&args[1..], out)?;
@@ -536,7 +662,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Skip
             | Std::Take
             | Std::Cloned
-            | Std::Fuse => items,
+            | Std::Fuse
+            | Std::Position => items,
             _ => Expr::call(Expr::member(items, "toArray"), vec![]),
         };
         let mut rest = self.operands(&args[1..], out)?.into_iter();

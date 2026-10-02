@@ -169,6 +169,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if !sequence {
                 return Err(self.unsupported(head_span, &format!("iterating over `{head_ty}`")));
             }
+            // Its body runs between items: a chain's stages that do what can be
+            // seen run lazily (ADR 0139).
+            self.mark_lazy_chain(f.head, true);
             let head = self.iter_value(f.head, out)?;
             let head = match option {
                 Some(item) => self.option_items(head, item, out),
@@ -216,7 +219,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if matches!(args.as_slice(), [f] if is_enumerate_pair(f))
                     && let js::ExprKind::Member(ref items, ref method) = callee.kind
                     && method == "map"
-                    && !self.is_lazy_iter(head_ty) =>
+                    && !self.is_lazy_value(f.head) =>
             {
                 Expr::call(Expr::member((**items).clone(), "entries"), vec![])
             }
