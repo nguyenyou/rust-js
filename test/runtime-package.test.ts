@@ -3,7 +3,7 @@
 // helpers its code names from it, instead of carrying its own copy of each.
 
 import { beforeAll, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { node } from "./programs";
 import { buildCompiler, compiler, fixture, root, run } from "./support";
@@ -21,6 +21,20 @@ test("the committed @rust-js/runtime is the compiler's helpers, each exported on
   const pkg = JSON.parse(readFileSync(join(root, "runtime", "package.json"), "utf8"));
   const version = readFileSync(join(root, "Cargo.toml"), "utf8").match(/^version = "([^"]+)"/m)![1];
   expect([pkg.name, pkg.version]).toEqual(["@rust-js/runtime", version]);
+});
+
+// Each helper is a file of its own, `src/runtime/<name>.js`, that the
+// compiler reads in: JS that parses as JS, and none left behind unread.
+test("each helper's file parses as JavaScript, and the compiler reads each", () => {
+  const dir = join(root, "src", "runtime");
+  const files = readdirSync(dir).filter((file) => file.endsWith(".js"));
+  const rust = readFileSync(join(root, "src", "runtime.rs"), "utf8");
+  expect(files.length).toBeGreaterThan(150);
+  for (const file of files) {
+    expect(rust, file).toContain(`include_str!("runtime/${file}")`);
+    // Compiled, and never run.
+    expect(() => new Function(readFileSync(join(dir, file), "utf8")), file).not.toThrow();
+  }
 });
 
 // A module names a few helpers, and imports just those; one a helper uses,

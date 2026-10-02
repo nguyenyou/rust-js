@@ -76,9 +76,9 @@ export const mutations: Mutation[] = [
   {
     name: "index-panic-message",
     breaks: "an index out of bounds panics with another message than Rust's",
-    file: "src/runtime.rs",
-    find: String.raw`function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(` + "`index out of bounds: the len is",
-    replace: String.raw`function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(` + "`index out of bounds: the length is",
+    file: "src/runtime/checked_index.js",
+    find: "function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is",
+    replace: "function $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the length is",
     tests: ["test/corpus.test.ts", "-t", "index_out_of_bounds"],
   },
   {
@@ -596,7 +596,7 @@ export const mutations: Mutation[] = [
   {
     name: "impl-dictionary-undefined-key",
     breaks: "a generic impl's dictionary given no drop is keyed by `undefined`, which a `WeakMap` can't hold",
-    file: "src/runtime.rs",
+    file: "src/runtime/trait_impl.js",
     find: "  const key = keys[keys.length - 1] ?? $traitImpl;\n",
     replace: "  const key = keys[keys.length - 1];\n",
     tests: ["test/corpus.test.ts", "-t", "drop_impl_dictionary"],
@@ -1751,7 +1751,7 @@ export const mutations: Mutation[] = [
   {
     name: "parse-f32-through-f64",
     breaks: "`s.parse::<f32>()` is the `f64` nearest the digits, rounded to an `f32`, which a hair off a tie rounds as the tie",
-    file: "src/runtime.rs",
+    file: "src/runtime/parse_f32.js",
     find: "  if (read.TAG === \"Err\" || !Number.isFinite(d) || Math.fround(d) === d) {",
     replace: "  if (true) {",
     tests: ["test/corpus.test.ts", "-t", "f32_parse"],
@@ -1895,7 +1895,7 @@ export const mutations: Mutation[] = [
   {
     name: "successors-behind",
     breaks: "`successors` finds the next item after it gives this one, calling its closure once less",
-    file: "src/runtime.rs",
+    file: "src/runtime/successors.js",
     find: "    next = successor(item);\n    yield item;",
     replace: "    yield item;\n    next = successor(item);",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
@@ -1967,7 +1967,7 @@ export const mutations: Mutation[] = [
   {
     name: "unzip-swapped",
     breaks: "`unzip()` gives the second parts first",
-    file: "src/runtime.rs",
+    file: "src/runtime/unzip.js",
     find: "  return [pairs.map(([a]) => a), pairs.map(([, b]) => b)];",
     replace: "  return [pairs.map(([, b]) => b), pairs.map(([a]) => a)];",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
@@ -2016,7 +2016,7 @@ export const mutations: Mutation[] = [
   {
     name: "range-next-unmoved",
     breaks: "a `Range`'s `next()` gives its start but doesn't move it",
-    file: "src/runtime.rs",
+    file: "src/runtime/range_next.js",
     find: "  return range.start < range.end ? range.start++ : undefined;",
     replace: "  return range.start < range.end ? range.start : undefined;",
     tests: ["test/corpus.test.ts","-t","range_values"],
@@ -2057,7 +2057,7 @@ export const mutations: Mutation[] = [
   {
     name: "char-range-surrogates",
     breaks: "a range of `char`s gives the surrogates, which no `char` is",
-    file: "src/runtime.rs",
+    file: "src/runtime/char_range.js",
     find: "    if (c < 0xd800 || c > 0xdfff) {",
     replace: "    if (true) {",
     tests: ["test/corpus.test.ts","-t","range_values"],
@@ -2439,7 +2439,7 @@ export const mutations: Mutation[] = [
   {
     name: "ascii-case-unicode",
     breaks: "`to_ascii_lowercase` lowers every letter, `Ü` too, as JS's `toLowerCase` does",
-    file: "src/runtime.rs",
+    file: "src/runtime/ascii_case.js",
     find: "    : text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());",
     replace: "    : text.toLowerCase();",
     tests: ["test/corpus.test.ts","-t","std_methods"],
@@ -2455,7 +2455,7 @@ export const mutations: Mutation[] = [
   {
     name: "append-keeps-other",
     breaks: "`v.append(&mut other)` leaves `other`'s items in it",
-    file: "src/runtime.rs",
+    file: "src/runtime/append.js",
     find: "  other.length = 0;\n",
     replace: "",
     tests: ["test/corpus.test.ts","-t","std_methods"],
@@ -2511,7 +2511,7 @@ export const mutations: Mutation[] = [
   {
     name: "pretty-not-indented",
     breaks: "a nested part of `{:#?}`'s lines aren't indented",
-    file: "src/runtime.rs",
+    file: "src/runtime/pretty.js",
     find: "  const lines = items.map((item) => \"    \" + item.replaceAll(\"\\n\", \"\\n    \") + \",\\n\").join(\"\");",
     replace: "  const lines = items.map((item) => \"    \" + item + \",\\n\").join(\"\");",
     tests: ["test/corpus.test.ts","-t","pretty_debug"],
@@ -2585,7 +2585,7 @@ export const mutations: Mutation[] = [
   {
     name: "byte-len-units",
     breaks: "a string's `len()` is its UTF-16 units, as JS counts, not its UTF-8 bytes",
-    file: "src/runtime.rs",
+    file: "src/runtime/byte_len.js",
     find: "  return bytes;\n}",
     replace: "  return s.length;\n}",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
@@ -2593,7 +2593,7 @@ export const mutations: Mutation[] = [
   {
     name: "byte-len-pair-three",
     breaks: "a character outside the BMP, two UTF-16 units, is counted as two 3-byte ones, not 4 bytes",
-    file: "src/runtime.rs",
+    file: "src/runtime/byte_len.js",
     find: "      bytes += 4;\n      i++;",
     replace: "      bytes += 3;",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
@@ -2601,7 +2601,7 @@ export const mutations: Mutation[] = [
   {
     name: "str-slice-units",
     breaks: "`&s[a..b]` slices UTF-16 units, not UTF-8 bytes",
-    file: "src/runtime.rs",
+    file: "src/runtime/str_slice.js",
     find: "  return s.slice($unitAt(s, start, \"start\"), $unitAt(s, end, \"end\"));",
     replace: "  return s.slice(start, end);",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
@@ -2609,7 +2609,7 @@ export const mutations: Mutation[] = [
   {
     name: "str-slice-inside-char",
     breaks: "slicing inside a character gives part of it, where Rust panics",
-    file: "src/runtime.rs",
+    file: "src/runtime/str_slice.js",
     find: "    if (next > at) {\n      throw",
     replace: "    if (false) {\n      throw",
     tests: ["test/corpus.test.ts", "-t", "string_slice_boundary"],
@@ -2617,7 +2617,7 @@ export const mutations: Mutation[] = [
   {
     name: "str-slice-past-end",
     breaks: "slicing past a string's end gives what's there, where Rust panics",
-    file: "src/runtime.rs",
+    file: "src/runtime/str_slice.js",
     find: "  if (end > length) throw new Error(`end byte index",
     replace: "  if (false) throw new Error(`end byte index",
     tests: ["test/corpus.test.ts", "-t", "string_slice_bounds"],
@@ -2625,7 +2625,7 @@ export const mutations: Mutation[] = [
   {
     name: "find-units",
     breaks: "`s.find(p)` is where in UTF-16 units, not UTF-8 bytes",
-    file: "src/runtime.rs",
+    file: "src/runtime/find.js",
     find: "  const at = s.indexOf(pattern);\n  return at === -1 ? undefined : $byteLen(s.slice(0, at));",
     replace: "  const at = s.indexOf(pattern);\n  return at === -1 ? undefined : at;",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
@@ -2633,7 +2633,7 @@ export const mutations: Mutation[] = [
   {
     name: "rfind-first",
     breaks: "`s.rfind(p)` finds the first, not the last",
-    file: "src/runtime.rs",
+    file: "src/runtime/rfind.js",
     find: "  const at = s.lastIndexOf(pattern);",
     replace: "  const at = s.indexOf(pattern);",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
@@ -2641,7 +2641,7 @@ export const mutations: Mutation[] = [
   {
     name: "char-indices-units",
     breaks: "`char_indices()` counts UTF-16 units, not UTF-8 bytes",
-    file: "src/runtime.rs",
+    file: "src/runtime/char_indices.js",
     find: "    at += $byteLen(c);",
     replace: "    at += c.length;",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],

@@ -323,2026 +323,328 @@ impl Helper {
 
     pub fn source(self) -> &'static str {
         match self {
-            Helper::Index => {
-                "\nfunction $index(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return items[index];\n}\n"
-            }
+            Helper::Index => include_str!("runtime/checked_index.js"),
             // `v[i] = x`: `v[$at(v, i)] = x`, since JS would make the array longer.
-            Helper::At => {
-                "\nfunction $at(items, index) {\n  if (index < 0 || index >= items.length) throw new Error(`index out of bounds: the len is ${items.length} but the index is ${index}`);\n  return index;\n}\n"
-            }
+            Helper::At => include_str!("runtime/at.js"),
             Helper::DisplayF64 => include_str!("runtime/display_f64.js"),
             Helper::F32Digits => include_str!("runtime/f32_digits.js"),
             // An `f32` as Rust's `{}` shows it: its shortest digits, never with
             // an exponent (ADR 0122).
-            Helper::DisplayF32 => {
-                r#"
-function $displayF32(value) {
-  if (Number.isNaN(value)) return "NaN";
-  if (value === Infinity) return "inf";
-  if (value === -Infinity) return "-inf";
-  const sign = value < 0 || Object.is(value, -0) ? "-" : "";
-  if (value === 0) return sign + "0";
-  const [digits, point] = $f32Digits(Math.abs(value));
-  const body =
-    point <= 0
-      ? "0." + "0".repeat(-point) + digits
-      : point >= digits.length
-        ? digits + "0".repeat(point - digits.length)
-        : digits.slice(0, point) + "." + digits.slice(point);
-  return sign + body;
-}
-"#
-            }
+            Helper::DisplayF32 => include_str!("runtime/display_f32.js"),
             // `{:?}`: with an exponent below `1e-4f32` and from `1e16f32`, and a
             // `.0` on a whole number, as Rust's.
-            Helper::DebugF32 => {
-                r#"
-function $debugF32(value) {
-  const size = Math.abs(value);
-  if (Number.isFinite(value) && size !== 0 && (size < Math.fround(1e-4) || size >= Math.fround(1e16))) {
-    const [digits, point] = $f32Digits(size);
-    const mantissa = digits.length > 1 ? digits[0] + "." + digits.slice(1) : digits;
-    return (value < 0 ? "-" : "") + mantissa + "e" + (point - 1);
-  }
-  const text = $displayF32(value);
-  return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
-}
-"#
-            }
+            Helper::DebugF32 => include_str!("runtime/debug_f32.js"),
             // `n as f32` of an `i64` or a `u64`: its nearest `f32`, rounded once,
             // to 24 bits, a tie to the even one. `Number(n)` would round it to an
             // `f64` first, which can make it a tie that isn't one.
-            Helper::BigToF32 => {
-                r#"
-function $bigToF32(n) {
-  const negative = n < 0n;
-  let size = negative ? -n : n;
-  const length = size.toString(2).length;
-  if (length > 24) {
-    const shift = BigInt(length - 24);
-    const rest = size & ((1n << shift) - 1n);
-    const half = 1n << (shift - 1n);
-    size >>= shift;
-    if (rest > half || (rest === half && (size & 1n) === 1n)) size++;
-    size <<= shift;
-  }
-  const x = Number(size);
-  return negative ? -x : x;
-}
-"#
-            }
+            Helper::BigToF32 => include_str!("runtime/big_to_f32.js"),
             // `x.powi(n)` of an `f32`: compiler-rt's `__powisf2`, which rounds
             // each product to an `f32`, in its order.
-            Helper::PowiF32 => {
-                r#"
-function $powiF32(x, n) {
-  const reciprocal = n < 0;
-  let result = 1;
-  while (true) {
-    if (n & 1) {
-      result = Math.fround(result * x);
-    }
-    n = (n / 2) | 0;
-    if (n === 0) {
-      break;
-    }
-    x = Math.fround(x * x);
-  }
-  return reciprocal ? Math.fround(1 / result) : result;
-}
-"#
-            }
-            Helper::F64Max => {
-                "\nfunction $f64Max(a, b) {\n  return Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.max(a, b);\n}\n"
-            }
-            Helper::F64Min => {
-                "\nfunction $f64Min(a, b) {\n  return Number.isNaN(a) ? b : Number.isNaN(b) ? a : Math.min(a, b);\n}\n"
-            }
-            Helper::TraitImpl => {
-                r#"
-function $traitImpl(cache, keys, make) {
-  // Each key is a dictionary or a drop, held weakly: a drop made for one call
-  // goes when it does. No drop, `undefined`, is keyed by this function. A
-  // const parameter's value is a number or the like, which only a Map holds.
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i] ?? $traitImpl;
-    const next = keys[i + 1] ?? $traitImpl;
-    const weak = typeof next === "object" || typeof next === "function";
-    if (!cache.has(key)) cache.set(key, weak ? new WeakMap() : new Map());
-    cache = cache.get(key);
-  }
-  const key = keys[keys.length - 1] ?? $traitImpl;
-  if (!cache.has(key)) cache.set(key, make());
-  return cache.get(key);
-}
-"#
-            }
+            Helper::PowiF32 => include_str!("runtime/powi_f32.js"),
+            Helper::F64Max => include_str!("runtime/f64_max.js"),
+            Helper::F64Min => include_str!("runtime/f64_min.js"),
+            Helper::TraitImpl => include_str!("runtime/trait_impl.js"),
             // An `i64`'s or `u64`'s `/` and `%` (ADR 0086): a BigInt's truncates
             // as Rust's does, and panics as Rust's does.
             // `x as u8` of an `f64`: saturating, as Rust's `as` is. `NaN` is 0,
             // and `-0` is 0.
-            Helper::F64ToInt => {
-                r#"
-function $f64ToInt(x, min, max) {
-  if (Number.isNaN(x)) return 0;
-  return Math.max(min, Math.min(max, Math.trunc(x))) + 0;
-}
-"#
-            }
+            Helper::F64ToInt => include_str!("runtime/f64_to_int.js"),
             // The same into an `i64` or `u64`: its range's ends aren't all
             // exact as floats, so it's clamped before it's a BigInt.
-            Helper::F64ToBig => {
-                r#"
-function $f64ToBig(x, min, max) {
-  if (Number.isNaN(x)) return 0n;
-  if (x <= Number(min)) return min;
-  if (x >= Number(max)) return max;
-  return BigInt(Math.trunc(x));
-}
-"#
-            }
-            Helper::BigAbs => {
-                r#"
-function $bigAbs(x) {
-  return x < 0n ? -x : x;
-}
-"#
-            }
+            Helper::F64ToBig => include_str!("runtime/f64_to_big.js"),
+            Helper::BigAbs => include_str!("runtime/big_abs.js"),
             // `pow` of an `i64` or `u64`, modulo 2^64 at each step, as it wraps.
-            Helper::BigPow => {
-                r#"
-function $bigPow(base, exp) {
-  let result = 1n;
-  base = BigInt.asUintN(64, base);
-  for (let e = exp; e > 0; e >>>= 1) {
-    if (e & 1) result = BigInt.asUintN(64, result * base);
-    base = BigInt.asUintN(64, base * base);
-  }
-  return result;
-}
-"#
-            }
-            Helper::BigChecked => {
-                r#"
-function $bigChecked(value, lo, hi) {
-  return value >= lo && value <= hi ? value : undefined;
-}
-"#
-            }
-            Helper::BigCheckedDiv => {
-                r#"
-function $bigCheckedDiv(a, b, min) {
-  return b === 0n || (a === min && b === -1n) ? undefined : a / b;
-}
-"#
-            }
-            Helper::BigClamp => {
-                r#"
-function $bigClamp(value, lo, hi) {
-  return value < lo ? lo : value > hi ? hi : value;
-}
-"#
-            }
-            Helper::BigRemEuclid => {
-                r#"
-function $bigRemEuclid(a, b, min) {
-  const r = $bigRem(a, b, min);
-  return r < 0n ? (b < 0n ? r - b : r + b) : r;
-}
-"#
-            }
-            Helper::BigDivEuclid => {
-                r#"
-function $bigDivEuclid(a, b, min) {
-  const q = $bigDiv(a, b, min);
-  if (a % b < 0n) return b > 0n ? q - 1n : q + 1n;
-  return q;
-}
-"#
-            }
-            Helper::BigSignum => {
-                r#"
-function $bigSignum(x) {
-  return x > 0n ? 1n : x < 0n ? -1n : 0n;
-}
-"#
-            }
+            Helper::BigPow => include_str!("runtime/big_pow.js"),
+            Helper::BigChecked => include_str!("runtime/big_checked.js"),
+            Helper::BigCheckedDiv => include_str!("runtime/big_checked_div.js"),
+            Helper::BigClamp => include_str!("runtime/big_clamp.js"),
+            Helper::BigRemEuclid => include_str!("runtime/big_rem_euclid.js"),
+            Helper::BigDivEuclid => include_str!("runtime/big_div_euclid.js"),
+            Helper::BigSignum => include_str!("runtime/big_signum.js"),
             // What's counted of an `i64`'s or `u64`'s 64 bits: a `u32`, a number.
-            Helper::BigBits => {
-                r#"
-function $bigCountOnes(x) {
-  return BigInt.asUintN(64, x).toString(2).replaceAll("0", "").length;
-}
-function $bigLeadingZeros(x) {
-  const bits = BigInt.asUintN(64, x);
-  return bits === 0n ? 64 : 64 - bits.toString(2).length;
-}
-function $bigTrailingZeros(x) {
-  const bits = BigInt.asUintN(64, x).toString(2);
-  return x === 0n ? 64 : bits.length - 1 - bits.lastIndexOf("1");
-}
-"#
-            }
-            Helper::BigAbsDiff => {
-                r#"
-function $bigAbsDiff(a, b) {
-  return a > b ? a - b : b - a;
-}
-"#
-            }
-            Helper::BigMinMax => {
-                r#"
-function $bigMax(a, b) {
-  return b >= a ? b : a;
-}
-function $bigMin(a, b) {
-  return b < a ? b : a;
-}
-"#
-            }
+            Helper::BigBits => include_str!("runtime/big_bits.js"),
+            Helper::BigAbsDiff => include_str!("runtime/big_abs_diff.js"),
+            Helper::BigMinMax => include_str!("runtime/big_min_max.js"),
             // `s.parse::<u64>()`: what Rust reads, exactly, as a BigInt.
-            Helper::ParseBig => {
-                r#"
-function $parseBig(s, min, max) {
-  const error = (message) => ({ TAG: "Err", _0: message });
-  if (s === "") return error("cannot parse integer from empty string");
-  if (!(min < 0n ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s)) return error("invalid digit found in string");
-  const n = BigInt(s);
-  if (n > max) return error("number too large to fit in target type");
-  if (n < min) return error("number too small to fit in target type");
-  return { TAG: "Ok", _0: n };
-}
-"#
-            }
-            Helper::BigDiv => {
-                r#"
-function $bigDiv(a, b, min) {
-  if (b === 0n) {
-    throw new Error("attempt to divide by zero");
-  }
-  if (a === min && b === -1n) {
-    throw new Error("attempt to divide with overflow");
-  }
-  return a / b;
-}
-"#
-            }
-            Helper::BigRem => {
-                r#"
-function $bigRem(a, b, min) {
-  if (b === 0n) {
-    throw new Error("attempt to calculate the remainder with a divisor of zero");
-  }
-  if (a === min && b === -1n) {
-    throw new Error("attempt to calculate the remainder with overflow");
-  }
-  return a % b;
-}
-"#
-            }
-            Helper::Div => {
-                r#"
-function $div(a, b, min) {
-  if (b === 0) {
-    throw new Error("attempt to divide by zero");
-  }
-  if (a === min && b === -1) {
-    throw new Error("attempt to divide with overflow");
-  }
-  return a / b;
-}
-"#
-            }
+            Helper::ParseBig => include_str!("runtime/parse_big.js"),
+            Helper::BigDiv => include_str!("runtime/big_div.js"),
+            Helper::BigRem => include_str!("runtime/big_rem.js"),
+            Helper::Div => include_str!("runtime/div.js"),
             // `v.retain(keep)`: in place, so every reference to `v` sees it.
-            Helper::Retain => {
-                r#"
-function $retain(v, keep) {
-  let n = 0;
-  for (const x of v) {
-    if (keep(x)) {
-      v[n++] = x;
-    }
-  }
-  v.length = n;
-}
-"#
-            }
+            Helper::Retain => include_str!("runtime/retain.js"),
             // `{:?}`: Rust's `Debug`, as far as the JS value shows it. Structs
             // print as `{ x: 1 }`: their type names aren't in the JS (ADR 0026).
-            Helper::Debug => {
-                r#"
-function $debug(v) {
-  if (typeof v === "string") {
-    return JSON.stringify(v);
-  }
-  if (Array.isArray(v)) {
-    return "[" + v.map($debug).join(", ") + "]";
-  }
-  if (v === undefined) {
-    return "()";
-  }
-  // A `HashMap` and a `HashSet` (ADR 0059), in braces as Rust shows them.
-  if (v instanceof Map) {
-    return "{" + [...v].map(([k, x]) => $debug(k) + ": " + $debug(x)).join(", ") + "}";
-  }
-  if (v instanceof Set) {
-    return "{" + [...v].map($debug).join(", ") + "}";
-  }
-  if (typeof v === "object" && v !== null) {
-    return "{ " + Object.entries(v).map(([k, x]) => k + ": " + $debug(x)).join(", ") + " }";
-  }
-  return String(v);
-}
-"#
-            }
+            Helper::Debug => include_str!("runtime/debug.js"),
             // `==` on structs, tuples, arrays and `Vec`s: a derived `PartialEq`
             // compares field by field, element by element.
-            Helper::Eq => {
-                r#"
-function $eq(a, b) {
-  if (a === b || (a == null && b == null)) {
-    return true;
-  }
-  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
-    return false;
-  }
-  if (Array.isArray(a)) {
-    return Array.isArray(b) && a.length === b.length && a.every((x, i) => $eq(x, b[i]));
-  }
-  const keys = Object.keys(a);
-  return keys.length === Object.keys(b).length && keys.every((k) => $eq(a[k], b[k]));
-}
-"#
-            }
+            Helper::Eq => include_str!("runtime/eq.js"),
             // `assert_eq!` and `assert_ne!` failing, with Rust's message.
-            Helper::Range => {
-                r#"
-function $range(start, end) {
-  return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
-}
-"#
-            }
+            Helper::Range => include_str!("runtime/range.js"),
             // `u8::try_from(x)` between integers: `Ok` of it as the target's
             // representation, a number or a BigInt, or a `TryFromIntError`,
             // which is its kind, `PosOverflow` or `NegOverflow`, as Rust's is:
             // its message is one for both (ADRs 0063 and 0109).
-            Helper::TryFromInt => {
-                r#"
-function $tryFromInt(x, lo, hi) {
-  if (x < lo) return { TAG: "Err", _0: "NegOverflow" };
-  if (x > hi) return { TAG: "Err", _0: "PosOverflow" };
-  return { TAG: "Ok", _0: typeof hi === "bigint" ? BigInt(x) : Number(x) };
-}
-"#
-            }
+            Helper::TryFromInt => include_str!("runtime/try_from_int.js"),
             // `a..b` of `i64`s or `u64`s, collected (ADR 0086).
             // `a..`, which never ends (ADR 0129): `++` steps a BigInt too.
-            Helper::RangeFrom => {
-                r#"
-function* $rangeFrom(start) {
-  for (let i = start; ; i++) {
-    yield i;
-  }
-}
-"#
-            }
+            Helper::RangeFrom => include_str!("runtime/range_from.js"),
             // A `Range`'s `next()` and `next_back()` move its bounds, as Rust's do.
-            Helper::RangeNext => {
-                r#"
-function $rangeNext(range) {
-  return range.start < range.end ? range.start++ : undefined;
-}
-"#
-            }
+            Helper::RangeNext => include_str!("runtime/range_next.js"),
             // `a..`'s `next()`: past its type's end it counts on, as `$rangeFrom` does.
-            Helper::RangeFromNext => {
-                r#"
-function $rangeFromNext(range) {
-  return range.start++;
-}
-"#
-            }
+            Helper::RangeFromNext => include_str!("runtime/range_from_next.js"),
             // A range of `char`s, which skips the surrogates no `char` is, as Rust's does.
-            Helper::CharRange => {
-                r#"
-function $charRange(start, end, inclusive = false) {
-  const items = [];
-  const last = end.codePointAt(0) - (inclusive ? 0 : 1);
-  for (let c = start.codePointAt(0); c <= last; c++) {
-    if (c < 0xd800 || c > 0xdfff) {
-      items.push(String.fromCodePoint(c));
-    }
-  }
-  return items;
-}
-"#
-            }
+            Helper::CharRange => include_str!("runtime/char_range.js"),
             // `{:#?}`'s parts (ADR 0137): each on a line of its own, indented by
             // four spaces, its own lines too, and ended by a comma; none, `[]`.
-            Helper::Pretty => {
-                r#"
-function $pretty(open, items, close, rest = false) {
-  if (items.length === 0) {
-    return open + (rest ? ".." : "") + close;
-  }
-  const lines = items.map((item) => "    " + item.replaceAll("\n", "\n    ") + ",\n").join("");
-  return open + "\n" + lines + (rest ? "    ..\n" : "") + close;
-}
-"#
-            }
+            Helper::Pretty => include_str!("runtime/pretty.js"),
             // ASCII's letters only, as Rust's `to_ascii_lowercase` changes them.
-            Helper::AsciiCase => {
-                r#"
-function $asciiCase(text, upper = false) {
-  return upper
-    ? text.replace(/[a-z]+/g, (letters) => letters.toUpperCase())
-    : text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
-}
-"#
-            }
+            Helper::AsciiCase => include_str!("runtime/ascii_case.js"),
             // `v.append(&mut other)`: `other`'s items, moved, which leaves it empty.
-            Helper::Append => {
-                r#"
-function $append(items, other) {
-  for (const item of other) {
-    items.push(item);
-  }
-  other.length = 0;
-}
-"#
-            }
-            Helper::RangeNextBack => {
-                r#"
-function $rangeNextBack(range) {
-  return range.start < range.end ? --range.end : undefined;
-}
-"#
-            }
-            Helper::BigRange => {
-                r#"
-function $bigRange(start, end) {
-  const items = [];
-  for (let i = start; i < end; i++) items.push(i);
-  return items;
-}
-"#
-            }
-            Helper::Cmp => {
-                r#"
-function $cmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-"#
-            }
+            Helper::Append => include_str!("runtime/append.js"),
+            Helper::RangeNextBack => include_str!("runtime/range_next_back.js"),
+            Helper::BigRange => include_str!("runtime/big_range.js"),
+            Helper::Cmp => include_str!("runtime/cmp.js"),
             // `{:.2}` of an `f64`: its exact value, rounded to even on a tie, as
             // Rust does. JS's `toFixed` rounds a tie up, and past 1e21 it
             // switches to an exponent.
-            Helper::ToFixed => {
-                include_str!("runtime/to_fixed.js")
-            }
+            Helper::ToFixed => include_str!("runtime/to_fixed.js"),
             // `{:?}` of an `f64`: `1.0`, and `1e16` or `1e-5` past `[1e-4, 1e16)`.
-            Helper::DebugF64 => {
-                r#"
-function $debugF64(value) {
-  const size = Math.abs(value);
-  if (Number.isFinite(value) && size !== 0 && (size < 1e-4 || size >= 1e16)) {
-    return value.toExponential().replace("e+", "e");
-  }
-  const text = $displayF64(value);
-  return Number.isFinite(value) && !text.includes(".") ? text + ".0" : text;
-}
-"#
-            }
+            Helper::DebugF64 => include_str!("runtime/debug_f64.js"),
             // `{:?}` of a string, or of a `char` in `'`: quoted, with what Rust
             // doesn't print as it is escaped: controls, formats, private use,
             // separators, combining marks, and spaces other than `" "`.
-            Helper::DebugStr => {
-                r#"
-function $debugStr(s, quote = '"') {
-  let out = quote;
-  for (const c of s) {
-    if (c === quote || c === "\\") out += "\\" + c;
-    else if (c === "\n") out += "\\n";
-    else if (c === "\r") out += "\\r";
-    else if (c === "\t") out += "\\t";
-    else if (c === "\0") out += "\\0";
-    else if (/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Grapheme_Extend}]/u.test(c) || (c !== " " && /\p{Zs}/u.test(c)))
-      out += "\\u{" + c.codePointAt(0).toString(16) + "}";
-    else out += c;
-  }
-  return out + quote;
-}
-"#
-            }
+            Helper::DebugStr => include_str!("runtime/debug_str.js"),
             // A derived `Debug` of a struct with more than five fields: its
             // fields' names, and their strings (ADR 0060).
-            Helper::DebugFields => {
-                r#"
-function $debugFields(name, fields, values, alternate = false) {
-  const shown = fields.map((field, i) => field + ": " + values[i]);
-  return alternate ? $pretty(name + " {", shown, "}") : name + " { " + shown.join(", ") + " }";
-}
-"#
-            }
+            Helper::DebugFields => include_str!("runtime/debug_fields.js"),
             // `{:+}`: a sign for a number that has none.
-            Helper::Plus => {
-                r#"
-function $plus(text) {
-  return text.startsWith("-") || text === "NaN" ? text : "+" + text;
-}
-"#
-            }
+            Helper::Plus => include_str!("runtime/plus.js"),
             // `{:05}`: zeros after the sign and any `0x`.
-            Helper::ZeroPad => {
-                r#"
-function $zeroPad(text, width) {
-  const head = /^[+-]?(0[xbo])?/.exec(text)[0];
-  return head + text.slice(head.length).padStart(width - head.length, "0");
-}
-"#
-            }
+            Helper::ZeroPad => include_str!("runtime/zero_pad.js"),
             // `{:>8}` of a string: Rust counts its `char`s, where JS's `padStart`
             // would count UTF-16 units.
-            Helper::Pad => {
-                r#"
-function $pad(text, width, align, fill = " ") {
-  const room = width - [...text].length;
-  if (room <= 0) return text;
-  const before = align === ">" ? room : align === "^" ? Math.floor(room / 2) : 0;
-  return fill.repeat(before) + text + fill.repeat(room - before);
-}
-"#
-            }
+            Helper::Pad => include_str!("runtime/pad.js"),
             // `partial_cmp` of `f64`s: `None` if either is `NaN`.
-            Helper::PartialCmp => {
-                r#"
-function $partialCmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : a === b ? 0 : undefined;
-}
-"#
-            }
+            Helper::PartialCmp => include_str!("runtime/partial_cmp.js"),
             // A fieldless enum's variants, in the order they're declared.
-            Helper::CmpIn => {
-                r#"
-function $cmpIn(names, a, b) {
-  return $cmp(names.indexOf(a), names.indexOf(b));
-}
-"#
-            }
+            Helper::CmpIn => include_str!("runtime/cmp_in.js"),
             // Item by item, then the shorter first, as Rust orders sequences.
-            Helper::CmpItems => {
-                r#"
-function $cmpItems(a, b, cmp) {
-  for (let i = 0; i < a.length && i < b.length; i++) {
-    const order = cmp(a[i], b[i]);
-    if (order !== 0) {
-      return order;
-    }
-  }
-  return $cmp(a.length, b.length);
-}
-"#
-            }
+            Helper::CmpItems => include_str!("runtime/cmp_items.js"),
             // The first that isn't `Equal`, unordered (`undefined`) included.
-            Helper::ThenCmp => {
-                r#"
-function $thenCmp(...orders) {
-  for (const order of orders) {
-    if (order !== 0) {
-      return order;
-    }
-  }
-  return 0;
-}
-"#
-            }
+            Helper::ThenCmp => include_str!("runtime/then_cmp.js"),
             // An iterator's `max`: the last of the greatest, as Rust's is. A generic
             // one's `Some` may be a box (ADR 0051).
-            Helper::MaxBy => {
-                r#"
-function $maxBy(items, cmp, boxed = false) {
-  if (items.length === 0) {
-    return undefined;
-  }
-  const max = items.reduce((max, x) => (cmp(x, max) >= 0 ? x : max));
-  return boxed ? $some(max) : max;
-}
-"#
-            }
+            Helper::MaxBy => include_str!("runtime/max_by.js"),
             // And `min`: the first of the least.
-            Helper::MinBy => {
-                r#"
-function $minBy(items, cmp, boxed = false) {
-  if (items.length === 0) {
-    return undefined;
-  }
-  const min = items.reduce((min, x) => (cmp(x, min) < 0 ? x : min));
-  return boxed ? $some(min) : min;
-}
-"#
-            }
-            Helper::Max => {
-                r#"
-function $max(items) {
-  return items.length === 0 ? undefined : items.reduce((max, x) => (x >= max ? x : max));
-}
-"#
-            }
-            Helper::Min => {
-                r#"
-function $min(items) {
-  return items.length === 0 ? undefined : items.reduce((min, x) => (x < min ? x : min));
-}
-"#
-            }
-            Helper::Position => {
-                r#"
-function $position(items, found) {
-  let i = 0;
-  for (const item of items) {
-    if (found(item)) return i;
-    i++;
-  }
-  return undefined;
-}
-"#
-            }
-            Helper::Try => {
-                r#"
-function $try(f) {
-  try {
-    return { TAG: "Ok", _0: f() };
-  } catch (e) {
-    return { TAG: "Err", _0: e };
-  }
-}
-"#
-            }
-            Helper::Settle => {
-                r#"
-function $settle(promise) {
-  return promise.then((value) => ({ TAG: "Ok", _0: value }), (e) => ({ TAG: "Err", _0: e }));
-}
-"#
-            }
+            Helper::MinBy => include_str!("runtime/min_by.js"),
+            Helper::Max => include_str!("runtime/max.js"),
+            Helper::Min => include_str!("runtime/min.js"),
+            Helper::Position => include_str!("runtime/position.js"),
+            Helper::Try => include_str!("runtime/try.js"),
+            Helper::Settle => include_str!("runtime/settle.js"),
             // `print!` and `eprint!` of text that may not end a line: written as
             // it is where JS can (Node, Bun, Deno), else each line as it ends,
             // as a browser's `console` only writes lines, and what's left when
             // the task ends (ADR 0087).
-            Helper::Print => {
-                r#"
-const $printed = ["", ""];
-function $print(text) {
-  $write(text, 0);
-}
-function $eprint(text) {
-  $write(text, 1);
-}
-function $write(text, error) {
-  const stream = globalThis.process?.[error ? "stderr" : "stdout"];
-  if (stream?.write) {
-    stream.write(text);
-    return;
-  }
-  const log = error ? console.error : console.log;
-  const lines = ($printed[error] + text).split("\n");
-  const rest = lines.pop();
-  for (const line of lines) log(line);
-  // What's left unended is written when this task ends, so none is lost.
-  if (rest !== "" && $printed[error] === "") {
-    queueMicrotask(() => {
-      if ($printed[error] !== "") log($printed[error]);
-      $printed[error] = "";
-    });
-  }
-  $printed[error] = rest;
-}
-"#
-            }
+            Helper::Print => include_str!("runtime/print.js"),
             // `s.replace(p, r)` and `s.split(p)` of a pattern that may be empty,
             // which Rust matches at each char's boundary, both ends too, and JS
             // between UTF-16 units, splitting an emoji (ADR 0063).
-            Helper::EmptyPattern => {
-                r#"
-function $replace(s, pattern, replacement) {
-  if (pattern !== "") return s.replaceAll(pattern, replacement);
-  return Array.from(s, (c) => replacement + c).join("") + replacement;
-}
-function $split(s, pattern) {
-  return pattern === "" ? ["", ...s, ""] : s.split(pattern);
-}
-"#
-            }
-            Helper::UnwrapOk => {
-                r#"
-function $unwrapOk(result, message = "called `Result::unwrap()` on an `Err` value", debug = $debug) {
-  if (result.TAG === "Err") {
-    throw new Error(message + ": " + debug(result._0));
-  }
-  return result._0;
-}
-"#
-            }
-            Helper::UnwrapErr => {
-                r#"
-function $unwrapErr(result, message = "called `Result::unwrap_err()` on an `Ok` value") {
-  if (result.TAG === "Ok") {
-    throw new Error(message + ": " + $debug(result._0));
-  }
-  return result._0;
-}
-"#
-            }
-            Helper::SplitOnce => {
-                r#"
-function $splitOnce(s, separator) {
-  const i = s.indexOf(separator);
-  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
-}
-"#
-            }
-            Helper::RsplitOnce => {
-                r#"
-function $rsplitOnce(s, separator) {
-  const i = s.lastIndexOf(separator);
-  return i < 0 ? undefined : [s.slice(0, i), s.slice(i + separator.length)];
-}
-"#
-            }
-            Helper::StripPrefix => {
-                r#"
-function $stripPrefix(s, prefix) {
-  return s.startsWith(prefix) ? s.slice(prefix.length) : undefined;
-}
-"#
-            }
-            Helper::StripSuffix => {
-                r#"
-function $stripSuffix(s, suffix) {
-  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : undefined;
-}
-"#
-            }
-            Helper::Some => {
-                r#"
-// `Some(x)` of a generic `T` (ADR 0051): `x`, unless it looks like `None`,
-// as `undefined`, `null` or such a box does. Then it's a box one deeper.
-function $some(x) {
-  if (x == null) return { $someNone: 0 };
-  if (typeof x === "object" && "$someNone" in x) return { $someNone: x.$someNone + 1 };
-  return x;
-}
-"#
-            }
-            Helper::SomeValue => {
-                r#"
-// What's in a `$some`: the box one level shallower.
-function $someValue(x) {
-  if (x != null && typeof x === "object" && "$someNone" in x) {
-    return x.$someNone === 0 ? undefined : { $someNone: x.$someNone - 1 };
-  }
-  return x;
-}
-"#
-            }
-            Helper::SomeAt => {
-                r#"
-// `Some` of the item at `index`, or `None` when there's none there.
-function $someAt(items, index) {
-  return index >= 0 && index < items.length ? $some(items[index]) : undefined;
-}
-"#
-            }
-            Helper::Pop => {
-                r#"
-// `Vec::pop` of a generic `T`: `None` for an empty one, else `Some` of the last.
-function $pop(items) {
-  return items.length === 0 ? undefined : $some(items.pop());
-}
-"#
-            }
-            Helper::Iterator => {
-                r#"
-// A Rust iterator of the crate's own as a JS one: its `next` returns the
-// item, or `None` at the end. JS's iterator helpers are lazy, like Rust's
-// adapters, so an endless one is fine until something wants all of it. A
-// generic `next` may box its `Some` (ADR 0051): `boxed` unboxes it.
-function $iterator(iterator, next, boxed = false) {
-  return Iterator.from({
-    next() {
-      const item = next(iterator);
-      if (item == null) {
-        return { done: true, value: undefined };
-      }
-      return { done: false, value: boxed ? $someValue(item) : item };
-    }
-  });
-}
-"#
-            }
+            Helper::EmptyPattern => include_str!("runtime/empty_pattern.js"),
+            Helper::UnwrapOk => include_str!("runtime/unwrap_ok.js"),
+            Helper::UnwrapErr => include_str!("runtime/unwrap_err.js"),
+            Helper::SplitOnce => include_str!("runtime/split_once.js"),
+            Helper::RsplitOnce => include_str!("runtime/rsplit_once.js"),
+            Helper::StripPrefix => include_str!("runtime/strip_prefix.js"),
+            Helper::StripSuffix => include_str!("runtime/strip_suffix.js"),
+            Helper::Some => include_str!("runtime/some.js"),
+            Helper::SomeValue => include_str!("runtime/some_value.js"),
+            Helper::SomeAt => include_str!("runtime/some_at.js"),
+            Helper::Pop => include_str!("runtime/pop.js"),
+            Helper::Iterator => include_str!("runtime/iterator.js"),
             // A key as a string of its value (ADR 0121): the same for two keys
             // exactly when `$eq` finds them equal, an object's fields by name.
-            Helper::Key => {
-                r#"
-function $key(value) {
-  if (value == null) {
-    return "~";
-  }
-  switch (typeof value) {
-    case "string":
-      return JSON.stringify(value);
-    case "bigint":
-      return value + "n";
-    case "object":
-      if (Array.isArray(value)) {
-        return "[" + value.map($key).join(",") + "]";
-      }
-      return "{" + Object.keys(value).sort().map((k) => JSON.stringify(k) + ":" + $key(value[k])).join(",") + "}";
-    default:
-      return String(value);
-  }
-}
-"#
-            }
+            Helper::Key => include_str!("runtime/key.js"),
             // A `HashMap` whose key compares by value (ADR 0121): a `Map` that
             // keeps `[key, value]` under the key's string. `insert` of a key
             // that's there keeps the key, as Rust's does.
-            Helper::KeyMap => {
-                r#"
-class $KeyMap extends Map {
-  constructor(entries) {
-    super();
-    if (entries) {
-      for (const [key, value] of entries) {
-        this.set(key, value);
-      }
-    }
-  }
-  get(key) {
-    const entry = super.get($key(key));
-    return entry === undefined ? undefined : entry[1];
-  }
-  set(key, value) {
-    const found = $key(key);
-    const entry = super.get(found);
-    if (entry === undefined) {
-      super.set(found, [key, value]);
-    } else {
-      entry[1] = value;
-    }
-    return this;
-  }
-  has(key) {
-    return super.has($key(key));
-  }
-  delete(key) {
-    return super.delete($key(key));
-  }
-  *entries() {
-    for (const [key, value] of super.values()) {
-      yield [key, value];
-    }
-  }
-  *keys() {
-    for (const [key] of super.values()) {
-      yield key;
-    }
-  }
-  *values() {
-    for (const [, value] of super.values()) {
-      yield value;
-    }
-  }
-  [Symbol.iterator]() {
-    return this.entries();
-  }
-  forEach(f, that) {
-    for (const [key, value] of this.entries()) {
-      f.call(that, value, key, this);
-    }
-  }
-}
-"#
-            }
+            Helper::KeyMap => include_str!("runtime/key_map.js"),
             // A `HashSet` whose item compares by value (ADR 0121): a `Set` of
             // the items, found by their strings.
-            Helper::KeySet => {
-                r#"
-class $KeySet extends Set {
-  #items = new Map();
-  constructor(items) {
-    super();
-    if (items) {
-      for (const item of items) {
-        this.add(item);
-      }
-    }
-  }
-  get size() {
-    return this.#items.size;
-  }
-  add(item) {
-    const found = $key(item);
-    if (!this.#items.has(found)) {
-      this.#items.set(found, item);
-    }
-    return this;
-  }
-  has(item) {
-    return this.#items.has($key(item));
-  }
-  delete(item) {
-    return this.#items.delete($key(item));
-  }
-  clear() {
-    this.#items.clear();
-  }
-  values() {
-    return this.#items.values();
-  }
-  keys() {
-    return this.#items.values();
-  }
-  *entries() {
-    for (const item of this.#items.values()) {
-      yield [item, item];
-    }
-  }
-  [Symbol.iterator]() {
-    return this.#items.values();
-  }
-  forEach(f, that) {
-    for (const item of this.#items.values()) {
-      f.call(that, item, item, this);
-    }
-  }
-}
-"#
-            }
+            Helper::KeySet => include_str!("runtime/key_set.js"),
             // A map's `insert` for its value: the one it replaced, or `None`.
-            Helper::Insert => {
-                r#"
-function $insert(map, key, value) {
-  const old = map.get(key);
-  map.set(key, value);
-  return old;
-}
-"#
-            }
+            Helper::Insert => include_str!("runtime/insert.js"),
             // A set's `insert` for its value: whether it wasn't there yet.
-            Helper::Add => {
-                r#"
-function $add(set, item) {
-  const added = !set.has(item);
-  set.add(item);
-  return added;
-}
-"#
-            }
+            Helper::Add => include_str!("runtime/add.js"),
             // A map's `remove` for its value: the one it took out, or `None`.
-            Helper::Remove => {
-                r#"
-function $remove(map, key) {
-  const old = map.get(key);
-  map.delete(key);
-  return old;
-}
-"#
-            }
+            Helper::Remove => include_str!("runtime/remove.js"),
             // `v.extend(items)` (ADR 0062): a `push` of each, not of an array
             // too long for a call's arguments.
-            Helper::Extend => {
-                r#"
-function $extend(v, items) {
-  for (const item of items) {
-    v.push(item);
-  }
-}
-"#
-            }
+            Helper::Extend => include_str!("runtime/extend.js"),
             // `v.insert(i, x)`, which panics past the end, where `splice` wouldn't.
-            Helper::InsertAt => {
-                r#"
-function $insertAt(v, index, item) {
-  if (index > v.length) {
-    throw new Error(`insertion index (is ${index}) should be <= len (is ${v.length})`);
-  }
-  v.splice(index, 0, item);
-}
-"#
-            }
+            Helper::InsertAt => include_str!("runtime/insert_at.js"),
             // `v.remove(i)`: the item, and a panic past the end.
-            Helper::RemoveAt => {
-                r#"
-function $removeAt(v, index) {
-  if (index >= v.length) {
-    throw new Error(`removal index (is ${index}) should be < len (is ${v.length})`);
-  }
-  return v.splice(index, 1)[0];
-}
-"#
-            }
-            Helper::Swap => {
-                r#"
-function $swap(v, a, b) {
-  if (a >= v.length || b >= v.length) {
-    throw new Error(`index out of bounds: the len is ${v.length} but the index is ${Math.max(a, b)}`);
-  }
-  [v[a], v[b]] = [v[b], v[a]];
-}
-"#
-            }
-            Helper::Truncate => {
-                r#"
-function $truncate(v, length) {
-  if (length < v.length) {
-    v.length = length;
-  }
-}
-"#
-            }
+            Helper::RemoveAt => include_str!("runtime/remove_at.js"),
+            Helper::Swap => include_str!("runtime/swap.js"),
+            Helper::Truncate => include_str!("runtime/truncate.js"),
             // `v.dedup()`: each run of equal items as one.
-            Helper::Dedup => {
-                r#"
-function $dedup(v) {
-  let n = 0;
-  for (const item of v) {
-    if (n === 0 || v[n - 1] !== item) {
-      v[n++] = item;
-    }
-  }
-  v.length = n;
-}
-"#
-            }
+            Helper::Dedup => include_str!("runtime/dedup.js"),
             // `v.windows(n)`: each run of `n` in a row. It panics for 0, as Rust's does.
-            Helper::Windows => {
-                r#"
-function $windows(v, size) {
-  if (size === 0) {
-    throw new Error("window size must be non-zero");
-  }
-  return Array.from({ length: Math.max(0, v.length - size + 1) }, (_, i) => v.slice(i, i + size));
-}
-"#
-            }
-            Helper::Chunks => {
-                r#"
-function $chunks(v, size) {
-  if (size === 0) {
-    throw new Error("chunk size must be non-zero");
-  }
-  return Array.from({ length: Math.ceil(v.length / size) }, (_, i) => v.slice(i * size, i * size + size));
-}
-"#
-            }
+            Helper::Windows => include_str!("runtime/windows.js"),
+            Helper::Chunks => include_str!("runtime/chunks.js"),
             // `a.zip(b)`: pairs, as many as the shorter has.
-            Helper::Zip => {
-                r#"
-function $zip(a, b) {
-  return Array.from({ length: Math.min(a.length, b.length) }, (_, i) => [a[i], b[i]]);
-}
-"#
-            }
-            Helper::TakeWhile => {
-                r#"
-function $takeWhile(items, keep) {
-  const end = items.findIndex((item) => !keep(item));
-  return end < 0 ? items.slice() : items.slice(0, end);
-}
-"#
-            }
-            Helper::SkipWhile => {
-                r#"
-function $skipWhile(items, skip) {
-  const start = items.findIndex((item) => !skip(item));
-  return start < 0 ? [] : items.slice(start);
-}
-"#
-            }
+            Helper::Zip => include_str!("runtime/zip.js"),
+            Helper::TakeWhile => include_str!("runtime/take_while.js"),
+            Helper::SkipWhile => include_str!("runtime/skip_while.js"),
             // A JS iterator's adapters (ADR 0128), which take from it only as
             // far as they're used, as Rust's do: an endless one is fine.
-            Helper::LazyChain => {
-                r#"
-function* $lazyChain(a, b) {
-  yield* a;
-  yield* b;
-}
-"#
-            }
-            Helper::LazyZip => {
-                r#"
-function* $lazyZip(a, b) {
-  const right = b[Symbol.iterator]();
-  for (const item of a) {
-    const other = right.next();
-    if (other.done) {
-      return;
-    }
-    yield [item, other.value];
-  }
-}
-"#
-            }
-            Helper::LazyTakeWhile => {
-                r#"
-function* $lazyTakeWhile(items, keep) {
-  for (const item of items) {
-    if (!keep(item)) {
-      return;
-    }
-    yield item;
-  }
-}
-"#
-            }
-            Helper::LazySkipWhile => {
-                r#"
-function* $lazySkipWhile(items, skip) {
-  let skipping = true;
-  for (const item of items) {
-    if (skipping && skip(item)) {
-      continue;
-    }
-    skipping = false;
-    yield item;
-  }
-}
-"#
-            }
+            Helper::LazyChain => include_str!("runtime/lazy_chain.js"),
+            Helper::LazyZip => include_str!("runtime/lazy_zip.js"),
+            Helper::LazyTakeWhile => include_str!("runtime/lazy_take_while.js"),
+            Helper::LazySkipWhile => include_str!("runtime/lazy_skip_while.js"),
             // std's endless iterator sources (ADR 0128). `repeat` clones its
             // value for each item, as Rust's does.
-            Helper::Repeating => {
-                r#"
-function* $repeating(value, clone = (value) => value) {
-  while (true) {
-    yield clone(value);
-  }
-}
-"#
-            }
-            Helper::RepeatingWith => {
-                r#"
-function* $repeatingWith(f) {
-  while (true) {
-    yield f();
-  }
-}
-"#
-            }
+            Helper::Repeating => include_str!("runtime/repeating.js"),
+            Helper::RepeatingWith => include_str!("runtime/repeating_with.js"),
             // The next item is found before this one is given, as Rust's is. A
             // generic `Some` may be boxed (ADR 0051): `boxed` unboxes it.
-            Helper::Successors => {
-                r#"
-function* $successors(next, successor, boxed = false) {
-  while (next != null) {
-    const item = boxed ? $someValue(next) : next;
-    next = successor(item);
-    yield item;
-  }
-}
-"#
-            }
+            Helper::Successors => include_str!("runtime/successors.js"),
             // `f` is called for each item, again after a `None` too, as Rust's is.
-            Helper::FromFn => {
-                r#"
-function $fromFn(f, boxed = false) {
-  return Iterator.from({
-    next() {
-      const item = f();
-      if (item == null) {
-        return { done: true, value: undefined };
-      }
-      return { done: false, value: boxed ? $someValue(item) : item };
-    }
-  });
-}
-"#
-            }
-            Helper::Unzip => {
-                r#"
-function $unzip(pairs) {
-  return [pairs.map(([a]) => a), pairs.map(([, b]) => b)];
-}
-"#
-            }
+            Helper::FromFn => include_str!("runtime/from_fn.js"),
+            Helper::Unzip => include_str!("runtime/unzip.js"),
             // `partition(p)`: those it holds for, and the rest.
-            Helper::Partition => {
-                r#"
-function $partition(items, keep) {
-  const yes = [];
-  const no = [];
-  for (const item of items) {
-    (keep(item) ? yes : no).push(item);
-  }
-  return [yes, no];
-}
-"#
-            }
+            Helper::Partition => include_str!("runtime/partition.js"),
             // `c.to_digit(radix)`: the digit, or `None`.
-            Helper::ToDigit => {
-                r#"
-function $toDigit(c, radix) {
-  const digit = parseInt(c, 36);
-  return digit < radix ? digit : undefined;
-}
-"#
-            }
+            Helper::ToDigit => include_str!("runtime/to_digit.js"),
             // `s.lines()`: without a last empty line, and each without its `\r`.
-            Helper::Lines => {
-                r#"
-function $lines(s) {
-  const lines = s.split("\n");
-  const last = lines.pop();
-  const ended = lines.map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
-  if (last !== "") {
-    ended.push(last);
-  }
-  return ended;
-}
-"#
-            }
+            Helper::Lines => include_str!("runtime/lines.js"),
             // `s.split(|c| ..)`: the pieces between the `char`s it's true of.
             // `x.pow(e)`: multiplied as `Math.imul` does, so what's past 2^32
             // wraps as Rust's does, where `x ** e` would lose the low bits.
-            Helper::Pow => {
-                r#"
-function $pow(base, exp) {
-  let result = 1;
-  while (exp > 0) {
-    if (exp & 1) {
-      result = Math.imul(result, base);
-    }
-    base = Math.imul(base, base);
-    exp >>>= 1;
-  }
-  return result;
-}
-"#
-            }
+            Helper::Pow => include_str!("runtime/pow.js"),
             // `x.checked_pow(e)`: Rust's own squarings, exact in BigInts, and
             // `None` as soon as one is out of the type's range. It's a BigInt
             // if the type's bounds are.
-            Helper::CheckedPow => {
-                r#"
-function $checkedPow(base, exp, lo, hi) {
-  const fits = (x) => x >= lo && x <= hi;
-  const result = (x) => (typeof hi === "bigint" ? x : Number(x));
-  if (exp === 0) return result(1n);
-  let b = BigInt(base);
-  let acc = 1n;
-  while (exp > 1) {
-    if (exp & 1) {
-      acc *= b;
-      if (!fits(acc)) return undefined;
-    }
-    exp >>>= 1;
-    b *= b;
-    if (!fits(b)) return undefined;
-  }
-  acc *= b;
-  return fits(acc) ? result(acc) : undefined;
-}
-"#
-            }
+            Helper::CheckedPow => include_str!("runtime/checked_pow.js"),
             // `x.powi(n)`: the multiplications Rust's own `__powidf2` does, in
             // its order, so the result rounds the same.
-            Helper::Powi => {
-                r#"
-function $powi(x, n) {
-  const reciprocal = n < 0;
-  let result = 1;
-  while (true) {
-    if (n & 1) {
-      result *= x;
-    }
-    n = (n / 2) | 0;
-    if (n === 0) {
-      break;
-    }
-    x *= x;
-  }
-  return reciprocal ? 1 / result : result;
-}
-"#
-            }
+            Helper::Powi => include_str!("runtime/powi.js"),
             // `x.round()`: a half away from zero, where `Math.round` goes up.
-            Helper::Round => {
-                r#"
-function $round(x) {
-  return Math.sign(x) * Math.round(Math.abs(x));
-}
-"#
-            }
+            Helper::Round => include_str!("runtime/round.js"),
             // `a.checked_add(b)`: the exact result, or `None` out of range. An
             // integer is never -0, which `0 * -5` is in JS: `+ 0` makes it 0.
-            Helper::Checked => {
-                r#"
-function $checked(value, lo, hi) {
-  return value >= lo && value <= hi ? value + 0 : undefined;
-}
-"#
-            }
-            Helper::CheckedDiv => {
-                r#"
-function $checkedDiv(a, b, min) {
-  return b === 0 || (a === min && b === -1) ? undefined : Math.trunc(a / b) + 0;
-}
-"#
-            }
+            Helper::Checked => include_str!("runtime/checked.js"),
+            Helper::CheckedDiv => include_str!("runtime/checked_div.js"),
             // `a.rem_euclid(b)`: never negative. `$rem` panics as `%` does,
             // and `+ 0` makes its -0 (`-4 % 2`) the integer 0.
-            Helper::RemEuclid => {
-                r#"
-function $remEuclid(a, b, min) {
-  const r = $rem(a, b, min) + 0;
-  return r < 0 ? (b < 0 ? r - b : r + b) : r;
-}
-"#
-            }
-            Helper::DivEuclid => {
-                r#"
-function $divEuclid(a, b, min) {
-  const q = Math.trunc($div(a, b, min)) + 0;
-  return a % b < 0 ? (b > 0 ? q - 1 : q + 1) : q;
-}
-"#
-            }
-            Helper::TrailingZeros => {
-                r#"
-function $trailingZeros(x, bits) {
-  return x === 0 ? bits : 31 - Math.clz32(x & -x);
-}
-"#
-            }
-            Helper::CountOnes => {
-                r#"
-function $countOnes(x) {
-  let ones = 0;
-  x >>>= 0;
-  while (x !== 0) {
-    ones += x & 1;
-    x >>>= 1;
-  }
-  return ones;
-}
-"#
-            }
+            Helper::RemEuclid => include_str!("runtime/rem_euclid.js"),
+            Helper::DivEuclid => include_str!("runtime/div_euclid.js"),
+            Helper::TrailingZeros => include_str!("runtime/trailing_zeros.js"),
+            Helper::CountOnes => include_str!("runtime/count_ones.js"),
             // `v.binary_search(&x)`: Rust's search, step for step, so that
             // among equal items it finds the one Rust does.
-            Helper::BinarySearch => {
-                r#"
-function $binarySearch(items, x) {
-  let size = items.length;
-  if (size === 0) {
-    return { TAG: "Err", _0: 0 };
-  }
-  let base = 0;
-  while (size > 1) {
-    const half = size >>> 1;
-    const mid = base + half;
-    if (!(items[mid] > x)) {
-      base = mid;
-    }
-    size -= half;
-  }
-  const found = items[base];
-  return found === x ? { TAG: "Ok", _0: base } : { TAG: "Err", _0: base + (found < x ? 1 : 0) };
-}
-"#
-            }
+            Helper::BinarySearch => include_str!("runtime/binary_search.js"),
             // `{:?}` of a parse error, which is its message: its kind, by the
             // message. A `TryFromIntError` is its kind itself.
-            Helper::DebugParseError => {
-                r#"
-function $debugParseError(message, name) {
-  const kinds = {
-    "cannot parse integer from empty string": "Empty",
-    "invalid digit found in string": "InvalidDigit",
-    "number too large to fit in target type": "PosOverflow",
-    "number too small to fit in target type": "NegOverflow",
-    "number would be zero for non-zero type": "Zero",
-    "cannot parse float from empty string": "Empty",
-    "invalid float literal": "Invalid",
-    "cannot parse char from empty string": "EmptyString",
-    "too many characters in string": "TooManyChars",
-  };
-  if (name === "TryFromIntError") return `TryFromIntError(${message})`;
-  return name === "ParseBoolError" ? name : `${name} { kind: ${kinds[message]} }`;
-}
-"#
-            }
+            Helper::DebugParseError => include_str!("runtime/debug_parse_error.js"),
             // An iterator that knows where it is (ADR 0071): a `Peekable`, or one
             // that `next()` steps through. It's a JS iterator too.
-            Helper::Iter => {
-                r#"
-function $iter(items) {
-  return {
-    items,
-    at: 0,
-    next() {
-      return this.at < this.items.length ? { value: this.items[this.at++], done: false } : { value: undefined, done: true };
-    },
-    [Symbol.iterator]() {
-      return this;
-    },
-  };
-}
-"#
-            }
+            Helper::Iter => include_str!("runtime/iter.js"),
             // `it.next()` of any JS iterator: its next item, or `undefined` at the end.
-            Helper::Next => {
-                r#"
-function $next(it) {
-  const step = it.next();
-  return step.done ? undefined : step.value;
-}
-"#
-            }
+            Helper::Next => include_str!("runtime/next.js"),
             // Of a generic `T`'s: a `Some` that looks like `None` is boxed (ADR 0051).
-            Helper::NextSome => {
-                r#"
-function $nextSome(it) {
-  const step = it.next();
-  return step.done ? undefined : $some(step.value);
-}
-"#
-            }
+            Helper::NextSome => include_str!("runtime/next_some.js"),
             // `a.total_cmp(&b)`: Rust's, which compares the bits as `i64`s,
             // negative ones with all but the sign flipped.
-            Helper::TotalCmp => {
-                r#"
-function $totalCmp(a, b) {
-  const view = new DataView(new ArrayBuffer(16));
-  view.setFloat64(0, a);
-  view.setFloat64(8, b);
-  const ordered = (bits) => bits ^ BigInt.asIntN(64, BigInt.asUintN(64, bits >> 63n) >> 1n);
-  const x = ordered(view.getBigInt64(0));
-  const y = ordered(view.getBigInt64(8));
-  return x < y ? -1 : x > y ? 1 : 0;
-}
-"#
-            }
+            Helper::TotalCmp => include_str!("runtime/total_cmp.js"),
             // `char::from_digit(n, radix)`, as Rust's: `0`-`9`, then `a`-`z`.
-            Helper::FromDigit => {
-                r#"
-function $fromDigit(num, radix) {
-  if (radix > 36) throw new Error("from_digit: radix is too high (maximum 36)");
-  return num < radix ? String.fromCharCode(num < 10 ? 48 + num : 87 + num) : undefined;
-}
-"#
-            }
+            Helper::FromDigit => include_str!("runtime/from_digit.js"),
             // `char::from_u32(n)`: a `char`, unless `n` is a surrogate or past U+10FFFF.
-            Helper::FromU32 => {
-                r#"
-function $fromU32(n) {
-  return n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff) ? undefined : String.fromCodePoint(n);
-}
-"#
-            }
+            Helper::FromU32 => include_str!("runtime/from_u32.js"),
             // `{:e}` of a number: `1.2345e3`, where JS writes `1.2345e+3`.
-            Helper::LowerExp => {
-                r#"
-function $lowerExp(x) {
-  if (Number.isNaN(x)) return "NaN";
-  if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";
-  return x.toExponential().replace("e+", "e");
-}
-"#
-            }
+            Helper::LowerExp => include_str!("runtime/lower_exp.js"),
             // A `serde_json::Error`, `{ message, line, column }`, shown as serde_json
             // shows one: a place only when it has one (line 0 is none).
-            Helper::JsonError => {
-                r#"
-function $displayJsonError(e) {
-  return e.line === 0 ? e.message : `${e.message} at line ${e.line} column ${e.column}`;
-}
-function $debugJsonError(e) {
-  return `Error(${$debugStr(e.message)}, line: ${e.line}, column: ${e.column})`;
-}
-"#
-            }
+            Helper::JsonError => include_str!("runtime/json_error.js"),
             // A `serde_json::Error` on its way out: a message, and where in the
             // text, line 0 when it's not about a place.
-            Helper::JsonFail => {
-                r#"
-class $JsonError extends Error {
-  constructor(message, line = 0, column = 0) {
-    super(message);
-    this.line = line;
-    this.column = column;
-  }
-}
-function $jsonError(message) {
-  return new $JsonError(message);
-}
-// A float as serde_json writes one: its shortest digits, fixed from 1e-5
-// to 1e15, else `1.5e+16`.
-function $jsonNumber(x) {
-  if (!Number.isFinite(x)) return "null";
-  if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
-  const [mantissa, exponent] = x.toExponential().split("e");
-  const e = Number(exponent);
-  if (e < -5 || e > 15) return `${mantissa}e${e < 0 ? "-" : "+"}${Math.abs(e)}`;
-  const fixed = String(x);
-  return fixed.includes(".") ? fixed : `${fixed}.0`;
-}
-"#
-            }
+            Helper::JsonFail => include_str!("runtime/json_fail.js"),
             Helper::FromJson => include_str!("runtime/from_json.js"),
             Helper::JsonValue => include_str!("runtime/json_value.js"),
             // serde_json's writer (ADR 0077): `write` makes serde's calls on it,
             // and it lays them out as serde_json's compact or pretty
             // formatter does.
-            Helper::ToJson => {
-                include_str!("runtime/to_json.js")
-            }
+            Helper::ToJson => include_str!("runtime/to_json.js"),
             // `scan(init, f)`: `f` changes the state through its box, and gives
             // each item out, until it gives `None`.
-            Helper::Scan => {
-                r#"
-function $scan(items, init, f) {
-  const state = { value: init };
-  const out = [];
-  for (const item of items) {
-    const next = f(state, item);
-    if (next === undefined) {
-      break;
-    }
-    out.push(next);
-  }
-  return out;
-}
-"#
-            }
-            Helper::Peek => {
-                r#"
-function $peek(it) {
-  return it.items[it.at];
-}
-"#
-            }
+            Helper::Scan => include_str!("runtime/scan.js"),
+            Helper::Peek => include_str!("runtime/peek.js"),
             // `it.next_if(f)`: the next item if `f` says so, and then past it.
-            Helper::NextIf => {
-                r#"
-function $nextIf(it, f) {
-  return it.at < it.items.length && f(it.items[it.at]) ? it.items[it.at++] : undefined;
-}
-"#
-            }
+            Helper::NextIf => include_str!("runtime/next_if.js"),
             // What's left of one, as an array; it then has nothing left.
-            Helper::Rest => {
-                r#"
-function $rest(it) {
-  const rest = it.items.slice(it.at);
-  it.at = it.items.length;
-  return rest;
-}
-"#
-            }
+            Helper::Rest => include_str!("runtime/rest.js"),
             // `chars.as_str()`: what's left, as a string, still there to step through.
-            Helper::RestStr => {
-                r#"
-function $restStr(it) {
-  return it.items.slice(it.at).join("");
-}
-"#
-            }
+            Helper::RestStr => include_str!("runtime/rest_str.js"),
             // `d.remove(i)` of a `VecDeque`: the item, or `None` past the end.
-            Helper::RemoveOpt => {
-                r#"
-function $removeOpt(items, index) {
-  return index < items.length ? items.splice(index, 1)[0] : undefined;
-}
-"#
-            }
+            Helper::RemoveOpt => include_str!("runtime/remove_opt.js"),
             // A `BinaryHeap` (ADR 0068), step for step as Rust's: `sift_up`,
             // `sift_down_range` and `sift_down_to_bottom` move a hole, and
             // compare as `<=` and `>=` of the items' `cmp`.
-            Helper::SiftUp => {
-                r#"
-function $siftUp(heap, start, pos, cmp) {
-  const item = heap[pos];
-  while (pos > start) {
-    const parent = (pos - 1) >>> 1;
-    if (cmp(item, heap[parent]) <= 0) {
-      break;
-    }
-    heap[pos] = heap[parent];
-    pos = parent;
-  }
-  heap[pos] = item;
-  return pos;
-}
-"#
-            }
-            Helper::SiftDown => {
-                r#"
-function $siftDown(heap, pos, end, cmp) {
-  const item = heap[pos];
-  let child = 2 * pos + 1;
-  while (child <= end - 2) {
-    if (cmp(heap[child], heap[child + 1]) <= 0) {
-      child += 1;
-    }
-    if (cmp(item, heap[child]) >= 0) {
-      heap[pos] = item;
-      return pos;
-    }
-    heap[pos] = heap[child];
-    pos = child;
-    child = 2 * pos + 1;
-  }
-  if (child === end - 1 && cmp(item, heap[child]) < 0) {
-    heap[pos] = heap[child];
-    pos = child;
-  }
-  heap[pos] = item;
-  return pos;
-}
-"#
-            }
-            Helper::HeapPush => {
-                r#"
-function $heapPush(heap, item, cmp) {
-  heap.push(item);
-  $siftUp(heap, 0, heap.length - 1, cmp);
-}
-"#
-            }
+            Helper::SiftUp => include_str!("runtime/sift_up.js"),
+            Helper::SiftDown => include_str!("runtime/sift_down.js"),
+            Helper::HeapPush => include_str!("runtime/heap_push.js"),
             // The last item goes to the top, which then sinks to the bottom
             // and rises back: Rust's `sift_down_to_bottom`.
-            Helper::HeapPop => {
-                r#"
-function $heapPop(heap, cmp) {
-  if (heap.length === 0) {
-    return undefined;
-  }
-  let top = heap.pop();
-  if (heap.length > 0) {
-    [top, heap[0]] = [heap[0], top];
-    const end = heap.length;
-    const item = heap[0];
-    let pos = 0;
-    let child = 1;
-    while (child <= end - 2) {
-      if (cmp(heap[child], heap[child + 1]) <= 0) {
-        child += 1;
-      }
-      heap[pos] = heap[child];
-      pos = child;
-      child = 2 * pos + 1;
-    }
-    if (child === end - 1) {
-      heap[pos] = heap[child];
-      pos = child;
-    }
-    heap[pos] = item;
-    $siftUp(heap, 0, pos, cmp);
-  }
-  return top;
-}
-"#
-            }
+            Helper::HeapPop => include_str!("runtime/heap_pop.js"),
             // `into_sorted_vec` and `BinaryHeap::from` take what they're given,
             // which may be a clone that was never made (ADR 0052): a copy, then.
-            Helper::HeapSorted => {
-                r#"
-function $heapSorted(items, cmp) {
-  const heap = items.slice();
-  let end = heap.length;
-  while (end > 1) {
-    end -= 1;
-    [heap[0], heap[end]] = [heap[end], heap[0]];
-    $siftDown(heap, 0, end, cmp);
-  }
-  return heap;
-}
-"#
-            }
-            Helper::HeapFrom => {
-                r#"
-function $heapFrom(items, cmp) {
-  const heap = items.slice();
-  let n = heap.length >>> 1;
-  while (n > 0) {
-    n -= 1;
-    $siftDown(heap, n, heap.length, cmp);
-  }
-  return heap;
-}
-"#
-            }
-            Helper::SplitBy => {
-                r#"
-function $splitBy(s, matches) {
-  const pieces = [""];
-  for (const c of s) {
-    if (matches(c)) {
-      pieces.push("");
-    } else {
-      pieces[pieces.length - 1] += c;
-    }
-  }
-  return pieces;
-}
-"#
-            }
+            Helper::HeapSorted => include_str!("runtime/heap_sorted.js"),
+            Helper::HeapFrom => include_str!("runtime/heap_from.js"),
+            Helper::SplitBy => include_str!("runtime/split_by.js"),
             // `s.parse::<u32>()` and the other integers: a `Result`, whose `Err` is
             // what the error's `to_string()` would be.
-            Helper::ParseInt => {
-                r#"
-function $parseInt(s, min, max) {
-  const error = (message) => ({ TAG: "Err", _0: message });
-  if (s === "") return error("cannot parse integer from empty string");
-  if (!(min < 0 ? /^[+-]?[0-9]+$/ : /^\+?[0-9]+$/).test(s)) return error("invalid digit found in string");
-  const n = Number(s);
-  if (n > max) return error("number too large to fit in target type");
-  if (n < min) return error("number too small to fit in target type");
-  return { TAG: "Ok", _0: n };
-}
-"#
-            }
+            Helper::ParseInt => include_str!("runtime/parse_int.js"),
             // `s.parse::<f64>()`: what Rust reads as a float, and no more (JS's
             // `Number` also takes `""`, `" 1"` and `"0x10"`).
-            Helper::ParseF64 => {
-                r#"
-function $parseF64(s) {
-  if (s === "") return { TAG: "Err", _0: "cannot parse float from empty string" };
-  const lower = s.toLowerCase();
-  const sign = lower.startsWith("-") ? -1 : 1;
-  const rest = lower.replace(/^[+-]/, "");
-  if (rest === "inf" || rest === "infinity") return { TAG: "Ok", _0: sign * Infinity };
-  if (rest === "nan") return { TAG: "Ok", _0: NaN };
-  if (!/^([0-9]+\.?[0-9]*|\.[0-9]+)(e[+-]?[0-9]+)?$/.test(rest)) return { TAG: "Err", _0: "invalid float literal" };
-  return { TAG: "Ok", _0: sign * Number(rest) };
-}
-"#
-            }
+            Helper::ParseF64 => include_str!("runtime/parse_f64.js"),
             // `s.parse::<f32>()`: the digits' nearest `f32` (ADR 0122). The
             // `f64` nearest them, rounded to an `f32`, is it, but where that
             // `f64` is a tie between two `f32`s, which the digits may be a
             // hair either side of: then they're compared with it exactly.
-            Helper::ParseF32 => {
-                r#"
-function $parseF32(s) {
-  const read = $parseF64(s);
-  const d = read._0;
-  if (read.TAG === "Err" || !Number.isFinite(d) || Math.fround(d) === d) {
-    return read.TAG === "Err" ? read : { TAG: "Ok", _0: Math.fround(d) };
-  }
-  const rounded = Math.fround(d);
-  // The `f32` this side of `d`: the largest where it rounds to infinity.
-  const near = Number.isFinite(rounded) ? rounded : Math.sign(d) * 3.4028234663852886e38;
-  const size = Math.abs(near);
-  // The `f32` on `d`'s other side, and the tie between them: past the
-  // largest, where infinity is, it's as far above as the one below is.
-  const view = new DataView(new ArrayBuffer(8));
-  view.setFloat32(0, size);
-  const bits = view.getUint32(0);
-  view.setUint32(0, Math.abs(d) > size ? bits + 1 : bits - 1);
-  const other = view.getFloat32(0);
-  view.setUint32(0, bits - 1);
-  const tie = other === Infinity ? size + (size - view.getFloat32(0)) / 2 : (size + other) / 2;
-  if (Math.abs(d) !== tie) return { TAG: "Ok", _0: rounded };
-  // The digits, `digits` times 10 to `exponent`, against the tie, `m`
-  // times 2 to `k`, in integers.
-  const [mantissa, power = "0"] = s.toLowerCase().replace(/^[+-]/, "").split("e");
-  const [whole, fraction = ""] = mantissa.split(".");
-  const digits = BigInt(whole + fraction || "0");
-  const exponent = Number(power) - fraction.length;
-  view.setFloat64(0, tie);
-  const tieBits = view.getBigUint64(0);
-  const m = (tieBits & ((1n << 52n) - 1n)) | (1n << 52n);
-  const k = Number(tieBits >> 52n) - 1075;
-  const left = digits * 10n ** BigInt(Math.max(exponent, 0)) * 2n ** BigInt(Math.max(-k, 0));
-  const right = m * 2n ** BigInt(Math.max(k, 0)) * 10n ** BigInt(Math.max(-exponent, 0));
-  // The tie itself goes to the even one, as `Math.fround` takes it.
-  if (left === right) return { TAG: "Ok", _0: rounded };
-  const chosen = left > right ? Math.max(size, other) : Math.min(size, other);
-  return { TAG: "Ok", _0: d < 0 ? -chosen : chosen };
-}
-"#
-            }
-            Helper::ParseBool => {
-                r#"
-function $parseBool(s) {
-  return s === "true" || s === "false"
-    ? { TAG: "Ok", _0: s === "true" }
-    : { TAG: "Err", _0: "provided string was not `true` or `false`" };
-}
-"#
-            }
-            Helper::ParseChar => {
-                r#"
-function $parseChar(s) {
-  const chars = [...s];
-  if (chars.length === 1) return { TAG: "Ok", _0: s };
-  return { TAG: "Err", _0: chars.length === 0 ? "cannot parse char from empty string" : "too many characters in string" };
-}
-"#
-            }
+            Helper::ParseF32 => include_str!("runtime/parse_f32.js"),
+            Helper::ParseBool => include_str!("runtime/parse_bool.js"),
+            Helper::ParseChar => include_str!("runtime/parse_char.js"),
             // `&v[a..b]`: a copy, and Rust's panic out of bounds.
-            Helper::SliceRange => {
-                r#"
-function $slice(items, start, end = items.length) {
-  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
-  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
-  return items.slice(start, end);
-}
-"#
-            }
+            Helper::SliceRange => include_str!("runtime/slice_range.js"),
             // `s.len()`: its UTF-8 bytes, as Rust counts them, where JS counts
             // UTF-16 units (ADR 0138).
-            Helper::ByteLen => {
-                r#"
-function $byteLen(s) {
-  let bytes = 0;
-  for (let i = 0; i < s.length; i++) {
-    const unit = s.charCodeAt(i);
-    if (unit < 0x80) bytes += 1;
-    else if (unit < 0x800) bytes += 2;
-    else if (unit >= 0xd800 && unit < 0xdc00) {
-      bytes += 4;
-      i++;
-    } else bytes += 3;
-  }
-  return bytes;
-}
-"#
-            }
+            Helper::ByteLen => include_str!("runtime/byte_len.js"),
             // `&s[a..b]`: from byte `a` to byte `b`, with Rust's panics, in its order.
-            Helper::StrSlice => {
-                r#"
-function $strSlice(s, start, end) {
-  const length = $byteLen(s);
-  end ??= length;
-  if (start > length) throw new Error(`start byte index ${start} is out of bounds for string of length ${length}`);
-  if (end > length) throw new Error(`end byte index ${end} is out of bounds for string of length ${length}`);
-  if (start > end) throw new Error(`byte range starts at ${start} but ends at ${end}`);
-  return s.slice($unitAt(s, start, "start"), $unitAt(s, end, "end"));
-}
-
-function $unitAt(s, at, which) {
-  let bytes = 0;
-  let unit = 0;
-  for (const c of s) {
-    if (bytes === at) return unit;
-    const next = bytes + $byteLen(c);
-    if (next > at) {
-      throw new Error(`${which} byte index ${at} is not a char boundary; it is inside ${$debugStr(c, "'")} (bytes ${bytes}..${next} of string)`);
-    }
-    bytes = next;
-    unit += c.length;
-  }
-  return unit;
-}
-"#
-            }
+            Helper::StrSlice => include_str!("runtime/str_slice.js"),
             // `s.find(p)` and `s.rfind(p)`: where `p` is, in UTF-8 bytes, or `None`.
-            Helper::Find => {
-                r#"
-function $find(s, pattern) {
-  const at = s.indexOf(pattern);
-  return at === -1 ? undefined : $byteLen(s.slice(0, at));
-}
-"#
-            }
-            Helper::Rfind => {
-                r#"
-function $rfind(s, pattern) {
-  const at = s.lastIndexOf(pattern);
-  return at === -1 ? undefined : $byteLen(s.slice(0, at));
-}
-"#
-            }
+            Helper::Find => include_str!("runtime/find.js"),
+            Helper::Rfind => include_str!("runtime/rfind.js"),
             // `s.char_indices()`: each `char`, with where it starts in UTF-8 bytes.
-            Helper::CharIndices => {
-                r#"
-function $charIndices(s) {
-  const indices = [];
-  let at = 0;
-  for (const c of s) {
-    indices.push([at, c]);
-    at += $byteLen(c);
-  }
-  return indices;
-}
-"#
-            }
+            Helper::CharIndices => include_str!("runtime/char_indices.js"),
             // `for x in &mut v[a..b]` (ADR 0099): where it ends, with `$slice`'s panics.
-            Helper::SliceEnd => {
-                r#"
-function $sliceEnd(items, start, end = items.length) {
-  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
-  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
-  return end;
-}
-"#
-            }
+            Helper::SliceEnd => include_str!("runtime/slice_end.js"),
             // `v.drain(a..b)`: the items, out of `v`, with `$slice`'s panics.
-            Helper::Drain => {
-                r#"
-function $drain(items, start, end = items.length) {
-  if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
-  if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
-  return items.splice(start, end - start);
-}
-"#
-            }
+            Helper::Drain => include_str!("runtime/drain.js"),
             // `v.split_off(at)`: the items from `at` on, out of `v`.
-            Helper::SplitOff => {
-                r#"
-function $splitOff(items, at) {
-  if (at > items.length) throw new Error(`\`at\` split index (is ${at}) should be <= len (is ${items.length})`);
-  return items.splice(at);
-}
-"#
-            }
+            Helper::SplitOff => include_str!("runtime/split_off.js"),
             // A `BTreeMap`'s entries, in its keys' order.
-            Helper::SortedEntries => {
-                r#"
-function $sortedEntries(map, cmp) {
-  return Array.from(map).sort((a, b) => cmp(a[0], b[0]));
-}
-"#
-            }
+            Helper::SortedEntries => include_str!("runtime/sorted_entries.js"),
             // A `BTreeSet`'s items, in order.
-            Helper::SortedKeys => {
-                r#"
-function $sortedKeys(set, cmp) {
-  return Array.from(set).sort(cmp);
-}
-"#
-            }
+            Helper::SortedKeys => include_str!("runtime/sorted_keys.js"),
             // `vec![item; count]`: clone all but the last slot, which takes item.
-            Helper::Repeat => {
-                r#"
-function $repeat(item, count, clone) {
-  const result = [];
-  if (count > 0) {
-    for (let i = 1; i < count; i++) result.push(clone(item));
-    result.push(item);
-  }
-  return result;
-}
-"#
-            }
+            Helper::Repeat => include_str!("runtime/repeat.js"),
             // `m.entry(k).or_insert(v)`: initialize only a missing entry.
-            Helper::OrInsert => {
-                r#"
-function $orInsert(map, key, value) {
-  if (!map.has(key)) {
-    map.set(key, value);
-  }
-  return map.get(key);
-}
-"#
-            }
+            Helper::OrInsert => include_str!("runtime/or_insert.js"),
             // `or_insert_with(f)`: `f` runs only if there's none there.
-            Helper::OrInsertWith => {
-                r#"
-function $orInsertWith(map, key, make) {
-  if (!map.has(key)) {
-    map.set(key, make());
-  }
-  return map.get(key);
-}
-"#
-            }
-            Helper::Unwrap => {
-                r#"
-function $unwrap(value, message = "called `Option::unwrap()` on a `None` value") {
-  if (value == null) {
-    throw new Error(message);
-  }
-  return value;
-}
-"#
-            }
-            Helper::AssertFailed => {
-                r#"
-// `left` and `right` are their `{:?}` strings already (ADR 0060).
-function $assertFailed(kind, left, right, message) {
-  const op = kind === "Eq" ? "==" : kind === "Ne" ? "!=" : "matches";
-  const why = message === undefined ? "" : ": " + message;
-  throw new Error("assertion `left " + op + " right` failed" + why + "\n  left: " + left + "\n right: " + right);
-}
-"#
-            }
-            Helper::Rem => {
-                r#"
-function $rem(a, b, min) {
-  if (b === 0) {
-    throw new Error("attempt to calculate the remainder with a divisor of zero");
-  }
-  if (a === min && b === -1) {
-    throw new Error("attempt to calculate the remainder with overflow");
-  }
-  return a % b;
-}
-"#
-            }
+            Helper::OrInsertWith => include_str!("runtime/or_insert_with.js"),
+            Helper::Unwrap => include_str!("runtime/unwrap.js"),
+            Helper::AssertFailed => include_str!("runtime/assert_failed.js"),
+            Helper::Rem => include_str!("runtime/rem.js"),
         }
     }
 }
