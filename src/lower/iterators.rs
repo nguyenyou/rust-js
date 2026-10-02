@@ -237,7 +237,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         f.is_some_and(|f| {
             let ty = self.thir[f].ty.peel_refs();
             let callable = ty.is_fn() || matches!(ty.kind(), ty::Closure(..) | ty::Param(_));
-            callable && !self.recognition().is_pure_fn(ty)
+            callable && !super::effects::is_pure_fn(self.tcx, self.krate.closures, ty)
         })
     }
 

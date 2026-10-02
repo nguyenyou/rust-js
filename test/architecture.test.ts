@@ -68,6 +68,22 @@ test("body queries cannot access emission state", () => {
   expect(source).not.toMatch(/\bfn\s+\w+\s*\([^)]*&mut\s+self/);
 });
 
+// What an expression can do that can be seen is a question of the THIR
+// alone (ADRs 0098, 0139): asked by emission, it never reaches into it.
+test("effects analysis cannot access emission state", () => {
+  const source = read("src/lower/effects.rs");
+  expect(source).not.toMatch(/\b(?:FnCx|Dependencies|Evaluation)\b|\bRefCell\s*<|crate::js|runtime::|super::drops\b/);
+  expect(source).not.toMatch(/\bfn\s+\w+\s*\([^)]*&mut\s+self/);
+});
+
+// Recognition is what the rest asks: it asks neither the destructors'
+// analysis nor the effects one, which ask it.
+test("recognition depends on neither destructors nor effects", () => {
+  for (const file of ["src/lower/recognition.rs", ...files("src/lower/recognition")]) {
+    expect(read(file), file).not.toMatch(/\b(?:super|crate::lower)::(?:drops|effects)\b/);
+  }
+});
+
 test("library identity checks and method tables stay in recognition", () => {
   for (const file of files("src/lower").filter(file => !file.includes("/recognition") && !file.endsWith("/library.rs"))) {
     // The scalar linkage adapter owns canonical crate names, not library intrinsics.

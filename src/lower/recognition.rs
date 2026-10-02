@@ -18,7 +18,6 @@ use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::{DefId, LocalDefId};
 use rustc_span::hygiene::{ExpnKind, MacroKind};
 use rustc_span::{Symbol, sym};
-use std::collections::HashMap;
 
 /// Only immutable analysis inputs: recognition cannot record dependencies,
 /// allocate names, register helpers, or lower an expression.
@@ -28,8 +27,6 @@ pub(super) struct Recognition<'a, 'tcx> {
     pub trait_impls: &'a [DefId],
     /// What the crate's libraries export (ADR 0100).
     pub foreign: &'a super::library::Foreign<'a, 'tcx>,
-    /// The crate's closures' bodies, to tell what calling one does.
-    pub closures: &'a HashMap<LocalDefId, &'a super::Body<'tcx>>,
 }
 
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
@@ -1759,20 +1756,6 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             || self.is_user_iterator(ty)
             || self.is_generic_iter(ty)
             || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
-    }
-
-    /// Whether calling a `ty`, a closure or a function, does nothing that
-    /// can be seen and can't panic: a closure whose body can't (as
-    /// `cannot_leave` says), or a struct's or a variant's constructor.
-    pub(super) fn is_pure_fn(&self, ty: ty::Ty<'tcx>) -> bool {
-        match *ty.peel_refs().kind() {
-            ty::Closure(def_id, _) => def_id
-                .as_local()
-                .and_then(|id| self.closures.get(&id))
-                .is_some_and(|body| super::drops::cannot_leave_in(self.tcx, &body.thir, body.expr)),
-            ty::FnDef(def_id, _) => matches!(self.tcx.def_kind(def_id), DefKind::Ctor(..)),
-            _ => false,
-        }
     }
 }
 

@@ -44,6 +44,7 @@ mod calls;
 mod combinators;
 mod display;
 mod drops;
+mod effects;
 mod format_args;
 mod format_spec;
 mod iterators;
@@ -1869,7 +1870,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             typing_env: self.typing_env,
             trait_impls: self.krate.trait_impls,
             foreign: self.krate.foreign,
-            closures: self.krate.closures,
         }
     }
 }
