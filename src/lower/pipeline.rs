@@ -183,6 +183,7 @@ pub fn lower_crate<'tcx>(
             writer_alternate: None,
             lazy_stages: HashSet::new(),
             lazy_starts: HashSet::new(),
+            owned_drains: HashSet::new(),
             dyn_debug: super::display::Pretty::Plain,
             codec_params: Vec::new(),
             stepped: body.map_or_else(HashSet::new, |body| body.facts.stepped.clone()),

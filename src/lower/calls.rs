@@ -266,6 +266,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // holds one, must keep or give back what it takes: these do. Another
         // might drop it, which JS wouldn't (ADR 0098). A value whose drops
         // rust-js can't follow, a `vec::IntoIter` of them say, might hold one.
+        // `collect()` of a chain that owns its items drains it (ADR 0098).
+        if known == Std::Collect
+            && let Some(&receiver) = args.first()
+        {
+            self.mark_owned_drain(receiver);
+        }
+        let drained = args
+            .first()
+            .is_some_and(|&a| self.owned_drains.contains(&self.chain_key(a)));
         let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;
         let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
             ty::Ref(_, inner, Mutability::Mut) => holds_drops(inner),
@@ -273,6 +282,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => holds_drops(self.thir[a].ty),
         });
         if takes_drops
+            && !drained
             && !matches!(
                 known,
                 Std::Drop

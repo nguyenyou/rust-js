@@ -345,6 +345,9 @@ struct FnCx<'a, 'tcx> {
     /// their body's THIR and their expression.
     lazy_stages: HashSet<(usize, ExprId)>,
     lazy_starts: HashSet<(usize, ExprId)>,
+    /// The stages of chains that `collect` drains of owned items (ADR 0098),
+    /// which std calls' check of what they take lets through.
+    owned_drains: HashSet<(usize, ExprId)>,
     /// How a `&dyn Debug` made here shows its value: pretty as its writer's
     /// `alternate` says, while a derived `Debug`'s or a builder's
     /// arguments are lowered (ADR 0137), plain anywhere else.

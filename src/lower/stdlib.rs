@@ -526,7 +526,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && is_adapter(known)
             && let Some(&inner) = args.first()
         {
-            let impure = self.impure(args.get(1).copied());
+            let impure = self.impure(args.get(1).copied()) || self.discards_owned(known, inner).is_some();
             stages.push((at, impure, impure || sensitive(known), inner));
             at = self.chain_stage(inner);
         }
@@ -541,6 +541,81 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         let start = self.chain_key(stages[first].3);
         self.lazy_starts.insert(start);
+    }
+
+    /// `collect()` of a chain that owns its items (ADR 0098): `map`, `filter`
+    /// and `skip_while` over the `into_iter()` of a `Vec` or an array, which
+    /// it drains. A stage drops what it discards, and `collect` keeps the
+    /// rest. Its stages are let through std calls' check of what they take:
+    /// a chain nothing drains would never drop its items.
+    pub(super) fn mark_owned_drain(&mut self, receiver: ExprId) {
+        let mut stages = Vec::new();
+        let mut at = self.chain_stage(receiver);
+        loop {
+            let ExprKind::Call { fun, ref args, .. } = self.thir[at].kind else {
+                return;
+            };
+            let Some(&inner) = args.first() else { return };
+            stages.push(self.chain_key(at));
+            match self.std_fn(fun) {
+                Some(Std::ArrayMethod("map" | "filter") | Std::IterComb(IterComb::SkipWhile)) => {
+                    at = self.chain_stage(inner);
+                }
+                Some(Std::Same) => {
+                    let source = self.reveal(self.thir[inner].ty);
+                    if !(source.is_array() || self.is_vec_like(source)) {
+                        return;
+                    }
+                    break;
+                }
+                _ => return,
+            }
+        }
+        self.owned_drains.extend(stages);
+    }
+
+    /// Whether `known`, at `receiver`, a stage of a drained chain, discards
+    /// items it owns, which it then drops: `filter`'s and `skip_while`'s.
+    fn discards_owned(&self, known: Std, receiver: ExprId) -> Option<ty::Ty<'tcx>> {
+        if !matches!(known, Std::ArrayMethod("filter") | Std::IterComb(IterComb::SkipWhile))
+            || !self.owned_drains.contains(&self.chain_key(receiver))
+        {
+            return None;
+        }
+        self.iterator_item(self.reveal(self.thir[receiver].ty))
+            .filter(|&item| self.has_drops(item))
+    }
+
+    /// `test`, a stage's predicate, as one that drops the `item` it
+    /// discards: one `filter` doesn't keep, or one `skip_while` skips.
+    fn dropping_discarded(
+        &mut self,
+        test: Expr,
+        item: ty::Ty<'tcx>,
+        discard_when: bool,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let test = if matches!(test.kind, js::ExprKind::Var(_)) {
+            test
+        } else {
+            self.spill(if discard_when { "skip" } else { "keep" }, test, out)
+        };
+        let js_span = self.js_span(span);
+        let mut drop = Vec::new();
+        self.drop_value(Expr::var("item"), item, span, &mut drop)?;
+        let asked = Expr::call(test, vec![Expr::var("item")]);
+        let answer = |b: bool| StmtKind::Return(Some(Expr::bool(b))).at(js_span);
+        let body = if discard_when {
+            drop.push(answer(true));
+            vec![StmtKind::If(asked, drop, None).at(js_span), answer(false)]
+        } else {
+            let mut rest = vec![StmtKind::If(asked, vec![answer(true)], None).at(js_span)];
+            rest.extend(drop);
+            rest.push(answer(false));
+            rest
+        };
+        Ok(Expr::arrow(vec!["item".into()], body))
     }
 
     pub(super) fn iterator_call(
@@ -635,8 +710,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 "`rev` of a lazy iterator: one of the crate's own, or after a closure whose effects can be seen",
             ));
         }
+        let discarded = self.discards_owned(known, receiver);
         if let Std::IterComb(comb) = known {
             let mut rest = self.operands(&args[1..], out)?;
+            if let Some(item) = discarded {
+                let test = std::mem::replace(&mut rest[0], Expr::undefined());
+                rest[0] = self.dropping_discarded(test, item, true, span, out)?;
+            }
             // What's chained or zipped on: one of the crate's own as a JS iterator.
             if matches!(comb, IterComb::Chain | IterComb::Zip) {
                 let other = std::mem::replace(&mut rest[0], Expr::undefined());
@@ -671,7 +751,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let method = |items: Expr, name: &str, list: Vec<Expr>| Expr::call(Expr::member(items, name), list);
         let (a, b) = (Expr::var("a"), Expr::var("b"));
         Ok(match known {
-            Std::ArrayMethod(name) => method(items, name, vec![next()]),
+            Std::ArrayMethod(name) => match discarded {
+                Some(item) => {
+                    let test = next();
+                    let keep = self.dropping_discarded(test, item, false, span, out)?;
+                    method(items, name, vec![keep])
+                }
+                None => method(items, name, vec![next()]),
+            },
             Std::Enumerate => {
                 let pair = Expr::array(vec![Expr::var("i"), Expr::var("x")]);
                 let js_span = self.js_span(span);

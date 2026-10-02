@@ -269,6 +269,26 @@ function main() {
   rustc writes a loop with an `iter` variable and a `next()` its lowering
   doesn't: the facts see the loop as it's lowered. (Amended: a loop's item
   that owned one was an error.)
+- **`collect()` drains a chain that owns its items**: `map`, `filter` and
+  `skip_while` over the `into_iter()` of a `Vec` or an array. `map`'s
+  closure owns each item, as a parameter; `filter` and `skip_while` drop
+  what they discard as they discard it, their predicate wrapped to say so;
+  and the new `Vec` owns the rest:
+
+  ```js
+  const keep = (n) => $byteLen(n[0]) > 1;
+  const long = v.filter((item) => {
+    if (keep(item)) return true;
+    noisyDrop_drop(item);
+    return false;
+  });
+  ```
+
+  A stage that drops what it discards does what can be seen, so a chain
+  with another such stage runs lazily, in Rust's order (ADR 0139). Only
+  `collect` lets those stages through the check of std calls: a chain of
+  owned items nothing drains, or one with `take`, which leaves some, is
+  still an error.
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of
