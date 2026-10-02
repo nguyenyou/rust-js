@@ -34,6 +34,14 @@ pub(super) enum TextOp {
     Parse,
     /// `&v[a..b]` of a slice, an array or a `Vec`.
     Slice,
+    /// `&s[a..b]` of a string: by its UTF-8 bytes (ADR 0138).
+    StrSlice,
+    /// `s.len()`: its UTF-8 bytes.
+    ByteLen,
+    /// `s.find(p)`, or `s.rfind(p)` if `true`: where, in UTF-8 bytes.
+    Find(bool),
+    /// `s.char_indices()`: each `char`, with where it starts in UTF-8 bytes.
+    CharIndices,
     /// `v.drain(a..b)`: those items, taken out of `v`.
     Drain,
 }
@@ -47,7 +55,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
-        if matches!(op, TextOp::Slice | TextOp::Drain) {
+        if matches!(op, TextOp::Slice | TextOp::StrSlice | TextOp::Drain) {
             return self.slice_range(op, args, span, out);
         }
         let mut values = self.operands(args, out)?.into_iter();
@@ -123,7 +131,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .ok_or_else(|| self.unsupported(span, "this `parse`"))?;
                 self.parse_as(arg(), target, span)?
             }
-            TextOp::Slice | TextOp::Drain => unreachable!("handled above"),
+            TextOp::ByteLen => {
+                self.runtime.insert(Helper::ByteLen);
+                Expr::call(Expr::var("$byteLen"), vec![arg()])
+            }
+            TextOp::Find(last) => {
+                let (helper, name) = if last {
+                    (Helper::Rfind, "$rfind")
+                } else {
+                    (Helper::Find, "$find")
+                };
+                self.runtime.insert(helper);
+                Expr::call(Expr::var(name), vec![arg(), arg()])
+            }
+            TextOp::CharIndices => {
+                self.runtime.insert(Helper::CharIndices);
+                Expr::call(Expr::var("$charIndices"), vec![arg()])
+            }
+            TextOp::Slice | TextOp::StrSlice | TextOp::Drain => unreachable!("handled above"),
         })
     }
 
@@ -180,6 +205,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let range_ty = self.thir[range].ty;
         let (helper, name) = match op {
             TextOp::Drain => (Helper::Drain, "$drain"),
+            TextOp::StrSlice => (Helper::StrSlice, "$strSlice"),
             _ => (Helper::SliceRange, "$slice"),
         };
         let kind = self.range_kind(range_ty);
@@ -225,6 +251,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             return Err(self.unsupported(span, "slicing by this range"));
         };
+        // `&s[..]` of a string: all of it, which is never out of bounds, nor
+        // inside a character.
+        if op == TextOp::StrSlice && start.is_none() && end.is_none() {
+            return Ok(self.operands(&[args[0]], out)?.remove(0));
+        }
         let mut list = vec![args[0]];
         list.extend(start);
         list.extend(end);

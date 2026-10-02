@@ -255,28 +255,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         let Some(known) = self.std_fn(fun) else {
-            // Rust counts a string's UTF-8 bytes, and JS its UTF-16 units (ADR 0034).
-            if let Some(string) = self
-                .recognition()
-                .unsupported_string(def_id, args.first().map(|&a| self.thir[a].ty))
-            {
-                let name = string.name;
-                let indexing = string.indexing;
-                let what = if indexing {
-                    "indexing or slicing a string".to_string()
-                } else {
-                    format!("`{name}()` of a string")
-                };
-                let why = if string.suggest_is_empty {
-                    "Rust counts its UTF-8 bytes, and JS its UTF-16 units; `is_empty()` works"
-                } else {
-                    "Rust counts its UTF-8 bytes, and JS its UTF-16 units"
-                };
-                return Err(self
-                    .tcx
-                    .dcx()
-                    .span_err(span, format!("rust-js does not support {what}: {why}")));
-            }
             let path = self.tcx.def_path_str(def_id);
             // A library's, that its manifest doesn't list (ADR 0100).
             if let Some(why) = self.krate.foreign.unlisted(def_id) {

@@ -3470,6 +3470,64 @@ export function $sliceEnd(items, start, end = items.length) {
   return end;
 }
 
+export function $byteLen(s) {
+  let bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const unit = s.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit < 0xdc00) {
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+export function $strSlice(s, start, end) {
+  const length = $byteLen(s);
+  end ??= length;
+  if (start > length) throw new Error(`start byte index ${start} is out of bounds for string of length ${length}`);
+  if (end > length) throw new Error(`end byte index ${end} is out of bounds for string of length ${length}`);
+  if (start > end) throw new Error(`byte range starts at ${start} but ends at ${end}`);
+  return s.slice($unitAt(s, start, "start"), $unitAt(s, end, "end"));
+}
+
+export function $unitAt(s, at, which) {
+  let bytes = 0;
+  let unit = 0;
+  for (const c of s) {
+    if (bytes === at) return unit;
+    const next = bytes + $byteLen(c);
+    if (next > at) {
+      throw new Error(`${which} byte index ${at} is not a char boundary; it is inside ${$debugStr(c, "'")} (bytes ${bytes}..${next} of string)`);
+    }
+    bytes = next;
+    unit += c.length;
+  }
+  return unit;
+}
+
+export function $find(s, pattern) {
+  const at = s.indexOf(pattern);
+  return at === -1 ? undefined : $byteLen(s.slice(0, at));
+}
+
+export function $rfind(s, pattern) {
+  const at = s.lastIndexOf(pattern);
+  return at === -1 ? undefined : $byteLen(s.slice(0, at));
+}
+
+export function $charIndices(s) {
+  const indices = [];
+  let at = 0;
+  for (const c of s) {
+    indices.push([at, c]);
+    at += $byteLen(c);
+  }
+  return indices;
+}
+
 export function $extend(v, items) {
   for (const item of items) {
     v.push(item);

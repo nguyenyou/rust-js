@@ -528,6 +528,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             {
                 return Some(Std::Text(TextOp::Slice));
             }
+            // `&s[a..b]` of a string: by its UTF-8 bytes (ADR 0138).
+            if tcx.is_lang_item(trait_, LangItem::Index)
+                && let Some(range) = args.types().nth(1)
+                && self.range_kind(range).is_some()
+                && self.is_string_like(ty)
+            {
+                return Some(Std::Text(TextOp::StrSlice));
+            }
             // `v[i]` of a `Vec` is a slice's, checked the same way.
             if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
                 && self.is_vec_like(ty.peel_refs())
@@ -841,6 +849,9 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             // JS's `pop()` gives `undefined` when empty: `None` (ADR 0030).
             "pop" if adt("Vec") => Std::Method("pop"),
             "len" if adt("Vec") || owner.is_slice() => Std::Len,
+            // A string counts its UTF-8 bytes, as Rust's does (ADR 0138).
+            "len" if owner.is_str() || string => Std::Text(TextOp::ByteLen),
+            "char_indices" if owner.is_str() => Std::Text(TextOp::CharIndices),
             "clear" if adt("Vec") => Std::Clear,
             "retain" if adt("Vec") => Std::Retain,
             "iter" | "iter_mut" if owner.is_slice() => Std::Same,
@@ -857,11 +868,13 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             }
             // Methods taking a pattern: only a string or a `char` one.
             "starts_with" | "ends_with" | "contains" | "replace" | "split" | "strip_prefix" | "strip_suffix"
-            | "split_once" | "rsplit_once"
+            | "split_once" | "rsplit_once" | "find" | "rfind"
                 if owner.is_str() && !self_ty.is_some_and(|p| self.is_string_like(p)) =>
             {
                 return None;
             }
+            "find" if owner.is_str() => Std::Text(TextOp::Find(false)),
+            "rfind" if owner.is_str() => Std::Text(TextOp::Find(true)),
             "starts_with" if owner.is_str() => Std::Method("startsWith"),
             "ends_with" if owner.is_str() => Std::Method("endsWith"),
             "contains" if owner.is_str() => Std::Method("includes"),
@@ -1434,6 +1447,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                     "std::slice::Iter",
                     "std::vec::IntoIter",
                     "std::str::Chars",
+                    "std::str::CharIndices",
                     "std::str::SplitWhitespace",
                     "std::str::Lines",
                     "std::array::IntoIter",
@@ -1571,12 +1585,6 @@ pub(super) enum Catching {
     PromiseResult,
 }
 
-pub(super) struct UnsupportedString {
-    pub name: Symbol,
-    pub indexing: bool,
-    pub suggest_is_empty: bool,
-}
-
 #[derive(Clone, Copy)]
 pub(super) enum OrderingCall {
     Compare,
@@ -1601,32 +1609,6 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         } else {
             Catching::Direct
         }
-    }
-
-    pub(super) fn unsupported_string(&self, id: DefId, receiver: Option<Ty<'tcx>>) -> Option<UnsupportedString> {
-        if !receiver.is_some_and(|ty| self.is_string_like(ty)) {
-            return None;
-        }
-        let indexing = self
-            .tcx
-            .trait_of_assoc(id)
-            .is_some_and(|t| self.tcx.is_lang_item(t, LangItem::Index));
-        let name = self.tcx.item_name(id);
-        (indexing
-            || [
-                "len",
-                "find",
-                "rfind",
-                "char_indices",
-                "match_indices",
-                "rmatch_indices",
-            ]
-            .contains(&name.as_str()))
-        .then_some(UnsupportedString {
-            name,
-            indexing,
-            suggest_is_empty: name.as_str() == "len",
-        })
     }
 
     pub(super) fn ordering_call(&self, id: DefId, tr: ty::TraitRef<'tcx>) -> Option<(OrderingCall, bool)> {

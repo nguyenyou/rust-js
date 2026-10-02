@@ -127,6 +127,11 @@ helpers! {
     ParseChar,
     SliceRange,
     SliceEnd,
+    ByteLen,
+    StrSlice,
+    Find,
+    Rfind,
+    CharIndices,
     Extend,
     InsertAt,
     RemoveAt,
@@ -288,6 +293,8 @@ impl Helper {
             Helper::DivEuclid => &[Helper::Div],
             Helper::NextSome => &[Helper::Some],
             Helper::JsonError => &[Helper::DebugStr],
+            Helper::StrSlice => &[Helper::ByteLen, Helper::DebugStr],
+            Helper::Find | Helper::Rfind | Helper::CharIndices => &[Helper::ByteLen],
             Helper::FromJson => &[
                 Helper::JsonFail,
                 Helper::DebugStr,
@@ -2138,6 +2145,84 @@ function $slice(items, start, end = items.length) {
   if (start > end) throw new Error(`slice index starts at ${start} but ends at ${end}`);
   if (end > items.length) throw new Error(`range end index ${end} out of range for slice of length ${items.length}`);
   return items.slice(start, end);
+}
+"#
+            }
+            // `s.len()`: its UTF-8 bytes, as Rust counts them, where JS counts
+            // UTF-16 units (ADR 0138).
+            Helper::ByteLen => {
+                r#"
+function $byteLen(s) {
+  let bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const unit = s.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit < 0xdc00) {
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+"#
+            }
+            // `&s[a..b]`: from byte `a` to byte `b`, with Rust's panics, in its order.
+            Helper::StrSlice => {
+                r#"
+function $strSlice(s, start, end) {
+  const length = $byteLen(s);
+  end ??= length;
+  if (start > length) throw new Error(`start byte index ${start} is out of bounds for string of length ${length}`);
+  if (end > length) throw new Error(`end byte index ${end} is out of bounds for string of length ${length}`);
+  if (start > end) throw new Error(`byte range starts at ${start} but ends at ${end}`);
+  return s.slice($unitAt(s, start, "start"), $unitAt(s, end, "end"));
+}
+
+function $unitAt(s, at, which) {
+  let bytes = 0;
+  let unit = 0;
+  for (const c of s) {
+    if (bytes === at) return unit;
+    const next = bytes + $byteLen(c);
+    if (next > at) {
+      throw new Error(`${which} byte index ${at} is not a char boundary; it is inside ${$debugStr(c, "'")} (bytes ${bytes}..${next} of string)`);
+    }
+    bytes = next;
+    unit += c.length;
+  }
+  return unit;
+}
+"#
+            }
+            // `s.find(p)` and `s.rfind(p)`: where `p` is, in UTF-8 bytes, or `None`.
+            Helper::Find => {
+                r#"
+function $find(s, pattern) {
+  const at = s.indexOf(pattern);
+  return at === -1 ? undefined : $byteLen(s.slice(0, at));
+}
+"#
+            }
+            Helper::Rfind => {
+                r#"
+function $rfind(s, pattern) {
+  const at = s.lastIndexOf(pattern);
+  return at === -1 ? undefined : $byteLen(s.slice(0, at));
+}
+"#
+            }
+            // `s.char_indices()`: each `char`, with where it starts in UTF-8 bytes.
+            Helper::CharIndices => {
+                r#"
+function $charIndices(s) {
+  const indices = [];
+  let at = 0;
+  for (const c of s) {
+    indices.push([at, c]);
+    at += $byteLen(c);
+  }
+  return indices;
 }
 "#
             }
