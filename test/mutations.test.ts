@@ -40,6 +40,9 @@ test("a mutant is caught, survives, or the run says nothing of it", () => {
   expect(judge(exit(1), "error: Cannot find module './corpus'\n\n 0 pass\n 1 fail\n")).toBe("inconclusive");
   expect(judge(exit(1), "(fail) (unnamed) [0.3ms]\n\n 0 pass\n 1 fail\n")).toBe("inconclusive");
   expect(judge(exit(0), " 0 pass\n 0 fail\n")).toBe("inconclusive");
+  // A long diff bun test cuts short doesn't end its last line, and the
+  // `(fail)` after it is printed on that line. Found running `f32_digits`.
+  expect(judge(exit(1), "+ 38818(fail) f32_digits.rs [409.30ms]\n\n 0 pass\n 1 fail\n")).toBe("caught");
   // A test that ran out of time failed as bun test prints it, but said
   // nothing of what the JS does. Found in review: it counted as caught.
   const timedOut = "(fail) wrapping.rs [5001.00ms]\n  ^ this test timed out after 5000ms.\n";

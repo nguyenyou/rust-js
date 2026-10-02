@@ -3076,7 +3076,9 @@ const count = (output: string, what: string) => Number(new RegExp(String.raw`^ (
 export function judge(p: Exit, output: string): "caught" | "survived" | "inconclusive" {
   if (stopped(p, testTimeout)) return "inconclusive";
   if (p.code === 0) return count(output, "pass") > 0 && count(output, "fail") === 0 ? "survived" : "inconclusive";
-  const failed = [...output.matchAll(/^\(fail\) (.*)$\n?(  \^ .* timed out\b)?/gm)].filter(
+  // Not only at a line's start: a long diff bun test cuts short doesn't end
+  // its last line, and the `(fail)` after it is printed on that line.
+  const failed = [...output.matchAll(/\(fail\) (.*)$\n?(  \^ .* timed out\b)?/gm)].filter(
     (m) => !m[1].startsWith("(unnamed)") && m[2] === undefined,
   );
   return p.code === 1 && failed.length > 0 ? "caught" : "inconclusive";
