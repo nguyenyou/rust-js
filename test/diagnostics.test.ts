@@ -28,6 +28,11 @@ for (const [name, source, message, crate] of [
   ["a sign in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:+}", t) }', "a sign for a"],
   // A `dyn Error`'s dictionary has its `source`, and none of what else std provides (ADR 0141).
   ["a deprecated method of a dyn Error", '#![allow(deprecated)]\npub fn f(e: &dyn std::error::Error) -> String { e.description().to_string() }', "`description` of a"],
+  // Rust gives a `{:?}`'s options to each of its parts, and a `fmt` that hands
+  // its `Formatter` on gives them to that one: rust-js doesn't yet (ADR 0058).
+  ["a width for an Option's {:?}", 'pub fn f() -> String { format!("{:5?}", Some(1)) }', "a width for a"],
+  ["a sign for a derived {:?}", '#[derive(Debug)] pub struct P { pub x: i32 }\npub fn f(p: &P) -> String { format!("{:+?}", p) }', "a sign for a"],
+  ["a width for a fmt that hands its Formatter on", 'pub struct M(pub f64);\nimpl std::fmt::Display for M { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { self.0.fmt(f) } }\npub fn f(m: &M) -> String { format!("{:>8}", m) }', "a width for a"],
   ["a width for a dyn", 'pub fn f(d: &dyn std::fmt::Display) -> String { format!("{:>6}", d) }', "a width for a"],
   ["zero padding in generic code", 'pub fn f<T: std::fmt::Debug>(t: &T) -> String { format!("{:08?}", t) }', "a width for a"],
   ["precision of a struct", 'pub struct P; impl std::fmt::Display for P { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { f.write_str("p") } }\npub fn f() -> String { format!("{:.2}", P) }', "a precision for a"],

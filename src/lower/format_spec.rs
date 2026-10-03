@@ -8,7 +8,7 @@ use super::representation::Num;
 use super::{FnCx, R};
 use crate::js::{Expr, Op};
 use crate::runtime::Helper;
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
 /// A placeholder's options, as core's `FormattingOptions` encodes them.
@@ -84,15 +84,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if spec.debug_hex {
             return Err(self.unsupported(span, "`{:x?}`"));
         }
-        // A generic `T`'s `fmt`, or a `dyn`'s, or one a `Box` of either
-        // shows, is given no options, where a std type's would pad or sign
-        // what it shows: only its dictionary knows which it is.
+        // Rust gives a placeholder's options to the `fmt` that shows the value,
+        // which gives a `{:?}`'s to each part of what it shows, and hands a
+        // `Formatter` on to another `fmt`. rust-js doesn't yet: it pads a
+        // number, a `bool` and a string itself, and a `fmt` of the crate's own
+        // that only writes ignores them. A generic `T`'s, a `dyn`'s, or a
+        // `Box` of either's is a dictionary's, which only it knows.
         let shown = self.shown_type(ty);
-        if self.is_unknown(shown) || matches!(shown.kind(), ty::Dynamic(..)) {
-            if width.is_some() {
+        let leaf = num.is_some() || shown.is_bool() || self.is_string_like(shown);
+        if (width.is_some() || spec.plus) && !leaf {
+            let display = self.display_trait();
+            let handed_on = match kind {
+                Std::FmtDisplay => !self.has_user_impl(display, shown) || self.hands_options_on(display, shown)?,
+                _ => true,
+            };
+            if handed_on && width.is_some() {
                 return Err(self.unsupported(span, &format!("a width for a `{shown}`")));
             }
-            if spec.plus {
+            if handed_on {
                 return Err(self.unsupported(span, &format!("a sign for a `{shown}`")));
             }
         }

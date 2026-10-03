@@ -58,6 +58,7 @@ pub fn lower_crate<'tcx>(
         drop_params,
         generic_consts,
         pretty_debug,
+        options_handed_on,
     } = analyze_crate(tcx, all_bodies, dependencies, export_library)?;
     // A library exports what its consumers can reach (ADR 0100).
     if export_library {
@@ -126,6 +127,7 @@ pub fn lower_crate<'tcx>(
         trait_impls: &trait_impls,
         serde_attrs,
         pretty_debug,
+        options_handed_on: &options_handed_on,
     };
     let mut work: Vec<(DefId, Option<&Body<'tcx>>)> = bodies
         .iter()

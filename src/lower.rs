@@ -287,6 +287,8 @@ struct CrateFacts<'a, 'tcx> {
     serde_attrs: &'a serde::SerdeAttributes,
     /// Do its `Debug` functions take whether to be pretty (ADR 0137)?
     pretty_debug: bool,
+    /// Its writers that hand their `Formatter`'s options on (ADR 0058).
+    options_handed_on: &'a HashSet<DefId>,
 }
 
 /// Dependencies recorded by one function (including copied trait bodies and

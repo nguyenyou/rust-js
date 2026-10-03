@@ -46,11 +46,18 @@ applied as Rust applies them:**
   `i16`).
 - **Still errors:** `{:e}`, `{:x?}`, a precision for a value it doesn't
   apply to, and options in a `panic!` message.
-- **A width or a sign for a generic `T`, or a `Box` of one, is an error.**
-  Its `fmt` is a dictionary's, `TDisplay.fmt(x)`, which is given no
-  options: a std type's would pad or sign what it shows, and a `fmt` of
-  the crate's own wouldn't, which only the dictionary knows. Dropping them
-  showed `[3]` where Rust shows `[     3]`. (Amended: they were dropped.)
+- **A width or a sign is an error where it wouldn't reach the `fmt` that
+  uses it.** Rust gives a placeholder's options to the value's `fmt`: a
+  `{:?}` of an `Option`, a tuple, a `Vec` or a derived `Debug` gives them
+  to each part, `{:5?}` of `Some(1)` is `Some(    1)`; a `fmt` that hands
+  its `Formatter` on, `self.0.fmt(f)`, gives them to that one; and a
+  generic `T`'s or a `dyn`'s `fmt` is a dictionary's, which only it
+  knows. rust-js pads a number, a `bool` and a string itself, and a `fmt`
+  of the crate's own that only writes, with `write!`, ignores them, as
+  Rust's does; any other is an error until the options reach it. Each was
+  dropped, so `[{:>8}]` of a `Meters(1.5)` that hands its `Formatter` to
+  its `f64` showed `[1.5]` where Rust shows `[     1.5]`. (Amended twice:
+  they were dropped, then only a generic `T`'s and a `dyn`'s were an error.)
 
 ## Why
 

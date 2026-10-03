@@ -56,6 +56,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.writing.writer.as_ref().map(|(_, name)| name.clone())
     }
 
+    /// Does `ty`'s own `fmt`, `writer`'s, hand its `Formatter`'s options on,
+    /// to another `fmt` or a builder (ADR 0058)? A derived `Debug` does: each
+    /// field is given them.
+    pub(super) fn hands_options_on(&self, writer: DefId, ty: Ty<'tcx>) -> R<bool> {
+        let fmt = self.tcx.associated_item_def_ids(writer)[0];
+        let args = self.tcx.mk_args(&[self.tcx.erase_and_anonymize_regions(ty).into()]);
+        Ok(self
+            .resolve_instance(fmt, args)?
+            .is_some_and(|instance| self.krate.options_handed_on.contains(&instance.def_id())))
+    }
+
     /// In a pretty writer (ADR 0137): its parameter that says whether it's
     /// `{:#?}`, which `f.alternate()` is.
     pub(super) fn writer_alternate(&self) -> Option<Expr> {

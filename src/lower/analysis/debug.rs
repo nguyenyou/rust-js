@@ -8,7 +8,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Symbol;
 use rustc_span::def_id::DefId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Does any body show a value with `{:#?}`, a `Debug` argument's alternate
 /// placeholder, or call `Formatter::alternate` (ADR 0137)? Another
@@ -106,4 +106,53 @@ pub(super) fn derived_debug(tcx: TyCtxt<'_>, id: DefId) -> bool {
                 .skip_normalization()
                 .def_id,
         )
+}
+
+/// The crate's writers (ADR 0054) that hand their `Formatter`'s options on:
+/// to another `fmt`, a builder, `f.pad`, a closure, anything but `write!`,
+/// `write_str` and `write_char`, which ignore them, and `f.alternate()`.
+/// A placeholder's width, sign or precision isn't given to one yet (ADR 0058).
+pub(super) fn options_handed_on(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> HashSet<DefId> {
+    let is_formatter = |t: ty::Ty<'_>| {
+        matches!(t.kind(), ty::Ref(_, inner, _)
+            if matches!(inner.kind(), ty::Adt(adt, _) if tcx.def_path_str(adt.did()) == "std::fmt::Formatter"))
+    };
+    let mut found = HashSet::new();
+    for body in all_bodies {
+        let thir = &body.thir;
+        let Some(f) = thir.params.iter().find_map(|param| match param.pat.as_deref()?.kind {
+            rustc_middle::thir::PatKind::Binding { var, .. } if is_formatter(param.ty) => Some(var),
+            _ => None,
+        }) else {
+            continue;
+        };
+        let names_f = |e: ExprId| {
+            let mut e = strip(thir, e);
+            while let ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } = thir[e].kind {
+                e = strip(thir, arg);
+            }
+            matches!(thir[e].kind, ExprKind::VarRef { id } if id == f).then_some(e)
+        };
+        // Where `f` is only written to, or asked if it's alternate.
+        let mut written = HashSet::new();
+        for expr in thir.exprs.iter() {
+            if let ExprKind::Call { fun, ref args, .. } = expr.kind
+                && let ty::FnDef(id, _) = *thir[fun].ty.kind()
+                && tcx.def_path_str(id).starts_with("std::fmt::Formatter")
+                && ["write_fmt", "write_str", "write_char", "alternate"].contains(&tcx.item_name(id).as_str())
+                && let Some(&receiver) = args.first()
+                && let Some(at) = names_f(receiver)
+            {
+                written.insert(at);
+            }
+        }
+        let uses = thir
+            .exprs
+            .iter_enumerated()
+            .filter(|(_, e)| matches!(e.kind, ExprKind::VarRef { id } if id == f));
+        if uses.map(|(at, _)| at).any(|at| !written.contains(&at)) {
+            found.insert(body.def_id.to_def_id());
+        }
+    }
+    found
 }

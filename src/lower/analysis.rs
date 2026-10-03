@@ -10,7 +10,7 @@ use super::bindings;
 use super::bindings::{Export, is_binding};
 use super::traits;
 use super::{Body, FnInfo, TestFn, module_path};
-use debug::{derived_debug, uses_pretty_debug};
+use debug::{derived_debug, options_handed_on, uses_pretty_debug};
 use drops::drop_params;
 use mutation::mutated_types;
 use naming::{exported_across_modules, js_uses, name_imports, name_items};
@@ -106,6 +106,9 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
     /// Whether the crate shows anything with `{:#?}`, or asks a `Formatter`
     /// if it's alternate: then its `Debug` functions take whether (ADR 0137).
     pub pretty_debug: bool,
+    /// The crate's writers that hand their `Formatter`'s options on, to
+    /// which a placeholder's aren't given yet (ADR 0058).
+    pub options_handed_on: HashSet<DefId>,
 }
 
 pub(super) fn analyze_crate<'a, 'tcx>(
@@ -263,6 +266,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
     let generic_consts = generic_consts(tcx, all_bodies);
     let pretty_debug = uses_pretty_debug(tcx, all_bodies);
+    let options_handed_on = options_handed_on(tcx, all_bodies);
 
     Some(AnalyzedCrate {
         bodies,
@@ -286,6 +290,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         drop_params,
         generic_consts,
         pretty_debug,
+        options_handed_on,
     })
 }
 
