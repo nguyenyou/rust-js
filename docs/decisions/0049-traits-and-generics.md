@@ -175,6 +175,24 @@ and obtain the supertrait dictionary; a conversion to the same trait is the
 pair itself. Nontrivial receivers are evaluated once, in Rust argument
 order, in a `const` before the call: `const receiver = make(c);`.
 
+A trait object given to generic code, `fn area_of<T: Shape + ?Sized>(s: &T)`
+with a `&dyn Shape`, is given Rust's built-in `impl Shape for dyn Shape`: a
+dictionary whose methods call the pair's own, as a call on the `dyn` does,
+and whose supertraits are dictionaries of the same kind, of the `dyn`'s
+principal or a supertrait of it:
+
+```js
+area_of(shape, {
+  area: (object) => object.impl.area(object.value),
+  scale: (object, arg1) => object.value.impl.scale(object.value, arg1),
+});
+```
+
+A `&mut self` method is given generic code's box of the pair, whose
+`value` the pair is. A `&mut dyn` given where a generic `&mut T` goes is
+boxed, and not copied back: nothing replaces an unsized value through a
+`&mut`. (Amended: generic code given a `dyn` was an error.)
+
 This does not make wrapper identity Rust pointer identity, and does not
 provide equality, reference counts, `Any`, or downcasting. Mutable dyn
 receivers were rejected at first: replacing a number or an entire struct

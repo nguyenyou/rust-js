@@ -37,7 +37,6 @@ associated-types/issue-47139-1.rs	error: rust-js does not support this method of
 associated-types/issue-47139-2.rs	error: rust-js does not support this method of an `Option` of a generic type yet
 associated-types/issue-54467.rs	error: rust-js does not support values of type `<<() as Stream>::Error as ParseError<char>>::Output` yet
 associated-types/nested-fnonce-output-projection.rs	error: rust-js does not support values of type `<{closure@associated-types/nested-fnonce-output-projection.rs:13:21: 13:23} as std::ops::FnOnce<()>>::Output` yet
-associated-types/object-method-numbering.rs	error: rust-js does not support implementation evidence for `<dyn SomeTrait<SomeType = i32> as SomeTrait>` yet
 associated-types/recursive-enum-with-assoc-type-selfref.rs	error: rust-js does not support values of type `<BP as Parameters>::SelfRef` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
@@ -101,7 +100,6 @@ coercion/unsafe-coercion.rs	error: rust-js does not support this expression yet
 collections/hashmap/hashmap-path-key.rs	error: rust-js does not support values of type `&std::path::Path` yet
 const_prop/dont-propagate-generic-instance-2.rs	error: rust-js does not support this `const` block yet
 const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support `type_name` of a type parameter yet
-const-generics/dyn-supertraits.rs	error: rust-js does not support implementation evidence for `<dyn Bar<3> as Foo<3>>` yet
 const-generics/type-dependent/issue-61936.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 const-generics/type-dependent/issue-69816.rs	error: rust-js does not support `Default` of `[<T as std::iter::Iterator>::Item; N]` yet
 const-generics/type-dependent/issue-70507.rs	error: rust-js does not support calling `core::slice::<impl [T]>::split_at` yet
@@ -313,9 +311,6 @@ rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 self/arbitrary_self_types_nested.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::rc::Rc<std::boxed::Box<Ty>>>) is !null` yet
 self/builtin-superkinds-self-type.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-self/dyn-compatibility-sized-self-by-value-self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
-self/dyn-compatibility-sized-self-generic-method.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
-self/dyn-compatibility-sized-self-return-Self.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
@@ -346,19 +341,16 @@ threads-sendsync/task-comm-6.rs	error: rust-js does not support calling `std::sy
 threads-sendsync/task-comm-chan-nil.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 threads-sendsync/trivial-message.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 threads-sendsync/yield2.rs	error: rust-js does not support calling `std::thread::yield_now` yet
-traits/associated_type_bound/check-trait-object-bounds-2-ok.rs	error: rust-js does not support implementation evidence for `<dyn for<'a> X<'a, F = for<'a> fn(&'a i32) -> &'a i32> as X<'_>>` yet
 traits/bug-7183-generics.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<isize>>` yet
 traits/coercion.rs	error: rust-js does not support values of type `dyn std::io::Write` yet
 traits/default-method/skip-default-method-if-normalization-fails.rs	error: rust-js does not support `&mut` to a `Self` yet
 traits/dyn-drop-principal.rs	error: rust-js does not support statics of type `&'static (dyn std::marker::Send + std::marker::Sync + 'static)` yet
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support calling `std::io::Write::write_fmt` yet
-traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support implementation evidence for `<dyn Bar as Foo>` yet
-traits/infer-from-object-issue-26952.rs	error: rust-js does not support implementation evidence for `<dyn Trait<A> as Trait<A>>` yet
+traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support this trait implementation yet
 traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops::Add::add` yet
-traits/issue-43132.rs	error: rust-js does not support implementation evidence for `<dyn Future<Error = u32> as Future>` yet
 traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `size_of` of a type parameter yet
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
-traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support implementation evidence for `<dyn Q as Q>` yet
+traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support trait method `Q::q` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<Point<S> as Positioned<S>>` yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet

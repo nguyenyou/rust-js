@@ -414,6 +414,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let value = self.expr(place, out)?;
                     values.push(Expr::object(vec![Prop::Field("value".into(), value)]));
                 }
+                // `grow(&mut *shape)` of a `dyn`: a box of it, and nothing to take
+                // back, since nothing replaces an unsized value through a `&mut`.
+                ArgForm::Boxed(place) if !self.thir[place].ty.is_sized(self.tcx, self.typing_env) => {
+                    let value = self.expr(place, out)?;
+                    values.push(Expr::object(vec![Prop::Field("value".into(), value)]));
+                }
                 ArgForm::Boxed(place) if self.result_borrows(def_id, i) => {
                     let handle = Expr::handle(self.fixed_place(place, span, out)?);
                     values.push(handle);

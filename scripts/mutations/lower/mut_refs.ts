@@ -92,4 +92,12 @@ export const mutations: Mutation[] = [
     replace: "self.instantiated(pointee, generic_args)) =>\n            {\n                value\n",
     tests: ["test/corpus.test.ts","-t","generic_mut_ref_kept"],
   },
+  {
+    name: "unsized-mut-arg-copied-back",
+    breaks: "a `&mut dyn` given where a generic `&mut T` goes is copied back through its `&mut`, which is refused",
+    file: "src/lower/mut_refs.rs",
+    find: "                ArgForm::Boxed(place) if !self.thir[place].ty.is_sized(self.tcx, self.typing_env) => {",
+    replace: "                ArgForm::Boxed(place) if false => {",
+    tests: ["test/corpus.test.ts", "-t", "dyn_generic"],
+  },
 ];

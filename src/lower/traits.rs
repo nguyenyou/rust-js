@@ -10,7 +10,7 @@ use crate::js::{self, Expr, Op, Prop, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, Mutability};
-use rustc_middle::traits::ImplSource;
+use rustc_middle::traits::{BuiltinImplSource, ImplSource};
 use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
@@ -695,7 +695,86 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let args = self.evidence_args(imp.impl_def_id, imp.args, span)?;
             return Ok(Expr::call(callee, args));
         }
+        // A trait object's: Rust's built-in `impl Trait for dyn Trait`.
+        if let Ok(ImplSource::Builtin(BuiltinImplSource::Object(_), _)) = selected {
+            return self.object_dictionary(tr, span);
+        }
         Err(self.unsupported(span, &format!("implementation evidence for `{tr}`")))
+    }
+
+    /// Rust's built-in `impl Trait for dyn Trait`, of `tr`, the `dyn`'s
+    /// principal or a supertrait of it, as generic code is given it: each
+    /// method calls the pair's own, as a call on the `dyn` does,
+    /// `(object) => object.impl.area(object.value)`, and each supertrait's
+    /// dictionary is one of these too.
+    fn object_dictionary(&mut self, tr: ty::TraitRef<'tcx>, span: Span) -> R<Expr> {
+        let object = Expr::var("object");
+        let principal = self
+            .dyn_trait_ref(tr.self_ty(), tr.self_ty())
+            .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
+        let mut props = Vec::new();
+        let returning = |value: Expr| Expr::arrow(Vec::new(), vec![StmtKind::Return(Some(value)).at(js::Span::NONE)]);
+        for (name, supertrait, _) in supertraits(self.tcx, tr.def_id, tr.args) {
+            if operational(self.tcx, self.krate.foreign, supertrait.def_id) {
+                props.push(Prop::Field(name, returning(self.dictionary(supertrait, span)?)));
+            }
+        }
+        for (name, bound) in item_bounds(self.tcx, tr.def_id, tr.args) {
+            if operational(self.tcx, self.krate.foreign, bound.def_id) {
+                props.push(Prop::Field(name, returning(self.dictionary(bound, span)?)));
+            }
+        }
+        for item in self.tcx.associated_items(tr.def_id).in_definition_order() {
+            // What a `dyn` can't be called with, and what a std trait's
+            // dictionary hasn't got, as `lower_dictionary` leaves out.
+            if !item.is_fn()
+                || self.tcx.generics_require_sized_self(item.def_id)
+                || (!self.is_rust_trait(tr.def_id)
+                    && self.tcx.defaultness(item.def_id).has_value()
+                    && !self.is_error_source(item.def_id))
+            {
+                continue;
+            }
+            let inputs = self
+                .tcx
+                .fn_sig(item.def_id)
+                .instantiate_identity()
+                .skip_normalization()
+                .skip_binder()
+                .inputs();
+            // Without a `Formatter`, which isn't a JS parameter (ADR 0054), and
+            // with a writer's `alternate`, where the crate's take one (ADR 0137).
+            let writer = self.formatter_param(item.def_id).is_some();
+            let count = inputs.len() - usize::from(writer) + usize::from(self.krate.pretty_debug && writer);
+            // A `&mut self` method is given a box of the pair, as generic code
+            // has a `&mut T` (ADR 0099), and gives the pair, as a call on the
+            // `dyn` does: `object.value.impl.scale(object.value, k)`.
+            let mutable = matches!(inputs[0].kind(), ty::Ref(_, _, Mutability::Mut));
+            let pair = match mutable {
+                true => Expr::member(object.clone(), "value"),
+                false => object.clone(),
+            };
+            let dictionary = self
+                .super_evidence(principal, tr, Expr::member(pair.clone(), "impl"))
+                .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
+            let this = match mutable {
+                true => pair,
+                false => Expr::member(pair, "value"),
+            };
+            let mut params: Vec<js::Pattern> = vec!["object".into()];
+            let mut values = vec![this];
+            for i in 1..count {
+                params.push(format!("arg{i}").into());
+                values.push(Expr::var(&format!("arg{i}")));
+            }
+            let name = bindings::fn_name(self.tcx, item.def_id);
+            let call = Expr::call(Expr::member(dictionary.clone(), name.clone()), values);
+            props.push(Prop::Field(
+                name,
+                Expr::arrow(params, vec![StmtKind::Return(Some(call)).at(js::Span::NONE)]),
+            ));
+        }
+        Ok(Expr::object(props))
     }
 
     pub(super) fn evidence_args(&mut self, id: DefId, args: ty::GenericArgsRef<'tcx>, span: Span) -> R<Vec<Expr>> {
