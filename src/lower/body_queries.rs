@@ -281,3 +281,11 @@ pub(super) fn stepped_locals<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>) -> Hash
     }
     stepped
 }
+
+/// Does `thir` read a static? A static's value, made where its module loads,
+/// may not be there yet where another's initializer is (ADR 0096).
+pub(super) fn reads_statics(thir: &Thir<'_>) -> bool {
+    thir.exprs
+        .iter()
+        .any(|e| matches!(e.kind, ExprKind::StaticRef { .. } | ExprKind::ThreadLocalRef(_)))
+}

@@ -26,4 +26,20 @@ export const mutations: Mutation[] = [
     replace: "            for attr in super::bindings::marks(tcx, module, \"none\") {\n",
     tests: ["test/compiler.test.ts","-t","js::import"],
   },
+  {
+    name: "initializer-reads-statics",
+    breaks: "a static's initializer that reads another is lowered, which JS may read before it's made",
+    file: "src/lower/pipeline.rs",
+    find: "                && !super::body_queries::reads_statics(&body.thir)",
+    replace: "",
+    tests: ["test/diagnostics.test.ts", "-t", "another static"],
+  },
+  {
+    name: "initializer-a-function",
+    breaks: "a static's initializer is made a function, not the static's value",
+    file: "src/lower/pipeline.rs",
+    find: "                    .or_else(|| initializer.then(|| def_id.expect_local())) =>",
+    replace: "                    .or_else(|| (initializer && false).then(|| def_id.expect_local())) =>",
+    tests: ["test/corpus.test.ts", "-t", "static_fns"],
+  },
 ];

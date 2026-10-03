@@ -149,14 +149,21 @@ impl Callbacks for RustJs {
         let serde_attrs = lower::serde_attributes(tcx);
         // 1. Copy each function's THIR. MIR building (for borrowck) steals it.
         let bodies = lower::collect_bodies(tcx);
+        let initializers = lower::collect_initializers(tcx);
 
         // 2. Run rustc's full analysis: type check, borrow check, lints.
         tcx.ensure_ok().analysis(());
 
         // 3. Only a program rustc accepts becomes JavaScript.
         if tcx.dcx().has_errors().is_none()
-            && let Some(unlinked) =
-                lower::lower_crate(tcx, &bodies, &serde_attrs, &self.dependencies, self.export_library)
+            && let Some(unlinked) = lower::lower_crate(
+                tcx,
+                &bodies,
+                &initializers,
+                &serde_attrs,
+                &self.dependencies,
+                self.export_library,
+            )
             && tcx.dcx().has_errors().is_none()
         {
             let linked = link::link(unlinked);

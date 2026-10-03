@@ -1,6 +1,5 @@
-//@ compile-fail: rust-js does not support constants of type `[u8; 200000]` yet
-// rustc won't build a value tree past 100,000 nodes, and reports that as its
-// own error; rust-js reports the constant as unsupported instead.
+// rustc won't build a value tree past 100,000 nodes, so the constant is its
+// initializer, lowered as code (ADR 0096).
 const DATA: [u8; 200_000] = [42; 200_000];
 
 fn main() {

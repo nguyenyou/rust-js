@@ -49,6 +49,24 @@ export function moved(dx) {
 - **It goes at the top of its module with the `const` items,** is exported
   when it's `pub` or another module uses it, and one inside a function goes
   there too, as a `const` does.
+- **A value rustc's can't say is its initializer, lowered as code,** a
+  static's or a `const`'s: a function, a closure, a `dyn`, which a value
+  tree has no pointer for, and one too large for a value tree:
+
+  ```js
+  const F = double;
+  const TABLE = [["double", double], ["triple", triple]];
+  const GREETER = { value: undefined, impl: enGreet() };
+  const DATA = new Array(200000).fill(42);
+  ```
+
+  Rust makes a `const`'s value afresh where it's used, and JS has one: it's
+  every use's where its type is shareable, functions, closures, shared
+  references, numbers and strings, and arrays, tuples, `Option`s and the
+  crate's own types of those, which are copied where they're read if
+  anything changes one in place. An initializer that reads a static is
+  still an error: that static's value may not be made yet where the
+  module loads it. (Amended: each was an error.)
 
 **A `static mut` is its module's `{ value }`,** as a thread-local's `Cell`
 is (ADR 0037), holding the value rustc computed for it:

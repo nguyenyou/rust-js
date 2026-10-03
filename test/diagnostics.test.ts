@@ -33,6 +33,10 @@ for (const [name, source, message, crate] of [
   ["a width for an Option's {:?}", 'pub fn f() -> String { format!("{:5?}", Some(1)) }', "a width for a"],
   ["a sign for a derived {:?}", '#[derive(Debug)] pub struct P { pub x: i32 }\npub fn f(p: &P) -> String { format!("{:+?}", p) }', "a sign for a"],
   ["a width for a fmt that hands its Formatter on", 'pub struct M(pub f64);\nimpl std::fmt::Display for M { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { self.0.fmt(f) } }\npub fn f(m: &M) -> String { format!("{:>8}", m) }', "a width for a"],
+  // A static's initializer is code where rustc's value can't say it (ADR 0096),
+  // but not one reading another static, nor of a value that can change in place.
+  ["a static of a function read from another static", 'pub fn f() {}\nstatic A: fn() = f;\npub static B: &fn() = &A;\npub fn g() { B() }', "statics of type"],
+  ["a constant of a Vec of functions", 'pub fn f() {}\npub const C: Vec<fn()> = Vec::new();\npub fn g() -> usize { C.len() }', "constants of type"],
   ["a width for a dyn", 'pub fn f(d: &dyn std::fmt::Display) -> String { format!("{:>6}", d) }', "a width for a"],
   ["zero padding in generic code", 'pub fn f<T: std::fmt::Debug>(t: &T) -> String { format!("{:08?}", t) }', "a width for a"],
   ["precision of a struct", 'pub struct P; impl std::fmt::Display for P { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { f.write_str("p") } }\npub fn f() -> String { format!("{:.2}", P) }', "a precision for a"],

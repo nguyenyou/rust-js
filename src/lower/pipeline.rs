@@ -31,6 +31,7 @@ struct Pass {
 pub fn lower_crate<'tcx>(
     tcx: TyCtxt<'tcx>,
     all_bodies: &[Body<'tcx>],
+    initializers: &[Body<'tcx>],
     serde_attrs: &super::SerdeAttributes,
     dependencies: &crate::library::Dependencies,
     export_library: bool,
@@ -66,6 +67,8 @@ pub fn lower_crate<'tcx>(
     }
 
     let mut const_items: HashMap<LocalModDefId, Vec<js::Const>> = HashMap::new();
+    // The statics and constants whose initializers are lowered as code.
+    let mut initialized: Vec<&Body<'tcx>> = Vec::new();
     for &def_id in consts.iter().filter(|&&d| !is_thread_local(tcx, d)) {
         let span = tcx.def_span(def_id);
         let typing_env = ty::TypingEnv::fully_monomorphized();
@@ -89,6 +92,19 @@ pub fn lower_crate<'tcx>(
         };
         let Some(value) = value else {
             let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
+            // A value rustc's can't say, a function's, a `dyn`'s or one too
+            // large for a value tree, is its initializer's, where one JS value
+            // can be every use's, and it reads no static, whose value may not
+            // be made yet.
+            let mutable = matches!(tcx.def_kind(def_id), DefKind::Static { mutability, .. } if mutability.is_mut());
+            if !mutable
+                && super::copies::shareable(tcx, ty)
+                && let Some(body) = initializers.iter().find(|body| body.def_id == def_id)
+                && !super::body_queries::reads_statics(&body.thir)
+            {
+                initialized.push(body);
+                continue;
+            }
             tcx.dcx()
                 .span_err(span, format!("rust-js does not support {what} of type `{ty}` yet"));
             failed = true;
@@ -134,6 +150,7 @@ pub fn lower_crate<'tcx>(
         .filter(|b| tcx.trait_of_assoc(b.def_id.to_def_id()).is_none())
         .map(|b| (b.def_id.to_def_id(), Some(*b)))
         .chain(dictionaries.iter().map(|id| (*id, None)))
+        .chain(initialized.iter().map(|body| (body.def_id.to_def_id(), Some(*body))))
         .collect();
     let (mut used, mut queued) = (HashSet::new(), HashSet::new());
     let no_facts = super::body_queries::BodyFacts::default();
@@ -189,7 +206,9 @@ pub fn lower_crate<'tcx>(
             drop_state: Default::default(),
             body_owner: def_id,
         };
+        let initializer = initialized.iter().any(|body| body.def_id.to_def_id() == def_id);
         let result = match body {
+            Some(body) if initializer => cx.lower_initializer(body),
             Some(body) => cx.lower_fn(body),
             None if codecs.contains(&def_id) => cx.lower_codec(def_id).map(|function| super::LoweredFn {
                 function,
@@ -247,6 +266,7 @@ pub fn lower_crate<'tcx>(
         .filter(|(id, _)| !derived.contains(id) || reached.contains(id))
     {
         let module = fns[&def_id].module;
+        let initializer = initialized.iter().any(|body| body.def_id.to_def_id() == def_id);
         pass.references.extend(lowered.dependencies.references.drain());
         pass.package_uses.extend(lowered.dependencies.package_uses.drain());
         if dictionaries.contains(&def_id) {
@@ -256,7 +276,12 @@ pub fn lower_crate<'tcx>(
                 .push(format!("${}", fns[&def_id].name));
         }
         match lowered {
-            lowered if let Some(&key) = thread_local_inits.get(&def_id.expect_local()) => {
+            lowered
+                if let Some(key) = thread_local_inits
+                    .get(&def_id.expect_local())
+                    .copied()
+                    .or_else(|| initializer.then(|| def_id.expect_local())) =>
+            {
                 // `const COUNT = { value: 0 };`: made when the module loads.
                 let function = lowered.function;
                 let value = match function.body.as_slice() {

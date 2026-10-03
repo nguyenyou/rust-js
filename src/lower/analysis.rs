@@ -77,6 +77,28 @@ pub fn collect_bodies(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
         .collect()
 }
 
+/// The initializers of the crate's statics and constants, copied as its
+/// functions' are, before MIR building steals them: one whose value rustc's
+/// can't say is lowered as code instead (ADR 0096).
+pub fn collect_initializers(tcx: TyCtxt<'_>) -> Vec<Body<'_>> {
+    tcx.hir_crate_items(())
+        .definitions()
+        .filter(|&def_id| matches!(tcx.def_kind(def_id), DefKind::Const { .. } | DefKind::Static { .. }))
+        .filter(|&def_id| !tcx.is_foreign_item(def_id) && tcx.hir_maybe_body_owned_by(def_id).is_some())
+        .filter_map(|def_id| {
+            let (thir, expr) = tcx.thir_body(def_id).ok()?;
+            let thir = (*thir.borrow()).clone();
+            let facts = super::body_queries::BodyFacts::collect(tcx, &thir);
+            Some(Body {
+                def_id,
+                thir,
+                expr,
+                facts,
+            })
+        })
+        .collect()
+}
+
 /// Crate-wide facts collected before function emission. Body references point
 /// into the captured THIR; all collections are owned by this analysis result.
 pub(super) struct AnalyzedCrate<'a, 'tcx> {

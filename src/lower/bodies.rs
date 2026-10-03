@@ -41,6 +41,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         })
     }
 
+    /// A static's or a constant's initializer, as a function with no
+    /// parameters that returns its value: made the item's value where its
+    /// module loads (ADR 0096).
+    pub(super) fn lower_initializer(&mut self, body: &Body<'tcx>) -> R<LoweredFn> {
+        let def_id = body.def_id.to_def_id();
+        let mut out = Vec::new();
+        self.drop_facts()?;
+        self.stmt(body.expr, &Dest::Return, &mut out)?;
+        self.check_drops()?;
+        Ok(LoweredFn {
+            function: js::Function {
+                name: self.krate.fns[&def_id].name.clone(),
+                params: Vec::new(),
+                body: out,
+                export: false,
+                is_async: false,
+                span: self.js_span(self.tcx.def_span(def_id)),
+                name_span: js::Span::NONE,
+            },
+            runtime: std::mem::take(&mut self.runtime),
+            jsx: self.jsx,
+            dependencies: self.dependencies.take(),
+        })
+    }
+
     /// A function's parameters and body, in `out`, and whether it's `async`.
     /// One that writes to a `Formatter` returns the string (ADR 0054).
     pub(super) fn lower_signature(

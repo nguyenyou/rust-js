@@ -5,9 +5,10 @@
 use super::{FnCx, Shape};
 use crate::js;
 use crate::js::{Expr, Op, Prop};
+use rustc_ast::Mutability;
 use rustc_hir::LangItem;
 use rustc_middle::ty;
-use rustc_middle::ty::Ty;
+use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::{Symbol, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -286,4 +287,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         seen.pop();
         structural
     }
+}
+
+/// Can one JS value be every use of a constant of `ty`, which Rust makes
+/// afresh at each? A function, a closure, a shared reference, a `dyn`
+/// behind one, a number and a string can't change in place; an array, a
+/// tuple, an `Option` and the crate's own struct or enum of those can, and
+/// is copied where it's read if something changes one, as any value is.
+pub(super) fn shareable<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
+    fn walk<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
+        if seen.contains(&ty) {
+            return true;
+        }
+        seen.push(ty);
+        let frozen = match ty.kind() {
+            ty::Bool | ty::Char | ty::Int(_) | ty::Uint(_) | ty::Float(_) | ty::Str => true,
+            ty::FnPtr(..) | ty::FnDef(..) | ty::Closure(..) | ty::Dynamic(..) => true,
+            ty::Ref(_, inner, Mutability::Not) => walk(tcx, *inner, seen),
+            ty::Array(item, _) | ty::Slice(item) => walk(tcx, *item, seen),
+            ty::Tuple(items) => items.iter().all(|item| walk(tcx, item, seen)),
+            ty::Adt(adt, args) if tcx.is_lang_item(adt.did(), LangItem::Option) => walk(tcx, args.type_at(0), seen),
+            ty::Adt(adt, args) if adt.did().is_local() && !adt.is_union() => adt
+                .all_fields()
+                .all(|field| walk(tcx, field.ty(tcx, args).skip_normalization(), seen)),
+            _ => false,
+        };
+        seen.pop();
+        frozen
+    }
+    walk(tcx, ty, &mut Vec::new())
 }

@@ -8,7 +8,6 @@ array-slice-vec/destructure-array-1.rs	error: rust-js does not support moving pa
 array-slice-vec/issue-18425.rs	error: rust-js does not support `[x; N]` of a value that isn't `Copy` yet
 array-slice-vec/slice_binary_search.rs	error: rust-js does not support calling `core::slice::<impl [T]>::binary_search_by_key` yet
 array-slice-vec/subslice-patterns-const-eval-match.rs	error: rust-js does not support values of type `std::option::Option<&Z>` yet
-associated-consts/assoc-const-in-static-array-size.rs	error: rust-js does not support statics of type `[u8; S::N]` yet
 associated-consts/associated-const-type-parameters.rs	error: rust-js does not support a generic impl's constant of its parameters yet
 associated-consts/mismatched_impl_ty_2.rs	error: rust-js does not support this constant yet
 associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support this constant yet
@@ -105,7 +104,7 @@ const-generics/type-dependent/issue-69816.rs	error: rust-js does not support `De
 const-generics/type-dependent/issue-70507.rs	error: rust-js does not support calling `core::slice::<impl [T]>::split_at` yet
 const-generics/type-dependent/issue-71805.rs	error: rust-js does not support values of type `&mut I` yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
-consts/cast-discriminant-zst-enum.rs	error: rust-js does not support constants of type `i128` yet
+consts/cast-discriminant-zst-enum.rs	error: rust-js does not support values of type `i128` yet
 consts/const_constructor/const-construct-call.rs	error: rust-js does not support constants of type `std::panic::AssertUnwindSafe<(std::option::Option<i32>, std::result::Result<i32, bool>)>` yet
 consts/const_discriminant.rs	error: rust-js does not support constants of type `std::mem::Discriminant<Test>` yet
 consts/const_fn_unsize.rs	error: rust-js does not support constants of type `std::ptr::NonNull<[i32]>` yet
@@ -117,33 +116,24 @@ consts/const-blocks/const-repeat.rs	error: rust-js does not support constants of
 consts/const-blocks/fn-call-in-const.rs	error: rust-js does not support values of type `std::option::Option<Bar>` yet
 consts/const-byte-str-cast.rs	error: rust-js does not support this expression yet
 consts/const-cast-ptr-int.rs	error: rust-js does not support statics of type `TestStruct` yet
-consts/const-cast.rs	error: rust-js does not support constants of type `extern "C" fn()` yet
-consts/const-closure-fn-trait-object.rs	error: rust-js does not support constants of type `&'static (dyn std::ops::Fn() + 'static)` yet
+consts/const-cast.rs	error: rust-js does not support statics of type `TestStruct` yet
 consts/const-err-rpass.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/const-eval/issue-64908.rs	error: rust-js does not support `size_of` of a type parameter yet
 consts/const-eval/ptr_fragments.rs	error: rust-js does not support constants of type `std::mem::MaybeUninit<*const i32>` yet
-consts/const-extern-function.rs	error: rust-js does not support statics of type `extern "C" fn()` yet
 consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn() -> isize>` yet
-consts/const-int-arithmetic.rs	error: rust-js does not support constants of type `i128` yet
-consts/const-int-saturating-arith.rs	error: rust-js does not support constants of type `u128` yet
-consts/const-item-with-block-body/macro-codegen.rs	error: rust-js does not support statics of type `MyType` yet
-consts/const-item-with-block-body/static.rs	error: rust-js does not support statics of type `fn(usize) -> usize` yet
+consts/const-int-arithmetic.rs	error: rust-js does not support `{:?}` of a `i128` yet
+consts/const-int-saturating-arith.rs	error: rust-js does not support this constant yet
 consts/const-region-ptrs-noncopy.rs	error: rust-js does not support this expression yet
 consts/const-size_of-align_of.rs	error: rust-js does not support `size_of` of a type parameter yet
-consts/const-trait-to-trait.rs	error: rust-js does not support constants of type `&'static (dyn Trait + 'static)` yet
 consts/const-typeid-of-rpass.rs	error: rust-js does not support statics of type `std::any::TypeId` yet
-consts/const-vec-of-fns.rs	error: rust-js does not support statics of type `&'static [fn()]` yet
+consts/const-vec-of-fns.rs	error: rust-js does not support statics of type `&'static mut [S<fn()>]` yet
 consts/issue-105536-const-val-roundtrip-ptr-eq.rs	error: rust-js does not support constants of type `*const u8` yet
 consts/issue-17718-borrow-interior.rs	error: rust-js does not support statics of type `&'static usize` yet
 consts/issue-21721.rs	error: rust-js does not support values of type `*const u8` yet
-consts/issue-27890.rs	error: rust-js does not support statics of type `&'static (dyn std::ops::Fn(i32) -> i32 + std::marker::Sync + 'static)` yet
 consts/issue-33537.rs	error: rust-js does not support values of type `*const i8` yet
-consts/issue-46553.rs	error: rust-js does not support statics of type `Data<i32>` yet
-consts/issue-54582.rs	error: rust-js does not support statics of type `[(&'static (dyn Stage + 'static), &'static str); 1]` yet
 consts/issue-58435-ice-with-assoc-const.rs	error: rust-js does not support this constant yet
 consts/issue-69532.rs	error: rust-js does not support calling `core::f64::<impl f64>::from_bits` yet
 consts/load-preserves-partial-init.rs	error: rust-js does not support constants of type `BagOfBits<[usize; 1]>` yet
-consts/method-reference-in-const-dyn-fn.rs	error: rust-js does not support constants of type `&'static (dyn for<'a> std::ops::Fn(&'a mut Foo) + 'static)` yet
 consts/mozjs-error.rs	error: rust-js does not support this constant yet
 consts/oncecell-const-init-57781.rs	error: rust-js does not support this constant yet
 consts/static-mut-refs.rs	error: rust-js does not support statics of type `*mut [isize]` yet
@@ -199,8 +189,7 @@ foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
 functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support constants of type `fn(u8) -> u8` yet
-functions-closures/fn-item-type-cast.rs	error: rust-js does not support statics of type `std::option::Option<fn(isize) -> isize>` yet
+functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support `size_of` of a type parameter yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
@@ -246,10 +235,8 @@ mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this p
 mir/mir_augmented_assignments.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 mir/mir_autoderef.rs	error: rust-js does not support this expression yet
 mir/mir_fat_ptr.rs	error: rust-js does not support values of type `&mut &[u8]` yet
-mir/mir_heavy_promoted.rs	error: rust-js does not support constants of type `[u8; 32 * 1024 * 1024]` yet
 mir/mir_misc_casts.rs	error: rust-js does not support values of type `*const ()` yet
 mir/mir_raw_fat_ptr.rs	error: rust-js does not support values of type `*const S<[u8]>` yet
-mir/mir_static_subtype.rs	error: rust-js does not support statics of type `fn(&'static ())` yet
 mir/mir_struct_with_assoc_ty.rs	error: rust-js does not support values of type `<Global<[u32; 2]> as DataBind>::Data` yet
 mir/reset-discriminant-drop-flag-on-partial-move.rs	error: rust-js does not support a `let` of a value with a destructor, without its value yet
 moves/issue-22536-copy-mustnt-zero.rs	error: rust-js does not support values of type `<Res as Resources>::Buffer` yet
@@ -260,7 +247,7 @@ nll/issue-47589.rs	error: rust-js does not support values of type `<Resources as
 nll/issue-48623-closure.rs	error: rust-js does not support a `&mut` of this in a variable yet
 nll/issue-53123-raw-pointer-cast.rs	error: rust-js does not support values of type `*mut T` yet
 numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calling `core::f64::<impl f64>::signum` yet
-numbers-arithmetic/float-int-invalid-const-cast.rs	error: rust-js does not support constants of type `u128` yet
+numbers-arithmetic/float-int-invalid-const-cast.rs	error: rust-js does not support values of type `u128` yet
 numbers-arithmetic/i128-min-literal-parses.rs	error: rust-js does not support values of type `i128` yet
 numbers-arithmetic/integer-literal-suffix-inference-2.rs	error: rust-js does not support values of type `*const ()` yet
 or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
@@ -298,13 +285,12 @@ regions/regions-static-bound-rpass.rs	error: rust-js does not support values of 
 resolve/reference-clone-nonclone-11820.rs	error: rust-js does not support values of type `std::option::Option<NoClone>` yet
 return/ret-bang.rs	error: rust-js does not support values of type `!` yet
 rfcs/rfc-0107-bind-by-move-pattern-guards/bind-by-move-no-guards.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-rfcs/rfc-1623-static/rfc1623.rs	error: rust-js does not support statics of type `&'static for<'a> fn(&'a [u8]) -> &'a [u8]` yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
 rfcs/rfc-2005-default-binding-mode/general.rs	error: rust-js does not support `&mut` to a `&mut std::option::Option<i32>` yet
 rfcs/rfc-2091-track-caller/file-is-nul-terminated.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2091-track-caller/track-caller-ffi.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
 rfcs/rfc-2091-track-caller/tracked-trait-impls.rs	error: rust-js does not support values of type `(*const str) is !null` yet
-rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support constants of type `&'static (dyn Tracked + 'static)` yet
+rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support values of type `(*const str) is !null` yet
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
 rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<std::option::Option<i32>>>` yet
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
@@ -344,7 +330,7 @@ threads-sendsync/yield2.rs	error: rust-js does not support calling `std::thread:
 traits/bug-7183-generics.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<isize>>` yet
 traits/coercion.rs	error: rust-js does not support values of type `dyn std::io::Write` yet
 traits/default-method/skip-default-method-if-normalization-fails.rs	error: rust-js does not support `&mut` to a `Self` yet
-traits/dyn-drop-principal.rs	error: rust-js does not support statics of type `&'static (dyn std::marker::Send + std::marker::Sync + 'static)` yet
+traits/dyn-drop-principal.rs	error: rust-js does not support values of type `dyn std::marker::Send` yet
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support calling `std::io::Write::write_fmt` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support this trait implementation yet
 traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops::Add::add` yet

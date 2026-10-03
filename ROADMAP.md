@@ -318,14 +318,14 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,810 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
+  1,824 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
   other one is a clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink. A test of a
   feature stable Rust doesn't have is out of scope, as no program of
-  rust-js's can use one (`7962214`). The 396 rejections, by kind: values of
-  a type rust-js doesn't support (129; raw pointers and an `Arc`'s insides
+  rust-js's can use one (`7962214`). The 382 rejections, by kind: values of
+  a type rust-js doesn't support (133; raw pointers and an `Arc`'s insides
   the most common), std calls (83; intrinsics and `mpsc` the most),
-  expressions (13), constants of a type (28), statics of a type (25),
+  expressions (13), constants of a type (17), statics of a type (15),
   and user implementations of a std trait (6: `Hash` and `Hasher`,
   `fmt::Write`, `Future` and `Wake`). A user `fmt::Write` stays refused:
   `write!` gives it one string, where Rust calls `write_str` for each piece.

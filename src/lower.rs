@@ -80,7 +80,7 @@ mod vecs;
 use crate::names::{fresh_in, js_ident};
 use crate::program::TestFn;
 use crate::runtime::Helper;
-pub use analysis::collect_bodies;
+pub use analysis::{collect_bodies, collect_initializers};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
 pub use pipeline::lower_crate;
 use recognition::Std;

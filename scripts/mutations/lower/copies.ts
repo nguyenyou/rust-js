@@ -42,4 +42,12 @@ export const mutations: Mutation[] = [
     replace: "            && (adt.did().is_local() || self.is_std_adt(ty, sym::Result)))\n",
     tests: ["test/crates.test.ts", "-t", "two crates: copy_enum"],
   },
+  {
+    name: "functions-can-change",
+    breaks: "a static of a function, a closure or a `dyn` is taken to change in place, and refused",
+    file: "src/lower/copies.rs",
+    find: "            ty::FnPtr(..) | ty::FnDef(..) | ty::Closure(..) | ty::Dynamic(..) => true,",
+    replace: "            ty::FnPtr(..) | ty::FnDef(..) | ty::Closure(..) | ty::Dynamic(..) => false,",
+    tests: ["test/corpus.test.ts", "-t", "static_fns"],
+  },
 ];
