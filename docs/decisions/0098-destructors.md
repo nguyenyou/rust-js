@@ -302,6 +302,36 @@ function main() {
   moves what the box owns, which clears its flag. Putting one back, `*b =
   Noisy(..)`, drops the old value only if the box still owns it, and sets
   the flag again. (Amended: either was an error.)
+- **A temporary ends at the scope rustc ends it at, whichever that is:** a
+  statement's, a `let`'s block's, or an expression's: an `if` or `while`
+  condition's, dropped before the branch, and a block's tail's, which in
+  Rust 2024 is dropped before the block's variables, as `assert_eq!`'s
+  `match` is. An expression a temporary ends with is a `try` around its
+  JS, its value computed inside it:
+
+  ```js
+  const noisy = make(1);
+  let value;
+  try {
+    value = Noisy.big(noisy);
+  } finally {
+    noisyDrop_drop(noisy);
+  }
+  if (value) { .. }
+  ```
+
+  An operand outside any statement, a function's or a closure's tail's,
+  is owned by what moves it, the innermost expression that isn't the
+  operand itself. A closure's body has its own statement and expressions.
+  A let-chain's condition is still an error: its `let`s' temporaries end
+  with the `if`, and the others' at their `&&`. (Amended: only a
+  statement's and a `let`'s block's.)
+- **A struct update, `..base`, moves the fields it doesn't name out of
+  `base`,** a part move. Of a variable, their flags are cleared once every
+  field's value is made, as Rust makes the struct then, and the fields it
+  names stay the variable's. Of a temporary, `..Default::default()`, the
+  fields it names are dropped where the temporary's scope ends. (Amended:
+  either was an error.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of
@@ -383,7 +413,9 @@ traits.
   a condition or a block's tail, one made in a branch of its statement, one
   taken apart or partly moved, an `if let` that moves part of a value, a
   struct update from one, a `let x;` without its value, and `async` code
-  that owns one are errors until they're done.
+  that owns one are errors until they're done. (Since done: temporaries
+  taken apart, ADR 0131; a condition's and a tail's temporaries, and
+  struct updates, above.)
 - A generic function given a value with a destructor has a JS parameter
   more than its Rust one has, as its dictionaries are (ADR 0052). A JS
   caller of an exported one passes none, and the drop doesn't run: a Rust

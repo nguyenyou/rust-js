@@ -256,6 +256,7 @@ struct Enclosing<'a, 'tcx> {
     body_facts: &'a body_queries::BodyFacts,
     body_owner: DefId,
     stepped: HashSet<LocalVarId>,
+    scopes: drops::BodyScopes<'tcx>,
     kind: EnclosingKind<'tcx>,
 }
 
@@ -422,7 +423,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if let Some(body) = self.body_query().scoped_loop(value) {
                     self.lower_loop(region_scope, hir_id, body, dest, span, out)
                 } else {
-                    self.stmt(value, dest, out)
+                    // What ends with it is dropped once it's delivered (ADR 0098).
+                    // One that fails fails its whole item, open scopes and all.
+                    let mark = out.len();
+                    self.begin_scope(region_scope);
+                    self.stmt(value, dest, out)?;
+                    self.end_scope(mark, expr.span, out)
                 }
             }
             ExprKind::Use { source }
@@ -676,7 +682,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js_span = self.js_span(span);
         let ty = expr.ty;
         match expr.kind {
-            ExprKind::Scope { value, .. } if self.body_query().scoped_loop(value).is_none() => self.expr(value, out),
+            ExprKind::Scope {
+                value, region_scope, ..
+            } if self.body_query().scoped_loop(value).is_none() => {
+                let mark = out.len();
+                self.begin_scope(region_scope);
+                let value = self.expr(value, out)?;
+                // Its value is computed before what ends with it is dropped (ADR 0098).
+                let value = match self.scope_has_temps() && !value.is_constant() {
+                    true if ty.is_unit() => {
+                        out.push(StmtKind::Expr(value).at(js_span));
+                        Expr::undefined()
+                    }
+                    true => self.spill("value", value, out),
+                    false => value,
+                };
+                self.end_scope(mark, span, out)?;
+                Ok(value)
+            }
             ExprKind::Use { source }
             | ExprKind::ValueTypeAscription { source, .. }
             | ExprKind::PlaceTypeAscription { source, .. } => self.expr(source, out),
@@ -1458,6 +1481,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     out.push(StmtKind::Const(name, v).at(span));
                 }
             }
+        }
+        // `..p` moves the fields it doesn't name out of `p` once every
+        // value is made, as Rust makes the struct (ADR 0098).
+        if let AdtExprBase::Base(fru) = &adt.base
+            && self.update_moves(fru.base)?
+        {
+            for (field, value) in adt.fields.iter().zip(&mut values) {
+                if value.has_effects() {
+                    let v = std::mem::replace(value, Expr::undefined());
+                    *value = self.spill(variant.fields[field.name].name.as_str(), v, out);
+                }
+            }
+            self.update_moved(fru.base, out)?;
         }
         let mut given: HashMap<usize, Expr> = adt.fields.iter().map(|f| f.name.as_usize()).zip(values).collect();
 

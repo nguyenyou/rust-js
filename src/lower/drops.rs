@@ -73,6 +73,13 @@ pub(super) struct Statement<'tcx> {
     temps: Vec<Temp<'tcx>>,
 }
 
+/// The statement and the expressions being lowered, whose temporaries a
+/// body inside them, a closure's, has none of: it has its own.
+pub(super) struct BodyScopes<'tcx> {
+    statement: Statement<'tcx>,
+    open: Vec<(region::Scope, Vec<Temp<'tcx>>)>,
+}
+
 /// A function's drops while a copied default body has its own.
 pub(super) struct SwappedDrops<'tcx> {
     params: HashMap<u32, String>,
@@ -117,6 +124,9 @@ pub(super) struct DropState<'tcx> {
     closures: HashMap<DefId, (DefId, Vec<(Expr, Ty<'tcx>)>)>,
     /// The flags of each temporary's parts that a pattern moves on some paths.
     temp_part_flags: HashMap<(usize, ExprId), Vec<(Path, String)>>,
+    /// The scopes of the expressions being lowered, innermost last, and the
+    /// temporaries that end with each: a condition's, a block's tail's.
+    open: Vec<(region::Scope, Vec<Temp<'tcx>>)>,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -684,12 +694,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let name = self.fresh(&base);
         out.push(StmtKind::Const(name.clone(), value).at(js_span));
-        let Some((statement, rest)) = self.drop_state.statement.scopes else {
-            return Err(self.unsupported(span, "a temporary with a destructor here"));
+        let (statement, rest) = match self.drop_state.statement.scopes {
+            Some((statement, rest)) => (Some(statement), rest),
+            None => (None, None),
         };
         let key = std::ptr::from_ref(self.thir) as usize;
+        // The expression whose scope it ends with, if not the statement's.
+        let mut open = None;
         let flag = match kind {
             TempKind::Operand => {
+                // Outside any statement, a function body's tail's: the scope
+                // of what moves it, the innermost that isn't its own.
+                if statement.is_none() {
+                    let own = self.thir[e].temp_scope_id;
+                    match self.drop_state.open.iter().rposition(|(s, _)| s.local_id != own) {
+                        Some(at) => open = Some(at),
+                        None => return Err(self.unsupported(span, "a temporary with a destructor here")),
+                    }
+                }
                 let flag = self.fresh(&format!("{name}$live"));
                 out.push(StmtKind::Let(flag.clone(), Some(Expr::bool(true))).at(js_span));
                 self.drop_state.temp_flags.insert((key, e), flag.clone());
@@ -700,7 +722,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 match tree.temporary_scope(self.thir[e].temp_scope_id).temp_lifetime {
                     // Never dropped, as a promoted constant isn't.
                     None => return Ok(Expr::var(&name)),
-                    Some(scope) if scope == statement || self.ends_with_statement(scope, statement) => None,
+                    Some(scope) if statement.is_some_and(|st| scope == st || self.ends_with_statement(scope, st)) => {
+                        None
+                    }
                     // `let r = &f();`: it lives as long as `r` does, less what a
                     // `let` moves out of it, `let (a, ref b) = (f(), g());` (ADR 0131).
                     Some(scope) if Some(scope) == rest => {
@@ -717,7 +741,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         });
                         return Ok(Expr::var(&name));
                     }
-                    Some(_) => return Err(self.unsupported(span, "a temporary with a destructor here")),
+                    // A condition's, a block's tail's: its expression's.
+                    Some(scope) => match self.drop_state.open.iter().rposition(|(s, _)| *s == scope) {
+                        Some(at) => {
+                            open = Some(at);
+                            None
+                        }
+                        None => return Err(self.unsupported(span, "a temporary with a destructor here")),
+                    },
                 }
             }
         };
@@ -744,13 +775,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             self.drop_state.temp_part_flags.insert((key, e), flags);
         }
-        self.drop_state.statement.temps.push(Temp {
+        let temp = Temp {
             name: name.clone(),
             ty,
             flag,
             operand,
             parts,
-        });
+        };
+        match open {
+            Some(at) => self.drop_state.open[at].1.push(temp),
+            None => self.drop_state.statement.temps.push(temp),
+        }
         Ok(Expr::var(&name))
     }
 
@@ -796,9 +831,51 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<()> {
         let statement = std::mem::replace(&mut self.drop_state.statement, outer);
+        self.place_temps(statement.temps, lowered, span, out)
+    }
+
+    /// The enclosing body's statement and expressions, while a body inside
+    /// it is lowered.
+    pub(super) fn take_scopes(&mut self) -> BodyScopes<'tcx> {
+        BodyScopes {
+            statement: std::mem::take(&mut self.drop_state.statement),
+            open: std::mem::take(&mut self.drop_state.open),
+        }
+    }
+
+    pub(super) fn give_scopes(&mut self, scopes: BodyScopes<'tcx>) {
+        self.drop_state.statement = scopes.statement;
+        self.drop_state.open = scopes.open;
+    }
+
+    /// Start lowering the expression whose scope is `scope`, which a
+    /// temporary may end with, as a condition's does.
+    pub(super) fn begin_scope(&mut self, scope: region::Scope) {
+        self.drop_state.open.push((scope, Vec::new()));
+    }
+
+    /// Finish the expression `begin_scope` started, whose JS is `out` from
+    /// `mark` on: each of the temporaries that end with it is dropped by a
+    /// `finally` after it.
+    pub(super) fn end_scope(&mut self, mark: usize, span: Span, out: &mut Vec<Stmt>) -> R<()> {
+        let (_, temps) = self.drop_state.open.pop().expect("a scope begun");
+        if temps.is_empty() {
+            return Ok(());
+        }
+        let lowered = out.split_off(mark);
+        self.place_temps(temps, lowered, span, out)
+    }
+
+    /// Whether the innermost scope begun has temporaries that end with it.
+    pub(super) fn scope_has_temps(&self) -> bool {
+        self.drop_state.open.last().is_some_and(|(_, temps)| !temps.is_empty())
+    }
+
+    /// `lowered`, in `out`, with `temps` dropped after it, last first.
+    fn place_temps(&mut self, temps: Vec<Temp<'tcx>>, lowered: Vec<Stmt>, span: Span, out: &mut Vec<Stmt>) -> R<()> {
         let key = std::ptr::from_ref(self.thir) as usize;
         // An operand temporary must have been moved where it's an operand.
-        for t in &statement.temps {
+        for t in &temps {
             if let Some(e) = t.operand
                 && !self.drop_state.temps_moved.contains(&(key, e))
             {
@@ -808,13 +885,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ));
             }
         }
-        if statement.temps.is_empty() {
+        if temps.is_empty() {
             out.extend(lowered);
             return Ok(());
         }
-        // Each is declared in the statement's own JS, not in a branch of it.
+        // Each is declared in the scope's own JS, not in a branch of it.
         let mut placed = Vec::new();
-        for t in statement.temps {
+        for t in temps {
             let at = lowered
                 .iter()
                 .position(|s| matches!(&s.kind, StmtKind::Const(n, _) if *n == t.name))
@@ -1110,6 +1187,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(())
     }
 
+    /// Whether `base`, a struct update's, is an owner it moves parts of.
+    pub(super) fn update_moves(&mut self, base: ExprId) -> R<bool> {
+        let base = self.strip(base);
+        Ok(self.drop_facts()?.updates.contains_key(&base))
+    }
+
+    /// A struct update, `..base`, once every field's value is made: the
+    /// parts it moves out of `base`, an owner, are no longer its own.
+    pub(super) fn update_moved(&mut self, base: ExprId, out: &mut Vec<Stmt>) -> R<()> {
+        let base = self.strip(base);
+        let facts = self.drop_facts()?;
+        let Some((var, paths)) = facts.updates.get(&base) else {
+            return Ok(());
+        };
+        let key = std::ptr::from_ref(self.thir) as usize;
+        self.drop_state.lowered_moves.insert((key, base));
+        let js_span = self.js_span(self.thir[base].span);
+        for path in paths {
+            if let Some(flag) = self.drop_state.part_flags.get(&(*var, path.clone())) {
+                out.push(StmtKind::Assign(Expr::var(flag), Expr::bool(false)).at(js_span));
+            }
+        }
+        Ok(())
+    }
+
     /// Before `list`, a call's operands, is evaluated: the variables it
     /// moves. Rust moves them as the call's made, after all of them are, so
     /// a later one that panics leaves them owned, and dropped.
@@ -1223,7 +1325,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 failed = Some(self.unsupported(*span, "binding a value with a destructor here"));
             }
         }
-        for &e in facts.moves.iter().chain(facts.part_moves.keys()) {
+        for &e in facts
+            .moves
+            .iter()
+            .chain(facts.part_moves.keys())
+            .chain(facts.updates.keys())
+        {
             if !self.drop_state.lowered_moves.contains(&(key, e)) {
                 failed = Some(self.unsupported(self.thir[e].span, "moving a value with a destructor here"));
             }

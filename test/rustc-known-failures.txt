@@ -169,20 +169,15 @@ drop/drop-on-untaken-arm-raw-ptr.rs	error: rust-js does not support values of ty
 drop/drop-order-comparisons-let-chains.rs	error: rust-js does not support a temporary with a destructor here yet
 drop/drop-with-trait-bound-calls-method-on-self.rs	error: rust-js does not support generic trait methods, where a type may have a destructor yet
 drop/dropck_legal_cycles.rs	error: rust-js does not support user implementations of this standard or external trait yet
-drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support a temporary with a destructor here yet
 drop/if-let-guards-2.rs	error: rust-js does not support a temporary with a destructor here yet
-drop/issue-21486.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support a temporary with a destructor in a branch yet
 drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support values of type `*mut std::option::Option<(S<'_>, S<'_>)>` yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `Holder<dyn Trait>`, whose last field is a `dyn` yet
-drop/nested-return-drop-order.rs	error: rust-js does not support a temporary with a destructor here yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
 dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support values of type `*const NoisyDrop<&std::vec::Vec<i32>>` yet
 dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<<Resources as ResourcesTrait<'_>>::DescriptorSet>) is !null` yet
-dropck/issue-34053.rs	error: rust-js does not support a temporary with a destructor here yet
 dst/dst-coerce-rc.rs	error: rust-js does not support values of type `(*const std::rc::RcInner<i32>) is !null` yet
 dst/dst-coercions.rs	error: rust-js does not support values of type `*const dyn T` yet
 dst/dst-field-align.rs	error: rust-js does not support a `Baz<dyn Bar>`, whose last field is a `dyn` yet
@@ -196,7 +191,6 @@ enum/enum-clike-ffi-as-int.rs	error: rust-js does not support calling `std::intr
 enum/enum-univariant-repr.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 expr/compound-assignment/eval-order.rs	error: rust-js does not support assigning to this place yet
 fn/dyn-fn-alignment.rs	error: rust-js does not support values of type `*const A` yet
-for-loop-while/cleanup-rvalue-during-if-and-while.rs	error: rust-js does not support a temporary with a destructor here yet
 for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 for-loop-while/foreach-external-iterators-hashmap-break-restart.rs	error: rust-js does not support calling `std::iter::Iterator::by_ref` yet
 for-loop-while/issue-69841.rs	error: rust-js does not support calling `std::hint::unreachable_unchecked` yet
@@ -253,7 +247,6 @@ match/struct-reference-patterns-12285.rs	error: rust-js does not support values 
 methods/inherent-method-resolution-on-deref-type-53843.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 methods/method-mut-self-modifies-mut-slice-lvalue.rs	error: rust-js does not support `&mut` to a `&mut [u8]` yet
 methods/method-two-traits-distinguished-via-where-clause.rs	error: rust-js does not support values of type `*const [isize]` yet
-mir/mir_adt_construction.rs	error: rust-js does not support a temporary with a destructor here yet
 mir/mir_assign_eval_order.rs	error: rust-js does not support assigning to this place yet
 mir/mir_augmented_assignments.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 mir/mir_autoderef.rs	error: rust-js does not support this expression yet
@@ -343,8 +336,6 @@ structs-enums/enum-non-c-like-repr-int.rs	error: rust-js does not support values
 structs-enums/tag-align-dyn-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-dyn-variants.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-structs/struct-partial-move-1.rs	error: rust-js does not support a struct update from a value with a destructor yet
-structs/struct-partial-move-2.rs	error: rust-js does not support a struct update from a value with a destructor yet
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet

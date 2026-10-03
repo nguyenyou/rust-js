@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use rustc_hir::{BindingMode, ByRef};
 use rustc_middle::thir::visit::{self, Visitor};
 use rustc_middle::thir::{
-    AdtExprBase, Expr as ThirExpr, ExprId, ExprKind, LocalVarId, Pat, PatKind, StmtKind as ThirStmt, Thir,
+    AdtExpr, AdtExprBase, Expr as ThirExpr, ExprId, ExprKind, LocalVarId, Pat, PatKind, StmtKind as ThirStmt, Thir,
 };
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, Ty};
@@ -40,6 +40,9 @@ pub(in crate::lower) struct Facts {
     /// their own, and each field that moves one, with its owner and part.
     pub(super) parts: HashMap<LocalVarId, Vec<Path>>,
     pub(super) part_moves: HashMap<ExprId, (LocalVarId, Path)>,
+    /// Each owner a struct update, `..base`, moves parts of, with its owner
+    /// and those parts: the fields the update doesn't name.
+    pub(super) updates: HashMap<ExprId, (LocalVarId, Vec<Path>)>,
     /// What this body does that isn't supported yet.
     pub(super) problems: Vec<(Span, String)>,
 }
@@ -58,6 +61,17 @@ pub(in crate::lower) enum TempKind {
     /// It's an operand, which the call or aggregate moves once every
     /// operand is evaluated; one after it that leaves early leaves it owned.
     Operand,
+}
+
+/// The parts a struct update moves out of its base: the fields it doesn't
+/// name that have a destructor.
+fn updated_paths<'tcx>(cx: &FnCx<'_, 'tcx>, adt: &AdtExpr<'tcx>, field_types: &[Ty<'tcx>]) -> Vec<Path> {
+    field_types
+        .iter()
+        .enumerate()
+        .filter(|&(i, &ty)| !adt.fields.iter().any(|f| f.name.as_usize() == i) && cx.has_drops(ty))
+        .map(|(i, _)| vec![(None, i)])
+        .collect()
 }
 
 pub(super) fn binds_any(pat: &Pat<'_>, owners: &HashMap<LocalVarId, Span>) -> bool {
@@ -337,9 +351,18 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                 return;
             }
             Some(ExprKind::Let { expr, pat }) if *expr == child => self.taken(pat),
-            Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
-                self.problem(span, "a struct update from a value with a destructor");
-                return;
+            Some(ExprKind::Adt(adt))
+                if let AdtExprBase::Base(fru) = &adt.base
+                    && fru.base == child =>
+            {
+                let paths = updated_paths(self.cx, adt, &fru.field_types);
+                if paths.is_empty() {
+                    Taken::Nothing
+                } else {
+                    self.facts.parts.entry(var).or_default().extend(paths.iter().cloned());
+                    self.facts.updates.insert(e, (var, paths));
+                    return;
+                }
             }
             _ => Taken::Whole,
         };
@@ -483,9 +506,14 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
                 | ExprKind::Index { lhs: arg, .. }
                 | ExprKind::Deref { arg },
             ) => *arg == child,
-            Some(ExprKind::Adt(adt)) if matches!(adt.base, AdtExprBase::Base(ref fru) if fru.base == child) => {
-                self.problem(span, "a struct update from a value with a destructor");
-                return;
+            // `..Default::default()`: what the update moves out of it.
+            Some(ExprKind::Adt(adt))
+                if let AdtExprBase::Base(fru) = &adt.base
+                    && fru.base == child =>
+            {
+                let paths = updated_paths(self.cx, adt, &fru.field_types);
+                self.facts.temp_parts.insert(e, (paths, false));
+                true
             }
             _ => false,
         };

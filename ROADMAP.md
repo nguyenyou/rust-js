@@ -318,11 +318,11 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,780 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
+  1,789 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
   other one is a clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink. A test of a
   feature stable Rust doesn't have is out of scope, as no program of
-  rust-js's can use one (`7962214`). The 426 rejections, by kind: values of
+  rust-js's can use one (`7962214`). The 417 rejections, by kind: values of
   a type rust-js doesn't support (137; raw pointers and an `Arc`'s insides
   the most common), std calls (83; intrinsics and `mpsc` the most),
   expressions (13), constants of a type (28), statics of a type (25),
@@ -350,11 +350,11 @@ tooling while preserving rust-js's own readable-output goals.
   generic function takes or gives, and a `&mut dyn` of std's, remain.
   Destructors run where Rust runs them
   ([ADR 0098](docs/decisions/0098-destructors.md)): variables, parameters,
-  moves, temporaries, generic code, partial moves, closures, loops and
-  `dyn` values. An `Rc`, an `Arc` or a thread-local holding a value with
-  a destructor, a closure holding part of one, a `dyn` of std's traits
-  owning one, and some temporaries (a condition's, one partly
-  moved) are rejected.
+  moves, temporaries wherever rustc ends them, generic code, partial moves
+  and struct updates, closures, loops and `dyn` values. An `Rc`, an
+  `Arc` or a thread-local holding a value with a destructor, a closure
+  holding part of one, a `dyn` of std's traits owning one, and some
+  temporaries (a let-chain's, one partly moved) are rejected.
 - [ ] **M7.3 — Complete reusable abstraction support.** Extend associated
   types/constants, generic traits and methods, const generics, trait objects,
   closures, macros, and async composition against the inventory. Test them
@@ -469,7 +469,7 @@ broader completeness work.
 | Options, maps, and iterators | A `HashMap` or `HashSet` keyed by a struct, a tuple or an enum with fields, whose `Eq` is derived, finds its keys by value ([ADR 0121](docs/decisions/0121-value-keys.md)); [diagnostic cases](test/diagnostics.test.ts) include nullish concrete option payloads, keys of a custom `PartialEq`, B-trees of struct keys, map equality, and held-iterator restrictions. | Combinations matter even when each broad feature is listed as supported. |
 | JSX authoring | [JSX boundaries](docs/jsx.md#current-boundaries) include macro composition and missing stock editor expansion. | Daily development and reusable component patterns need a tested workflow. |
 | Text and slices | A string's length, slices and offsets count its UTF-8 bytes ([ADR 0138](docs/decisions/0138-string-byte-counts.md)); the [text contract](docs/decisions/0063-text.md) leaves `match_indices`, a closure's `find` and mutable range slices unsupported; [diagnostics](test/diagnostics.test.ts) cover stored ranges. | Portable parsing and reusable algorithms depend on precise text and borrowing semantics. |
-| Resource lifetime | Destructors run where Rust runs them ([ADR 0098](docs/decisions/0098-destructors.md)); an `Rc`, an `Arc` or a thread-local holding a value with one, a `dyn` of std's traits owning one, such as `Box<dyn Send>`, a closure holding part of one, and some temporaries are rejected. | Native RAII cleanup cannot be assumed to follow JavaScript garbage collection. |
+| Resource lifetime | Destructors run where Rust runs them ([ADR 0098](docs/decisions/0098-destructors.md)); an `Rc`, an `Arc` or a thread-local holding a value with one, a `dyn` of std's traits owning one, such as `Box<dyn Send>`, a closure holding part of one, and some temporaries, such as a let-chain's, are rejected. | Native RAII cleanup cannot be assumed to follow JavaScript garbage collection. |
 
 ## Public playground track
 

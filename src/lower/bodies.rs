@@ -456,6 +456,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             body_facts,
             body_owner,
             stepped,
+            scopes: self.take_scopes(),
             kind,
         })
     }
@@ -467,6 +468,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.body_facts = enclosing.body_facts;
         self.body_owner = enclosing.body_owner;
         self.stepped = enclosing.stepped;
+        self.give_scopes(enclosing.scopes);
         match enclosing.kind {
             EnclosingKind::Closure { loops, names } => {
                 self.loops = loops;
