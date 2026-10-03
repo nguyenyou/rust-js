@@ -59,11 +59,15 @@ const kept = v
   stage that does what can be seen. That stage's receiver starts the JS
   iterator, `v.values()`. A chain whose value goes anywhere else, an
   argument or a return value, is as it was.
+- **`next()` takes one item**: of a chain made there, `v.iter().map(f).next()`,
+  or of one kept to step through, it's `$next` of a JS iterator, and `f`
+  runs once each time, as Rust's does. `peekable()` of a chain that does
+  what can be seen is an error: a `Peekable` is an array's, for now.
 - **A chain kept in a variable** is lazy when a stage does what can be
-  seen and every use of the variable iterates it, a loop over it or a
-  stage or a consumer of it, since what ends it can't be told where it's
-  made: those uses take a JS iterator as it is. One that's returned,
-  passed on, or stepped with `next()` is as it was.
+  seen and every use of the variable iterates it, a loop over it, a stage
+  or a consumer of it, or `next()`, since what ends it can't be told where
+  it's made: those uses take a JS iterator as it is. One that's returned
+  or passed on is as it was.
 - **`chain` and `zip` do what can be seen if their other side does**, and
   when they're lazy, so is that side, from its own first such stage. A
   `zip` whose other side does always is: it takes from that side only
@@ -97,6 +101,7 @@ const kept = v
 
 - Chains whose closures print, change state or may panic, and loops over
   them, run in Rust's order.
-- A chain kept in a variable that's returned or passed on, and stepped
-  with `next()`, is still an array. (Amended: a chain kept in a variable,
-  and the other side of a `zip` or a `chain`, were arrays.)
+- A chain kept in a variable that's returned or passed on is still an
+  array. (Amended: a chain kept in a variable, and the other side of a
+  `zip` or a `chain`, were arrays; and `next()` and `peekable()` of a
+  chain took all of it.)

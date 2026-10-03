@@ -4,7 +4,7 @@
 
 use super::calls::Call;
 use super::combinators::IterComb;
-use super::combinators::IterSource;
+use super::combinators::{IterSource, StepOp};
 use super::representation::Num;
 use super::{FnCx, R, Std};
 use crate::js;
@@ -33,6 +33,7 @@ fn iterates(known: Std) -> bool {
                 | Std::ArrayMethod(_)
                 | Std::IterComb(_)
                 | Std::Len
+                | Std::Step(StepOp::Next)
         )
 }
 

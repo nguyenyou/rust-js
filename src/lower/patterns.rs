@@ -109,7 +109,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ..
         } = pat.kind
             && let Some(init) = init
-            && !self.stepped.contains(&var)
             && self.iterated_only(var)
         {
             self.mark_lazy_chain(init, true);
@@ -130,7 +129,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && let Some(init) = init
             && self.stepped.contains(&var)
             && self.is_array_iter(ty)
-            && !self.is_lazy_iter(ty)
+            && !self.is_lazy_value(init)
             && !self.is_peekable(ty)
             && !self.has_drops(ty)
         {

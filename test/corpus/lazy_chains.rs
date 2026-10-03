@@ -58,6 +58,12 @@ fn main() {
     let joined: Vec<i32> = v[..1].iter().copied().chain(v.iter().map(|&x| noisy("joined", x))).take(2).collect();
     println!("{:?}", joined);
 
+    // `next()` takes one item, of a chain made there or kept to step through.
+    println!("{:?}", v.iter().map(|&x| noisy("next", x)).next());
+    let mut stepped = v.iter().map(|&x| noisy("stepped", x));
+    println!("{:?}", stepped.next());
+    println!("{:?}", stepped.next());
+
     // Closures that do nothing that can be seen keep arrays.
     let doubled: Vec<i32> = v.iter().map(|x| x * 2).filter(|x| x % 4 == 0).take(1).collect();
     println!("{:?}", doubled);

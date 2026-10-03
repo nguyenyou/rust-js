@@ -186,6 +186,7 @@ for (const [name, source, diagnostic] of [
   ["collect after take of owned items", `pub struct R; impl Drop for R { fn drop(&mut self) {} } pub fn f(v: Vec<R>) -> Vec<R> { v.into_iter().take(1).collect() }`, "of a value with a destructor"],
   // A chain whose stages do what can be seen runs lazily (ADR 0139), and a JS
   // iterator can't run from its other end, as `rev` would have it.
+  ["peekable after a closure with effects", `pub fn f(v: &[i32]) -> Option<i32> { let mut p = v.iter().map(|x| { println!("{}", x); *x }).peekable(); p.peek().copied() }`, "\`peekable\` of a lazy iterator"],
   ["rev after a closure with effects", `pub fn f(v: &[i32]) -> Vec<i32> { v.iter().map(|x| { println!("{}", x); *x }).rev().collect() }`, "\`rev\` of a lazy iterator"],
   // A closure's drop drops the variables it took, where it's made (ADR 0098):
   // not part of one, nor where JS can't see them, nor given away by value

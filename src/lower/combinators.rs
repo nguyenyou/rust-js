@@ -186,17 +186,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         }
         let stepping = self.is_stepping(args[0]);
+        // One item at a time: a chain's stages that do what can be seen run
+        // lazily, as Rust's do (ADR 0139).
+        if matches!(op, StepOp::Next | StepOp::Peekable) {
+            self.mark_lazy_chain(args[0], true);
+        }
+        let lazy = self.is_lazy_value(args[0]);
         let helper = |this: &mut Self, helper: Helper, name: &str, list: Vec<Expr>| {
             this.runtime.insert(helper);
             Expr::call(Expr::var(name), list)
         };
         Ok(match op {
-            StepOp::Next if (stepping || self.is_lazy_iter(receiver_ty)) && boxed => {
+            StepOp::Next if (stepping || lazy) && boxed => {
                 let it = self.expr(args[0], out)?;
                 self.runtime.insert(Helper::Some);
                 helper(self, Helper::NextSome, "$nextSome", vec![it])
             }
-            StepOp::Next if stepping || self.is_lazy_iter(receiver_ty) => {
+            StepOp::Next if stepping || lazy => {
                 let it = self.expr(args[0], out)?;
                 helper(self, Helper::Next, "$next", vec![it])
             }
@@ -224,7 +230,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
             StepOp::Peekable => {
-                if self.is_lazy_iter(receiver_ty) {
+                if lazy {
                     return Err(self.unsupported(span, "`peekable` of a lazy iterator"));
                 }
                 let items = self.iter_value(args[0], out)?;
