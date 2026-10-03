@@ -23,23 +23,16 @@ for (const [name, source, message, crate] of [
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
   ["option of a reference to unit", "pub fn f(x: &()) -> bool { Some(x).is_some() }", "does not support values of type"],
   ["map to a nullish type", 'pub fn f(o: Option<i32>) -> bool { o.map(|_| ()).is_some() }', "`map` to a `()`"],
-  // A generic `T`'s `fmt` is given no options, which a std type's would pad: not yet.
-  ["a width in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:>6}", t) }', "a width for a"],
-  ["a sign in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:+}", t) }', "a sign for a"],
   // A `dyn Error`'s dictionary has its `source`, and none of what else std provides (ADR 0141).
   ["a deprecated method of a dyn Error", '#![allow(deprecated)]\npub fn f(e: &dyn std::error::Error) -> String { e.description().to_string() }', "`description` of a"],
-  // Rust gives a `{:?}`'s options to each of its parts, and a `fmt` that hands
-  // its `Formatter` on gives them to that one: rust-js doesn't yet (ADR 0058).
-  ["a width for an Option's {:?}", '#[derive(Debug)] pub struct P(pub u8);\npub fn f() -> String { format!("{:5?}", Some(P(1))) }', "a width for a"],
-  ["a sign for a derived {:?}", '#[derive(Debug)] pub struct P { pub x: i32 }\npub fn f(p: &P) -> String { format!("{:+?}", p) }', "a sign for a"],
-  ["a width for a fmt that hands its Formatter on", 'pub struct M(pub f64);\nimpl std::fmt::Display for M { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { self.0.fmt(f) } }\npub fn f(m: &M) -> String { format!("{:>8}", m) }', "a width for a"],
+  // A placeholder's options are given to what shows the value (ADR 0058), but a
+  // `&dyn Debug` is the string it shows already, and serde_json's `fmt`s are rust-js's.
+  ["a width for a dyn Debug", 'pub fn f(v: u8) -> String { let d: &dyn std::fmt::Debug = &v; format!("{:5?}", d) }', "options for a"],
+  ["a width for a serde_json Value", 'pub fn f(v: &serde_json::Value) -> String { format!("{:>9}", v) }', "options for a", "serde"],
   // A static's initializer is code where rustc's value can't say it (ADR 0096),
   // but not one reading another static, nor of a value that can change in place.
   ["a static of a function read from another static", 'pub fn f() {}\nstatic A: fn() = f;\npub static B: &fn() = &A;\npub fn g() { B() }', "statics of type"],
   ["a constant of a Vec of functions", 'pub fn f() {}\npub const C: Vec<fn()> = Vec::new();\npub fn g() -> usize { C.len() }', "constants of type"],
-  ["a width for a dyn", 'pub fn f(d: &dyn std::fmt::Display) -> String { format!("{:>6}", d) }', "a width for a"],
-  ["zero padding in generic code", 'pub fn f<T: std::fmt::Debug>(t: &T) -> String { format!("{:08?}", t) }', "a width for a"],
-  ["precision of a struct", 'pub struct P; impl std::fmt::Display for P { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { f.write_str("p") } }\npub fn f() -> String { format!("{:.2}", P) }', "a precision for a"],
   // ADR 0121: a key found by its value is one a derived `Eq` compares.
   ["map keyed by a struct of its own equality", '#[derive(Hash)] pub struct P { pub x: u32 }\nimpl PartialEq for P { fn eq(&self, o: &P) -> bool { self.x % 10 == o.x % 10 } }\nimpl Eq for P {}\npub fn f() -> usize { let m: std::collections::HashMap<P, u32> = std::collections::HashMap::new(); m.len() }', "does not support values of type `P`"],
   ["map keyed by a struct with a field of its own equality", '#[derive(Hash)] pub struct Q(pub u32);\nimpl PartialEq for Q { fn eq(&self, o: &Q) -> bool { self.0 % 10 == o.0 % 10 } }\nimpl Eq for Q {}\n#[derive(PartialEq, Eq, Hash)] pub struct P { pub q: Q }\npub fn f() -> usize { let m: std::collections::HashSet<P> = std::collections::HashSet::new(); m.len() }', "does not support values of type `P`"],

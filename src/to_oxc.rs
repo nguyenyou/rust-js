@@ -29,8 +29,8 @@ use oxc_ast::ast::{
     IdentifierName, JSXAttributeItem, JSXAttributeName, JSXAttributeValue, JSXChild, JSXClosingElement,
     JSXClosingFragment, JSXElementName, JSXExpression, JSXIdentifier, JSXMemberExpressionObject, JSXOpeningElement,
     JSXOpeningFragment, LabelIdentifier, ObjectPropertyKind, Program, PropertyKey, PropertyKind,
-    SimpleAssignmentTarget, Statement, TemplateElement, TemplateElementValue, VariableDeclarationKind,
-    VariableDeclarator,
+    SimpleAssignmentTarget, Statement, StaticMemberExpression, TemplateElement, TemplateElementValue,
+    VariableDeclarationKind, VariableDeclarator,
 };
 use oxc_ast::builder::AstBuilder;
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
@@ -682,6 +682,16 @@ impl<'a> Cx<'a> {
                     false,
                     b,
                 )
+            }
+            ExprKind::OptionalMember(object, property) => {
+                let member = StaticMemberExpression::boxed(
+                    sp,
+                    self.expr(object),
+                    IdentifierName::new(SPAN, self.name(property), b),
+                    true,
+                    b,
+                );
+                Expression::new_chain_expression(sp, ChainElement::StaticMemberExpression(member), b)
             }
             ExprKind::Index(object, index) => {
                 Expression::new_computed_member_expression(sp, self.expr(object), self.expr(index), false, b)

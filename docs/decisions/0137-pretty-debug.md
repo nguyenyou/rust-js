@@ -1,6 +1,6 @@
 # 0137. `{:#?}` is pretty Debug, and a writer is told whether
 
-Status: Accepted. Extends [0054](0054-display.md), [0060](0060-debug.md) and [0136](0136-common-std-methods.md).
+Status: Accepted. Extends [0054](0054-display.md), [0060](0060-debug.md) and [0136](0136-common-std-methods.md). Its `alternate` parameter is superseded by [0143](0143-formatter-options.md): writers take an `options` object, `{ alternate: true }`.
 
 ## Context
 

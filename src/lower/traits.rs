@@ -562,11 +562,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let partial_ord = tr.def_id == self.partial_ord_trait();
         if (default || clone || eq || display || debug || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
             if debug {
-                // Given whether it's pretty, where the crate's writers are (ADR 0137).
-                let (params, pretty): (Vec<js::Pattern>, _) = match self.krate.pretty_debug {
+                // Given a `Formatter`'s options, where the crate's writers are (ADRs 0058, 0137).
+                let (params, pretty): (Vec<js::Pattern>, _) = match self.writers_take_options() {
                     true => (
-                        vec!["value".into(), "alternate".into()],
-                        super::display::Pretty::When(Expr::var("alternate")),
+                        vec!["value".into(), "options".into()],
+                        super::display::Pretty::When(Expr::var("options")),
                     ),
                     false => (vec!["value".into()], super::display::Pretty::Plain),
                 };
@@ -743,9 +743,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .skip_binder()
                 .inputs();
             // Without a `Formatter`, which isn't a JS parameter (ADR 0054), and
-            // with a writer's `alternate`, where the crate's take one (ADR 0137).
+            // with a writer's options, where the crate's take them (ADRs 0058, 0137).
             let writer = self.formatter_param(item.def_id).is_some();
-            let count = inputs.len() - usize::from(writer) + usize::from(self.krate.pretty_debug && writer);
+            let count = inputs.len() - usize::from(writer) + usize::from(self.writers_take_options() && writer);
             // A `&mut self` method is given a box of the pair, as generic code
             // has a `&mut T` (ADR 0099), and gives the pair, as a call on the
             // `dyn` does: `object.value.impl.scale(object.value, k)`.
@@ -1030,9 +1030,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `{}` or `{:?}` of `pair`, a `dyn` of `ty`, as `writer`, `Display` or
     /// `Debug`, says: through its dictionary, `d.impl.fmt(d.value)`, or a
-    /// supertrait's, `e.impl.Display().fmt(e.value)` (ADR 0141). None if
-    /// `ty` isn't such a `dyn`.
-    pub(super) fn dyn_written(&self, pair: Expr, ty: Ty<'tcx>, writer: DefId, span: Span) -> R<Option<Expr>> {
+    /// supertrait's, `e.impl.Display().fmt(e.value)` (ADR 0141), given
+    /// `options` (ADR 0058). None if `ty` isn't such a `dyn`.
+    pub(super) fn dyn_written(
+        &self,
+        pair: Expr,
+        (ty, writer): (Ty<'tcx>, DefId),
+        options: Option<Expr>,
+        span: Span,
+    ) -> R<Option<Expr>> {
         if !matches!(ty.kind(), ty::Dynamic(..)) || self.dynamic_trait(ty).is_none() {
             return Ok(None);
         }
@@ -1045,10 +1051,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !pair.reads_same() {
             return Err(self.unsupported(span, &format!("showing a `{ty}` made where it's shown")));
         }
-        Ok(Some(Expr::call(
-            Expr::member(dictionary, "fmt"),
-            vec![Expr::member(pair, "value")],
-        )))
+        let mut values = vec![Expr::member(pair, "value")];
+        values.extend(options);
+        Ok(Some(Expr::call(Expr::member(dictionary, "fmt"), values)))
     }
 
     /// The dictionary of a `Box<dyn Error>`, `to`, made from a `from` by std's
@@ -1315,8 +1320,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .inputs()
                 .len()
                 - usize::from(self.formatter_param(method).is_some())
-                // A writer's `alternate`, where the crate's take one (ADR 0137).
-                + usize::from(self.krate.pretty_debug && self.formatter_param(method).is_some());
+                // A writer's options, where the crate's take them (ADRs 0058, 0137).
+                + usize::from(self.writers_take_options() && self.formatter_param(method).is_some());
             let mut params: Vec<String> = (0..count).map(|i| format!("arg{i}")).collect();
             let mut values: Vec<Expr> = params.iter().map(|name| Expr::var(name)).collect();
             // Its own const parameters' values, given after its arguments

@@ -209,6 +209,8 @@ pub enum ExprKind {
     Symbol(Symbol),
     /// `object.property`, e.g. `Math.imul` or `math.add`.
     Member(Box<Expr>, String),
+    /// `a?.b`: `undefined` where `a` is `undefined` or `null`.
+    OptionalMember(Box<Expr>, String),
     /// `object[index]`, e.g. `pair[0]`.
     Index(Box<Expr>, Box<Expr>),
     /// `[a, b]`: a tuple or tuple struct (ADR 0020).
@@ -389,6 +391,11 @@ impl Expr {
         Expr::new(ExprKind::Member(Box::new(object), property))
     }
 
+    /// `object?.property`.
+    pub fn optional_member(object: Expr, property: impl Into<String>) -> Expr {
+        Expr::new(ExprKind::OptionalMember(Box::new(object), property.into()))
+    }
+
     pub fn index(object: Expr, index: Expr) -> Expr {
         Expr::new(ExprKind::Index(Box::new(object), Box::new(index)))
     }
@@ -502,7 +509,9 @@ impl Expr {
                 StmtKind::Return(Some(value)) | StmtKind::Expr(value) => value.contains_jsx(),
                 _ => false,
             }),
-            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => a.contains_jsx(),
+            ExprKind::Member(a, _) | ExprKind::OptionalMember(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) => {
+                a.contains_jsx()
+            }
             ExprKind::Handle(_) | ExprKind::Pair(..) => false,
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => a.contains_jsx() || b.contains_jsx(),
             ExprKind::Cond(a, b, c) => a.contains_jsx() || b.contains_jsx() || c.contains_jsx(),
@@ -588,6 +597,7 @@ impl Expr {
             }
             ExprKind::Arrow(..) | ExprKind::AsyncArrow(..) => return None,
             ExprKind::Member(a, field) => ExprKind::Member(one(a)?, field.clone()),
+            ExprKind::OptionalMember(a, field) => ExprKind::OptionalMember(one(a)?, field.clone()),
             ExprKind::Handle(place) => ExprKind::Handle(one(place)?),
             ExprKind::Pair(place, dictionary) => ExprKind::Pair(one(place)?, one(dictionary)?),
             ExprKind::Index(a, b) => ExprKind::Index(one(a)?, one(b)?),
@@ -625,9 +635,11 @@ impl Expr {
     pub fn mentions_var(&self, name: &str) -> bool {
         match &self.kind {
             ExprKind::Var(n) => n == name,
-            ExprKind::Member(a, _) | ExprKind::Unary(_, a) | ExprKind::Await(a) | ExprKind::Handle(a) => {
-                a.mentions_var(name)
-            }
+            ExprKind::Member(a, _)
+            | ExprKind::OptionalMember(a, _)
+            | ExprKind::Unary(_, a)
+            | ExprKind::Await(a)
+            | ExprKind::Handle(a) => a.mentions_var(name),
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Pair(a, b) => {
                 a.mentions_var(name) || b.mentions_var(name)
             }
@@ -646,7 +658,7 @@ impl Expr {
         match &self.kind {
             ExprKind::Var(n) => names.contains(&n.as_str()),
             ExprKind::Symbol(_) => false,
-            ExprKind::Member(object, _) => object.mentions(names),
+            ExprKind::Member(object, _) | ExprKind::OptionalMember(object, _) => object.mentions(names),
             _ => !self.is_constant(),
         }
     }
@@ -669,7 +681,7 @@ impl Expr {
     pub fn reads_same(&self) -> bool {
         match &self.kind {
             ExprKind::Var(_) | ExprKind::Symbol(_) => true,
-            ExprKind::Member(object, _) => object.reads_same(),
+            ExprKind::Member(object, _) | ExprKind::OptionalMember(object, _) => object.reads_same(),
             ExprKind::Index(object, index) => object.reads_same() && index.is_constant(),
             _ => self.is_constant(),
         }
@@ -691,7 +703,7 @@ impl Expr {
             | ExprKind::AsyncArrow(..) => false,
             // It lets other code run meanwhile.
             ExprKind::Await(_) => true,
-            ExprKind::Member(object, _) => object.has_effects(),
+            ExprKind::Member(object, _) | ExprKind::OptionalMember(object, _) => object.has_effects(),
             // Making one reads nothing: its getter does, later.
             ExprKind::Handle(_) => false,
             ExprKind::Pair(_, dictionary) => dictionary.has_effects(),

@@ -13,7 +13,7 @@ import {
 var $wrapDebug, $builtDebug, $listyDebug, $rawDebug, $asksDebug, $shownDisplay, $delegateDebug;
 
 function pretty(value, TDebug) {
-  return TDebug.fmt(value, true);
+  return TDebug.fmt(value, { alternate: true });
 }
 
 function main() {
@@ -88,8 +88,8 @@ function main() {
   );
   console.log(`1..4 ${$debugStr("text")} [${[1].map((item) => String(item)).join(", ")}]`);
   const point = { x: 1, label: "a" };
-  console.log(`${pointDebug_fmt(point, true)}\n${pointDebug_fmt(point)}`);
-  console.log(`${pairDebug_fmt([2, { x: 3, label: "b" }], true)}`);
+  console.log(`${pointDebug_fmt(point, { alternate: true })}\n${pointDebug_fmt(point)}`);
+  console.log(`${pairDebug_fmt([2, { x: 3, label: "b" }], { alternate: true })}`);
   console.log(
     `${$pretty(
       "[",
@@ -97,39 +97,41 @@ function main() {
         "Dot",
         { TAG: "Circle", r: 1.5 },
         { TAG: "Line", _0: { x: 0, label: "s" }, _1: { x: 9, label: "e" } },
-      ].map((item) => shapeDebug_fmt(item, true)),
+      ].map((item) => shapeDebug_fmt(item, { alternate: true })),
       "]",
     )}`,
   );
   console.log(
-    `${unitDebug_fmt(undefined, true)} ${wideDebug_fmt(
+    `${unitDebug_fmt(undefined, { alternate: true })} ${wideDebug_fmt(
       { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 },
-      true,
+      { alternate: true },
     )}`,
   );
   console.log(
-    `${wrapDebug_fmt({ inner: 1, list: [2, 3] }, true, {
-      fmt: (value, alternate) => String(value),
-    })}`,
+    `${wrapDebug_fmt(
+      { inner: 1, list: [2, 3] },
+      { alternate: true },
+      { fmt: (value, options) => String(value) },
+    )}`,
   );
   console.log(
     `${builtDebug_fmt(
       { x: 1, tags: [2] },
-      true,
-    )} ${listyDebug_fmt([[5]], true)} ${listyDebug_fmt([[]], true)}`,
+      { alternate: true },
+    )} ${listyDebug_fmt([[5]], { alternate: true })} ${listyDebug_fmt([[]], { alternate: true })}`,
   );
   console.log(
-    `${rawDebug_fmt([4], true)} ${rawDebug_fmt([4])} ${asksDebug_fmt(undefined, true)} ${asksDebug_fmt(undefined)} ${shownDisplay_fmt([7], true)} ${shownDisplay_fmt([7])}`,
+    `${rawDebug_fmt([4], { alternate: true })} ${rawDebug_fmt([4])} ${asksDebug_fmt(undefined, { alternate: true })} ${asksDebug_fmt(undefined)} ${shownDisplay_fmt([7], { alternate: true })} ${shownDisplay_fmt([7])}`,
   );
-  console.log(`${delegateDebug_fmt([[9]], true)}`);
+  console.log(`${delegateDebug_fmt([[9]], { alternate: true })}`);
   console.log(
-    `${pretty([1, "a"], { fmt: (value, alternate) => (value == null ? "None" : alternate ? $pretty("Some(", [alternate ? $pretty("(", [String(value[0]), $debugStr(value[1])], ")") : `(${value[0]}, ${$debugStr(value[1])})`], ")") : `Some(${alternate ? $pretty("(", [String(value[0]), $debugStr(value[1])], ")") : `(${value[0]}, ${$debugStr(value[1])})`})`) })}\n${pretty(
+    `${pretty([1, "a"], { fmt: (value, options) => (value == null ? "None" : options?.alternate ? $pretty("Some(", [options?.alternate ? $pretty("(", [String(value[0]), $debugStr(value[1])], ")") : `(${value[0]}, ${$debugStr(value[1])})`], ")") : `Some(${options?.alternate ? $pretty("(", [String(value[0]), $debugStr(value[1])], ")") : `(${value[0]}, ${$debugStr(value[1])})`})`) })}\n${pretty(
       { inner: [1], list: [] },
       wrapDebug(rawDebug()),
     )}`,
   );
   const kept = [1, undefined];
-  console.error(`${pairDebug_fmt(kept, true)}`);
+  console.error(`${pairDebug_fmt(kept, { alternate: true })}`);
   console.log(`${pairDebug_fmt(kept)}`);
 }
 
@@ -137,45 +139,49 @@ export function entry() {
   main();
 }
 
-function pointDebug_fmt(point, alternate) {
+function pointDebug_fmt(point, options) {
   const shown = String(point.x);
   const shown$1 = $debugStr(point.label);
-  return alternate
+  return options?.alternate
     ? $pretty("Point {", [`x: ${shown}`, `label: ${shown$1}`], "}")
     : `Point { x: ${shown}, label: ${shown$1} }`;
 }
 
-function pairDebug_fmt(pair, alternate) {
+function pairDebug_fmt(pair, options) {
   const shown = String(pair[0]);
   const shown$1 =
     pair[1] == null
       ? "None"
-      : alternate
-        ? $pretty("Some(", [pointDebug_fmt(pair[1], alternate)], ")")
-        : `Some(${pointDebug_fmt(pair[1], alternate)})`;
-  return alternate ? $pretty("Pair(", [shown, shown$1], ")") : `Pair(${shown}, ${shown$1})`;
+      : options?.alternate
+        ? $pretty("Some(", [pointDebug_fmt(pair[1], options)], ")")
+        : `Some(${pointDebug_fmt(pair[1], options)})`;
+  return options?.alternate
+    ? $pretty("Pair(", [shown, shown$1], ")")
+    : `Pair(${shown}, ${shown$1})`;
 }
 
-function shapeDebug_fmt(shape, alternate) {
+function shapeDebug_fmt(shape, options) {
   let f = "";
   if (shape === "Dot") {
     f += "Dot";
   } else if (shape.TAG === "Circle") {
     const shown = $debugF64(shape.r);
-    f += alternate ? $pretty("Circle {", [`r: ${shown}`], "}") : `Circle { r: ${shown} }`;
+    f += options?.alternate ? $pretty("Circle {", [`r: ${shown}`], "}") : `Circle { r: ${shown} }`;
   } else {
-    const shown$1 = pointDebug_fmt(shape._0, alternate);
-    const shown$2 = pointDebug_fmt(shape._1, alternate);
-    f += alternate ? $pretty("Line(", [shown$1, shown$2], ")") : `Line(${shown$1}, ${shown$2})`;
+    const shown$1 = pointDebug_fmt(shape._0, options);
+    const shown$2 = pointDebug_fmt(shape._1, options);
+    f += options?.alternate
+      ? $pretty("Line(", [shown$1, shown$2], ")")
+      : `Line(${shown$1}, ${shown$2})`;
   }
   return f;
 }
 
-function unitDebug_fmt(unit, alternate) {
+function unitDebug_fmt(unit, options) {
   return "Unit";
 }
 
-function wideDebug_fmt(wide, alternate) {
+function wideDebug_fmt(wide, options) {
   const names = ["a", "b", "c", "d", "e", "f"];
   const values = [
     String(wide.a),
@@ -185,31 +191,31 @@ function wideDebug_fmt(wide, alternate) {
     String(wide.e),
     String(wide.f),
   ];
-  return $debugFields("Wide", names, values, alternate);
+  return $debugFields("Wide", names, values, options?.alternate);
 }
 
-function wrapDebug_fmt(wrap, alternate, TDebug) {
-  const shown = TDebug.fmt(wrap.inner, alternate);
-  const shown$1 = alternate
+function wrapDebug_fmt(wrap, options, TDebug) {
+  const shown = TDebug.fmt(wrap.inner, options);
+  const shown$1 = options?.alternate
     ? $pretty(
         "[",
-        wrap.list.map((item) => TDebug.fmt(item, alternate)),
+        wrap.list.map((item) => TDebug.fmt(item, options)),
         "]",
       )
-    : `[${wrap.list.map((item) => TDebug.fmt(item, alternate)).join(", ")}]`;
-  return alternate
+    : `[${wrap.list.map((item) => TDebug.fmt(item, options)).join(", ")}]`;
+  return options?.alternate
     ? $pretty("Wrap {", [`inner: ${shown}`, `list: ${shown$1}`], "}")
     : `Wrap { inner: ${shown}, list: ${shown$1} }`;
 }
 
-function builtDebug_fmt(built, alternate) {
-  return alternate
+function builtDebug_fmt(built, options) {
+  return options?.alternate
     ? $pretty(
         "Built {",
         [
           `x: ${built.x}`,
           `tags: ${
-            alternate
+            options?.alternate
               ? $pretty(
                   "[",
                   built.tags.map((item) => String(item)),
@@ -222,7 +228,7 @@ function builtDebug_fmt(built, alternate) {
         true,
       )
     : `Built { x: ${built.x}, tags: ${
-        alternate
+        options?.alternate
           ? $pretty(
               "[",
               built.tags.map((item) => String(item)),
@@ -232,34 +238,34 @@ function builtDebug_fmt(built, alternate) {
       }, .. }`;
 }
 
-function listyDebug_fmt(listy, alternate) {
-  return alternate
+function listyDebug_fmt(listy, options) {
+  return options?.alternate
     ? $pretty("[", ["0"].concat(Array.from(listy[0], (entry) => String(entry))), "]")
     : `[${["0"].concat(Array.from(listy[0], (entry) => String(entry))).join(", ")}]`;
 }
 
-function rawDebug_fmt(raw, alternate) {
+function rawDebug_fmt(raw, options) {
   return `[${raw[0]} [${[raw[0]].map((item) => String(item)).join(", ")}]]`;
 }
 
-function asksDebug_fmt(asks, alternate) {
-  if (alternate) {
+function asksDebug_fmt(asks, options) {
+  if (options?.alternate === true) {
     return "pretty";
   } else {
     return "plain";
   }
 }
 
-function shownDisplay_fmt(shown, alternate) {
-  if (alternate) {
+function shownDisplay_fmt(shown, options) {
+  if (options?.alternate === true) {
     return `#${shown[0]}`;
   } else {
     return String(shown[0]);
   }
 }
 
-function delegateDebug_fmt(delegate, alternate) {
-  return alternate
+function delegateDebug_fmt(delegate, options) {
+  return options?.alternate
     ? $pretty(
         "[",
         delegate[0].map((item) => String(item)),

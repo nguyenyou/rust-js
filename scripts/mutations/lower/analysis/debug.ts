@@ -12,11 +12,11 @@ export const mutations: Mutation[] = [
     snapshots: true,
   },
   {
-    name: "options-handed-on-unseen",
-    breaks: "a `fmt` that hands its `Formatter` to its field's is taken to ignore a width, which the field's pads",
+    name: "format-options-flag-primitive",
+    breaks: "a crate that gives a width to its own types is taken to give none, and the numbers its writers show are unpadded",
     file: "src/lower/analysis/debug.rs",
-    find: "        if uses.map(|(at, _)| at).any(|at| !written.contains(&at)) {",
-    replace: "        if uses.map(|(at, _)| at).any(|at| !written.contains(&at)) && false {",
-    tests: ["test/diagnostics.test.ts", "-t", "hands its Formatter"],
+    find: "                args.first().is_none_or(|&arg| !primitive(thir[arg].ty.peel_refs()))",
+    replace: "                args.first().is_some_and(|_| false)",
+    tests: ["test/corpus.test.ts", "-t", "options_handed_on"],
   },
 ];

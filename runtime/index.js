@@ -3853,6 +3853,25 @@ export function $pad(text, width, align, fill = " ") {
   return fill.repeat(before) + text + fill.repeat(room - before);
 }
 
+// A `Formatter`'s options, applied to the text a number, a `bool` or a
+// string shows as std's `fmt`s apply them (ADR 0058): a number takes a
+// sign and zeros, a string is cut to its precision, and either is padded.
+export function $formatted(text, options, numeric = false) {
+  if (options === undefined) return text;
+  const { width, precision } = options;
+  if (numeric && options.plus) text = $plus(text);
+  if (!numeric && precision !== undefined) text = [...text].slice(0, precision).join("");
+  if (width === undefined) return text;
+  if (numeric && options.zero) return $zeroPad(text, width);
+  return $pad(text, width, options.align ?? (numeric ? ">" : "<"), options.fill);
+}
+
+// A float's precision is its digits; the rest is `$formatted`'s.
+export function $formatFloat(value, options, show) {
+  const precision = options?.precision;
+  return $formatted(precision === undefined ? show(value) : $toFixed(value, precision), options, true);
+}
+
 export function $cmpIn(names, a, b) {
   return $cmp(names.indexOf(a), names.indexOf(b));
 }

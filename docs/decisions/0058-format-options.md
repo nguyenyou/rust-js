@@ -1,6 +1,6 @@
 # 0058. Format options, where Rust applies them
 
-Status: Accepted. Extends [0034](0034-strings-and-chars.md) and [0054](0054-display.md).
+Status: Accepted. Extends [0034](0034-strings-and-chars.md) and [0054](0054-display.md). Extended by [0143](0143-formatter-options.md).
 
 ## Context
 
@@ -52,18 +52,12 @@ applied as Rust applies them:**
   and values. A number, a `bool` and `()` apply them, as std's `fmt`s do,
   and a string's `Debug` doesn't. A `bool`'s `{:5?}` pads, as its `Display`
   does. (Amended: each was an error, and a `bool`'s `{:5?}` wasn't padded.)
-- **A width or a sign is an error where it wouldn't reach the `fmt` that
-  uses it.** Rust gives a placeholder's options to the value's `fmt`: a
-  `{:?}` of an `Option`, a tuple, a `Vec` or a derived `Debug` gives them
-  to each part, `{:5?}` of `Some(1)` is `Some(    1)`; a `fmt` that hands
-  its `Formatter` on, `self.0.fmt(f)`, gives them to that one; and a
-  generic `T`'s or a `dyn`'s `fmt` is a dictionary's, which only it
-  knows. rust-js pads a number, a `bool` and a string itself, and a `fmt`
-  of the crate's own that only writes, with `write!`, ignores them, as
-  Rust's does; any other is an error until the options reach it. Each was
-  dropped, so `[{:>8}]` of a `Meters(1.5)` that hands its `Formatter` to
-  its `f64` showed `[1.5]` where Rust shows `[     1.5]`. (Amended twice:
-  they were dropped, then only a generic `T`'s and a `dyn`'s were an error.)
+- **Options reach the `fmt` that shows the value,** as Rust hands them on
+  with the `Formatter`: a `fmt` of the crate's own, a generic `T`'s, a
+  `dyn`'s, a derived `Debug`'s fields and a builder's arguments are given
+  them as an object at run time (ADR 0143). (Amended three times: they
+  were dropped, then only a generic `T`'s and a `dyn`'s were an error,
+  then any that would reach a `fmt` that hands them on was.)
 
 ## Why
 

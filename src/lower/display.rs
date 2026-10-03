@@ -13,42 +13,73 @@ use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, PatKind};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
+use rustc_span::{Span, Symbol};
 
-/// Whether `{:?}` is pretty, `{:#?}` (ADR 0137): never, always, or as a
-/// writer function's `alternate` says.
 /// What writing to a `Formatter` knows (ADRs 0054, 0137).
 #[derive(Default)]
 pub(super) struct Writing {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
     writer: Option<(Option<LocalVarId>, String)>,
-    /// In such a function of a crate that shows anything pretty (ADR 0137):
-    /// the parameter that says whether it's `{:#?}`.
-    alternate: Option<Expr>,
-    /// How a `&dyn Debug` made here shows its value: pretty as its writer's
-    /// `alternate` says, while a derived `Debug`'s or a builder's
+    /// In such a function of a crate that gives a `Formatter` options (ADRs
+    /// 0058, 0137): the parameter that has them, `{ alternate: true }`.
+    given: Option<Expr>,
+    /// How a `&dyn Debug` made here shows its value: with its writer's
+    /// options, while a derived `Debug`'s or a builder's
     /// arguments are lowered (ADR 0137), plain anywhere else.
     dyn_debug: Pretty,
     /// The options a `{:?}` being shown gives each part of it (ADR 0058).
     options: Option<Options>,
 }
 
+/// The options a `fmt` is given (ADRs 0058, 0137): none, `{:#?}`'s, a
+/// writer's own, which say at run time, or a placeholder's, `{ width: 6 }`,
+/// which say whether it's pretty.
 #[derive(Clone, Default)]
 pub(super) enum Pretty {
     #[default]
     Plain,
     Always,
     When(Expr),
+    Given(Expr, bool),
 }
 
 impl Pretty {
-    /// The JS value that says: `false`, `true`, or the variable.
-    pub(super) fn alternate(&self) -> Expr {
+    /// Whether it's pretty, if that's known.
+    fn known(&self) -> Option<bool> {
         match self {
-            Pretty::Plain => Expr::bool(false),
-            Pretty::Always => Expr::bool(true),
-            Pretty::When(alternate) => alternate.clone(),
+            Pretty::Plain => Some(false),
+            Pretty::Always => Some(true),
+            Pretty::When(_) => None,
+            Pretty::Given(_, alternate) => Some(*alternate),
+        }
+    }
+
+    /// The JS value that says whether it's pretty: `false`, `true`, or
+    /// `options?.alternate`.
+    pub(super) fn alternate(&self) -> Expr {
+        match (self, self.known()) {
+            (Pretty::When(options), _) => Expr::optional_member(options.clone(), "alternate"),
+            (_, known) => Expr::bool(known == Some(true)),
+        }
+    }
+
+    /// `pretty_form` or `plain`, as it says.
+    fn choose(&self, pretty_form: Expr, plain: Expr) -> Expr {
+        match self.known() {
+            Some(true) => pretty_form,
+            Some(false) => plain,
+            None => Expr::cond(self.alternate(), pretty_form, plain),
+        }
+    }
+
+    /// The options object a `fmt` is given: `undefined`, `{ alternate: true }`,
+    /// the writer's own, or a placeholder's.
+    fn options(&self) -> Expr {
+        match self {
+            Pretty::Plain => Expr::undefined(),
+            Pretty::Always => Expr::object(vec![js::Prop::Field("alternate".into(), Expr::bool(true))]),
+            Pretty::When(options) | Pretty::Given(options, _) => options.clone(),
         }
     }
 }
@@ -60,21 +91,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.writing.writer.as_ref().map(|(_, name)| name.clone())
     }
 
-    /// Does `ty`'s own `fmt`, `writer`'s, hand its `Formatter`'s options on,
-    /// to another `fmt` or a builder (ADR 0058)? A derived `Debug` does: each
-    /// field is given them.
-    pub(super) fn hands_options_on(&self, writer: DefId, ty: Ty<'tcx>) -> R<bool> {
-        let fmt = self.tcx.associated_item_def_ids(writer)[0];
-        let args = self.tcx.mk_args(&[self.tcx.erase_and_anonymize_regions(ty).into()]);
-        Ok(self
-            .resolve_instance(fmt, args)?
-            .is_some_and(|instance| self.krate.options_handed_on.contains(&instance.def_id())))
+    /// In a writer given options (ADR 0137): whether it's `{:#?}`, which
+    /// `f.alternate()` is: `options?.alternate === true`.
+    pub(super) fn writer_alternate(&self) -> Option<Expr> {
+        let options = self.writing.given.clone()?;
+        Some(Expr::bin(
+            Op::Eq,
+            Expr::optional_member(options, "alternate"),
+            Expr::bool(true),
+        ))
     }
 
-    /// In a pretty writer (ADR 0137): its parameter that says whether it's
-    /// `{:#?}`, which `f.alternate()` is.
-    pub(super) fn writer_alternate(&self) -> Option<Expr> {
-        self.writing.alternate.clone()
+    /// Do the crate's writers take a `Formatter`'s options (ADRs 0058, 0137):
+    /// does it show anything pretty, or give a placeholder's options to what
+    /// isn't a number, a `bool` or a string?
+    pub(super) fn writers_take_options(&self) -> bool {
+        self.krate.pretty_debug || self.krate.format_options
     }
 
     /// `lower`, during which a `&dyn Debug` made shows its value as `pretty`
@@ -100,26 +132,55 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Num::of(ty).is_some() || ty.is_bool() || ty.is_unit() || self.is_string_like(ty)
     }
 
-    /// Is each part of what `{:?}` of `ty` shows, all the way down, a leaf
-    /// rust-js applies options to (`is_debug_leaf`): an `Option`'s, a
-    /// `Result`'s, a tuple's, an array's, a `Vec`'s, a map's or a set's?
-    pub(super) fn debug_parts_are_leaves(&self, ty: Ty<'tcx>) -> bool {
-        let ty = self.shown_type(ty.peel_refs());
-        if self.is_debug_leaf(ty) {
-            return true;
+    /// A number, a `bool`, `()` or a string shown in a writer given options
+    /// at run time (ADR 0058): `$formatted(text, options)`, which applies
+    /// them as std's `fmt` does. A string's and a `char`'s `{:?}` don't, and
+    /// a crate that gives none but `{:#?}`'s has none to apply.
+    fn formatted(&mut self, value: Expr, (kind, ty): (Std, Ty<'tcx>), pretty: &Pretty) -> Option<Expr> {
+        let Pretty::When(options) = pretty else { return None };
+        if !self.krate.format_options {
+            return None;
         }
-        match ty.kind() {
-            ty::Tuple(items) => items.iter().all(|t| self.debug_parts_are_leaves(t)),
-            ty::Array(item, _) | ty::Slice(item) => self.debug_parts_are_leaves(*item),
-            // Their items' types, not an allocator's or a hasher's.
-            ty::Adt(_, args) if self.option_of(ty).is_some() || self.is_vec_like(ty) || self.is_set(ty) => {
-                self.debug_parts_are_leaves(args.type_at(0))
-            }
-            ty::Adt(_, args) if self.is_std_adt(ty, sym::Result) || self.is_map(ty) => {
-                self.debug_parts_are_leaves(args.type_at(0)) && self.debug_parts_are_leaves(args.type_at(1))
-            }
-            _ => false,
+        let num = Num::of(ty);
+        // A precision is a float's digits.
+        if let Some(num) = num.filter(|n| n.float()) {
+            let (helper, show) = match (kind, num) {
+                (Std::FmtDebug, Num::F32) => (Helper::DebugF32, "$debugF32"),
+                (Std::FmtDebug, _) => (Helper::DebugF64, "$debugF64"),
+                (_, Num::F32) => (Helper::DisplayF32, "$displayF32"),
+                _ => (Helper::DisplayF64, "$displayF64"),
+            };
+            self.runtime.insert(helper);
+            self.runtime.insert(Helper::FormatFloat);
+            return Some(Expr::call(
+                Expr::var("$formatFloat"),
+                vec![value, options.clone(), Expr::var(show)],
+            ));
         }
+        let text = match kind {
+            _ if num.is_some() || ty.is_bool() => shown_number(value),
+            Std::FmtDebug if ty.is_unit() => Expr::str("()"),
+            Std::FmtDisplay if self.is_string_like(ty) => value,
+            _ => return None,
+        };
+        self.runtime.insert(Helper::Formatted);
+        let mut args = vec![text, options.clone()];
+        if num.is_some() {
+            args.push(Expr::bool(true));
+        }
+        Some(Expr::call(Expr::var("$formatted"), args))
+    }
+
+    /// An error if a placeholder's options are given to what can't apply
+    /// them (ADR 0058): serde_json's types, whose `fmt`s are rust-js's own,
+    /// and a `&dyn Debug`, the string it shows already (ADR 0060).
+    fn can_apply(&self, ty: Ty<'tcx>, pretty: &Pretty, span: Span) -> R<()> {
+        if matches!(pretty, Pretty::Given(..))
+            && (self.json_type(ty).is_some() || self.is_json_error(ty) || self.is_dyn_debug(ty))
+        {
+            return Err(self.unsupported(span, &format!("options for a `{ty}`")));
+        }
+        Ok(())
     }
 
     /// `value`, of type `ty`, made a `&dyn Debug` here: the string it shows
@@ -149,19 +210,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(PatKind::Wild) => (None, self.fresh("f")),
             _ => return Err(self.unsupported(span, "this `Formatter` parameter")),
         };
-        // Whether it's pretty, `{:#?}`, where the crate shows anything so (ADR 0137).
+        // Its `Formatter`'s options, where the crate gives any (ADRs 0058, 0137).
         let mut js_params = js_params;
-        let alternate = self.krate.pretty_debug.then(|| {
-            let alternate = self.fresh("alternate");
-            js_params.push(alternate.as_str().into());
-            Expr::var(&alternate)
+        let given = self.writers_take_options().then(|| {
+            let options = self.fresh("options");
+            js_params.push(options.as_str().into());
+            Expr::var(&options)
         });
         let mut body_out = Vec::new();
         let previous = self.writing.writer.replace((var, name.clone()));
-        let previous_alternate = std::mem::replace(&mut self.writing.alternate, alternate);
+        let previous_given = std::mem::replace(&mut self.writing.given, given);
         let lowered = self.stmt(body, &Dest::Discard, &mut body_out);
         self.writing.writer = previous;
-        self.writing.alternate = previous_alternate;
+        self.writing.given = previous_given;
         lowered?;
         // Each way through writes once: each is a `return` of what it writes.
         if let Some(returns) = as_returns(&body_out, &name) {
@@ -250,7 +311,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // More than five fields: arrays of their names and strings.
             WriteCall::StructFields => {
                 self.runtime.insert(Helper::DebugFields);
-                values.extend(self.writing.alternate.clone());
+                values.extend(self.writing.given.is_some().then(|| pretty.alternate()));
                 Expr::call(Expr::var("$debugFields"), values)
             }
             WriteCall::TupleFields => {
@@ -298,14 +359,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let open = join(vec![type_name, Expr::str("(")]);
                 self.pretty_or_parts(&pretty, join(parts), open, Expr::array(shown), Expr::str(")"))
             }
-            // Another writer, given this one's `Formatter`: as pretty as it is.
+            // Another writer, given this one's `Formatter`: its options.
             WriteCall::Function => {
-                values.extend(self.writing.alternate.clone());
+                values.extend(self.writing.given.clone());
                 values.extend(self.evidence_args(def_id, generic_args, span)?);
                 Expr::call(self.fn_ref(def_id), values)
             }
             WriteCall::Trait => {
-                values.extend(self.writing.alternate.clone());
+                values.extend(self.writing.given.clone());
                 match self.trait_call(def_id, generic_args, values, span, out)? {
                     Some(call) => call,
                     None => return Err(self.unsupported(span, "this call")),
@@ -569,10 +630,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     list.push(Expr::bool(true));
                 }
                 let pretty_form = Expr::call(Expr::var("$pretty"), list);
-                match &pretty {
-                    Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form, written),
-                    _ => pretty_form,
-                }
+                pretty.choose(pretty_form, written)
             }
         };
         let target = Expr::var(&written_to);
@@ -601,6 +659,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn display_string_with(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let (value, ty) = self.through_refs(value, ty);
         let ty = self.shown_type(ty);
+        if let Some(shown) = self.formatted(value.clone(), (Std::FmtDisplay, ty), pretty) {
+            return Ok(shown);
+        }
+        self.can_apply(ty, pretty, span)?;
         // A `TryFromIntError` is its kind, whose message is one for both
         // (ADR 0109): `value && ..` of one whose value runs code, as a kind
         // is never empty.
@@ -637,7 +699,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$displayF32"), vec![value]));
         }
         let display = self.display_trait();
-        if let Some(shown) = self.dyn_written(value.clone(), ty, display, span)? {
+        let options = self.options_arg(pretty);
+        if let Some(shown) = self.dyn_written(value.clone(), (ty, display), options, span)? {
             return Ok(shown);
         }
         if self.is_unknown(ty) {
@@ -646,7 +709,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .evidence_for(tr)
                 .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
             let mut list = vec![value];
-            list.extend(self.alternate_arg(pretty));
+            list.extend(self.options_arg(pretty));
             return Ok(Expr::call(Expr::member(dictionary, "fmt"), list));
         }
         if self.has_user_impl(display, ty) {
@@ -703,6 +766,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.writing.options = Some(options);
             return shown;
         }
+        if let Some(shown) = self.formatted(value.clone(), (Std::FmtDebug, ty), pretty) {
+            return Ok(shown);
+        }
+        self.can_apply(ty, pretty, span)?;
         // serde_json's own, `Object {"a": Number(1)}` (ADR 0083).
         if let Some(shown) = self.json_value_debug(value.clone(), ty, pretty) {
             return Ok(shown);
@@ -721,7 +788,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ChannelError::Send => Expr::str("SendError { .. }"),
             });
         }
-        if let Some(shown) = self.dyn_written(value.clone(), self.shown_type(ty), self.debug_trait(), span)? {
+        let (shown, options) = (self.shown_type(ty), self.options_arg(pretty));
+        if let Some(shown) = self.dyn_written(value.clone(), (shown, self.debug_trait()), options, span)? {
             return Ok(shown);
         }
         if num == Some(Num::F64) {
@@ -777,7 +845,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .evidence_for(tr)
                 .ok_or_else(|| self.unsupported(span, &format!("implementation evidence for `{tr}`")))?;
             let mut list = vec![value];
-            list.extend(self.alternate_arg(pretty));
+            list.extend(self.options_arg(pretty));
             return Ok(Expr::call(Expr::member(dictionary, "fmt"), list));
         }
         // A fieldless enum is its variant's name (ADR 0013), which is what a
@@ -970,8 +1038,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// How pretty what this writer shows is (ADR 0137): as its `alternate`
     /// says, or plain where the crate's writers don't take one.
     pub(super) fn writer_pretty(&self) -> Pretty {
-        match &self.writing.alternate {
-            Some(alternate) => Pretty::When(alternate.clone()),
+        match &self.writing.given {
+            Some(options) => Pretty::When(options.clone()),
             None => Pretty::Plain,
         }
     }
@@ -979,7 +1047,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `value`, in a `const` first if it may run code, which a plain and a
     /// pretty form would each run.
     fn once(&mut self, value: Expr, out: &mut Vec<Stmt>) -> Expr {
-        if self.writing.alternate.is_none() || value.reads_same() {
+        if self.writing.given.is_none() || value.reads_same() {
             value
         } else {
             self.spill("shown", value, out)
@@ -988,39 +1056,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `pretty_or`, of an `open` and a `close` that are expressions.
     fn pretty_or_parts(&mut self, pretty: &Pretty, plain: Expr, open: Expr, items: Expr, close: Expr) -> Expr {
-        let mut pretty_form = || {
-            self.runtime.insert(Helper::Pretty);
-            Expr::call(Expr::var("$pretty"), vec![open.clone(), items.clone(), close.clone()])
-        };
-        match pretty {
-            Pretty::Plain => plain,
-            Pretty::Always => pretty_form(),
-            Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form(), plain),
+        if pretty.known() == Some(false) {
+            return plain;
         }
+        self.runtime.insert(Helper::Pretty);
+        pretty.choose(Expr::call(Expr::var("$pretty"), vec![open, items, close]), plain)
     }
 
     /// `plain`, or, pretty, `$pretty(open, items, close)` of the same parts:
     /// each on a line of its own, indented, and ended by a comma (ADR 0137).
     fn pretty_or(&mut self, pretty: &Pretty, plain: Expr, open: &str, items: Expr, close: &str) -> Expr {
-        let mut pretty_form = || {
-            self.runtime.insert(Helper::Pretty);
-            Expr::call(
-                Expr::var("$pretty"),
-                vec![Expr::str(open), items.clone(), Expr::str(close)],
-            )
-        };
-        match pretty {
-            Pretty::Plain => plain,
-            Pretty::Always => pretty_form(),
-            Pretty::When(alternate) => Expr::cond(alternate.clone(), pretty_form(), plain),
-        }
+        self.pretty_or_parts(pretty, plain, Expr::str(open), items, Expr::str(close))
     }
 
     /// What a writer function is given after its value, where the crate's
-    /// take whether they're pretty (ADR 0137): `true`, `false`, or the
-    /// variable that says.
-    pub(super) fn alternate_arg(&self, pretty: &Pretty) -> Option<Expr> {
-        self.krate.pretty_debug.then(|| pretty.alternate())
+    /// take options (ADRs 0058, 0137): none for a plain one, which takes
+    /// nothing after it.
+    pub(super) fn options_arg(&self, pretty: &Pretty) -> Option<Expr> {
+        (self.writers_take_options() && !matches!(pretty, Pretty::Plain)).then(|| pretty.options())
     }
 
     /// A call of the crate's own `fmt`, `Debug`'s or `Display`'s, given
@@ -1041,10 +1094,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .ok_or_else(|| self.unsupported(span, "this implementation"))?;
         let evidence = self.evidence_args(instance.def_id(), instance.args, span)?;
         let mut values = vec![value];
-        if let Some(alternate) = self.alternate_arg(pretty)
-            && (!evidence.is_empty() || !matches!(pretty, Pretty::Plain))
-        {
-            values.push(alternate);
+        match self.options_arg(pretty) {
+            Some(options) => values.push(options),
+            None if self.writers_take_options() && !evidence.is_empty() => values.push(Expr::undefined()),
+            None => {}
         }
         values.extend(evidence);
         Ok(Expr::call(self.fn_ref(instance.def_id()), values))
@@ -1097,15 +1150,25 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `(value) => <its string>` for a dictionary's `fmt`, or the function
     /// itself: `String`, `$displayF64`.
     pub(super) fn display_fn(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        let shown = self.display_string(Expr::var("value"), ty, span)?;
+        // Given a `Formatter`'s options, where the crate's writers are (ADR 0058).
+        let (params, pretty): (Vec<js::Pattern>, _) = match self.writers_take_options() {
+            true => (
+                vec!["value".into(), "options".into()],
+                Pretty::When(Expr::var("options")),
+            ),
+            false => (vec!["value".into()], Pretty::Plain),
+        };
+        let shown = self.display_string_with(Expr::var("value"), ty, span, &pretty)?;
+        let names: Vec<&str> = ["value", "options"].into_iter().take(params.len()).collect();
         if let js::ExprKind::Call(callee, args) = &shown.kind
             && matches!(callee.kind, js::ExprKind::Var(_))
-            && matches!(args.as_slice(), [only] if is_var(only, "value"))
+            && args.len() == names.len()
+            && args.iter().zip(&names).all(|(arg, name)| is_var(arg, name))
         {
             return Ok((**callee).clone());
         }
         Ok(Expr::arrow(
-            vec!["value".into()],
+            params,
             vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
         ))
     }

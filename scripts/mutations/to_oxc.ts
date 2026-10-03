@@ -18,4 +18,12 @@ export const mutations: Mutation[] = [
     replace: "dictionary.into_iter().take(0).chain([get, set])",
     tests: ["test/corpus.test.ts", "-t", "dyn_mut"],
   },
+  {
+    name: "optional-member-plain",
+    breaks: "`options?.alternate` is printed `options.alternate`, which throws for a writer given no options",
+    file: "src/to_oxc.rs",
+    find: "                    IdentifierName::new(SPAN, self.name(property), b),\n                    true,",
+    replace: "                    IdentifierName::new(SPAN, self.name(property), b),\n                    false,",
+    tests: ["test/corpus.test.ts", "-t", "pretty_debug"],
+  },
 ];

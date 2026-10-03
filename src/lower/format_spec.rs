@@ -6,7 +6,7 @@ use super::display::Pretty;
 use super::recognition::Std;
 use super::representation::Num;
 use super::{FnCx, R};
-use crate::js::{Expr, Op};
+use crate::js::{Expr, Op, Prop};
 use crate::runtime::Helper;
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
@@ -94,32 +94,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Err(self.unsupported(span, "`{:x?}`"));
         }
         // Rust gives a placeholder's options to the `fmt` that shows the value,
-        // which gives a `{:?}`'s to each part of what it shows, and hands a
-        // `Formatter` on to another `fmt`. rust-js doesn't yet: it pads a
-        // number, a `bool` and a string itself, and a `fmt` of the crate's own
-        // that only writes ignores them. A generic `T`'s, a `dyn`'s, or a
-        // `Box` of either's is a dictionary's, which only it knows.
+        // which gives a `{:?}`'s to each part of what it shows, and hands its
+        // `Formatter` on to another `fmt`. A number, a `bool` and a string are
+        // padded here. Anything else is shown given them: each part of it
+        // that's one of those applies them here, and a `fmt` of the crate's
+        // own, a generic `T`'s or a `dyn`'s is given them as an object.
         let shown = self.shown_type(ty);
-        // A `{:?}` of parts that are all std's leaves gives each the options.
-        let options = width.is_some() || precision.is_some() || spec.plus;
-        if kind == Std::FmtDebug && options && !self.is_debug_leaf(shown) && self.debug_parts_are_leaves(shown) {
-            let options = Options { spec, width, precision };
-            let pretty = if spec.alternate { Pretty::Always } else { Pretty::Plain };
-            return self.with_options(Some(options), |cx| cx.debug_string_with(value, ty, span, &pretty));
-        }
         let leaf = num.is_some() || shown.is_bool() || shown.is_unit() || self.is_string_like(shown);
-        if (width.is_some() || spec.plus) && !leaf {
-            let display = self.display_trait();
-            let handed_on = match kind {
-                Std::FmtDisplay => !self.has_user_impl(display, shown) || self.hands_options_on(display, shown)?,
-                _ => true,
-            };
-            if handed_on && width.is_some() {
-                return Err(self.unsupported(span, &format!("a width for a `{shown}`")));
-            }
-            if handed_on {
-                return Err(self.unsupported(span, &format!("a sign for a `{shown}`")));
-            }
+        let options = width.is_some() || precision.is_some() || spec.plus;
+        if options && !leaf && matches!(kind, Std::FmtDisplay | Std::FmtDebug) {
+            let given = Pretty::Given(options_object(spec, &width, &precision), spec.alternate);
+            let options = Options { spec, width, precision };
+            return self.with_options(Some(options), |cx| match kind {
+                Std::FmtDisplay => cx.display_string_with(value, ty, span, &given),
+                _ => cx.debug_string_with(value, ty, span, &given),
+            });
         }
         let text = match kind {
             Std::FmtRadix(radix) => {
@@ -245,4 +234,33 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         Ok(Expr::call(Expr::var("$pad"), args))
     }
+}
+
+/// A placeholder's options as the object a `fmt` is given (ADR 0058):
+/// `{ width: 6, align: ">" }`, with only those it has.
+fn options_object(spec: Spec, width: &Option<Expr>, precision: &Option<Expr>) -> Expr {
+    let mut fields = Vec::new();
+    let mut field = |name: &str, value: Expr| fields.push(Prop::Field(name.into(), value));
+    if spec.alternate {
+        field("alternate", Expr::bool(true));
+    }
+    if let Some(width) = width {
+        field("width", width.clone());
+    }
+    if let Some(precision) = precision {
+        field("precision", precision.clone());
+    }
+    if spec.fill != ' ' {
+        field("fill", Expr::str(spec.fill.to_string()));
+    }
+    if let Some(align) = spec.align {
+        field("align", Expr::str(align.to_string()));
+    }
+    if spec.plus {
+        field("plus", Expr::bool(true));
+    }
+    if spec.zero {
+        field("zero", Expr::bool(true));
+    }
+    Expr::object(fields)
 }

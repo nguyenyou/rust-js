@@ -173,6 +173,8 @@ helpers! {
     Plus,
     ZeroPad,
     Pad,
+    Formatted,
+    FormatFloat,
     CmpIn,
     CmpItems,
     ThenCmp,
@@ -290,6 +292,8 @@ impl Helper {
             Helper::Pop => &[Helper::Some],
             Helper::Iterator => &[Helper::SomeValue],
             Helper::DebugFields => &[Helper::Pretty],
+            Helper::Formatted => &[Helper::Plus, Helper::ZeroPad, Helper::Pad],
+            Helper::FormatFloat => &[Helper::Formatted, Helper::ToFixed],
             Helper::Successors | Helper::FromFn => &[Helper::SomeValue],
             Helper::RemEuclid => &[Helper::Rem],
             Helper::DivEuclid => &[Helper::Div],
@@ -427,6 +431,8 @@ impl Helper {
             // `{:>8}` of a string: Rust counts its `char`s, where JS's `padStart`
             // would count UTF-16 units.
             Helper::Pad => include_str!("runtime/pad.js"),
+            Helper::Formatted => include_str!("runtime/formatted.js"),
+            Helper::FormatFloat => include_str!("runtime/format_float.js"),
             // `partial_cmp` of `f64`s: `None` if either is `NaN`.
             Helper::PartialCmp => include_str!("runtime/partial_cmp.js"),
             // A fieldless enum's variants, in the order they're declared.
