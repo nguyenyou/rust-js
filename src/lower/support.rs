@@ -146,10 +146,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A guard held in a variable is the object it guards; a guarded
             // number would be a copy, not a place.
             ty::Adt(_, args)
-                if ["RefCellRef", "RefCellRefMut"]
-                    .into_iter()
-                    .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
-                    && !args.types().next().is_some_and(|inner| self.is_object(inner)) =>
+                if self.is_guard(ty) && !args.types().next().is_some_and(|inner| self.is_object(inner)) =>
             {
                 return Some(ty);
             }

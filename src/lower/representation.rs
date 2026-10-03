@@ -22,7 +22,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         loop {
             ty = match ty.kind() {
                 ty::Ref(_, inner, _) => *inner,
-                ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => args.type_at(0),
+                ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => args.type_at(0),
                 _ => return ty,
             };
         }

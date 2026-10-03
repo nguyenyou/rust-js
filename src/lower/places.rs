@@ -313,10 +313,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Borrow { arg, .. } => self.place(arg).or_else(|| self.ref_place(arg)),
             ExprKind::Call { fun, ref args, .. } => match self.std_fn(fun)? {
                 Std::Same => self.ref_place(args[0]),
-                Std::Borrow => {
+                Std::Borrow | Std::Lock => {
                     let (cell, _) = self.ref_place(args[0])?;
                     Some((Expr::member(cell, "value"), true))
                 }
+                // A lock's guard, `m.lock().unwrap()`, which is always `Ok`.
+                Std::UnwrapOk => self.ref_place(args[0]),
                 _ => None,
             },
             _ => None,

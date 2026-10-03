@@ -9,7 +9,7 @@ use rustc_ast::Mutability;
 use rustc_hir::LangItem;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
-use rustc_span::{Symbol, sym};
+use rustc_span::sym;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.
@@ -281,11 +281,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Param(_) | ty::Alias(..) | ty::Dynamic(..) => false,
             ty::Tuple(parts) => parts.iter().all(|t| self.structural_clone_in(t, seen)),
             ty::Array(item, _) | ty::Slice(item) => self.structural_clone_in(*item, seen),
-            ty::Adt(..)
-                if self.is_std_adt(ty, Symbol::intern("Rc")) || self.is_string_like(ty) || self.is_js_object(ty) =>
-            {
-                true
-            }
+            ty::Adt(..) if self.is_rc(ty) || self.is_string_like(ty) || self.is_js_object(ty) => true,
             ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => false,
             ty::Adt(_, args) if self.is_std_wrapper(ty) || self.is_map(ty) => {
                 args.types().all(|t| self.structural_clone_in(t, seen))

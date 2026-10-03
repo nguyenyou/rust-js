@@ -394,7 +394,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    fn ok(value: Expr) -> Expr {
+    pub(super) fn ok(value: Expr) -> Expr {
         Expr::object(vec![
             Prop::Field("TAG".into(), Expr::str("Ok")),
             Prop::Field("_0".into(), value),

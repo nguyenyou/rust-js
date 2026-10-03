@@ -178,4 +178,28 @@ export const mutations: Mutation[] = [
     replace: "        if true {\n            return ty;\n        }",
     tests: ["test/corpus.test.ts", "-t", "associated_type_fields"],
   },
+  {
+    name: "arc-not-rc",
+    breaks: "an `Arc` is an error where an `Rc` is shared",
+    file: "src/lower/recognition.rs",
+    find: "        self.is_std_adt(ty, sym::Rc) || self.is_std_adt(ty, sym::Arc)",
+    replace: "        self.is_std_adt(ty, sym::Rc)",
+    tests: ["test/corpus.test.ts", "-t", "^locks"],
+  },
+  {
+    name: "lock-unknown",
+    breaks: "`m.lock()` of a `Mutex` is an error",
+    file: "src/lower/recognition.rs",
+    find: "            \"lock\" if adt(\"Mutex\") => Std::Lock,\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "^locks"],
+  },
+  {
+    name: "mutex-guard-unguarded",
+    breaks: "a `MutexGuard` held in a variable is an error, where it's the object it guards",
+    file: "src/lower/recognition.rs",
+    find: "            \"RefCellRefMut\",\n            \"MutexGuard\",\n",
+    replace: "            \"RefCellRefMut\",\n",
+    tests: ["test/corpus.test.ts", "-t", "^locks"],
+  },
 ];

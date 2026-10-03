@@ -34,6 +34,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             // A `Ref` or `RefMut` guard is what it guards: the object itself.
             Std::Borrow => Expr::member(arg(), "value"),
+            Std::Lock => Self::ok(Expr::member(arg(), "value")),
             // `mem::drop(x)` is `x`'s destructor, run now (ADR 0098).
             Std::Drop => {
                 let ty = self.thir[args[0]].ty;

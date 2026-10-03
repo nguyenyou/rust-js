@@ -111,6 +111,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.recognition().is_str_split(ty)
     }
 
+    /// An `Rc` or an `Arc`.
+    pub(super) fn is_rc(&self, ty: Ty<'tcx>) -> bool {
+        self.recognition().is_rc(ty)
+    }
+
+    /// A guard of a `RefCell` or a lock.
+    pub(super) fn is_guard(&self, ty: Ty<'tcx>) -> bool {
+        self.recognition().is_guard(ty)
+    }
+
     /// A field's type, given `args`, with its projections normalized.
     pub(super) fn field_ty(&self, field: &ty::FieldDef, args: ty::GenericArgsRef<'tcx>) -> Ty<'tcx> {
         self.recognition().field_ty(field, args)

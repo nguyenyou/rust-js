@@ -25,11 +25,9 @@ async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user i
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support labeled blocks yet
 async-await/issue-73137.rs	error: rust-js does not support user implementations of this standard or external trait yet
-autoref-autoderef/autoderef-arc-boxed-closure-call.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::boxed::Box<{closure@autoref-autoderef/autoderef-arc-boxed-closure-call.rs:8:37: 8:39}>>) is !null` yet
 autoref-autoderef/deref-chain-method-calls-13264.rs	error: rust-js does not support values of type `*const Node` yet
 binding/func-arg-incomplete-pattern.rs	error: rust-js does not support values of type `*const usize` yet
 binding/match-pipe-binding.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
-binding/match-ref-binding-in-guard-3256.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 binding/nested-matchs.rs	error: rust-js does not support values of type `!` yet
 binding/order-drop-with-match.rs	error: rust-js does not support moving a value with a destructor here yet
 binding/zero_sized_subslice_match.rs	error: rust-js does not support this expression yet
@@ -59,10 +57,9 @@ cast/negative-integer-cast-to-pointer.rs	error: rust-js does not support values 
 cast/supported-cast.rs	error: rust-js does not support values of type `*const std::string::String` yet
 cast/trait-object-cast-segfault-4333.rs	error: rust-js does not support values of type `&mut dyn std::io::Write` yet
 closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does not support constants of type `*const i32` yet
-closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
+closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support values of type `(*const std::collections::linked_list::Node<std::string::String>) is !null` yet
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
-closures/once-move-out-on-heap.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 closures/region-obligations-closure-and-projection.rs	error: rust-js does not support values of type `*mut u8` yet
 codegen/arm-collect-into-vec-codegen-regression.rs	error: rust-js does not support values of type `*mut ()` yet
 codegen/box-str-drop-glue.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
@@ -142,7 +139,6 @@ drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `Holder<
 drop/or-pattern-drop-order.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support values of type `*const NoisyDrop<&std::vec::Vec<i32>>` yet
-dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<DescriptorSet<'_>>) is !null` yet
 dst/dst-coerce-rc.rs	error: rust-js does not support values of type `(*const std::rc::RcInner<i32>) is !null` yet
 dst/dst-coercions.rs	error: rust-js does not support values of type `*const dyn T` yet
 dst/dst-field-align.rs	error: rust-js does not support a `Baz<dyn Bar>`, whose last field is a `dyn` yet
@@ -235,7 +231,6 @@ packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expr
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a value with a destructor yet
-pattern/pattern-match-arc-move.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 privacy/pub-extern-privacy.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 process/env-vars.rs	error: rust-js does not support iterating over `std::env::VarsOs` yet
 ptr_ops/ptr-swap-overlapping-regions.rs	error: rust-js does not support calling `std::ptr::swap` yet
@@ -258,7 +253,6 @@ rfcs/rfc-2091-track-caller/tracked-trait-obj.rs	error: rust-js does not support 
 rfcs/rfc-2294-if-let-guard/run-pass.rs	error: rust-js does not support calling `core::num::<impl u8>::rotate_left` yet
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
-self/arbitrary_self_types_nested.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::rc::Rc<std::boxed::Box<Ty>>>) is !null` yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
@@ -277,7 +271,7 @@ structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::int
 symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
-threads-sendsync/send-is-not-static-par-for.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
+threads-sendsync/send-is-not-static-par-for.rs	error: rust-js does not support a `&mut i32` from `std::iter::Iterator::enumerate` used as a value yet
 threads-sendsync/send-type-inference.rs	error: rust-js does not support a channel of a value with a destructor, `std::sync::mpsc::Sender<std::sync::mpsc::Sender<Command<K, V>>>`, yet
 threads-sendsync/sync-send-iterators-in-libcollections.rs	error: rust-js does not support calling `std::collections::BinaryHeap::<T, A>::drain` yet
 threads-sendsync/sync-send-iterators-in-libcore.rs	error: rust-js does not support calling `core::str::<impl str>::escape_debug` yet
@@ -297,11 +291,9 @@ traits/superdefault-generics.rs	error: rust-js does not support implementation e
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
 traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 traits/trait-upcasting/multiple-supertraits-modulo-normalization.rs	error: rust-js does not support this trait upcast yet
-traits/trait-upcasting/struct.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
 traits/with-bounds-default.rs	error: rust-js does not support implementation evidence for `<std::option::Option<T> as Getter<T>>` yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet
-type-inference/issue-113283-alllocator-trait-eq.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
 type/type-name-basic.rs	error: rust-js does not support `type_name` of a type parameter yet
 typeck/issue-18937-1.rs	error: rust-js does not support values of type `*mut [U]` yet
 typeck/osstring-str-equality.rs	error: rust-js does not support calling `std::convert::From::from` yet

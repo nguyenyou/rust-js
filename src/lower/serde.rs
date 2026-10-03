@@ -497,7 +497,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(());
         }
         match ty.kind() {
-            ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => {
                 self.write_json(value, json, args.type_at(0), span, out)
             }
             // `{"Ok": ..}` or `{"Err": ..}`, as serde's impl writes one.

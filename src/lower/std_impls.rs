@@ -58,7 +58,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(..) if std("Cell") || std("RefCell") || std("Atomic") => true,
             // A map or a set changes in place (ADR 0059).
             ty::Adt(..) if self.is_map(ty) => true,
-            ty::Adt(..) if std("Rc") || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
+            ty::Adt(..) if self.is_rc(ty) || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
             ty::Adt(..) if self.has_user_impl(self.clone_trait(), ty) => true,
             // A range is its bounds (ADR 0129), changed in place only if
             // `contains_mutated` says so.
@@ -414,7 +414,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let class = self.map_class(self.is_set(ty), args.types().next());
                 Expr::new_(class, Vec::new())
             }
-            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.default_value(args.type_at(0), span)?,
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.default_value(args.type_at(0), span)?,
             ty::Adt(_, args) if std("Cell") || std("RefCell") || std("Atomic") => Expr::object(vec![Prop::Field(
                 "value".into(),
                 self.default_value(args.type_at(0), span)?,
@@ -577,7 +577,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Array(item, _) | ty::Slice(item) => self.eq_items(a, b, *item, span),
             ty::Adt(_, args) if self.is_vec_like(ty) => self.eq_items(a, b, args.type_at(0), span),
-            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.eq_value(a, b, args.type_at(0), span, out),
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.eq_value(a, b, args.type_at(0), span, out),
             ty::Adt(_, args) if std("Cell") || std("RefCell") => self.eq_value(
                 Expr::member(a, "value"),
                 Expr::member(b, "value"),

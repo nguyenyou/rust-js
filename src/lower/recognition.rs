@@ -90,6 +90,8 @@ pub(super) enum Std {
     CellSet,
     /// `RefCell::borrow`, `borrow_mut`: the cell's `value`.
     Borrow,
+    /// A `Mutex`'s `lock()` or an `RwLock`'s `read()` or `write()`: `Ok` of its `value`.
+    Lock,
     /// An atomic's operations (ADR 0096), on its `{ value }` as a `Cell`'s:
     /// `load` and `into_inner`, `store`, `swap`, the `fetch_` ones, with
     /// the operator or whether it's `fetch_max`, and `compare_exchange`.
@@ -504,11 +506,9 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             let Some(ty) = self_ty else { return Some(None) };
             let same = self.is_string_like(ty)
                 || self.is_js_object(ty)
-                || self.is_std_adt(ty, sym::Rc)
+                || self.is_rc(ty)
                 || self.is_vec_like(ty)
-                || ["RefCellRef", "RefCellRefMut"]
-                    .into_iter()
-                    .any(|name| self.is_std_adt(ty, Symbol::intern(name)));
+                || self.is_guard(ty);
             return Some(same.then_some(Std::Same));
         }
         None
@@ -890,8 +890,12 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             "new_lower_exp" if argument => Std::FmtExp(false),
             "new_upper_exp" if argument => Std::FmtExp(true),
             "from_usize" if argument => Std::FmtUsize,
-            "new" if adt("Rc") => Std::Same,
-            "new" if adt("Cell") || adt("RefCell") || adt("Atomic") => Std::CellNew,
+            "new" if adt("Rc") || adt("Arc") => Std::Same,
+            "new" if adt("Cell") || adt("RefCell") || adt("Atomic") || adt("Mutex") || adt("RwLock") => Std::CellNew,
+            // On one thread a lock is never contested: always `Ok` (ADR 0025).
+            "lock" if adt("Mutex") => Std::Lock,
+            "read" | "write" if adt("RwLock") => Std::Lock,
+            "into_inner" | "get_mut" if adt("Mutex") || adt("RwLock") => Std::Lock,
             "get" if adt("Cell") => Std::CellGet,
             "set" if adt("Cell") => Std::CellSet,
             "borrow" | "borrow_mut" if adt("RefCell") => Std::Borrow,
@@ -1597,10 +1601,31 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_std_wrapper(&self, ty: Ty<'tcx>) -> bool {
         ty.is_box()
             || self.is_lang_adt(ty, LangItem::String)
-            || ["Rc", "Cell", "RefCell", "RefCellRef", "RefCellRefMut", "Atomic"]
+            || self.is_rc(ty)
+            || self.is_guard(ty)
+            || ["Cell", "RefCell", "Atomic", "Mutex", "RwLock"]
                 .into_iter()
                 .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_vec_like(ty)
+    }
+
+    /// An `Rc`, or an `Arc`, which on one thread is one: the value it
+    /// points at, shared (ADR 0023).
+    pub(super) fn is_rc(&self, ty: Ty<'tcx>) -> bool {
+        self.is_std_adt(ty, sym::Rc) || self.is_std_adt(ty, sym::Arc)
+    }
+
+    /// A guard of a `RefCell` or a lock: what it guards (ADR 0025).
+    pub(super) fn is_guard(&self, ty: Ty<'tcx>) -> bool {
+        [
+            "RefCellRef",
+            "RefCellRefMut",
+            "MutexGuard",
+            "RwLockReadGuard",
+            "RwLockWriteGuard",
+        ]
+        .into_iter()
+        .any(|name| self.is_std_adt(ty, Symbol::intern(name)))
     }
 
     pub(super) fn is_std(&self, id: DefId) -> bool {

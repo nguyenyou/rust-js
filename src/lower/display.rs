@@ -1106,10 +1106,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `Box<T>`, `Rc<T>`, `Ref<T>` and `RefMut<T>`: shown as their `T`,
     /// which is the value they are in JS (ADR 0023).
     fn shows_inside(&self, ty: Ty<'tcx>) -> bool {
-        ty.is_box()
-            || ["Rc", "RefCellRef", "RefCellRefMut"]
-                .iter()
-                .any(|n| self.is_std_adt(ty, Symbol::intern(n)))
+        ty.is_box() || self.is_rc(ty) || self.is_guard(ty)
     }
 
     /// Does `{:?}` of a `ty` read the value more than once? An `Option`, a
@@ -1121,9 +1118,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         match ty.kind() {
             ty::Tuple(tys) => !tys.is_empty(),
-            ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
-                self.debug_reads_parts(args.type_at(0))
-            }
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.debug_reads_parts(args.type_at(0)),
             _ => self.option_of(ty).is_some() || self.is_std_adt(ty, Symbol::intern("Result")),
         }
     }

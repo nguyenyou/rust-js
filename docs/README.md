@@ -228,6 +228,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0141 A `dyn Display` or `dyn Error` is a value and its dictionary](decisions/0141-std-trait-objects.md)
 - [0142 A channel on one thread is a queue its ends share](decisions/0142-channels.md)
 - [0143 A `Formatter`'s options are an object its writers are given](decisions/0143-formatter-options.md)
+- [0144 A lock on one thread is a `RefCell`, and an `Arc` is an `Rc`](decisions/0144-locks.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

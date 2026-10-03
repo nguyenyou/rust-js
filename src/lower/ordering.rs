@@ -13,7 +13,7 @@ use rustc_hir::LangItem;
 use rustc_middle::traits::ImplSource;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
-use rustc_span::{DUMMY_SP, Span, Symbol};
+use rustc_span::{DUMMY_SP, Span};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn ord_trait(&self) -> DefId {
@@ -95,7 +95,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Derived. Each is read more than once below.
         let a = if a.reads_same() { a } else { self.spill("left", a, out) };
         let b = if b.reads_same() { b } else { self.spill("right", b, out) };
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
         match ty.kind() {
             _ if let Some(inner) = self.option_of(ty) => {
                 // `None` is less than any `Some`.
@@ -112,7 +111,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Expr::cond(none(&b), Expr::int(1), some),
                 ))
             }
-            ty::Adt(_, args) if ty.is_box() || std("Rc") => self.cmp_value(a, b, args.type_at(0), partial, span, out),
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => {
+                self.cmp_value(a, b, args.type_at(0), partial, span, out)
+            }
             // `Reverse(x)`: `x`s the other way round, as its impl has it.
             ty::Adt(_, args) if self.is_reverse(ty) => {
                 let inside = |x: Expr| Expr::index(x, Expr::int(0));

@@ -140,9 +140,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(reader("option"), vec![read]));
         }
         match ty.kind() {
-            ty::Adt(_, args) if ty.is_box() || self.is_std_adt(ty, Symbol::intern("Rc")) => {
-                self.json_reader(args.type_at(0), span)
-            }
+            ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.json_reader(args.type_at(0), span),
             ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("Result")) => {
                 let (ok, err) = (
                     self.json_reader(args.type_at(0), span)?,

@@ -698,6 +698,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::CellGet
             | Std::CellSet
             | Std::Borrow
+            | Std::Lock
             | Std::Drop
             | Std::Forget
             | Std::AtomicLoad

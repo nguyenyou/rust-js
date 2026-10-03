@@ -122,4 +122,12 @@ export const mutations: Mutation[] = [
     replace: "            Std::OptionTake => (self.mut_place(args[0], span)?, None),",
     tests: ["test/corpus.test.ts","-t","std_methods"],
   },
+  {
+    name: "lock-guard-not-a-place",
+    breaks: "`*m.lock().unwrap() += 1` writes to nothing, where it's `m.value`",
+    file: "src/lower/places.rs",
+    find: "                Std::UnwrapOk => self.ref_place(args[0]),",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "^locks"],
+  },
 ];
