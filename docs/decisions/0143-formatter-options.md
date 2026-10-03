@@ -67,7 +67,7 @@ metersDisplay_fmt([1.5], { width: 8, precision: 2 })
   default; a string or a `bool` is cut to its precision and pads on the
   left. A string's and a `char`'s `{:?}` ignore them, as std's do.
 - **Dictionaries take the object too:** a generic `T`'s `fmt`
-  (`TDisplay.fmt(value, { width: 6, align: ">" })`), a `dyn`'s, and std's
+  (`TDisplay.fmt(value, { width: 6, align: "Right" })`), a `dyn`'s, and std's
   `Display` and `Debug` dictionaries, which apply it.
 - **Only a crate that needs it pays for it.** Its writers take `options`
   if it shows anything with `{:#?}`, asks `f.alternate()`, or gives a
@@ -77,6 +77,21 @@ metersDisplay_fmt([1.5], { width: 8, precision: 2 })
 - **Still errors, where options would be dropped:** a placeholder's options
   for a `&dyn Debug` made elsewhere, which is the string it shows already
   (ADR 0060), and for serde_json's types, whose `fmt`s are rust-js's own.
+
+**A writer can ask its `Formatter` what it was given,** and `f.pad(s)`
+applies it, as a `str`'s `Display` does:
+
+| Rust | JS |
+|---|---|
+| `f.width()`, `f.precision()` | `options?.width`, `options?.precision`: `None` is `undefined` |
+| `f.fill()` | `options?.fill ?? " "` |
+| `f.align()` | `options?.align`: `"Left"`, `"Right"` or `"Center"`, `fmt::Alignment`'s variants |
+| `f.sign_plus()`, `f.sign_aware_zero_pad()` | `options?.plus === true`, `options?.zero === true` |
+| `f.pad(s)` | `$formatted(s, options)` |
+
+- **A crate that asks takes options in its writers,** as one that gives
+  them does, though no placeholder gives any: the answer is then `None`.
+- **Still errors:** `f.sign_minus()` and `f.pad_integral(..)`.
 
 ## Why
 

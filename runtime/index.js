@@ -3863,7 +3863,8 @@ export function $formatted(text, options, numeric = false) {
   if (!numeric && precision !== undefined) text = [...text].slice(0, precision).join("");
   if (width === undefined) return text;
   if (numeric && options.zero) return $zeroPad(text, width);
-  return $pad(text, width, options.align ?? (numeric ? ">" : "<"), options.fill);
+  const align = { Left: "<", Right: ">", Center: "^" }[options.align] ?? (numeric ? ">" : "<");
+  return $pad(text, width, align, options.fill);
 }
 
 // A float's precision is its digits; the rest is `$formatted`'s.

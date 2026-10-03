@@ -253,8 +253,14 @@ fn options_object(spec: Spec, width: &Option<Expr>, precision: &Option<Expr>) ->
     if spec.fill != ' ' {
         field("fill", Expr::str(spec.fill.to_string()));
     }
+    // As `f.align()` gives it, a `fmt::Alignment`'s variant.
     if let Some(align) = spec.align {
-        field("align", Expr::str(align.to_string()));
+        let name = match align {
+            '<' => "Left",
+            '>' => "Right",
+            _ => "Center",
+        };
+        field("align", Expr::str(name));
     }
     if spec.plus {
         field("plus", Expr::bool(true));

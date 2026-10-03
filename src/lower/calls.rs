@@ -263,13 +263,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             return Err(self.unsupported(span, "methods of a `fmt::Result`"));
         }
-        // `f.alternate()`: whether this writer is pretty, `{:#?}` (ADR 0137).
-        if self.tcx.item_name(def_id).as_str() == "alternate"
-            && self.tcx.def_path_str(def_id).starts_with("std::fmt::Formatter")
-        {
+        // `f.alternate()`, `f.width()` and the like: what this writer's
+        // `Formatter` was given (ADRs 0137, 0143).
+        if let Some(query) = super::recognition::formatter_query(self.tcx, def_id) {
             return self
-                .writer_alternate()
-                .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"))
+                .formatter_answer(query)
+                .ok_or_else(|| self.unsupported(span, "asking a `Formatter` here"))
                 .map(Some);
         }
         // `cmp::max(a, b)` of what isn't a number: `Ord::max(a, b)`'s (ADR 0136).

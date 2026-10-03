@@ -1430,6 +1430,8 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
 
 pub(super) enum WriteCall {
     Text,
+    /// `f.pad(s)`: `s`, given the `Formatter`'s options (ADR 0143).
+    Pad,
     Display,
     Debug,
     StructFields,
@@ -1482,6 +1484,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let on_formatter = owner.is_some_and(|t| self.is_std_adt(t, Symbol::intern("Formatter")));
         match tcx.item_name(def_id).as_str() {
             "write_fmt" | "write_str" | "write_char" if on_formatter || is_trait("FmtWrite") => WriteCall::Text,
+            "pad" if on_formatter => WriteCall::Pad,
             "fmt" if is_trait("Display") => WriteCall::Display,
             "fmt" if is_trait("Debug") => WriteCall::Debug,
             "debug_struct_fields_finish" if on_formatter => WriteCall::StructFields,
@@ -2064,4 +2067,33 @@ pub(crate) fn type_fact(tcx: TyCtxt<'_>, def_id: DefId) -> Option<TypeFact> {
         "std::any::type_name" | "std::any::type_name_of_val" => Some(TypeFact::Name),
         _ => None,
     }
+}
+
+/// What a writer asks its `Formatter` (ADRs 0137, 0143).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum FormatterQuery {
+    Alternate,
+    Width,
+    Precision,
+    Fill,
+    Align,
+    SignPlus,
+    SignAwareZeroPad,
+}
+
+/// The question `def_id` asks of a `Formatter`: `f.width()` and the like.
+pub(super) fn formatter_query(tcx: TyCtxt<'_>, def_id: DefId) -> Option<FormatterQuery> {
+    if !tcx.def_path_str(def_id).starts_with("std::fmt::Formatter") {
+        return None;
+    }
+    Some(match tcx.item_name(def_id).as_str() {
+        "alternate" => FormatterQuery::Alternate,
+        "width" => FormatterQuery::Width,
+        "precision" => FormatterQuery::Precision,
+        "fill" => FormatterQuery::Fill,
+        "align" => FormatterQuery::Align,
+        "sign_plus" => FormatterQuery::SignPlus,
+        "sign_aware_zero_pad" => FormatterQuery::SignAwareZeroPad,
+        _ => return None,
+    })
 }

@@ -2,6 +2,7 @@
 //! `{:#?}`, and which derives are shown (ADRs 0060, 0137).
 
 use crate::lower::format_args::{Piece, decode_template};
+use crate::lower::recognition::{FormatterQuery, formatter_query};
 use crate::lower::{Body, strip};
 use rustc_hir::def::DefKind;
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId, Thir};
@@ -113,10 +114,22 @@ pub(super) fn uses_pretty_debug(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bo
 
 /// Does any body give a placeholder's options, a width, a precision, a sign
 /// or zeros, to a value that isn't a number, a `bool`, a `char`, a string
-/// or `()`: one of the crate's own, a generic `T`, a `dyn` (ADR 0058)? Then
+/// or `()`: one of the crate's own, a generic `T`, a `dyn` (ADR 0058)? Or
+/// ask a `Formatter` for them, `f.width()` or `f.pad(s)` (ADR 0143)? Then
 /// its writers take them, and its dictionaries apply them. One whose
 /// argument can't be told is taken to be.
 pub(super) fn uses_format_options(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
+    let asks = |id: DefId| {
+        formatter_query(tcx, id).is_some_and(|query| query != FormatterQuery::Alternate)
+            || (tcx.item_name(id).as_str() == "pad" && tcx.def_path_str(id).starts_with("std::fmt::Formatter"))
+    };
+    if all_bodies.iter().any(|body| {
+        body.thir.exprs.iter().any(|expr| {
+            matches!(expr.kind, ExprKind::Call { fun, .. } if matches!(*body.thir[fun].ty.kind(), ty::FnDef(id, _) if asks(id)))
+        })
+    }) {
+        return true;
+    }
     let primitive = |ty: ty::Ty<'_>| {
         ty.is_numeric()
             || ty.is_bool()

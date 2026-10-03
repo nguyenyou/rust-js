@@ -156,4 +156,20 @@ export const mutations: Mutation[] = [
     replace: "                Pretty::Plain,\n            ),\n            false => (vec![\"value\".into()], Pretty::Plain),\n        };\n        let shown = self.display_string_with(",
     tests: ["test/corpus.test.ts", "-t", "options_handed_on"],
   },
+  {
+    name: "pad-unpadded",
+    breaks: "`f.pad(s)` writes `s` as it is, where a placeholder's width pads it",
+    file: "src/lower/display.rs",
+    find: "                self.formatted(text.clone(), (Std::FmtDisplay, str_ty), &pretty)\n                    .unwrap_or(text)",
+    replace: "                text",
+    tests: ["test/corpus.test.ts", "-t", "formatter_queries"],
+  },
+  {
+    name: "fill-default-empty",
+    breaks: "`f.fill()` of a placeholder that gives none is `''`, where it's a space",
+    file: "src/lower/display.rs",
+    find: "Expr::bin(Op::Coalesce, member(\"fill\"), Expr::str(\" \"))",
+    replace: "member(\"fill\")",
+    tests: ["test/corpus.test.ts", "-t", "formatter_queries"],
+  },
 ];

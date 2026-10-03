@@ -12,11 +12,11 @@ import {
 var $metersDisplay, $nameDisplay, $pairDebug;
 
 function show(value, TDisplay) {
-  return `[${TDisplay.fmt(value, { width: 6, align: ">" })}]`;
+  return `[${TDisplay.fmt(value, { width: 6, align: "Right" })}]`;
 }
 
 function debug(value, TDebug) {
-  return `[${TDebug.fmt(value, { width: 4, align: "<" })}]`;
+  return `[${TDebug.fmt(value, { width: 4, align: "Left" })}]`;
 }
 
 function main() {
@@ -27,7 +27,7 @@ function main() {
     })}] [${metersDisplay_fmt([2], { plus: true })}] [${metersDisplay_fmt([-0.25], {
       width: 9,
       precision: 1,
-      align: "<",
+      align: "Left",
     })}]`,
   );
   console.log(
@@ -38,9 +38,9 @@ function main() {
     impl: { fmt: (value, options) => $formatted(String(value), options, true) },
   };
   console.log(
-    `[${d.impl.fmt(d.value, { width: 4, align: "<" })}] [${nameDisplay_fmt(["rust"], {
+    `[${d.impl.fmt(d.value, { width: 4, align: "Left" })}] [${nameDisplay_fmt(["rust"], {
       width: 7,
-      align: "^",
+      align: "Center",
     })}] [${nameDisplay_fmt(["rust"], { precision: 2 })}]`,
   );
   const arg = { x: -3, y: 0.25 };
@@ -65,7 +65,7 @@ function main() {
     })}] [${metersDisplay_fmt([1], {
       width: 12,
       fill: "*",
-      align: "^",
+      align: "Center",
     })}] [${String(true).padStart(5)}]`,
   );
 }

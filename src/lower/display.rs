@@ -4,7 +4,7 @@
 
 use super::format_spec::Options;
 use super::recognition::WriteCall;
-use super::recognition::{ChannelError, Std};
+use super::recognition::{ChannelError, FormatterQuery, Std};
 use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -91,15 +91,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.writing.writer.as_ref().map(|(_, name)| name.clone())
     }
 
-    /// In a writer given options (ADR 0137): whether it's `{:#?}`, which
-    /// `f.alternate()` is: `options?.alternate === true`.
-    pub(super) fn writer_alternate(&self) -> Option<Expr> {
+    /// In a writer given options (ADRs 0137, 0143): what `f.alternate()`,
+    /// `f.width()` and the like answer, `options?.alternate === true` and
+    /// `options?.width`, which is `None` where it's not given.
+    pub(super) fn formatter_answer(&self, query: FormatterQuery) -> Option<Expr> {
         let options = self.writing.given.clone()?;
-        Some(Expr::bin(
-            Op::Eq,
-            Expr::optional_member(options, "alternate"),
-            Expr::bool(true),
-        ))
+        let member = |name: &str| Expr::optional_member(options.clone(), name);
+        let is_true = |name: &str| Expr::bin(Op::Eq, member(name), Expr::bool(true));
+        Some(match query {
+            FormatterQuery::Alternate => is_true("alternate"),
+            FormatterQuery::Width => member("width"),
+            FormatterQuery::Precision => member("precision"),
+            FormatterQuery::Fill => Expr::bin(Op::Coalesce, member("fill"), Expr::str(" ")),
+            FormatterQuery::Align => member("align"),
+            FormatterQuery::SignPlus => is_true("plus"),
+            FormatterQuery::SignAwareZeroPad => is_true("zero"),
+        })
     }
 
     /// Do the crate's writers take a `Formatter`'s options (ADRs 0058, 0137):
@@ -300,6 +307,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let written = match operation {
             // `write!(f, ..)` is `f.write_fmt(format_args!(..))`, which is a string (ADR 0034).
             WriteCall::Text => values.remove(0),
+            // A string, padded and cut as the `Formatter`'s options say, as a
+            // `str`'s `Display` is (ADR 0143).
+            WriteCall::Pad => {
+                let text = values.remove(0);
+                let str_ty = self.tcx.types.str_;
+                self.formatted(text.clone(), (Std::FmtDisplay, str_ty), &pretty)
+                    .unwrap_or(text)
+            }
             WriteCall::Display => {
                 let ty = generic_args.type_at(0);
                 self.display_string_with(values.remove(0), ty, span, &pretty)?

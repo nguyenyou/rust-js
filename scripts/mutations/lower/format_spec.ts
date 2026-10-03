@@ -30,8 +30,8 @@ export const mutations: Mutation[] = [
     name: "options-object-without-align",
     breaks: "`{:<9.1}` of a type whose `fmt` hands its `Formatter` on to a number pads it on the left",
     file: "src/lower/format_spec.rs",
-    find: "        field(\"align\", Expr::str(align.to_string()));",
-    replace: "        let _ = align;",
+    find: "        field(\"align\", Expr::str(name));",
+    replace: "        let _ = name;",
     tests: ["test/corpus.test.ts", "-t", "options_handed_on"],
   },
   {
@@ -49,5 +49,13 @@ export const mutations: Mutation[] = [
     find: "        let pads = num.is_some()\n            || ty.is_bool()\n",
     replace: "        let pads = num.is_some()\n",
     tests: ["test/corpus.test.ts", "-t", "debug_options"],
+  },
+  {
+    name: "align-left-named-right",
+    breaks: "`f.align()` of `{:<5}` is `Right`, and a `{:<6}` given on pads on the left",
+    file: "src/lower/format_spec.rs",
+    find: "            '<' => \"Left\",",
+    replace: "            '<' => \"Right\",",
+    tests: ["test/corpus.test.ts", "-t", "formatter_queries"],
   },
 ];

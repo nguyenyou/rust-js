@@ -95,7 +95,7 @@ the ones below to it.
 | Whether a value is a JS iterator or an array | `iterators.rs` | `is_lazy_value`, `mark_lazy_chain`, `dyn_iterator` |
 | Locals stepped through, `$iter`s (ADR 0071) | `iterators.rs` | `steps_through`, `bound_as_iter`, `is_stepping` |
 | `&mut`s to values JS can't change in place | `mut_refs.rs` | `is_boxed`, `is_alias`, `slot`, `is_item_call` |
-| Writing to a `Formatter` | `display.rs` | `written`, `writer_alternate`, `with_dyn_debug` |
+| Writing to a `Formatter` | `display.rs` | `written`, `formatter_answer`, `with_dyn_debug` |
 | What a function or a binding is in JS | `items.rs` | `fn_ref`, `js_ref`, `resolve_instance` |
 | Dictionaries and evidence | `traits.rs` | `dictionary`, `evidence_for`, `impl_call` |
 | When a value is copied | `copies.rs` | `copy_if_needed`, `contains_mutated` |

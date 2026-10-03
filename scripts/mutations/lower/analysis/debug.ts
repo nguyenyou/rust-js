@@ -19,4 +19,12 @@ export const mutations: Mutation[] = [
     replace: "                args.first().is_some_and(|_| false)",
     tests: ["test/corpus.test.ts", "-t", "options_handed_on"],
   },
+  {
+    name: "formatter-asked-unseen",
+    breaks: "a crate that asks `f.width()`, and gives no placeholder's options, has writers that take none, and the question is an error",
+    file: "src/lower/analysis/debug.rs",
+    find: "        formatter_query(tcx, id).is_some_and(|query| query != FormatterQuery::Alternate)",
+    replace: "        false && formatter_query(tcx, id).is_some_and(|query| query != FormatterQuery::Alternate)",
+    tests: ["test/corpus.test.ts", "-t", "formatter_asked"],
+  },
 ];
