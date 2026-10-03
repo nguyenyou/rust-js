@@ -24,6 +24,7 @@ path = "../src/main.rs"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rustc_const_eval = { path = "rustc/compiler/rustc_const_eval" }
 rustc_data_structures = { path = "rustc/compiler/rustc_data_structures" }
 rustc_driver = { path = "rustc/compiler/rustc_driver_impl", package = "rustc_driver_impl" }
 rustc_expand = { path = "rustc/compiler/rustc_expand" }
