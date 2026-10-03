@@ -898,18 +898,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::RepeatingWith);
                 Expr::call(Expr::var("$repeatingWith"), vec![arg()])
             }
-            // Their closures' `Option`s: a generic `Some` is boxed (ADR 0051).
+            // Their closures' `Option`s: a `Some` that looks like `None` is boxed (ADR 0051).
             Std::IterSource(source @ (IterSource::Successors | IterSource::FromFn)) => {
                 let item = generic_args.type_at(0);
-                let (helper, name, what) = match source {
-                    IterSource::Successors => (Helper::Successors, "$successors", "successors"),
-                    _ => (Helper::FromFn, "$fromFn", "from_fn"),
+                let (helper, name) = match source {
+                    IterSource::Successors => (Helper::Successors, "$successors"),
+                    _ => (Helper::FromFn, "$fromFn"),
                 };
                 let boxed = self.boxed_payload(item);
-                if self.can_be_nullish(item) && !boxed {
-                    let what = format!("`{what}` of a `{item}`, whose `Some` would be `None` in JS");
-                    return Err(self.unsupported(span, &what));
-                }
                 let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
                 if boxed {
                     list.push(Expr::bool(true));

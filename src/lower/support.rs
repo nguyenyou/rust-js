@@ -133,15 +133,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Mut) if self.is_cell_pointee(*inner) => return None,
             ty::Array(elem, _) | ty::Slice(elem) => return self.unsupported_in(*elem, seen),
             ty::Adt(_, _) if self.is_lang_adt(ty, LangItem::String) => return None,
-            // An `Option` is its value or `undefined` (ADR 0030), so the value
-            // itself mustn't be able to look like `None`.
-            ty::Adt(..) if let Some(inner) = self.option_of(ty) => {
-                return if self.can_be_nullish(inner) && !self.boxed_payload(inner) {
-                    Some(ty)
-                } else {
-                    self.unsupported_in(inner, seen)
-                };
-            }
+            // An `Option` is its value or `undefined` (ADR 0030), or a box where
+            // the value looks like `None` (ADR 0051).
+            ty::Adt(..) if let Some(inner) = self.option_of(ty) => return self.unsupported_in(inner, seen),
             // `format_args!`'s pieces are strings by the time JS sees them.
             ty::Adt(_, _)
                 if self.is_lang_adt(ty, LangItem::FormatArguments)

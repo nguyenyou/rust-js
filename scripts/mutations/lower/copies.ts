@@ -50,4 +50,13 @@ export const mutations: Mutation[] = [
     replace: "            ty::FnPtr(..) | ty::FnDef(..) | ty::Closure(..) | ty::Dynamic(..) => false,",
     tests: ["test/corpus.test.ts", "-t", "static_fns"],
   },
+  {
+    name: "copy-into-box",
+    breaks: "a copy of an `Option<Option<[i32; 2]>>` that's `Some(None)` copies the box as an array",
+    file: "src/lower/copies.rs",
+    find: "                    let boxed = item != inner;",
+    replace: "                    let boxed = false;",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+    snapshots: true,
+  },
 ];

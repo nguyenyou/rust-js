@@ -91,4 +91,20 @@ export const mutations: Mutation[] = [
     replace: "    if true {\n        return Expr::num(shortest);\n    }\n    if !v.is_finite() || shortest == f64::from(v) {",
     tests: ["test/corpus.test.ts", "-t", "f32\\.rs"],
   },
+  {
+    name: "concrete-nullish-unboxed",
+    breaks: "`Some(None)` of a concrete `Option<Option<i32>>` is `undefined`, and reads as `None`",
+    file: "src/lower/representation.rs",
+    find: "        self.is_unknown(self.payload(ty)) || self.can_be_nullish(ty)",
+    replace: "        self.is_unknown(self.payload(ty))",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
+  {
+    name: "constant-some-unboxed",
+    breaks: "a constant `Some(None)` that rustc computed is `undefined`, and reads as `None`",
+    file: "src/lower/representation.rs",
+    find: "                    Some(&inner) => const_js(tcx, inner).map(some_literal),",
+    replace: "                    Some(&inner) => const_js(tcx, inner),",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
 ];

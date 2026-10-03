@@ -21,8 +21,6 @@ for (const [name, source, message, crate] of [
   ["camelCase fields that collide", '#![allow(non_snake_case)]\n#[rust_js::camel_case]\nconst _: () = ();\npub struct P { pub first_name: u32, pub firstName: u32 }\npub fn f(p: &P) -> u32 { p.first_name + p.firstName }', "both `firstName` in JS"],
   ["#[thread_local] static", "#![feature(thread_local)]\n#[thread_local] static N: std::cell::Cell<u32> = std::cell::Cell::new(0);\npub fn f() -> u32 { N.get() }", "does not support `#[thread_local]` statics"],
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
-  ["option of a reference to unit", "pub fn f(x: &()) -> bool { Some(x).is_some() }", "does not support values of type"],
-  ["map to a nullish type", 'pub fn f(o: Option<i32>) -> bool { o.map(|_| ()).is_some() }', "`map` to a `()`"],
   // A `dyn Error`'s dictionary has its `source`, and none of what else std provides (ADR 0141).
   ["a deprecated method of a dyn Error", '#![allow(deprecated)]\npub fn f(e: &dyn std::error::Error) -> String { e.description().to_string() }', "`description` of a"],
   // A placeholder's options are given to what shows the value (ADR 0058), but a
@@ -45,7 +43,6 @@ for (const [name, source, message, crate] of [
   ["binary_search of floats", 'pub fn f(v: &[f64]) -> bool { v.binary_search_by(|x| x.total_cmp(&1.0)).is_ok() }', "does not support"],
   // `a + b` of a `T: Add` is its dictionary's (ADR 0108); `a += b` isn't yet.
   ["an assigning operator in generic code", 'pub fn f<T: std::ops::AddAssign>(a: &mut T, b: T) { *a += b; }', "does not support"],
-  ["then to a nullish type", 'pub fn f(b: bool) -> bool { b.then(|| ()).is_some() }', "values of type `std::option::Option<()>`"],
   ["a reference count", 'pub fn f(r: &std::rc::Rc<u32>) -> usize { std::rc::Rc::strong_count(r) }', "does not support"],
   ["a heap of options", 'pub fn f() -> bool { let mut h = std::collections::BinaryHeap::new(); h.push(Some(1u32)); h.pop().is_some() }', "a heap of"],
   ["a pointer of the crate's own to a dyn", "#![feature(derive_coerce_pointee)]\nuse std::ops::Deref;\n#[derive(std::marker::CoercePointee)] #[repr(transparent)] pub struct Ptr<'a, #[pointee] T: ?Sized> { ptr: &'a T }\nimpl<T: ?Sized> Deref for Ptr<'_, T> { type Target = T; fn deref(&self) -> &T { self.ptr } }\npub trait Get { fn get(&self) -> u32; }\npub struct V(u32);\nimpl Get for V { fn get(&self) -> u32 { self.0 } }\npub fn f() -> u32 { let v = V(10); let p: Ptr<dyn Get> = Ptr { ptr: &v }; p.get() }", "does not support unsizing a `Ptr<'_, dyn Get>`"],
@@ -54,6 +51,8 @@ for (const [name, source, message, crate] of [
   // A `dyn` of std's traits has no dictionary to carry a drop (ADR 0098).
   ["a Box<dyn Send> of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let _: Box<dyn Send> = Box::new(D); }', "a `dyn` of a value with a destructor"],
   ["an Rc<dyn> of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let _: std::rc::Rc<dyn Send> = std::rc::Rc::new(D); }', "a `dyn` of a value with a destructor"],
+  // A std call given an iterator whose destructors rust-js can't follow would drop what it skips silently.
+  ["last of owned items", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f(v: Vec<D>) -> Option<D> { v.into_iter().last() }', "`std::iter::Iterator::last` of a value with a destructor"],
   ["an Rc of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let r = std::rc::Rc::new(D); drop(r); }', "a std type holding a value with a destructor, `std::rc::Rc<D>`"],
   ["a user impl of a std trait", 'pub struct C;\nimpl std::hash::Hasher for C { fn finish(&self) -> u64 { 0 } fn write(&mut self, _: &[u8]) {} }', "user implementations of this standard or external trait"],
   ["comparing another crate's struct", 'pub fn f(a: std::time::Duration, b: std::time::Duration) -> bool { a < b }', "does not support"],

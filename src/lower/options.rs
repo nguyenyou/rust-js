@@ -144,10 +144,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::OptionMap => {
                 let (option, f) = (arg(), arg());
                 let mapped = generic_args.type_at(1);
-                if self.can_be_nullish(mapped) && !self.boxed_payload(mapped) {
-                    let what = format!("`map` to a `{mapped}`, whose `Some` would be `None` in JS");
-                    return Err(self.unsupported(span, &what));
-                }
                 // `|_| 7` has no parameter left (ADR 0038): `Some(None)`.
                 let param = match &f.kind {
                     js::ExprKind::Arrow(params, _) if params.len() <= 1 => Some(params.first().cloned()),
@@ -239,8 +235,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Expr::call(Expr::var("$someAt"), vec![items, index])
     }
 
-    /// `Some(value)` of a generic `T` (ADR 0051): `$some(value)`.
+    /// `Some(value)` of what could look like `None` (ADR 0051): `$some(value)`,
+    /// or a literal itself where it can't, as `$some(4)` is `4`.
     pub(super) fn some(&mut self, value: Expr) -> Expr {
+        let nullish = matches!(value.kind, js::ExprKind::Undefined | js::ExprKind::Null);
+        let literal = matches!(
+            value.kind,
+            js::ExprKind::Array(_) | js::ExprKind::Object(_) | js::ExprKind::Template(..)
+        );
+        if (value.is_constant() && !nullish) || literal {
+            return value;
+        }
         self.runtime.insert(Helper::Some);
         Expr::call(Expr::var("$some"), vec![value])
     }

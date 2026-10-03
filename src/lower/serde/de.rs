@@ -130,13 +130,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         if let Some(inner) = self.option_of(ty) {
             let read = self.json_reader(inner, span)?;
-            // Of a type parameter, a `Some` that looks like `None` is boxed
-            // (ADR 0051). Otherwise `Some(None)` would be `None` (ADR 0030).
+            // A `Some` that looks like `None` is boxed (ADR 0051).
             let read = if self.boxed_payload(inner) {
                 self.runtime.insert(Helper::Some);
                 Expr::call(reader("some"), vec![read])
-            } else if self.can_be_nullish(inner) {
-                return Err(unsupported(self));
             } else {
                 read
             };

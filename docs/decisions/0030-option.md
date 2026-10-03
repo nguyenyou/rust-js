@@ -44,9 +44,10 @@ conversion:
   one".
 - **`Option<T>` needs a `T` that's never `undefined` or `null` itself**, or
   `Some(x)` and `None` would be the same value. `Option<()>`, `Option` of a
-  unit struct, and `Option<Option<T>>` are errors for now, looking through
-  references (`Option<&()>` too). ReScript boxes them. In generic code, where
-  `T` might be one, rust-js does too ([0051](0051-generic-options.md)).
+  unit struct, and `Option<Option<T>>`, looking through references
+  (`Option<&()>` too), box such a `Some`, as ReScript does, and as generic
+  code does where `T` might be one ([0051](0051-generic-options.md)).
+  (Amended: they were errors.)
 - **`unwrap_or`'s argument runs even when it isn't needed**, as in Rust. `??`
   skips it, so an argument with effects is computed first, in order:
   `const option = half(n); const fallback = bump(); option ?? fallback`.
@@ -54,8 +55,8 @@ conversion:
   parameter, as in `o != null ? o + 1 : undefined`. An option that's computed
   goes in a `const` first, named like the parameter, so it's computed once. A
   function, or a closure with statements, is called: `f(o)`. Mapping to a
-  type that can itself be `undefined` or `null`, like `()`, is an error, as
-  `Option<()>` is.
+  type that can itself be `undefined` or `null`, like `()`, boxes it
+  (ADR 0051). (Amended: it was an error.)
 - **`if let`** is new, and works with any pattern (`if let (0, y) = p`).
   When its value isn't already in a variable, it goes into a `const` named
   like the pattern's variable, which that variable then just is.

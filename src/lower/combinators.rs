@@ -162,10 +162,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(output));
             if let Some(item) = self.option_of(output) {
                 boxed = self.boxed_payload(item);
-                if self.can_be_nullish(item) && !boxed {
-                    let what = format!("stepping through `{item}`s, which `None` would look like in JS");
-                    return Err(self.unsupported(span, &what));
-                }
             }
         }
         let stepping = self.is_stepping(args[0]);
@@ -426,21 +422,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(inner) = self.option_of(subject_ty)
             && self.boxed_payload(inner)
         {
-            return Err(self.unsupported(span, "this method of an `Option` of a generic type"));
+            return Err(self.unsupported(span, "this method of an `Option` of what could look like `None`"));
         }
         let mut values = self.operands(args, out)?;
         if let Comb::Then | Comb::ThenSome = comb {
             let some = generic_args.type_at(0);
-            if self.can_be_nullish(some) {
-                let what = format!("`then` to a `{some}`, whose `Some` would be `None` in JS");
-                return Err(self.unsupported(span, &what));
-            }
             let (test, value) = (values.remove(0), values.remove(0));
             let value = if comb == Comb::Then {
                 self.call_with(value, Vec::new(), "value", out)
             } else if value.has_effects() {
                 // Rust works it out either way.
                 self.spill("value", value, out)
+            } else {
+                value
+            };
+            // Boxed where it looks like `None` (ADR 0051).
+            let value = if self.boxed_payload(some) {
+                self.some(value)
             } else {
                 value
             };

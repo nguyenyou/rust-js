@@ -8,7 +8,7 @@ export const mutations: Mutation[] = [
     file: "src/lower/calls.rs",
     find: "        let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;\n",
     replace: "        let holds_drops = |ty: Ty<'tcx>| self.drops(ty) == Drops::Runs;\n",
-    tests: ["test/corpus.test.ts", "-t", "drop_skipped_items"],
+    tests: ["test/diagnostics.test.ts", "-t", "last of owned items"],
   },
   {
     name: "compare-mut-cells",

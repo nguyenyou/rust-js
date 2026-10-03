@@ -1,6 +1,6 @@
 # 0051. `Option<T>` in generic code: boxed only when it looks like `None`
 
-Status: Accepted. Extends [0030](0030-option.md) and [0049](0049-traits-and-generics.md).
+Status: Accepted. Extends [0030](0030-option.md) and [0049](0049-traits-and-generics.md). Amended: concrete code boxes too.
 
 ## Context
 
@@ -41,26 +41,29 @@ function $some(x) {
   function called with numbers, strings or structs returns plain values,
   and a JS caller sees what it would without generics. Only a `None`-like
   value is ever boxed.
-- **Only where the payload is a type parameter**, looking through
-  references, `Box` and `Rc`, which are the value itself (ADR 0023):
-  `Option<T>`, `Option<&T>`, `Option<Box<T>>`. Code that isn't generic
-  keeps `Some(x)` as `x`.
+- **Only where the payload could look like `None`**, looking through
+  references, `Box` and `Rc`, which are the value itself (ADR 0023): a type
+  parameter, `Option<T>`, `Option<&T>`, `Option<Box<T>>`; and in concrete
+  code a `()`, a unit struct or an `Option`, `Option<Option<i32>>`. Every
+  other `Option` keeps `Some(x)` as `x`. A literal that can't look like
+  `None` is itself: `Some(Some(4))` is `4`, and `Some(None)` is
+  `$some(undefined)`. (Amended: concrete code's were errors.)
 - **Std functions that make an `Option` of a generic element box it too:**
   - `Vec::pop` is `$pop(v)`;
-  - a slice's `first` and `last`, and an iterator's `find`, are `$someAt(v, i)`;
+  - a slice's `first`, `last` and `get`, and an iterator's `find`, are
+    `$someAt(v, i)`;
+  - `bool::then` and `then_some` box their value, and `copied` and
+    `cloned` keep the box they're given;
   - `Result::ok` wraps its value in `$some`.
 
   Any other std call that would make one is a compile error, not JS that's
   quietly wrong.
-- **Where an `Option` is made, a concrete `None`-like payload is an error:**
-  at `Some(..)`, and at a std call that returns one. This closes the
-  `Some(&())` hole, and keeps a concrete `Option<Option<T>>` an error even
-  as a temporary, which the type check of variables didn't see.
+- **A copy of an `Option` changed in place copies only what's inside every
+  `Some`:** a box holds nothing that can change.
 
-A box never reaches code that isn't generic. There, a type whose `Some`
-would need one is still an error, so the only place a box can appear is
-inside generic code, or in what an exported generic function hands a JS
-caller for a `None`-like argument.
+A box can reach a JS caller only for a value whose `Some` looks like
+`None`: an exported function's `Option<Option<i32>>` gives `Some(None)` as
+`{ $someNone: 0 }`.
 
 ## Why
 
@@ -82,9 +85,10 @@ caller for a `None`-like argument.
   every function's use of each parameter, and it would reject correct Rust.
 - **Box every `Some` in generic code.** Simpler, but then a generic
   function returns boxes to its JS callers even for numbers.
-- **Lift the rule for concrete code too**, boxing `Option<Option<i32>>`
-  everywhere. The same helpers would do it. It's left for when a program
-  needs it, since it changes the representation of concrete values.
+- **Leave concrete code's an error.** It was, at first, since it changes
+  the representation of concrete values. But it was 12 of rustc's tests,
+  and the same helpers do it: `Option<Option<T>>` is ordinary Rust, a
+  lookup that may find a `None`.
 
 ## Consequences
 

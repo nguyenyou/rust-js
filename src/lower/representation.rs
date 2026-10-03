@@ -61,10 +61,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// An `Option<T>` whose `T` might look like `None` only because it's a
-    /// type parameter: `Some` of it is boxed when it does (ADR 0051).
+    /// An `Option<T>` whose `T` might look like `None`: a type parameter, or
+    /// a `()` or an `Option` itself. `Some` of it is boxed when it does
+    /// (ADR 0051).
     pub(super) fn boxed_payload(&self, ty: Ty<'tcx>) -> bool {
-        self.is_unknown(self.payload(ty))
+        self.is_unknown(self.payload(ty)) || self.can_be_nullish(ty)
     }
 
     /// Can a `T` be `undefined` or `null` in JS? Then `Option<T>` can't be
@@ -419,6 +420,23 @@ fn const_int(e: &Expr) -> Option<i128> {
     })
 }
 
+/// `Some` of a constant, as `$some` makes it (ADR 0051): itself, or a box
+/// where it looks like `None`, `{ $someNone: 0 }`, one deeper for a box.
+fn some_literal(inner: Expr) -> Expr {
+    let depth = match &inner.kind {
+        js::ExprKind::Undefined | js::ExprKind::Null => 0,
+        js::ExprKind::Object(props) => match props.as_slice() {
+            [Prop::Field(name, depth)] if name == "$someNone" => match depth.as_int() {
+                Some(n) => n + 1,
+                None => return inner,
+            },
+            _ => return inner,
+        },
+        _ => return inner,
+    };
+    Expr::object(vec![Prop::Field("$someNone".into(), Expr::int(depth))])
+}
+
 pub(super) fn is_fieldless_enum(adt: ty::AdtDef<'_>) -> bool {
     adt.is_enum() && adt.variants().iter().all(|v| v.fields.is_empty())
 }
@@ -615,7 +633,7 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
             let variant = adt.variant(index.try_to_leaf()?.to_u32().into());
             if tcx.is_lang_item(adt.did(), LangItem::Option) {
                 return match fields.first() {
-                    Some(&inner) => const_js(tcx, inner),
+                    Some(&inner) => const_js(tcx, inner).map(some_literal),
                     None => Some(Expr::undefined()),
                 };
             }

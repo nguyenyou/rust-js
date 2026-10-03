@@ -28,13 +28,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // `Some(x)` is `x`, and `None` is `undefined` (ADR 0030).
         if let Some(inner) = self.option_of(ty) {
-            // `Some(x)` of a `()`, or an `Option`, would be `None` (ADR 0030):
-            // checked where it's made, since a temporary has no type check of its own.
-            if !adt.fields.is_empty() && self.can_be_nullish(inner) && !self.boxed_payload(inner) {
-                return Err(self.unsupported(span, &format!("values of type `{ty}`")));
-            }
             return match adt.fields.first() {
-                // Of a generic `T`, which might look like `None` (ADR 0051).
+                // Of what might look like `None`, a generic `T` or an `Option` (ADR 0051).
                 Some(field) if self.boxed_payload(inner) => {
                     let value = self.expr(field.expr, out)?;
                     Ok(self.some(value))
@@ -180,8 +175,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let [item] = <[Expr; 1]>::try_from(items).map_err(|_| self.unsupported(span, "this constructor"))?;
             if self.boxed_payload(inner) {
                 self.some(item)
-            } else if self.can_be_nullish(inner) {
-                return Err(self.unsupported(span, &format!("values of type `{ty}`")));
             } else {
                 item
             }

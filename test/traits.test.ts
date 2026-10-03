@@ -174,8 +174,6 @@ test("copied JSX defaults select the implementation module's JSX extension", () 
 });
 
 for (const [name, source, diagnostic] of [
-  // A generic `Option<T>` is supported (ADR 0051); a concrete nested one isn't.
-  ["nested Option", `pub fn f(x: Option<i32>) -> bool { Some(x).is_some() }`, "does not support values of type"],
   // A loop that owns its items drops what it hasn't reached (ADR 0098): of a
   // `Vec`, an array or an `Option`, not yet of an adapter, nor through an
   // iterator of the crate's own that holds one.

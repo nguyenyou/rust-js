@@ -37,6 +37,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let last = Expr::bin(Op::Sub, Expr::member(items.clone(), "length"), Expr::int(1));
                 self.some_at(items, last)
             }
+            Std::SliceGet if boxed => {
+                let items = arg();
+                self.some_at(items, arg())
+            }
             Std::First => Expr::index(arg(), Expr::int(0)),
             Std::SliceGet => {
                 let items = arg();

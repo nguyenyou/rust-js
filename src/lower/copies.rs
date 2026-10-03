@@ -85,9 +85,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     if !self.contains_mutated(inner) {
                         return place;
                     }
+                    // A box, `Some(None)`, holds nothing to copy (ADR 0051):
+                    // only the value inside every `Some` does.
+                    let mut item = inner;
+                    while let Some(next) = self.option_of(item) {
+                        item = next;
+                    }
+                    let boxed = item != inner;
                     return once(place, &|o| {
-                        let none = Expr::bin(Op::LooseEq, o.clone(), Expr::null());
-                        Expr::cond(none, o.clone(), self.copy(o, inner))
+                        let mut none = Expr::bin(Op::LooseEq, o.clone(), Expr::null());
+                        if boxed {
+                            let in_box = Expr::member(o.clone(), "$someNone");
+                            none = Expr::bin(Op::Or, none, Expr::bin(Op::Ne, in_box, Expr::undefined()));
+                        }
+                        Expr::cond(none, o.clone(), self.copy(o, item))
                     });
                 }
                 // An array that's changed in place: `a.slice()`, or a copy of

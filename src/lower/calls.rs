@@ -1,6 +1,7 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
 use super::bindings::{JsForm, is_binding, is_method, js_form};
+use super::combinators::Comb;
 use super::combinators::StepOp;
 use super::drops::Drops;
 use super::recognition::{Catching, Std, StreamOp};
@@ -366,16 +367,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(span, &format!("a `{cell}` from `{path}` used as a value")));
         }
+        // One whose `Some` is boxed where it looks like `None` (ADR 0051): only
+        // these make one.
         let boxed = self.option_of(output).is_some_and(|inner| self.boxed_payload(inner));
-        // And one of a `()` or an `Option`, which would be `None` (ADR 0030).
-        // `map` says so in its own words.
-        if known != Std::OptionMap
-            && self
-                .option_of(output)
-                .is_some_and(|inner| self.can_be_nullish(inner) && !self.boxed_payload(inner))
-        {
-            return Err(self.unsupported(span, &format!("values of type `{output}`")));
-        }
         if boxed
             && !matches!(
                 known,
@@ -384,6 +378,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::Method("pop")
                     | Std::First
                     | Std::SliceLast
+                    | Std::SliceGet
+                    | Std::OptionCloned
+                    | Std::Comb(Comb::Then | Comb::ThenSome)
                     | Std::ResultOk
                     | Std::ArrayMethod("find")
                     | Std::Extreme(_)
@@ -393,7 +390,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::OptionReplace
             )
         {
-            return Err(self.unsupported(span, "this call, for an `Option` of a generic type"));
+            return Err(self.unsupported(span, "this call, for an `Option` of what could look like `None`"));
         }
         if let Std::Map(op) = known {
             return self.map_call(op, args, generic_args, discarded, span, out);

@@ -22,8 +22,8 @@ export const mutations: Mutation[] = [
     name: "successors-unboxed",
     breaks: "a generic `successors` gives its boxed `Some`s, not what's in them",
     file: "src/lower/iterators.rs",
-    find: "                let boxed = self.boxed_payload(item);\n                if self.can_be_nullish(item) && !boxed {",
-    replace: "                let boxed = self.boxed_payload(item);\n                let boxed = boxed && false;\n                if self.can_be_nullish(item) && !boxed {",
+    find: "                let boxed = self.boxed_payload(item);\n                let mut list: Vec<Expr>",
+    replace: "                let boxed = self.boxed_payload(item) && false;\n                let mut list: Vec<Expr>",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
   },
   {
