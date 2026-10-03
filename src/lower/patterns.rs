@@ -109,12 +109,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ..
         } = pat.kind
             && let Some(init) = init
-            && self.iterated_only(var)
         {
-            self.mark_lazy_chain(init, true);
-            if self.chains.lazy.contains(&self.chain_key(init)) {
-                self.chains.locals.insert(var);
-            }
+            self.keep_chain(var, init);
         }
         // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,
         // which knows where it is (ADR 0071). A JS iterator knows already.

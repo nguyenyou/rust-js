@@ -713,11 +713,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 ],
             )
         };
-        // `chain` and `zip` are lazy when either side is (ADR 0128).
-        let other_lazy = generic_args
-            .types()
-            .nth(1)
-            .is_some_and(|other| self.is_lazy_iter(other));
         let item_ty = || self.iterator_item(receiver_ty);
         Ok(match comb {
             // `Some`s only: `.map(f).filter((item) => item != null)`.
@@ -743,7 +738,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 _ => method(items, "flat", Vec::new()),
             },
-            IterComb::Zip if lazy || other_lazy => {
+            // `chain` and `zip` are lazy when either side is (ADR 0128):
+            // `iterator_call` says so in `lazy`.
+            IterComb::Zip if lazy => {
                 self.runtime.insert(Helper::LazyZip);
                 Expr::call(Expr::var("$lazyZip"), vec![items, next()])
             }
@@ -751,7 +748,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.runtime.insert(Helper::Zip);
                 Expr::call(Expr::var("$zip"), vec![items, next()])
             }
-            IterComb::Chain if lazy || other_lazy => {
+            IterComb::Chain if lazy => {
                 self.runtime.insert(Helper::LazyChain);
                 Expr::call(Expr::var("$lazyChain"), vec![items, next()])
             }

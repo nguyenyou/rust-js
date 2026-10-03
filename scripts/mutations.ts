@@ -1904,16 +1904,16 @@ export const mutations: Mutation[] = [
     name: "lazy-chain-concat",
     breaks: "`[1, 2].into_iter().chain(repeat(0))` is `concat`, which adds the JS iterator as one item",
     file: "src/lower/combinators.rs",
-    find: "            IterComb::Chain if lazy || other_lazy => {",
-    replace: "            IterComb::Chain if false && (lazy || other_lazy) => {",
+    find: "            IterComb::Chain if lazy => {",
+    replace: "            IterComb::Chain if false && lazy => {",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
   },
   {
     name: "lazy-zip-eager",
     breaks: "`chars().zip(repeat(7))` is `$zip`, which takes a JS iterator's length to be none",
     file: "src/lower/combinators.rs",
-    find: "            IterComb::Zip if lazy || other_lazy => {",
-    replace: "            IterComb::Zip if false && (lazy || other_lazy) => {",
+    find: "            IterComb::Zip if lazy => {",
+    replace: "            IterComb::Zip if false && lazy => {",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
   },
   {
@@ -2976,9 +2976,9 @@ export const mutations: Mutation[] = [
   {
     name: "kept-chain-eager",
     breaks: "a chain kept in a variable runs every item through each stage before the loop over it",
-    file: "src/lower/patterns.rs",
-    find: "            self.mark_lazy_chain(init, true);\n            if self.chains.lazy",
-    replace: "            if self.chains.lazy",
+    file: "src/lower/iterators.rs",
+    find: "        self.mark_lazy_chain(init, true);\n        if self.chains.lazy",
+    replace: "        if self.chains.lazy",
     tests: ["test/corpus.test.ts", "-t", "lazy_chains"],
   },
   {
@@ -3020,6 +3020,14 @@ export const mutations: Mutation[] = [
     find: "            StepOp::Peekable => {\n                if lazy {",
     replace: "            StepOp::Peekable => {\n                if false {",
     tests: ["test/traits.test.ts", "-t", "peekable after"],
+  },
+  {
+    name: "other-side-lazy-ignored",
+    breaks: "a `chain` or a `zip` whose other side is a JS iterator is taken as arrays, as `concat` and `$zip` take them",
+    file: "src/lower/iterators.rs",
+    find: "                && args.get(1).is_some_and(|&o| self.is_lazy_value(o));",
+    replace: "                && false;",
+    tests: ["test/corpus.test.ts", "-t", "iterator_sources"],
   },
   {
     name: "f32-digits-symmetric",

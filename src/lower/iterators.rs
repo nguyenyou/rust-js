@@ -124,7 +124,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
-    pub(super) fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
+    fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
         self.recognition().is_lazy_iter(ty)
     }
 
@@ -268,9 +268,27 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if self.chains.locals.contains(&id))
     }
 
+    /// A chain kept in `var`, made by `init`: lazy if a stage does what can be
+    /// seen, when every use of `var` iterates it (ADR 0139).
+    pub(super) fn keep_chain(&mut self, var: LocalVarId, init: ExprId) {
+        if !self.iterated_only(var) {
+            return;
+        }
+        self.mark_lazy_chain(init, true);
+        if self.chains.lazy.contains(&self.chain_key(init)) {
+            self.chains.locals.insert(var);
+        }
+    }
+
+    /// Whether `e` is a stage of a chain `collect()` drains of owned items
+    /// (ADR 0098).
+    pub(super) fn is_drained(&self, e: ExprId) -> bool {
+        self.chains.drains.contains(&self.chain_key(e))
+    }
+
     /// Whether every use of `var` iterates it: a loop over it, or a stage or
     /// a consumer of it.
-    pub(super) fn iterated_only(&self, var: LocalVarId) -> bool {
+    fn iterated_only(&self, var: LocalVarId) -> bool {
         let named = |e: ExprId| matches!(self.thir[self.chain_stage(e)].kind, ExprKind::VarRef { id } if id == var);
         let uses = self
             .thir
@@ -514,11 +532,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A JS iterator's helpers are lazy: `map`, `filter`, `take`, `drop`,
         // and those that stop early, like `find`. Anything else takes all of
         // it, as an array (ADR 0055).
-        let lazy = self.is_lazy_iter(receiver_ty);
-        // A stage of a chain its consumer found must be lazy (ADR 0139).
-        let key = self.chain_key(receiver);
-        let starts = !lazy && self.chains.starts.contains(&key);
-        let lazy = lazy || self.is_lazy_value(receiver);
+        // A stage of a chain its consumer found must be lazy too (ADR 0139).
+        let lazy = self.is_lazy_value(receiver);
+        let starts = !lazy && self.chains.starts.contains(&self.chain_key(receiver));
         let (items, lazy) = if starts {
             (Expr::call(Expr::member(items, "values"), vec![]), true)
         } else {

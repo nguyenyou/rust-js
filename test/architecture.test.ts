@@ -84,6 +84,16 @@ test("the destructors' facts are found without emitting", () => {
   expect(source).not.toMatch(/crate::js|runtime::|&mut\s+FnCx|\bdrop_state\b/);
 });
 
+// Whether a value is a JS iterator is one question, `is_lazy_value`: its
+// type says so, or a chain's consumer made it so (ADR 0139). Asked of the
+// type alone elsewhere, the two disagreed: `next()` of a chain took all
+// of it. Only iterators.rs reads the type's answer, and the marks.
+test("iterators.rs alone answers whether a value is lazy", () => {
+  for (const file of ["src/lower.rs", ...files("src/lower")].filter(f => f !== "src/lower/iterators.rs" && !f.includes("/recognition"))) {
+    expect(read(file), file).not.toMatch(/\.is_lazy_iter\(|\.chains\.\w/);
+  }
+});
+
 // Recognition is what the rest asks: it asks neither the destructors'
 // analysis nor the effects one, which ask it.
 test("recognition depends on neither destructors nor effects", () => {

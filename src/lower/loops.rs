@@ -194,7 +194,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
                 || self.is_str_split(peeled)
                 || self.is_array_iter(peeled)
-                || self.is_lazy_iter(peeled)
+                || self.is_lazy_value(f.head)
                 || self.is_map(peeled)
                 // A generic one, an array or a JS iterator: `for .. of` takes either (ADR 0061).
                 || self.bounded_by(peeled, sym::IntoIterator)

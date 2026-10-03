@@ -333,9 +333,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             self.mark_owned_drain(receiver);
         }
-        let drained = args
-            .first()
-            .is_some_and(|&a| self.chains.drains.contains(&self.chain_key(a)));
+        let drained = args.first().is_some_and(|&a| self.is_drained(a));
         let holds_drops = |ty: Ty<'tcx>| self.drops(ty) != Drops::Nothing;
         let takes_drops = args.iter().any(|&a| match *self.thir[a].ty.kind() {
             ty::Ref(_, inner, Mutability::Mut) => holds_drops(inner),
