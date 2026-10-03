@@ -46,6 +46,11 @@ applied as Rust applies them:**
   `i16`).
 - **Still errors:** `{:e}`, `{:x?}`, a precision for a value it doesn't
   apply to, and options in a `panic!` message.
+- **A width or a sign for a generic `T`, or a `Box` of one, is an error.**
+  Its `fmt` is a dictionary's, `TDisplay.fmt(x)`, which is given no
+  options: a std type's would pad or sign what it shows, and a `fmt` of
+  the crate's own wouldn't, which only the dictionary knows. Dropping them
+  showed `[3]` where Rust shows `[     3]`. (Amended: they were dropped.)
 
 ## Why
 

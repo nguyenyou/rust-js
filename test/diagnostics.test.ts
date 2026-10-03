@@ -23,6 +23,10 @@ for (const [name, source, message, crate] of [
   ["static holding a reference to another", "static A: u32 = 1;\nstatic B: &u32 = &A;\npub fn f() -> u32 { *B }", "does not support statics of type `&'static u32`"],
   ["option of a reference to unit", "pub fn f(x: &()) -> bool { Some(x).is_some() }", "does not support values of type"],
   ["map to a nullish type", 'pub fn f(o: Option<i32>) -> bool { o.map(|_| ()).is_some() }', "`map` to a `()`"],
+  // A generic `T`'s `fmt` is given no options, which a std type's would pad: not yet.
+  ["a width in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:>6}", t) }', "a width for a"],
+  ["a sign in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:+}", t) }', "a sign for a"],
+  ["zero padding in generic code", 'pub fn f<T: std::fmt::Debug>(t: &T) -> String { format!("{:08?}", t) }', "a width for a"],
   ["precision of a struct", 'pub struct P; impl std::fmt::Display for P { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { f.write_str("p") } }\npub fn f() -> String { format!("{:.2}", P) }', "a precision for a"],
   // ADR 0121: a key found by its value is one a derived `Eq` compares.
   ["map keyed by a struct of its own equality", '#[derive(Hash)] pub struct P { pub x: u32 }\nimpl PartialEq for P { fn eq(&self, o: &P) -> bool { self.x % 10 == o.x % 10 } }\nimpl Eq for P {}\npub fn f() -> usize { let m: std::collections::HashMap<P, u32> = std::collections::HashMap::new(); m.len() }', "does not support values of type `P`"],

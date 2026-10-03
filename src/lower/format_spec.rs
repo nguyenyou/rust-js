@@ -84,6 +84,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if spec.debug_hex {
             return Err(self.unsupported(span, "`{:x?}`"));
         }
+        // A generic `T`'s `fmt`, or one a `Box` of it shows, is given no
+        // options, where a std type's would pad or sign what it shows.
+        let shown = self.shown_type(ty);
+        if self.is_unknown(shown) {
+            if width.is_some() {
+                return Err(self.unsupported(span, &format!("a width for a `{shown}`")));
+            }
+            if spec.plus {
+                return Err(self.unsupported(span, &format!("a sign for a `{shown}`")));
+            }
+        }
         let text = match kind {
             Std::FmtRadix(radix) => {
                 let Some(num) = num.filter(|&n| !n.float()) else {

@@ -537,12 +537,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `fmt` can tell (ADR 0137).
     pub(super) fn display_string_with(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let (value, ty) = self.through_refs(value, ty);
-        // `Box`, `Rc` and a `RefCell`'s `borrow()` show what they hold, as
-        // they are it in JS.
-        let ty = match ty.kind() {
-            ty::Adt(_, args) if self.shows_inside(ty) => args.types().next().expect("what it holds").peel_refs(),
-            _ => ty,
-        };
+        let ty = self.shown_type(ty);
         // A `TryFromIntError` is its kind, whose message is one for both
         // (ADR 0109): `value && ..` of one whose value runs code, as a kind
         // is never empty.
@@ -594,6 +589,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.writer_call(fmt, args, value, pretty, span);
         }
         Err(self.unsupported(span, &format!("`{{}}` of a `{ty}`")))
+    }
+
+    /// The type `ty` shows: what a `Box`, an `Rc` or a `RefCell`'s
+    /// `borrow()` holds, as they are it in JS, and `ty` itself otherwise.
+    pub(super) fn shown_type(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
+        match ty.kind() {
+            ty::Adt(_, args) if self.shows_inside(ty) => args.types().next().expect("what it holds").peel_refs(),
+            _ => ty,
+        }
     }
 
     /// `ParseIntError`, `TryFromIntError` and the like, which rust-js holds as their message

@@ -2386,6 +2386,14 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts", "-t", "dyn_iterators"],
   },
   {
+    name: "generic-width-dropped",
+    breaks: "a width for a generic `T` is dropped, so `[{:>6}]` of a `3` shows `[3]`",
+    file: "src/lower/format_spec.rs",
+    find: "        if self.is_unknown(shown) {\n            if width.is_some() {",
+    replace: "        if self.is_unknown(shown) {\n            if false && width.is_some() {",
+    tests: ["test/diagnostics.test.ts", "-t", "generic code"],
+  },
+  {
     name: "match-temp-split",
     breaks: "`match (make(5), make(6))` taken apart tests each part where it is, so the tuple's operands are never moved",
     file: "src/lower/patterns.rs",
