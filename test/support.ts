@@ -184,12 +184,21 @@ let built = false;
  */
 export function buildCompiler() {
   if (built || given) return;
-  const runner = String(process.env.BUN_TEST_WORKER_ID ? process.ppid : process.pid);
-  const started = run(["ps", "-o", "lstart=", "-p", runner]).trim();
-  const thisRun = createHash("sha256").update(`${runner} ${started}`).digest("hex").slice(0, 16);
-  once(join(target, "tests-build", thisRun), () => run(["cargo", "build", "--quiet"]));
+  once(join(target, "tests-build", thisRun()), () => run(["cargo", "build", "--quiet"]));
   process.env.RUST_JS_COMPILER = compiler;
   built = true;
+}
+
+/** This test run, the same in each of its workers: its runner's pid, and
+ * when it started. */
+let runId: string | undefined;
+function thisRun(): string {
+  if (runId === undefined) {
+    const runner = String(process.env.BUN_TEST_WORKER_ID ? process.ppid : process.pid);
+    const started = run(["ps", "-o", "lstart=", "-p", runner]).trim();
+    runId = createHash("sha256").update(`${runner} ${started}`).digest("hex").slice(0, 16);
+  }
+  return runId;
 }
 
 function readIfThere(file: string): string | undefined {
@@ -204,13 +213,9 @@ function alive(pid: number): boolean {
     return false;
   }
 }
-let web = false;
+/** The webapi crate's metadata, which React's build makes too. */
 export function buildWebapi() {
-  if (!web) {
-    buildCompiler();
-    run(["webapi/build.sh", "-o", join(target, "libwebapi.rmeta")]);
-    web = true;
-  }
+  buildReact();
 }
 /** `@rust-js/runtime`, installed in an app outside the checkout, as a package
  * manager installs it: what its JS imports (ADR 0103). */
@@ -232,11 +237,14 @@ export function buildSerde(kind: "rmeta" | "rlib" = "rmeta"): string[] {
   return serdeFlags[kind];
 }
 
+/** The js, webapi and react crates' metadata, in `target`: built once for
+ * the run, as each of its workers is a process of its own, which would
+ * otherwise write them again as others read them. */
 let react = false;
 export function buildReact() {
   if (!react) {
     buildCompiler();
-    run(["react/build.sh", "-o", join(target, "libreact.rmeta")]);
+    once(join(target, "tests-react", thisRun()), () => run(["react/build.sh", "-o", join(target, "libreact.rmeta")]));
     react = true;
   }
 }
