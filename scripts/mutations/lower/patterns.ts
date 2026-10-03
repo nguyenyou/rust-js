@@ -139,14 +139,6 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","const_blocks_and_let_guards"],
   },
   {
-    name: "lazy-local-stepped-as-array",
-    breaks: "`let mut r = repeat(4); r.next()` steps through it as an array, which it isn't: `None`",
-    file: "src/lower/patterns.rs",
-    find: "            && self.is_array_iter(ty)\n            && !self.is_lazy_value(init)\n",
-    replace: "            && self.is_array_iter(ty)\n",
-    tests: ["test/corpus.test.ts","-t","iterator_sources"],
-  },
-  {
     name: "match-temp-split",
     breaks: "`match (make(5), make(6))` taken apart tests each part where it is, so the tuple's operands are never moved",
     file: "src/lower/patterns.rs",
@@ -177,13 +169,5 @@ export const mutations: Mutation[] = [
     find: "            let place = Expr::member(self.fixed_place(cell, pat.span, out)?, \"value\");",
     replace: "            let place = Expr::member(self.place(cell).map_or_else(Expr::undefined, |(p, _)| p), \"value\");",
     tests: ["test/corpus.test.ts", "-t", "^locks"],
-  },
-  {
-    name: "stepped-generic-let-unbound",
-    breaks: "`let mut it = it;` of a generic iterator stepped through is an error",
-    file: "src/lower/patterns.rs",
-    find: "            && self.steps_through(var)\n            && self.is_generic_iter(ty)\n",
-    replace: "            && false\n",
-    tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
   },
 ];

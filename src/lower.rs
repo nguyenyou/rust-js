@@ -261,9 +261,7 @@ enum EnclosingKind<'tcx> {
 struct ItemScope<'tcx> {
     names: HashSet<String>,
     locals: Locals,
-    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
-    self_args: Option<ty::GenericArgsRef<'tcx>>,
-    self_env: Option<ty::TypingEnv<'tcx>>,
+    given: traits::GivenScope<'tcx>,
     typing_env: ty::TypingEnv<'tcx>,
 }
 
@@ -312,6 +310,9 @@ struct FnCx<'a, 'tcx> {
     typing_env: ty::TypingEnv<'tcx>,
     /// What the generic item being lowered is given, besides its arguments.
     given: Given<'tcx>,
+    /// In a generic type's derived `serialize` or `deserialize` (ADR
+    /// 0080): each type parameter, and the parameter that writes or reads it.
+    codecs: Vec<(Ty<'tcx>, String)>,
     /// While lowering a closure: the places it captured into snapshots.
     captures: HashMap<(LocalVarId, Vec<usize>), Var>,
     thir: &'a Thir<'tcx>,
@@ -363,9 +364,6 @@ struct Given<'tcx> {
     /// And the impl's typing environment, where what its arguments name
     /// resolves: the body's own is its trait's.
     self_env: Option<ty::TypingEnv<'tcx>>,
-    /// In a generic type's derived `serialize` or `deserialize` (ADR
-    /// 0080): each type parameter, and the parameter that writes or reads it.
-    codec_params: Vec<(Ty<'tcx>, String)>,
 }
 
 /// What walks of types found, kept so a type met again, along another path

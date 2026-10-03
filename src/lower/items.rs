@@ -165,6 +165,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         def_id: DefId,
         args: ty::GenericArgsRef<'tcx>,
     ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
+        // rustc's instance resolution panics on arguments it can't normalize:
+        // normalized first, or not resolved (ADR 0106).
         let Ok(args) = self
             .tcx
             .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args))
@@ -172,24 +174,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(None);
         };
         ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, args)
-    }
-
-    /// `resolve_instance` of a call whose arguments a copied default's
-    /// `Self` was replaced in (ADR 0049): they're the impl's, which resolve in
-    /// the impl's typing environment, as its own body's types don't.
-    pub(super) fn resolve_self_instance(
-        &self,
-        def_id: DefId,
-        args: ty::GenericArgsRef<'tcx>,
-    ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
-        let typing_env = self.given.self_env.unwrap_or(self.typing_env);
-        let Ok(args) = self
-            .tcx
-            .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(args))
-        else {
-            return Ok(None);
-        };
-        ty::Instance::try_resolve(self.tcx, typing_env, def_id, args)
     }
 
     /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, and
@@ -305,12 +289,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         id: DefId,
         generic_args: ty::GenericArgsRef<'tcx>,
     ) -> R<Option<(DefId, ty::GenericArgsRef<'tcx>)>> {
-        let generic_args = match self.given.self_args {
-            Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
-                .instantiate(self.tcx, args)
-                .skip_normalization(),
-            None => generic_args,
-        };
+        let generic_args = self.in_impl_terms(generic_args);
         Ok(self
             .resolve_self_instance(id, generic_args)?
             .filter(|instance| {

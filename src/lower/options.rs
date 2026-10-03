@@ -276,3 +276,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Expr::call(Expr::var("$someValue"), vec![option])
     }
 }
+
+/// `Some` of a constant, as `$some` makes it (ADR 0051): itself, or a box
+/// where it looks like `None`, `{ $someNone: 0 }`, one deeper for a box.
+pub(super) fn some_literal(inner: Expr) -> Expr {
+    let depth = match &inner.kind {
+        js::ExprKind::Undefined | js::ExprKind::Null => 0,
+        js::ExprKind::Object(props) => match props.as_slice() {
+            [Prop::Field(name, depth)] if name == "$someNone" => match depth.as_int() {
+                Some(n) => n + 1,
+                None => return inner,
+            },
+            _ => return inner,
+        },
+        _ => return inner,
+    };
+    Expr::object(vec![Prop::Field("$someNone".into(), Expr::int(depth))])
+}
+
+/// Is `value` the box of a `Some` that looks like `None` (ADR 0051), not
+/// what's in one: `value.$someNone !== undefined`.
+pub(super) fn is_some_box(value: Expr) -> Expr {
+    Expr::bin(Op::Ne, Expr::member(value, "$someNone"), Expr::undefined())
+}

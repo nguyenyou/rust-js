@@ -183,6 +183,7 @@ pub fn lower_crate<'tcx>(
             tcx,
             typing_env: ty::TypingEnv::post_analysis(tcx, def_id),
             given: Default::default(),
+            codecs: Vec::new(),
             krate: &crate_facts,
             dependencies: Default::default(),
             captures: HashMap::new(),

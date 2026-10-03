@@ -343,12 +343,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(trait_id) => match self.impl_method(def_id, generic_args)? {
                 Some((method, method_args)) => (method, method_args, None),
                 None if self.is_rust_trait(trait_id) => {
-                    let generic_args = match self.given.self_args {
-                        Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
-                            .instantiate(self.tcx, args)
-                            .skip_normalization(),
-                        None => generic_args,
-                    };
+                    let generic_args = self.in_impl_terms(generic_args);
                     let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
                     if matches!(tr.self_ty().kind(), ty::Dynamic(..)) {
                         return Ok(None);

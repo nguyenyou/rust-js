@@ -12,7 +12,7 @@ use crate::js::{Expr, Op, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
-use rustc_middle::ty;
+use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 use std::collections::HashSet;
@@ -166,6 +166,47 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.stepping.bound.insert(var);
     }
 
+    /// `Iterator.from(value)`: a JS iterator of an array or of one, which
+    /// steps either (ADR 0061).
+    pub(super) fn js_iterator(&self, value: Expr) -> Expr {
+        Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value])
+    }
+
+    /// `$iter(items)`: a JS iterator of an array that knows where it is
+    /// (ADR 0071).
+    pub(super) fn stepped_items(&mut self, items: Expr) -> Expr {
+        self.runtime.insert(Helper::Iter);
+        Expr::call(Expr::var("$iter"), vec![items])
+    }
+
+    /// What `var`, a local that `it.next()` steps through (ADR 0071), is
+    /// bound to, of `init` of type `ty`: `$iter(v)` of an array's iterator,
+    /// `Iterator.from(it)` of a generic one. None of one that isn't stepped
+    /// through, or that knows where it is already, a JS iterator's.
+    pub(super) fn stepped_value(
+        &mut self,
+        var: LocalVarId,
+        (init, ty): (ExprId, Ty<'tcx>),
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Option<Expr>> {
+        if !self.steps_through(var) {
+            return Ok(None);
+        }
+        let value = if self.is_generic_iter(ty) {
+            let value = self.expr(init, out)?;
+            self.js_iterator(value)
+        } else if self.is_array_iter(ty) && !self.is_lazy_value(init) && !self.is_peekable(ty) && !self.has_drops(ty) {
+            let items = self.iter_value(init, out)?;
+            let items = self.iter_source(items, ty, span, out)?;
+            self.stepped_items(items)
+        } else {
+            return Ok(None);
+        };
+        self.bound_as_iter(var);
+        Ok(Some(value))
+    }
+
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
     fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
@@ -213,7 +254,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A generic one is an array or a JS iterator: `Iterator.from` takes
         // either (ADR 0061).
         if self.is_generic_iter(ty) {
-            return Ok(Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]));
+            return Ok(self.js_iterator(value));
         }
         if !self.is_user_iterator(ty) {
             return Ok(value);
@@ -284,7 +325,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.recognition().is_dyn_iter(ty) || self.is_lazy_value(inner) {
             return Ok(value);
         }
-        Ok(Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]))
+        Ok(self.js_iterator(value))
     }
 
     /// What `Box::new(it)` boxes, or `&mut it` lends, reborrowed or not: `it`.

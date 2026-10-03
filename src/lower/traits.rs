@@ -11,7 +11,7 @@ use crate::runtime::Helper;
 use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, Mutability};
 use rustc_middle::traits::{BuiltinImplSource, ImplSource};
-use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 use std::collections::HashMap;
@@ -463,7 +463,89 @@ fn js_word(text: &str) -> String {
         .collect()
 }
 
+/// What a copied default body replaced of the given of the item it's
+/// lowered in, its evidence and arguments, to put back when it's done.
+pub(super) struct GivenScope<'tcx> {
+    evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+    self_args: Option<ty::GenericArgsRef<'tcx>>,
+    self_env: Option<ty::TypingEnv<'tcx>>,
+}
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Enter a trait's default body copied into an impl (ADR 0049): it's
+    /// given `evidence`, and the impl's arguments for its trait's
+    /// parameters, `self_args`, which resolve in the typing environment
+    /// of the item it's lowered in, the impl's.
+    pub(super) fn enter_default(
+        &mut self,
+        evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
+        self_args: ty::GenericArgsRef<'tcx>,
+    ) -> GivenScope<'tcx> {
+        GivenScope {
+            evidence: std::mem::replace(&mut self.given.evidence, evidence),
+            self_args: self.given.self_args.replace(self_args),
+            self_env: self.given.self_env.replace(self.typing_env),
+        }
+    }
+
+    /// Leave the copied default `enter_default` entered.
+    pub(super) fn leave_default(&mut self, scope: GivenScope<'tcx>) {
+        self.given.evidence = scope.evidence;
+        self.given.self_args = scope.self_args;
+        self.given.self_env = scope.self_env;
+    }
+
+    /// `value` in the impl's terms, in a copied default: its trait's
+    /// parameters, `Self` among them, replaced by the impl's arguments for
+    /// them (ADR 0049). Anywhere else, `value` itself.
+    pub(super) fn in_impl_terms<T: TypeFoldable<TyCtxt<'tcx>>>(&self, value: T) -> T {
+        match self.given.self_args {
+            Some(args) => ty::EarlyBinder::bind(self.tcx, value)
+                .instantiate(self.tcx, args)
+                .skip_normalization(),
+            None => value,
+        }
+    }
+
+    /// `resolve_instance` of a call whose arguments a copied default's
+    /// `Self` was replaced in (ADR 0049): they're the impl's, which resolve in
+    /// the impl's typing environment, as its own body's types don't.
+    pub(super) fn resolve_self_instance(
+        &self,
+        def_id: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
+        let typing_env = self.given.self_env.unwrap_or(self.typing_env);
+        // Normalized first, or not resolved, as `resolve_instance`'s are.
+        let Ok(args) = self
+            .tcx
+            .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(args))
+        else {
+            return Ok(None);
+        };
+        ty::Instance::try_resolve(self.tcx, typing_env, def_id, args)
+    }
+
+    /// The first dictionary this function was given whose bound `which`
+    /// says is the one: `T: Copy`'s, or a codec's (ADRs 0049, 0081).
+    pub(super) fn given_evidence(&self, which: impl Fn(ty::TraitRef<'tcx>) -> bool) -> Option<Expr> {
+        self.given
+            .evidence
+            .iter()
+            .find(|&&(tr, _)| which(tr))
+            .map(|(_, value)| value.clone())
+    }
+
+    /// The fact of its type parameter `index` this function was given,
+    /// `TSize` (ADR 0145).
+    pub(super) fn given_type_fact(&self, index: u32, fact: TypeFact) -> Option<Expr> {
+        self.given
+            .type_facts
+            .iter()
+            .find(|&&(at, given, _)| at == index && given == fact)
+            .map(|(_, _, value)| value.clone())
+    }
+
     pub(super) fn evidence_params(&mut self, id: DefId) -> Vec<js::Pattern> {
         // Each const parameter's value first, `N`, in the order they're
         // declared, the impl's before the method's (ADR 0107).
@@ -890,12 +972,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // In a copied default, `Self` is the impl's type: a call on it
         // resolves to the impl's method, called directly.
-        let generic_args = match self.given.self_args {
-            Some(args) => ty::EarlyBinder::bind(self.tcx, generic_args)
-                .instantiate(self.tcx, args)
-                .skip_normalization(),
-            None => generic_args,
-        };
+        let generic_args = self.in_impl_terms(generic_args);
         let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
         if matches!(tr.self_ty().kind(), ty::Dynamic(..)) && operational(self.tcx, self.krate.foreign, trait_id) {
             // A std trait's dictionary has only what it's given: `Error`'s, its

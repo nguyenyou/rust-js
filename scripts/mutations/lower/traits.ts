@@ -461,4 +461,21 @@ export const mutations: Mutation[] = [
     replace: "                ty::ClauseKind::Trait(_) => false,",
     tests: ["test/corpus.test.ts", "-t", "generic_associated_types"],
   },
+  {
+    name: "default-resolved-in-trait-env",
+    breaks: "a default copied into `impl<T> Getter<T> for Option<T>` calls the impl's methods through its dictionary, not directly: right, but not the JS a person writes",
+    file: "src/lower/traits.rs",
+    find: "        let typing_env = self.given.self_env.unwrap_or(self.typing_env);",
+    replace: "        let typing_env = self.typing_env;",
+    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
+    snapshots: true,
+  },
+  {
+    name: "type-fact-of-wrong-kind",
+    breaks: "`align_of::<T>()` reads the size its caller gave",
+    file: "src/lower/traits.rs",
+    find: "            .find(|&&(at, given, _)| at == index && given == fact)",
+    replace: "            .find(|&&(at, _, _)| at == index)",
+    tests: ["test/corpus.test.ts", "-t", "type_facts"],
+  },
 ];

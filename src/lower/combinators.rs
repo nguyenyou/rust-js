@@ -186,7 +186,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => args[0],
                 };
                 let it = self.expr(made, out)?;
-                let it = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![it]);
+                let it = self.js_iterator(it);
                 if boxed {
                     self.runtime.insert(Helper::Some);
                     helper(self, Helper::NextSome, "$nextSome", vec![it])
@@ -232,7 +232,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 let items = self.iter_value(args[0], out)?;
                 let items = self.iter_source(items, receiver_ty, span, out)?;
-                helper(self, Helper::Iter, "$iter", vec![items])
+                self.stepped_items(items)
             }
             StepOp::Peek if boxed => {
                 let it = self.expr(args[0], out)?;

@@ -16,13 +16,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A field that also contains mutated types is copied in turn.
     pub(super) fn copy(&self, place: Expr, ty: Ty<'tcx>) -> Expr {
         if self.is_unknown(ty)
-            && let Some((_, dictionary)) = self
-                .given
-                .evidence
-                .iter()
-                .find(|(tr, _)| tr.self_ty() == ty && self.tcx.is_lang_item(tr.def_id, LangItem::Copy))
+            && let Some(dictionary) =
+                self.given_evidence(|tr| tr.self_ty() == ty && self.tcx.is_lang_item(tr.def_id, LangItem::Copy))
         {
-            return Expr::call(Expr::member(dictionary.clone(), "copy"), vec![place]);
+            return Expr::call(Expr::member(dictionary, "copy"), vec![place]);
         }
         // A copy reads its source once per part: a value that isn't a place,
         // like `$unwrap(v[0])`, is taken once, `((value) => ..)(source)`.
@@ -95,8 +92,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return once(place, &|o| {
                         let mut none = Expr::bin(Op::LooseEq, o.clone(), Expr::null());
                         if boxed {
-                            let in_box = Expr::member(o.clone(), "$someNone");
-                            none = Expr::bin(Op::Or, none, Expr::bin(Op::Ne, in_box, Expr::undefined()));
+                            none = Expr::bin(Op::Or, none, super::options::is_some_box(o.clone()));
                         }
                         Expr::cond(none, o.clone(), self.copy(o, item))
                     });

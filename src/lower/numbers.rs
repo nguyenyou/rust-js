@@ -803,11 +803,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         if let ty::Param(param) = of.kind() {
             return self
-                .given
-                .type_facts
-                .iter()
-                .find(|&&(index, given, _)| index == param.index && given == fact)
-                .map(|(_, _, value)| value.clone())
+                .given_type_fact(param.index, fact)
                 .ok_or_else(|| self.unsupported(span, &format!("`{what}` of a type parameter")));
         }
         if fact != TypeFact::Name {

@@ -19,14 +19,6 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","generic_mut_ref_kept"],
   },
   {
-    name: "instance-args-unnormalized",
-    breaks: "an impl method is resolved with an associated type rustc can't normalize here, and rustc panics",
-    file: "src/lower/items.rs",
-    find: "        let Ok(args) = self\n            .tcx\n            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args))\n        else {\n            return Ok(None);\n        };\n        ty::Instance::try_resolve(",
-    replace: "        ty::Instance::try_resolve(",
-    tests: ["test/diagnostics.test.ts","-t","refused not crashed"],
-  },
-  {
     name: "f32-fn-value-unrounded",
     breaks: "`.map(f32::sqrt)` is a double's square root, no `f32`, where its call is rounded to one",
     file: "src/lower/items.rs",
@@ -57,14 +49,5 @@ export const mutations: Mutation[] = [
     find: "            Std::IsSome => Expr::bin(Op::LooseNe, x, Expr::null()),",
     replace: "            Std::IsSome => Expr::bin(Op::LooseEq, x, Expr::null()),",
     tests: ["test/corpus.test.ts","-t","expression_values"],
-  },
-  {
-    name: "default-resolved-in-trait-env",
-    breaks: "a default copied into `impl<T> Getter<T> for Option<T>` calls the impl's methods through its dictionary, not directly: right, but not the JS a person writes",
-    file: "src/lower/items.rs",
-    find: "        let typing_env = self.given.self_env.unwrap_or(self.typing_env);",
-    replace: "        let typing_env = self.typing_env;",
-    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
-    snapshots: true,
   },
 ];

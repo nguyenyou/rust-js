@@ -47,6 +47,7 @@
     "bless": "BLESS=1 bun test test/snapshots.test.ts test/jsx.test.ts test/corpus.test.ts",
     "bench:lowering": "cargo build --locked && bun bench/lowering.ts",
     "typecheck": "tsc --noEmit",
+    "architecture": "bun scripts/architecture-report.ts",
     "runtime": "cargo build && ./target/debug/rust-js --runtime-module > runtime/index.js"
   },
   "devDependencies": {

@@ -149,7 +149,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 && self.is_generic_iter(param.ty)
             {
                 let name = self.bind(*var, name.as_str(), true);
-                let iterator = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![Expr::var(&name)]);
+                let iterator = self.js_iterator(Expr::var(&name));
                 out.push(StmtKind::Assign(Expr::var(&name), iterator).at(js::Span::NONE));
                 self.bound_as_iter(*var);
                 names.push(js::Pattern::Name(name));
@@ -485,9 +485,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 EnclosingKind::Default(Box::new(ItemScope {
                     names: self.names.clone(),
                     locals: std::mem::take(&mut self.locals),
-                    evidence: std::mem::replace(&mut self.given.evidence, evidence),
-                    self_args: self.given.self_args.replace(self_args),
-                    self_env: self.given.self_env.replace(self.typing_env),
+                    given: self.enter_default(evidence, self_args),
                     typing_env: std::mem::replace(&mut self.typing_env, typing_env),
                 }))
             }
@@ -519,16 +517,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let ItemScope {
                     names,
                     locals,
-                    evidence,
-                    self_args,
-                    self_env,
+                    given,
                     typing_env,
                 } = *scope;
                 self.names = names;
                 self.locals = locals;
-                self.given.evidence = evidence;
-                self.given.self_args = self_args;
-                self.given.self_env = self_env;
+                self.leave_default(given);
                 self.typing_env = typing_env;
             }
         }

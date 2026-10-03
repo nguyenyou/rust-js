@@ -99,6 +99,13 @@ test("iterators.rs alone answers whether a value is lazy", () => {
 // ask: `self.is_boxed(var)`, not `self.locals.mut_refs.boxes`. Six modules
 // once wrote the `&mut`s' sets, and four the stepped iterators' (the
 // architecture audit).
+//
+// What a generic function was given, its dictionaries, the copied default's
+// arguments and the facts of its type parameters, is traits.rs's: seven
+// modules read it, four of them instantiating a copied default's arguments
+// each its own way (the second architecture audit). Each walk's cache of
+// what it found of a type is its walk's own. A path is matched across line
+// breaks, `self\n.given\n.type_facts`, which a formatter makes of a long one.
 const owners: Record<string, string[]> = {
   "self.drop_state": ["src/lower/drops.rs", "src/lower/drops/types.rs"],
   "self.chains": ["src/lower/iterators.rs"],
@@ -106,17 +113,45 @@ const owners: Record<string, string[]> = {
   "self.writing": ["src/lower/display.rs"],
   ".mut_refs.": ["src/lower/mut_refs.rs"],
   "self.cloning": ["src/lower/std_impls.rs"],
-  "self.walks": ["src/lower/copies.rs", "src/lower/std_impls.rs", "src/lower/support.rs"],
+  "self.given": ["src/lower/traits.rs"],
+  "self.walks.representable": ["src/lower/support.rs"],
+  "self.walks.assumed": ["src/lower/support.rs"],
+  "self.walks.mutated": ["src/lower/copies.rs"],
+  "self.walks.clones": ["src/lower/std_impls.rs"],
+  "self.walks.clone_assumed": ["src/lower/std_impls.rs"],
 };
+// `self.given`, matched as `self . given` with any space around each dot.
+const statePattern = (state: string) =>
+  new RegExp(`${state.split(".").join("\\s*\\.\\s*")}${state.endsWith(".") ? "" : "\\b"}`);
 test("each group of a function's state is read and written by its owner", () => {
+  const strays: string[] = [];
   for (const file of ["src/lower.rs", ...files("src/lower")]) {
     const text = read(file);
     for (const [state, allowed] of Object.entries(owners)) {
-      if (allowed.includes(file)) continue;
-      const pattern = new RegExp(`${state.replaceAll(".", "\\.")}${state.endsWith(".") ? "" : "\\b"}`);
-      expect([file, state, pattern.test(text)]).toEqual([file, state, false]);
+      if (!allowed.includes(file) && statePattern(state).test(text)) strays.push(`${state} in ${file}`);
     }
   }
+  expect(strays).toEqual([]);
+});
+
+// A JS form rust-js writes for one concept is written by the module that
+// owns it, which the rest ask: a generic iterator as a JS iterator, a
+// stepped one's `$iter`, and the box of a `Some` that looks like `None`.
+// Each was written in two to five modules (the second architecture audit).
+const idioms: [string, RegExp, string[]][] = [
+  ["Iterator.from", /Expr::var\("Iterator"\),\s*"from"/, ["src/lower/iterators.rs"]],
+  ["$iter", /"\$iter"|Helper::Iter\b/, ["src/lower/iterators.rs"]],
+  ["$someNone", /\$someNone/, ["src/lower/options.rs"]],
+];
+test("a JS form of a concept is written by the concept's owner", () => {
+  const strays: string[] = [];
+  for (const file of ["src/lower.rs", ...files("src/lower")]) {
+    const text = read(file);
+    for (const [idiom, pattern, allowed] of idioms) {
+      if (!allowed.includes(file) && pattern.test(text)) strays.push(`${idiom} in ${file}`);
+    }
+  }
+  expect(strays).toEqual([]);
 });
 
 // calls.rs lowers calls, and nothing else asks it anything: what a function

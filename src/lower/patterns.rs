@@ -5,7 +5,6 @@ use super::{
     ordering_value, std_impls, variant_field, without_refs,
 };
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
-use crate::runtime::Helper;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{BindingMode, ByRef, LangItem, RangeEnd};
 use rustc_middle::mir::BorrowKind;
@@ -112,8 +111,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         {
             self.keep_chain(var, init);
         }
-        // `let mut it = v.iter();` that `it.next()` steps through: `$iter(v)`,
-        // which knows where it is (ADR 0071). A JS iterator knows already.
+        // A local that `it.next()` steps through: what knows where it is,
+        // `$iter(v)` or `Iterator.from(it)` (ADR 0071).
         if let PatKind::Binding {
             name,
             var,
@@ -123,44 +122,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ..
         } = pat.kind
             && let Some(init) = init
-            && self.steps_through(var)
-            && self.is_array_iter(ty)
-            && !self.is_lazy_value(init)
-            && !self.is_peekable(ty)
-            && !self.has_drops(ty)
+            && let Some(value) = self.stepped_value(var, (init, ty), span, out)?
         {
-            let items = self.iter_value(init, out)?;
-            let items = self.iter_source(items, ty, span, out)?;
-            self.runtime.insert(Helper::Iter);
-            let value = Expr::call(Expr::var("$iter"), vec![items]);
             let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
-            self.bound_as_iter(var);
-            let kind = if mutability == Mutability::Mut {
-                StmtKind::Let(name, Some(value))
-            } else {
-                StmtKind::Const(name, value)
-            };
-            out.push(kind.at(self.js_span(span)));
-            return Ok(());
-        }
-        // `let mut it = it;` of a generic iterator stepped through: a JS
-        // iterator, `Iterator.from(it)`, which knows where it is (ADR 0071).
-        if let PatKind::Binding {
-            name,
-            var,
-            mode: BindingMode(ByRef::No, mutability),
-            subpattern: None,
-            ty,
-            ..
-        } = pat.kind
-            && let Some(init) = init
-            && self.steps_through(var)
-            && self.is_generic_iter(ty)
-        {
-            let value = self.expr(init, out)?;
-            let value = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]);
-            let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
-            self.bound_as_iter(var);
             let kind = if mutability == Mutability::Mut {
                 StmtKind::Let(name, Some(value))
             } else {
