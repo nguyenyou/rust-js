@@ -33,6 +33,7 @@ methods, and Scala.js's collections are Scala's own.
 | `.count()`, `.last()` | `.length`, `.at(-1)` |
 | `.position(p)`, `.max()`, `.min()` | `$position`, `$max`, `$min`: options (ADR 0030) |
 | `.collect::<Vec<_>>()`, `.collect::<String>()` | a new array (an adapter's result already is one; otherwise `.slice()`), `.join("")` |
+| `.collect::<Result<Vec<_>, _>>()`, `.collect::<Option<Vec<_>>>()` | `$collectResults(items)`, `$collectOptions(items)`: the first `Err` or `None`, where it stops, or the values. A chain whose stages do what can be seen runs lazily up to it (ADR 0139). Into a `Result` or an `Option` of anything but an array is an error. (Amended: it was the array, unwrapped.) |
 
 **Sorting sorts in place, with a comparator**, and JS's sort is stable, as
 Rust's `sort` is:

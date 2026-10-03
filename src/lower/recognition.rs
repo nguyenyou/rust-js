@@ -260,6 +260,9 @@ pub(super) enum Std {
     Fold,
     Sum,
     CollectString,
+    /// `collect()` into a `Result` or an `Option` of a collection: the first
+    /// `Err` or `None`, or all the values.
+    CollectFallible,
     /// `collect::<Vec<_>>()`: a new array, unless it's one already.
     Collect,
     Position,
@@ -314,6 +317,7 @@ impl Std {
                 | Std::Fold
                 | Std::Sum
                 | Std::CollectString
+                | Std::CollectFallible
                 | Std::Collect
                 | Std::Position
                 | Std::Extreme(_)
@@ -652,6 +656,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
                     let set = args.types().nth(1).is_some_and(|b| self.is_set(b));
                     Std::Map(MapOp::From { set })
+                }
+                "collect"
+                    if args
+                        .types()
+                        .nth(1)
+                        .is_some_and(|b| self.is_std_type(b, StdItem::Result) || self.option_of(b).is_some()) =>
+                {
+                    Std::CollectFallible
                 }
                 "collect" => Std::Collect,
                 _ => return None,

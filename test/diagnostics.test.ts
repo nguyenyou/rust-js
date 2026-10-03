@@ -57,6 +57,8 @@ for (const [name, source, message, crate] of [
   ["size_of_val of an unsized type parameter", 'pub fn f<T: ?Sized>(x: &T) -> usize { std::mem::size_of_val(x) }\npub fn g() -> usize { f("ab") }', "`size_of` of a type parameter"],
   // `ToString` is a dictionary of a generic `T`'s, but a `dyn ToString` has no pair to call through.
   ["to_string of a dyn ToString", 'pub fn f(x: &dyn ToString) -> String { x.to_string() }', "dyn std::string::ToString"],
+  // `collect()` into a `Result` or an `Option` is of an array (ADR 0036).
+  ["collecting into a Result of a String", 'pub fn f(v: Vec<Result<char, ()>>) -> Result<String, ()> { v.into_iter().collect() }', "collecting into a"],
   ["an Rc of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let r = std::rc::Rc::new(D); drop(r); }', "a std type holding a value with a destructor, `std::rc::Rc<D>`"],
   ["a user impl of a std trait", 'pub struct C;\nimpl std::hash::Hasher for C { fn finish(&self) -> u64 { 0 } fn write(&mut self, _: &[u8]) {} }', "user implementations of this standard or external trait"],
   ["comparing another crate's struct", 'pub fn f(a: std::time::Duration, b: std::time::Duration) -> bool { a < b }', "does not support"],

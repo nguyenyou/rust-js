@@ -624,6 +624,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Fold
             | Std::Sum
             | Std::CollectString
+            | Std::CollectFallible
             | Std::Collect
             | Std::Position
             | Std::Extreme(_)

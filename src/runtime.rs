@@ -176,6 +176,8 @@ helpers! {
     Formatted,
     FormatFloat,
     Lent,
+    CollectResults,
+    CollectOptions,
     CmpIn,
     CmpItems,
     ThenCmp,
@@ -293,6 +295,7 @@ impl Helper {
             Helper::Pop => &[Helper::Some],
             Helper::Iterator => &[Helper::SomeValue],
             Helper::DebugFields => &[Helper::Pretty],
+            Helper::CollectOptions => &[Helper::SomeValue],
             Helper::Formatted => &[Helper::Plus, Helper::ZeroPad, Helper::Pad],
             Helper::FormatFloat => &[Helper::Formatted, Helper::ToFixed],
             Helper::Successors | Helper::FromFn => &[Helper::SomeValue],
@@ -435,6 +438,8 @@ impl Helper {
             Helper::Formatted => include_str!("runtime/formatted.js"),
             Helper::FormatFloat => include_str!("runtime/format_float.js"),
             Helper::Lent => include_str!("runtime/lent.js"),
+            Helper::CollectResults => include_str!("runtime/collect_results.js"),
+            Helper::CollectOptions => include_str!("runtime/collect_options.js"),
             // `partial_cmp` of `f64`s: `None` if either is `NaN`.
             Helper::PartialCmp => include_str!("runtime/partial_cmp.js"),
             // A fieldless enum's variants, in the order they're declared.

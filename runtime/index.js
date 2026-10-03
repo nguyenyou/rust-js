@@ -3880,6 +3880,29 @@ export function $lent(it) {
   return Iterator.from({ next: () => it.next() });
 }
 
+// `collect()` into a `Result`: the first `Err`, where it stops, as Rust's
+// does, or `Ok` of all the values.
+export function $collectResults(items) {
+  const values = [];
+  for (const item of items) {
+    if (item.TAG === "Err") return item;
+    values.push(item._0);
+  }
+  return { TAG: "Ok", _0: values };
+}
+
+// `collect()` into an `Option`: `None` at the first `None`, where it stops,
+// as Rust's does, or all the values, each out of its box where it has one
+// (ADR 0051).
+export function $collectOptions(items, boxed = false) {
+  const values = [];
+  for (const item of items) {
+    if (item == null) return undefined;
+    values.push(boxed ? $someValue(item) : item);
+  }
+  return values;
+}
+
 export function $cmpIn(names, a, b) {
   return $cmp(names.indexOf(a), names.indexOf(b));
 }

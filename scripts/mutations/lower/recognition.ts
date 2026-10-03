@@ -227,4 +227,12 @@ export const mutations: Mutation[] = [
     tests: ["test/snapshots.test.ts"],
     snapshots: true,
   },
+  {
+    name: "collect-fallible-as-array",
+    breaks: "`collect()` into a `Result<Vec<_>, _>` is the array of `Result`s, not one `Result`",
+    file: "src/lower/recognition.rs",
+    find: "                        .is_some_and(|b| self.is_std_type(b, StdItem::Result) || self.option_of(b).is_some()) =>",
+    replace: "                        .is_some_and(|b| false && self.is_std_type(b, StdItem::Result)) =>",
+    tests: ["test/corpus.test.ts", "-t", "collect_fallible|calculator"],
+  },
 ];

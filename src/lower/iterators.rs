@@ -26,6 +26,7 @@ fn iterates(known: Std) -> bool {
             known,
             Std::Collect
                 | Std::CollectString
+                | Std::CollectFallible
                 | Std::Sum
                 | Std::Fold
                 | Std::Last
@@ -101,6 +102,8 @@ fn sensitive(known: Std) -> bool {
         Std::Take
             | Std::Rev
             | Std::Position
+            // It stops at the first `Err` or `None`.
+            | Std::CollectFallible
             | Std::ArrayMethod("find" | "some" | "every")
             | Std::IterComb(IterComb::TakeWhile | IterComb::Zip | IterComb::FindMap | IterComb::Nth)
     )
@@ -736,7 +739,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Take
             | Std::Cloned
             | Std::Fuse
-            | Std::Position => items,
+            | Std::Position
+            // Steps it, and stops at the first `Err` or `None`.
+            | Std::CollectFallible => items,
             _ => Expr::call(Expr::member(items, "toArray"), vec![]),
         };
         let mut rest = self.operands(&args[1..], out)?.into_iter();
@@ -851,6 +856,31 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         Expr::call(Expr::var("$heapFrom"), vec![items, compare])
                     }
                     _ => items,
+                }
+            }
+            // Into a `Result` or an `Option` of an array: the first `Err` or
+            // `None`, which ends it, or `Ok` of all the values, or the values.
+            Std::CollectFallible => {
+                let target = generic_args.types().nth(1).expect("a collection's type");
+                let ty::Adt(_, target_args) = target.kind() else {
+                    unreachable!("a `Result` or an `Option`")
+                };
+                let collection = target_args.type_at(0);
+                if !self.is_vec_like(collection) && !collection.boxed_ty().is_some_and(|t| t.is_slice()) {
+                    return Err(self.unsupported(span, &format!("collecting into a `{target}`")));
+                }
+                if self.option_of(target).is_some() {
+                    let mut list = vec![items];
+                    let item = generic_args.types().next().and_then(|i| self.iterator_item(i));
+                    if item.is_some_and(|item| self.option_of(item).is_some_and(|inner| self.boxed_payload(inner))) {
+                        self.runtime.insert(Helper::SomeValue);
+                        list.push(Expr::bool(true));
+                    }
+                    self.runtime.insert(Helper::CollectOptions);
+                    Expr::call(Expr::var("$collectOptions"), list)
+                } else {
+                    self.runtime.insert(Helper::CollectResults);
+                    Expr::call(Expr::var("$collectResults"), vec![items])
                 }
             }
             Std::Position => {
