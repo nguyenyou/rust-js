@@ -13,7 +13,6 @@ associated-type-bounds/rpit.rs	error: rust-js does not support values of type `<
 associated-type-bounds/union-bounds.rs	error: rust-js does not support values of type `_Un7<'_, '_, T>` yet
 associated-types/assoc-type-in-extern-fn-signature.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
 associated-types/associated-item-long-paths.rs	error: rust-js does not support `size_of` of a type parameter yet
-associated-types/associated-types-binding-in-trait.rs	error: rust-js does not support iterating over `<T as BitIter>::Iter` yet
 associated-types/associated-types-conditional-dispatch.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 associated-types/associated-types-doubleendediterator-object.rs	error: rust-js does not support values of type `dyn std::iter::DoubleEndedIterator<Item = isize>` yet
 associated-types/associated-types-iterator-binding.rs	error: rust-js does not support `&mut` to a `T` yet
@@ -115,7 +114,6 @@ consts/tuple-struct-constructors.rs	error: rust-js does not support constants of
 consts/zst_no_llvm_alloc.rs	error: rust-js does not support constants of type `*const ()` yet
 derives/debug/derive-debug.rs	error: rust-js does not support values of type `*const (dyn std::marker::Send + 'static)` yet
 derives/derive-hash-on-unit-struct.rs	error: rust-js does not support calling `std::hash::SipHasher::new` yet
-derives/derive-hrtb-for-bare-fn-field-with-lifetime.rs	error: rust-js does not support generic associated types yet
 derives/deriving-hash.rs	error: rust-js does not support user implementations of this standard or external trait yet
 derives/deriving-with-repr-packed-3.rs	error: rust-js does not support values of type `*const Aligned` yet
 derives/eq-ord/deriving-cmp-generic-enum.rs	error: rust-js does not support comparing `E<i32>`s yet
@@ -157,13 +155,8 @@ for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
-generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/generic-associated-type-bounds.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/issue-76826.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/iterable.rs	error: rust-js does not support generic associated types yet
-generic-associated-types/streaming_iterator.rs	error: rust-js does not support generic associated types yet
+generic-associated-types/issue-76826.rs	error: rust-js does not support calling `core::slice::<impl [T]>::get_mut` yet
+generic-associated-types/streaming_iterator.rs	error: rust-js does not support values of type `&mut I` yet
 higher-ranked/trait-bounds/assoc-type-projection-method.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet

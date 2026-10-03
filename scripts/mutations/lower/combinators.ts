@@ -90,4 +90,12 @@ export const mutations: Mutation[] = [
     replace: "                let fallback = self.default_value(inner, span)?;\n                match false {",
     tests: ["test/corpus.test.ts", "-t", "nested_options"],
   },
+  {
+    name: "generic-next-of-box",
+    breaks: "`c.items().next()` of an unknown iterator steps the box a `&mut` to it is, and throws",
+    file: "src/lower/combinators.rs",
+    find: "            StepOp::Next if self.is_generic_iter(receiver_ty) && !self.is_kept(args[0]) => {",
+    replace: "            StepOp::Next if false && self.is_generic_iter(receiver_ty) && !self.is_kept(args[0]) => {",
+    tests: ["test/corpus.test.ts", "-t", "generic_associated_types"],
+  },
 ];

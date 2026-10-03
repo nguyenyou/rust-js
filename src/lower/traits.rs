@@ -338,19 +338,28 @@ pub(super) fn item_bounds<'tcx>(
 ) -> Vec<(String, ty::TraitRef<'tcx>)> {
     let mut found = Vec::new();
     for item in tcx.associated_items(trait_id).in_definition_order() {
-        // A generic associated type's are its own parameters' too: those are
-        // refused (`validate`).
-        if tcx.def_kind(item.def_id) != DefKind::AssocTy
-            || item.is_impl_trait_in_trait()
-            || !tcx.generics_of(item.def_id).own_params.is_empty()
+        if tcx.def_kind(item.def_id) != DefKind::AssocTy || item.is_impl_trait_in_trait() {
+            continue;
+        }
+        // A generic associated type's own lifetimes are erased, as JS has
+        // none: one dictionary for every `Iter<'a>` (ADR 0146). One with other
+        // parameters of its own has no bounds (`gat_supported`).
+        let own = &tcx.generics_of(item.def_id).own_params;
+        if own
+            .iter()
+            .any(|param| !matches!(param.kind, ty::GenericParamDefKind::Lifetime))
         {
             continue;
         }
+        let item_args = ty::GenericArgs::for_item(tcx, item.def_id, |param, _| match args.get(param.index as usize) {
+            Some(&arg) => arg,
+            None => tcx.lifetimes.re_erased.into(),
+        });
         let bounds = tcx.explicit_item_bounds(item.def_id);
         for ((declared, _), (instantiated, _)) in
             bounds.iter_identity_copied().map(|item| item.skip_normalization()).zip(
                 bounds
-                    .iter_instantiated_copied(tcx, args)
+                    .iter_instantiated_copied(tcx, item_args)
                     .map(|item| item.skip_normalization()),
             )
         {
@@ -366,6 +375,25 @@ pub(super) fn item_bounds<'tcx>(
         }
     }
     found
+}
+
+/// Can rust-js have `def_id`, a generic associated type (ADR 0146)? Its own
+/// lifetimes are erased, and its own types and constants a dictionary entry
+/// would vary by: one of those with no bound has none.
+pub(super) fn gat_supported(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
+    // An impl's is its trait's, which has the bounds.
+    let def_id = tcx.trait_item_of(def_id).unwrap_or(def_id);
+    let own = &tcx.generics_of(def_id).own_params;
+    own.iter()
+        .all(|param| matches!(param.kind, ty::GenericParamDefKind::Lifetime))
+        || tcx
+            .explicit_item_bounds(def_id)
+            .iter_identity_copied()
+            .map(|item| item.skip_normalization())
+            .all(|(clause, _)| match clause.kind().skip_binder() {
+                ty::ClauseKind::Trait(bound) => tcx.is_lang_item(bound.def_id(), LangItem::Sized),
+                _ => true,
+            })
 }
 
 /// A type as a word of an evidence name: a type parameter's, `T`, or an

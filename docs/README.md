@@ -230,6 +230,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0143 A `Formatter`'s options are an object its writers are given](decisions/0143-formatter-options.md)
 - [0144 A lock on one thread is a `RefCell`, and an `Arc` is an `Rc`](decisions/0144-locks.md)
 - [0145 A generic function is given the size and name of a type parameter it asks for](decisions/0145-type-facts.md)
+- [0146 A generic associated type of lifetimes is an associated type](decisions/0146-generic-associated-types.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

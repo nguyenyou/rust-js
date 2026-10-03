@@ -85,9 +85,10 @@ pub(super) fn reject_unsupported(
                 continue;
             }
             // A trait's own, a type only a caller knows in generic code, as a
-            // type parameter is (ADR 0106). Not one with parameters of its own.
-            DefKind::AssocTy if tcx.generics_of(def_id).own_params.is_empty() => continue,
-            DefKind::AssocTy => "generic associated types",
+            // type parameter is (ADR 0106); a generic one too, of lifetimes,
+            // which JS hasn't, or of no bound a dictionary has (ADR 0146).
+            DefKind::AssocTy if traits::gat_supported(tcx, def_id.to_def_id()) => continue,
+            DefKind::AssocTy => "generic associated types with bounds",
             DefKind::Impl { of_trait: true }
                 if !tcx.is_automatically_derived(def_id.to_def_id())
                     && !traits::implementable(

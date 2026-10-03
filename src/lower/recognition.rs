@@ -1870,7 +1870,24 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let Some(trait_id) = self.tcx.get_diagnostic_item(name) else {
             return false;
         };
-        matches!(ty.kind(), ty::Param(_)) && {
+        // A type parameter, or an associated type of one, `<S as Source>::Iter`,
+        // that only a caller knows (ADR 0106).
+        let ty = self
+            .tcx
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty))
+            .unwrap_or(ty);
+        let unknown = matches!(
+            ty.kind(),
+            ty::Param(_)
+                | ty::Alias(
+                    _,
+                    ty::AliasTy {
+                        kind: ty::Projection { .. },
+                        ..
+                    }
+                )
+        );
+        unknown && {
             let tr = ty::TraitRef::new(self.tcx, trait_id, [ty]);
             matches!(
                 self.tcx.codegen_select_candidate(self.typing_env.as_query_input(tr)),

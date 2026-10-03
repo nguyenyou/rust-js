@@ -50,4 +50,12 @@ export const mutations: Mutation[] = [
     replace: "            _ if false => {\n",
     tests: ["test/diagnostics.test.ts","-t","externally implementable"],
   },
+  {
+    name: "gats-refused",
+    breaks: "a generic associated type of lifetimes, `type Iter<'a>`, is an error",
+    file: "src/lower/analysis/validation.rs",
+    find: "            DefKind::AssocTy if traits::gat_supported(tcx, def_id.to_def_id()) => continue,",
+    replace: "            DefKind::AssocTy if false && traits::gat_supported(tcx, def_id.to_def_id()) => continue,",
+    tests: ["test/corpus.test.ts", "-t", "generic_associated_types"],
+  },
 ];

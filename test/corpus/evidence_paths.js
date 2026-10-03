@@ -158,7 +158,7 @@ function iDigits() {
     $iDigits = {
       digit_iter: iDigits_digit_iter,
       digit_sum: (self) =>
-        iDigits_digit_iter(self)
+        Iterator.from(iDigits_digit_iter(self))
           .map((d) => d)
           .reduce((s, d) => (s + d) >>> 0, 0),
     };

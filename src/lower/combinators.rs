@@ -176,6 +176,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Expr::call(Expr::var(name), list)
         };
         Ok(match op {
+            // A generic one, an array or a JS iterator, stepped where it's made,
+            // not kept: `Iterator.from` steps either (ADR 0061), the iterator
+            // itself, not the box a `&mut` to a generic value is (ADR 0099).
+            StepOp::Next if self.is_generic_iter(receiver_ty) && !self.is_kept(args[0]) => {
+                let made = match self.thir[self.strip(args[0])].kind {
+                    ExprKind::Borrow { arg, .. } => arg,
+                    _ => args[0],
+                };
+                let it = self.expr(made, out)?;
+                let it = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![it]);
+                if boxed {
+                    self.runtime.insert(Helper::Some);
+                    helper(self, Helper::NextSome, "$nextSome", vec![it])
+                } else {
+                    helper(self, Helper::Next, "$next", vec![it])
+                }
+            }
             StepOp::Next if (stepping || lazy) && boxed => {
                 let it = self.expr(args[0], out)?;
                 self.runtime.insert(Helper::Some);

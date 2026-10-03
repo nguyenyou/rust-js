@@ -71,7 +71,8 @@ an impl's signature, it's that type.
 - **A value of one has nothing to drop only where nothing does**, the
   crate's own types and a library's: no drop function is given for one, as
   a type parameter's is (ADR 0098). Elsewhere it's an error.
-- **Not one with parameters of its own**, `type Item<'a>`: an error.
+- **One with lifetimes of its own**, `type Item<'a>`, is one too (ADR 0146).
+  (Amended: it was an error.)
 
 **A trait's generic method is given its own evidence where it's called,**
 `describe<T: Display>`'s `TDisplay`:
