@@ -707,7 +707,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Dynamic(predicates, ..)
                 if predicates
                     .principal_def_id()
-                    .is_some_and(|id| id.is_local() && self.dyn_supported(id)) =>
+                    .is_some_and(|id| id.is_local() && self.dyn_supported(id) || self.is_std_pair_trait(id)) =>
             {
                 return None;
             }

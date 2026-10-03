@@ -1678,6 +1678,8 @@ pub(super) fn operational(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_,
         || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+        // A `dyn Error`'s (ADR 0141), its `Display` and `Debug` its supertraits'.
+        || tcx.is_diagnostic_item(Symbol::intern("Error"), id)
         // Its evidence is the writer or reader itself (ADR 0081).
         || serde_trait(tcx, id).is_some()
         // `a + b` of a `T: Add`, and `x.into()` of a `T: Into<U>` (ADR 0108).

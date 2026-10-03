@@ -489,8 +489,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.erase_and_anonymize_regions(from) == self.tcx.erase_and_anonymize_regions(to) {
             return Some(value);
         }
-        // A std trait's dictionary, like `Copy`'s, has no supertraits in it.
-        if !self.is_rust_trait(from.def_id) {
+        // A std trait's dictionary, like `Copy`'s, has no supertraits in it,
+        // but `Error`'s has its `Display` and `Debug` (ADR 0141).
+        if !self.is_rust_trait(from.def_id) && !self.is_std_pair_trait(from.def_id) {
             return None;
         }
         for (name, tr, _) in supertraits(self.tcx, from.def_id, from.args) {
@@ -752,6 +753,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let tr = ty::TraitRef::from_assoc(self.tcx, trait_id, generic_args);
         if matches!(tr.self_ty().kind(), ty::Dynamic(..)) && operational(self.tcx, self.krate.foreign, trait_id) {
+            // A std trait's dictionary has only what it's given: `Error`'s, its
+            // `source` (ADR 0141), and none of the methods std provides.
+            if !self.is_rust_trait(trait_id) && self.tcx.defaultness(id).has_value() && !self.is_error_source(id) {
+                let what = format!("`{}` of a `{}`", self.tcx.item_name(id), tr.self_ty());
+                return Err(self.unsupported(span, &what));
+            }
             let mut values = values;
             let receiver = values.remove(0);
             // The pair is read twice, so one with effects goes in a `const`
@@ -929,12 +936,77 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         id.is_local() || self.krate.foreign.in_library(id)
     }
 
+    /// The trait a `dyn` of `ty` is a pair of, `{ value, impl }` (ADR 0049):
+    /// one rust-js compiled, or std's `Display` or `Error`, whose
+    /// dictionaries it makes (ADR 0141). A `dyn Debug` is a string instead.
     pub(super) fn dynamic_trait(&self, ty: Ty<'tcx>) -> Option<DefId> {
         let inner = self.pointee(ty);
         match inner.kind() {
-            ty::Dynamic(predicates, ..) => predicates.principal_def_id().filter(|&id| self.is_rust_trait(id)),
+            ty::Dynamic(predicates, ..) => predicates
+                .principal_def_id()
+                .filter(|&id| self.is_rust_trait(id) || self.is_std_pair_trait(id)),
             _ => None,
         }
+    }
+
+    /// `{}` or `{:?}` of `pair`, a `dyn` of `ty`, as `writer`, `Display` or
+    /// `Debug`, says: through its dictionary, `d.impl.fmt(d.value)`, or a
+    /// supertrait's, `e.impl.Display().fmt(e.value)` (ADR 0141). None if
+    /// `ty` isn't such a `dyn`.
+    pub(super) fn dyn_written(&self, pair: Expr, ty: Ty<'tcx>, writer: DefId, span: Span) -> R<Option<Expr>> {
+        if !matches!(ty.kind(), ty::Dynamic(..)) || self.dynamic_trait(ty).is_none() {
+            return Ok(None);
+        }
+        let from = self.dyn_trait_ref(ty, ty).expect("a principal");
+        let to = ty::TraitRef::new(self.tcx, writer, [ty]);
+        let Some(dictionary) = self.super_evidence(from, to, Expr::member(pair.clone(), "impl")) else {
+            return Ok(None);
+        };
+        // Read twice: once for its dictionary, once for its value.
+        if !pair.reads_same() {
+            return Err(self.unsupported(span, &format!("showing a `{ty}` made where it's shown")));
+        }
+        Ok(Some(Expr::call(
+            Expr::member(dictionary, "fmt"),
+            vec![Expr::member(pair, "value")],
+        )))
+    }
+
+    /// The dictionary of a `Box<dyn Error>`, `to`, made from a `from` by std's
+    /// `From` (ADR 0141): the error's own `Error`, or a message's,
+    /// `$stringError()`. None if `to` isn't one.
+    pub(super) fn dyn_error_from(&mut self, to: Ty<'tcx>, from: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
+        let error = Symbol::intern("Error");
+        let is_error = |id: DefId| self.tcx.is_diagnostic_item(error, id);
+        let Some(inner) = to.boxed_ty() else {
+            return Ok(None);
+        };
+        if !matches!(inner.kind(), ty::Dynamic(traits, ..) if traits.principal_def_id().is_some_and(is_error)) {
+            return Ok(None);
+        }
+        if self.is_string_like(from) {
+            self.runtime.insert(Helper::StringError);
+            return Ok(Some(Expr::call(Expr::var("$stringError"), Vec::new())));
+        }
+        let error = self.tcx.get_diagnostic_item(error).expect("std has `Error`");
+        let tr = ty::TraitRef::new(self.tcx, error, [from]);
+        self.dictionary(tr, span).map(Some)
+    }
+
+    /// `Error::source`, which a `dyn Error`'s dictionary has (ADR 0141).
+    fn is_error_source(&self, id: DefId) -> bool {
+        self.tcx.item_name(id) == Symbol::intern("source")
+            && self
+                .tcx
+                .trait_of_assoc(id)
+                .is_some_and(|tr| self.tcx.is_diagnostic_item(Symbol::intern("Error"), tr))
+    }
+
+    /// `Display` or `Error`: a std trait whose `dyn` is a pair (ADR 0141).
+    pub(super) fn is_std_pair_trait(&self, id: DefId) -> bool {
+        ["Display", "Error"]
+            .into_iter()
+            .any(|name| self.tcx.is_diagnostic_item(Symbol::intern(name), id))
     }
 
     fn dyn_trait_ref(&self, ty: Ty<'tcx>, self_ty: Ty<'tcx>) -> Option<ty::TraitRef<'tcx>> {
@@ -1112,8 +1184,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 continue;
             }
             // A std trait's provided methods, like `Clone::clone_from`,
-            // aren't in its dictionary: nothing calls them through it.
-            if !self.is_rust_trait(tr.def_id) && self.tcx.defaultness(item.def_id).has_value() {
+            // aren't in its dictionary: nothing calls them through it. But a
+            // `dyn Error` calls `source` (ADR 0141).
+            let source = self.is_error_source(item.def_id);
+            if !self.is_rust_trait(tr.def_id) && self.tcx.defaultness(item.def_id).has_value() && !source {
                 continue;
             }
             // The method's own parameters: lifetimes, `fn bar<'b>`, are erased,
@@ -1127,6 +1201,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .resolve_instance(item.def_id, args)?
                 .ok_or_else(|| self.unsupported(span, "this trait implementation"))?;
             let method = instance.def_id();
+            // std's own `source`: `None`.
+            if source && !self.krate.fns.contains_key(&method) {
+                let none = Expr::arrow(
+                    Vec::new(),
+                    vec![StmtKind::Return(Some(Expr::undefined())).at(js::Span::NONE)],
+                );
+                props.push(Prop::Field(bindings::fn_name(self.tcx, item.def_id), none));
+                continue;
+            }
             // A library's trait's default, whose body is the library's (ADR 0100).
             if self.krate.foreign.in_library(method) {
                 let what = format!(

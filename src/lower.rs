@@ -1674,6 +1674,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // returned as it is, or one with a `From` of the crate's own, and it's
         // `{ TAG: "Err", _0: from(error) }`.
         let mut from = None;
+        // Or a `Box<dyn Error>`, of the error and its dictionary (ADR 0141).
+        let mut boxed_error = None;
         if !is_option {
             let ExprKind::Match { ref arms, .. } = self.thir[self.strip(question)].kind else {
                 unreachable!("checked")
@@ -1697,10 +1699,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let (Some(to), Some(from_ty)) = (to, from_ty) else {
                     return Err(self.unsupported(span, "this `?`"));
                 };
-                from = Some(
-                    self.error_from(to, from_ty)?
-                        .ok_or_else(|| self.unsupported(span, "`?` that converts the error with this `From`"))?,
-                );
+                match self.dyn_error_from(to, from_ty, span)? {
+                    Some(dictionary) => boxed_error = Some(dictionary),
+                    None => {
+                        from =
+                            Some(self.error_from(to, from_ty)?.ok_or_else(|| {
+                                self.unsupported(span, "`?` that converts the error with this `From`")
+                            })?);
+                    }
+                }
             }
         }
         let (subject, _) = self.subject(tried, base.unwrap_or(if is_option { "value" } else { "result" }), out)?;
@@ -1715,10 +1722,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             (Expr::bin(Op::LooseEq, subject, Expr::null()), Expr::undefined(), value)
         } else {
             let failed = Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str("Err"));
-            let ret = match from {
-                Some(from) => Expr::object(vec![
+            let error = Expr::member(subject.clone(), "_0");
+            let converted = match (from, boxed_error) {
+                (Some(from), _) => Some(Expr::call(from, vec![error])),
+                (None, Some(dictionary)) => Some(Expr::object(vec![
+                    Prop::Field("value".into(), error),
+                    Prop::Field("impl".into(), dictionary),
+                ])),
+                (None, None) => None,
+            };
+            let ret = match converted {
+                Some(converted) => Expr::object(vec![
                     Prop::Field("TAG".into(), Expr::str("Err")),
-                    Prop::Field("_0".into(), Expr::call(from, vec![Expr::member(subject.clone(), "_0")])),
+                    Prop::Field("_0".into(), converted),
                 ]),
                 None => subject.clone(),
             };

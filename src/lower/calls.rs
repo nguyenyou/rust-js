@@ -156,6 +156,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             return Err(self.unsupported(span, "comparing `&mut`s"));
         }
+        // `Box<dyn Error>` from an error or a message, by std's `From`, or
+        // the `Into` it gives (ADR 0141): `{ value, impl }`.
+        if let Some((to, from)) = self.converted(def_id, generic_args)
+            && let Some(dictionary) = self.dyn_error_from(to, from, span)?
+        {
+            let value = self.expr(args[0], out)?;
+            return Ok(Some(Expr::object(vec![
+                Prop::Field("value".into(), value),
+                Prop::Field("impl".into(), dictionary),
+            ])));
+        }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
             return Ok(Some(written));
         }
@@ -1408,6 +1419,20 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .flatten()
                     .is_some_and(|i| self.is_rust_fn(i.def_id()))
         })
+    }
+
+    /// What `From::from` or `Into::into` makes, and from what.
+    fn converted(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<(Ty<'tcx>, Ty<'tcx>)> {
+        let tr = self.tcx.trait_of_assoc(def_id)?;
+        let mut types = args.types();
+        let (first, second) = (types.next()?, types.next()?);
+        if self.tcx.is_diagnostic_item(rustc_span::sym::From, tr) {
+            Some((first, second))
+        } else if self.tcx.is_diagnostic_item(rustc_span::sym::Into, tr) {
+            Some((second, first))
+        } else {
+            None
+        }
     }
 
     pub(super) fn fn_ref(&self, def_id: DefId) -> Expr {

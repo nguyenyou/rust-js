@@ -3256,6 +3256,16 @@ export function $debugJsonError(e) {
   return `Error(${$debugStr(e.message)}, line: ${e.line}, column: ${e.column})`;
 }
 
+// std's error of a message, which `Box<dyn Error>::from("..")` makes: a
+// `dyn Error`'s dictionary, whose `value` is the message (ADR 0141).
+export function $stringError() {
+  return {
+    Debug: () => ({ fmt: (message) => $debugStr(message) }),
+    Display: () => ({ fmt: (message) => message }),
+    source: () => undefined,
+  };
+}
+
 export function $lowerExp(x) {
   if (Number.isNaN(x)) return "NaN";
   if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";

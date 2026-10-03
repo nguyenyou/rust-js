@@ -103,6 +103,7 @@ helpers! {
     FromJson,
     JsonValue,
     JsonError,
+    StringError,
     LowerExp,
     FromDigit,
     FromU32,
@@ -293,6 +294,7 @@ impl Helper {
             Helper::DivEuclid => &[Helper::Div],
             Helper::NextSome => &[Helper::Some],
             Helper::JsonError => &[Helper::DebugStr],
+            Helper::StringError => &[Helper::DebugStr],
             Helper::StrSlice => &[Helper::ByteLen, Helper::DebugStr],
             Helper::Find | Helper::Rfind | Helper::CharIndices => &[Helper::ByteLen],
             Helper::FromJson => &[
@@ -566,6 +568,7 @@ impl Helper {
             // A `serde_json::Error`, `{ message, line, column }`, shown as serde_json
             // shows one: a place only when it has one (line 0 is none).
             Helper::JsonError => include_str!("runtime/json_error.js"),
+            Helper::StringError => include_str!("runtime/string_error.js"),
             // A `serde_json::Error` on its way out: a message, and where in the
             // text, line 0 when it's not about a place.
             Helper::JsonFail => include_str!("runtime/json_fail.js"),

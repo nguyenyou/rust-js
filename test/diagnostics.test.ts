@@ -26,6 +26,9 @@ for (const [name, source, message, crate] of [
   // A generic `T`'s `fmt` is given no options, which a std type's would pad: not yet.
   ["a width in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:>6}", t) }', "a width for a"],
   ["a sign in generic code", 'pub fn f<T: std::fmt::Display>(t: &T) -> String { format!("{:+}", t) }', "a sign for a"],
+  // A `dyn Error`'s dictionary has its `source`, and none of what else std provides (ADR 0141).
+  ["a deprecated method of a dyn Error", '#![allow(deprecated)]\npub fn f(e: &dyn std::error::Error) -> String { e.description().to_string() }', "`description` of a"],
+  ["a width for a dyn", 'pub fn f(d: &dyn std::fmt::Display) -> String { format!("{:>6}", d) }', "a width for a"],
   ["zero padding in generic code", 'pub fn f<T: std::fmt::Debug>(t: &T) -> String { format!("{:08?}", t) }', "a width for a"],
   ["precision of a struct", 'pub struct P; impl std::fmt::Display for P { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { f.write_str("p") } }\npub fn f() -> String { format!("{:.2}", P) }', "a precision for a"],
   // ADR 0121: a key found by its value is one a derived `Eq` compares.

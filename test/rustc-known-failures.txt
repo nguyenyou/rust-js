@@ -265,8 +265,6 @@ numbers-arithmetic/apfloat-modulo-wrong.rs	error: rust-js does not support calli
 numbers-arithmetic/float-int-invalid-const-cast.rs	error: rust-js does not support constants of type `u128` yet
 numbers-arithmetic/i128-min-literal-parses.rs	error: rust-js does not support values of type `i128` yet
 numbers-arithmetic/integer-literal-suffix-inference-2.rs	error: rust-js does not support values of type `*const ()` yet
-object-lifetime/object-lifetime-default-from-ref-struct.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
-object-lifetime/object-lifetime-default-from-rptr.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 or-patterns/search-via-bindings.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 overloaded/fixup-deref-mut.rs	error: rust-js does not support values of type `*mut Point` yet
@@ -353,9 +351,7 @@ traits/bug-7183-generics.rs	error: rust-js does not support values of type `std:
 traits/coercion.rs	error: rust-js does not support values of type `dyn std::io::Write` yet
 traits/default-method/skip-default-method-if-normalization-fails.rs	error: rust-js does not support `&mut` to a `Self` yet
 traits/dyn-drop-principal.rs	error: rust-js does not support statics of type `&'static (dyn std::marker::Send + std::marker::Sync + 'static)` yet
-traits/dyn-trait.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support calling `std::io::Write::write_fmt` yet
-traits/error-trait-object-from-string.rs	error: rust-js does not support values of type `dyn std::error::Error + std::marker::Send + std::marker::Sync` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support implementation evidence for `<dyn Bar as Foo>` yet
 traits/infer-from-object-issue-26952.rs	error: rust-js does not support implementation evidence for `<dyn Trait<A> as Trait<A>>` yet
 traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops::Add::add` yet
@@ -363,16 +359,12 @@ traits/issue-43132.rs	error: rust-js does not support implementation evidence fo
 traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `size_of` of a type parameter yet
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support implementation evidence for `<dyn Q as Q>` yet
-traits/object/lifetime-first.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<Point<S> as Positioned<S>>` yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
-traits/trait-upcasting/basic.rs	error: rust-js does not support `{:?}` of a `dyn Baz` yet
 traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
-traits/trait-upcasting/diamond.rs	error: rust-js does not support `{:?}` of a `dyn Baz` yet
-traits/trait-upcasting/lifetime.rs	error: rust-js does not support `{:?}` of a `dyn Baz` yet
 traits/trait-upcasting/multiple-supertraits-modulo-normalization.rs	error: rust-js does not support this trait upcast yet
-traits/trait-upcasting/struct.rs	error: rust-js does not support `{:?}` of a `dyn Baz` yet
+traits/trait-upcasting/struct.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
 traits/with-bounds-default.rs	error: rust-js does not support this call, for an `Option` of a generic type yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet

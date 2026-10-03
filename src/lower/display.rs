@@ -574,6 +574,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::call(Expr::var("$displayF32"), vec![value]));
         }
         let display = self.display_trait();
+        if let Some(shown) = self.dyn_written(value.clone(), ty, display, span)? {
+            return Ok(shown);
+        }
         if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, display, [ty]);
             let dictionary = self
@@ -643,6 +646,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let num = Num::of(ty);
         if self.is_dyn_debug(ty) {
             return Ok(value);
+        }
+        if let Some(shown) = self.dyn_written(value.clone(), self.shown_type(ty), self.debug_trait(), span)? {
+            return Ok(shown);
         }
         if num == Some(Num::F64) {
             self.runtime.insert(Helper::DebugF64);

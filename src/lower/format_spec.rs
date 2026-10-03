@@ -8,7 +8,7 @@ use super::representation::Num;
 use super::{FnCx, R};
 use crate::js::{Expr, Op};
 use crate::runtime::Helper;
-use rustc_middle::ty::Ty;
+use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
 
 /// A placeholder's options, as core's `FormattingOptions` encodes them.
@@ -84,10 +84,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if spec.debug_hex {
             return Err(self.unsupported(span, "`{:x?}`"));
         }
-        // A generic `T`'s `fmt`, or one a `Box` of it shows, is given no
-        // options, where a std type's would pad or sign what it shows.
+        // A generic `T`'s `fmt`, or a `dyn`'s, or one a `Box` of either
+        // shows, is given no options, where a std type's would pad or sign
+        // what it shows: only its dictionary knows which it is.
         let shown = self.shown_type(ty);
-        if self.is_unknown(shown) {
+        if self.is_unknown(shown) || matches!(shown.kind(), ty::Dynamic(..)) {
             if width.is_some() {
                 return Err(self.unsupported(span, &format!("a width for a `{shown}`")));
             }
