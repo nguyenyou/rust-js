@@ -94,6 +94,61 @@ test("iterators.rs alone answers whether a value is lazy", () => {
   }
 });
 
+// What the front end keeps as it lowers a function is grouped by concern,
+// each group read and written by the module that owns it, which the rest
+// ask: `self.is_boxed(var)`, not `self.locals.mut_refs.boxes`. Six modules
+// once wrote the `&mut`s' sets, and four the stepped iterators' (the
+// architecture audit).
+const owners: Record<string, string[]> = {
+  "self.drop_state": ["src/lower/drops.rs", "src/lower/drops/types.rs"],
+  "self.chains": ["src/lower/iterators.rs"],
+  "self.stepping": ["src/lower/iterators.rs"],
+  "self.writing": ["src/lower/display.rs"],
+  ".mut_refs.": ["src/lower/mut_refs.rs"],
+  "self.cloning": ["src/lower/std_impls.rs"],
+  "self.walks": ["src/lower/copies.rs", "src/lower/std_impls.rs", "src/lower/support.rs"],
+};
+test("each group of a function's state is read and written by its owner", () => {
+  for (const file of ["src/lower.rs", ...files("src/lower")]) {
+    const text = read(file);
+    for (const [state, allowed] of Object.entries(owners)) {
+      if (allowed.includes(file)) continue;
+      const pattern = new RegExp(`${state.replaceAll(".", "\\.")}${state.endsWith(".") ? "" : "\\b"}`);
+      expect([file, state, pattern.test(text)]).toEqual([file, state, false]);
+    }
+  }
+});
+
+// calls.rs lowers calls, and nothing else asks it anything: what a function
+// is in JS is items.rs's, a `&mut` given to one mut_refs.rs's. Sixteen
+// modules called it once (the architecture audit).
+test("calls.rs is a dispatcher only lower.rs calls", () => {
+  const defined = (file: string) => new Set([...read(file).matchAll(/^ {4}(?:pub\([^)]*\) )?fn (\w+)/gm)].map(m => m[1]));
+  const others = ["src/lower.rs", ...files("src/lower")].filter(f => f !== "src/lower/calls.rs");
+  const elsewhere = new Set(others.flatMap(f => [...defined(f)]));
+  const own = [...defined("src/lower/calls.rs")].filter(name => !elsewhere.has(name));
+  expect(own.length).toBeGreaterThan(0);
+  for (const file of others.filter(f => f !== "src/lower.rs")) {
+    const called = own.filter(name => new RegExp(`\\bself\\.${name}\\(`).test(read(file)));
+    expect([file, called]).toEqual([file, []]);
+  }
+});
+
+// A question recognition answers is asked of it, or through shortcuts.rs,
+// where each shortcut is one line, so where it's answered is plain. They
+// were in ten modules once, each looking like that module's own.
+test("shortcuts to recognition are in shortcuts.rs, and only shorten", () => {
+  const forward = /^ {4}(?:pub\([^)]*\) )?fn (\w+)(?:<[^>]*>)?\([^{]*\{\n\s+self\.recognition\(\)\.\w+\([^;{}]*\)\n {4}\}\n/gm;
+  for (const file of ["src/lower.rs", ...files("src/lower")].filter(f => f !== "src/lower/shortcuts.rs" && !f.includes("/recognition"))) {
+    // iterators.rs's own way to the answer its rule keeps it alone in asking.
+    const found = [...read(file).matchAll(forward)].map(m => m[1]).filter(name => !(file.endsWith("/iterators.rs") && name === "is_lazy_iter"));
+    expect([file, found]).toEqual([file, []]);
+  }
+  const shortcuts = read("src/lower/shortcuts.rs");
+  const functions = [...shortcuts.matchAll(/^ {4}(?:pub\([^)]*\) )?fn /gm)].length;
+  expect([...shortcuts.matchAll(forward)].length).toBe(functions);
+});
+
 // A call is lowered by a dispatcher that hands it to what knows it: the
 // crate's own functions, bindings and closures to `special_call`, a std
 // function to `std_call` and its domain's function (vecs.rs, options.rs,

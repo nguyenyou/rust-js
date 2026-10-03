@@ -84,6 +84,23 @@ Each is checked to stay that way.
 | `jsx.rs`, `jsx_api.rs`, `bindings.rs` | JSX, and bindings to JavaScript |
 | `library.rs`, `sources.rs`, `pipeline.rs` | Libraries' contracts, source files, and the crate as a whole |
 
+**Who owns what.** A concept that more than one module needs has one
+module that owns it: its state, and the questions about it, which the
+others ask. [architecture.test.ts](../test/architecture.test.ts) holds
+the ones below to it.
+
+| Concept | Owner | What the others ask |
+|---|---|---|
+| What dropping runs, and where | `drops.rs`, `drops/` | `drop_value`, `moved`, `temporary`, `enter_body_drops` |
+| Whether a value is a JS iterator or an array | `iterators.rs` | `is_lazy_value`, `mark_lazy_chain`, `dyn_iterator` |
+| Locals stepped through, `$iter`s (ADR 0071) | `iterators.rs` | `steps_through`, `bound_as_iter`, `is_stepping` |
+| `&mut`s to values JS can't change in place | `mut_refs.rs` | `is_boxed`, `is_alias`, `slot`, `is_item_call` |
+| Writing to a `Formatter` | `display.rs` | `written`, `writer_alternate`, `with_dyn_debug` |
+| What a function or a binding is in JS | `items.rs` | `fn_ref`, `js_ref`, `resolve_instance` |
+| Dictionaries and evidence | `traits.rs` | `dictionary`, `evidence_for`, `impl_call` |
+| When a value is copied | `copies.rs` | `copy_if_needed`, `contains_mutated` |
+| Which std function a call is | `recognition.rs` | `classify`, and its answers through `shortcuts.rs` |
+
 **Calls.** A call is lowered by `calls.rs::call`, a short dispatcher;
 what a function is in JS is `items.rs`'s, and a `&mut` given to one
 `mut_refs.rs`'s:
