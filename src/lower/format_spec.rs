@@ -11,6 +11,15 @@ use crate::runtime::Helper;
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
+/// A placeholder's options, with its width and precision, which a `{:?}`
+/// gives each part of what it shows (ADR 0058).
+#[derive(Clone)]
+pub(super) struct Options {
+    pub(super) spec: Spec,
+    pub(super) width: Option<Expr>,
+    pub(super) precision: Option<Expr>,
+}
+
 /// A placeholder's options, as core's `FormattingOptions` encodes them.
 #[derive(Clone, Copy, PartialEq, Default)]
 pub(super) struct Spec {
@@ -91,7 +100,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // that only writes ignores them. A generic `T`'s, a `dyn`'s, or a
         // `Box` of either's is a dictionary's, which only it knows.
         let shown = self.shown_type(ty);
-        let leaf = num.is_some() || shown.is_bool() || self.is_string_like(shown);
+        // A `{:?}` of parts that are all std's leaves gives each the options.
+        let options = width.is_some() || precision.is_some() || spec.plus;
+        if kind == Std::FmtDebug && options && !self.is_debug_leaf(shown) && self.debug_parts_are_leaves(shown) {
+            let options = Options { spec, width, precision };
+            let pretty = if spec.alternate { Pretty::Always } else { Pretty::Plain };
+            return self.with_options(Some(options), |cx| cx.debug_string_with(value, ty, span, &pretty));
+        }
+        let leaf = num.is_some() || shown.is_bool() || shown.is_unit() || self.is_string_like(shown);
         if (width.is_some() || spec.plus) && !leaf {
             let display = self.display_trait();
             let handed_on = match kind {
@@ -195,7 +211,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Width: only what Rust pads. A `str`'s `{:?}` and a `fmt` of the
         // crate's own don't.
         let Some(width) = width else { return Ok(text) };
-        let pads = num.is_some() || (kind == Std::FmtDisplay && (self.is_string_like(ty) || ty.is_bool()));
+        // A `bool`'s `Debug` is its `Display`, and `()`'s pads `"()"`.
+        let pads = num.is_some()
+            || ty.is_bool()
+            || (kind == Std::FmtDisplay && self.is_string_like(ty))
+            || (kind == Std::FmtDebug && ty.is_unit());
         if !pads {
             return Ok(text);
         }

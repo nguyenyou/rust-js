@@ -2,8 +2,9 @@
 //! string it writes. Its formatter is a local string, each write is `f += s`,
 //! and `fmt::Result`, which is always `Ok`, is nothing at all.
 
-use super::recognition::ChannelError;
+use super::format_spec::Options;
 use super::recognition::WriteCall;
+use super::recognition::{ChannelError, Std};
 use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -12,7 +13,7 @@ use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, PatKind};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol};
+use rustc_span::{Span, Symbol, sym};
 
 /// Whether `{:?}` is pretty, `{:#?}` (ADR 0137): never, always, or as a
 /// writer function's `alternate` says.
@@ -29,6 +30,8 @@ pub(super) struct Writing {
     /// `alternate` says, while a derived `Debug`'s or a builder's
     /// arguments are lowered (ADR 0137), plain anywhere else.
     dyn_debug: Pretty,
+    /// The options a `{:?}` being shown gives each part of it (ADR 0058).
+    options: Option<Options>,
 }
 
 #[derive(Clone, Default)]
@@ -81,6 +84,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let made = lower(self);
         self.writing.dyn_debug = outer;
         made
+    }
+
+    /// `lower`, during which each part of a `{:?}` shown is given `options`.
+    pub(super) fn with_options<T>(&mut self, options: Option<Options>, lower: impl FnOnce(&mut Self) -> T) -> T {
+        let outer = std::mem::replace(&mut self.writing.options, options);
+        let made = lower(self);
+        self.writing.options = outer;
+        made
+    }
+
+    /// A part of a `{:?}` that applies its options itself, as std's `fmt`
+    /// does: a number, a `bool` and `()` pad, and a string doesn't.
+    pub(super) fn is_debug_leaf(&self, ty: Ty<'tcx>) -> bool {
+        Num::of(ty).is_some() || ty.is_bool() || ty.is_unit() || self.is_string_like(ty)
+    }
+
+    /// Is each part of what `{:?}` of `ty` shows, all the way down, a leaf
+    /// rust-js applies options to (`is_debug_leaf`): an `Option`'s, a
+    /// `Result`'s, a tuple's, an array's, a `Vec`'s, a map's or a set's?
+    pub(super) fn debug_parts_are_leaves(&self, ty: Ty<'tcx>) -> bool {
+        let ty = self.shown_type(ty.peel_refs());
+        if self.is_debug_leaf(ty) {
+            return true;
+        }
+        match ty.kind() {
+            ty::Tuple(items) => items.iter().all(|t| self.debug_parts_are_leaves(t)),
+            ty::Array(item, _) | ty::Slice(item) => self.debug_parts_are_leaves(*item),
+            // Their items' types, not an allocator's or a hasher's.
+            ty::Adt(_, args) if self.option_of(ty).is_some() || self.is_vec_like(ty) || self.is_set(ty) => {
+                self.debug_parts_are_leaves(args.type_at(0))
+            }
+            ty::Adt(_, args) if self.is_std_adt(ty, sym::Result) || self.is_map(ty) => {
+                self.debug_parts_are_leaves(args.type_at(0)) && self.debug_parts_are_leaves(args.type_at(1))
+            }
+            _ => false,
+        }
     }
 
     /// `value`, of type `ty`, made a `&dyn Debug` here: the string it shows
@@ -651,6 +690,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// value is shown as the value is.
     pub(super) fn debug_string_with(&mut self, value: Expr, ty: Ty<'tcx>, span: Span, pretty: &Pretty) -> R<Expr> {
         let (value, ty) = self.through_refs(value, ty);
+        // A part of a `{:?}` given its options (ADR 0058): a leaf applies them.
+        if self.writing.options.is_some() && self.is_debug_leaf(ty) {
+            let options = self.writing.options.take().expect("checked");
+            let shown = self.format_value(
+                value,
+                (Std::FmtDebug, ty),
+                options.spec,
+                (options.width.clone(), options.precision.clone()),
+                span,
+            );
+            self.writing.options = Some(options);
+            return shown;
+        }
         // serde_json's own, `Object {"a": Number(1)}` (ADR 0083).
         if let Some(shown) = self.json_value_debug(value.clone(), ty, pretty) {
             return Ok(shown);

@@ -46,6 +46,12 @@ applied as Rust applies them:**
   `i16`).
 - **Still errors:** `{:e}`, `{:x?}`, a precision for a value it doesn't
   apply to, and options in a `panic!` message.
+- **A `{:?}`'s options are given to each part of what it shows,** where
+  each part is one of std's leaves, all the way down: `{:5?}` of `Some(1)`
+  is `Some(${"1".padStart(5)})`, a `Vec`'s items each padded, a map's keys
+  and values. A number, a `bool` and `()` apply them, as std's `fmt`s do,
+  and a string's `Debug` doesn't. A `bool`'s `{:5?}` pads, as its `Display`
+  does. (Amended: each was an error, and a `bool`'s `{:5?}` wasn't padded.)
 - **A width or a sign is an error where it wouldn't reach the `fmt` that
   uses it.** Rust gives a placeholder's options to the value's `fmt`: a
   `{:?}` of an `Option`, a tuple, a `Vec` or a derived `Debug` gives them

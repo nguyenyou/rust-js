@@ -26,4 +26,20 @@ export const mutations: Mutation[] = [
     replace: "                Std::FmtDisplay => self.hands_options_on(display, shown)?,",
     tests: ["test/diagnostics.test.ts", "-t", "generic code|a width for a dyn"],
   },
+  {
+    name: "debug-options-not-given",
+    breaks: "`{:5?}` of `Some(1)` is refused, where each of its parts can be given the options",
+    file: "src/lower/format_spec.rs",
+    find: "!self.is_debug_leaf(shown) && self.debug_parts_are_leaves(shown) {",
+    replace: "!self.is_debug_leaf(shown) && self.debug_parts_are_leaves(shown) && false {",
+    tests: ["test/corpus.test.ts", "-t", "debug_options"],
+  },
+  {
+    name: "debug-bool-unpadded",
+    breaks: "`{:5?}` of `true` isn't padded, where a `bool`'s `Debug` is its `Display`, which pads",
+    file: "src/lower/format_spec.rs",
+    find: "        let pads = num.is_some()\n            || ty.is_bool()\n",
+    replace: "        let pads = num.is_some()\n",
+    tests: ["test/corpus.test.ts", "-t", "debug_options"],
+  },
 ];

@@ -91,4 +91,12 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts","-t","pretty_debug"],
     snapshots: true,
   },
+  {
+    name: "debug-leaf-ignores-options",
+    breaks: "a part of a `{:?}` ignores the options it's given, so `{:5?}` of `Some(1)` pads nothing",
+    file: "src/lower/display.rs",
+    find: "        if self.writing.options.is_some() && self.is_debug_leaf(ty) {",
+    replace: "        if false && self.writing.options.is_some() && self.is_debug_leaf(ty) {",
+    tests: ["test/corpus.test.ts", "-t", "debug_options"],
+  },
 ];

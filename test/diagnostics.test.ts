@@ -30,7 +30,7 @@ for (const [name, source, message, crate] of [
   ["a deprecated method of a dyn Error", '#![allow(deprecated)]\npub fn f(e: &dyn std::error::Error) -> String { e.description().to_string() }', "`description` of a"],
   // Rust gives a `{:?}`'s options to each of its parts, and a `fmt` that hands
   // its `Formatter` on gives them to that one: rust-js doesn't yet (ADR 0058).
-  ["a width for an Option's {:?}", 'pub fn f() -> String { format!("{:5?}", Some(1)) }', "a width for a"],
+  ["a width for an Option's {:?}", '#[derive(Debug)] pub struct P(pub u8);\npub fn f() -> String { format!("{:5?}", Some(P(1))) }', "a width for a"],
   ["a sign for a derived {:?}", '#[derive(Debug)] pub struct P { pub x: i32 }\npub fn f(p: &P) -> String { format!("{:+?}", p) }', "a sign for a"],
   ["a width for a fmt that hands its Formatter on", 'pub struct M(pub f64);\nimpl std::fmt::Display for M { fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { self.0.fmt(f) } }\npub fn f(m: &M) -> String { format!("{:>8}", m) }', "a width for a"],
   // A static's initializer is code where rustc's value can't say it (ADR 0096),
