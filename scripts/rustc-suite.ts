@@ -72,6 +72,9 @@ const outOfScope: [RegExp, string][] = [
   [/^(compile-flags|rustc-env|exec-env|run-flags|unset-exec-env)$/, "needs flags or an environment of its own"],
   [/^needs-(?!unwind$)/, "needs a capability of its own"],
   [/^only-/, "is for some targets only"],
+  // Ignored on one of the machines that run these, an x86_64 or an Arm
+  // Linux, which would then answer it differently from the other.
+  [/^ignore-(aarch64|x86_64)$/, "is for some targets only"],
   [/^ignore-(wasm|wasm32|wasm32-bare)$/, "doesn't apply to wasm, whose integers rust-js has"],
   [/^known-bug$/, "is a known rustc bug"],
   [/^ignore-test$/, "is disabled"],

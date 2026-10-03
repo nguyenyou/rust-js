@@ -8,8 +8,10 @@
 #
 # The VM is a Tart VM, `rustjs` unless RUST_JS_VM names another. It works in
 # its own copy of the sources, ~/rust-js, synced from this checkout before
-# each command: its target/ and node_modules/ are Linux's own, never this
-# checkout's.
+# each command. What git ignores, target/, node_modules/, the WASM build's
+# rustc checkout, is the VM's own, never this checkout's. What the command
+# writes that git doesn't ignore, a blessed snapshot or list, is copied back
+# to this checkout after it, whether it passed or failed.
 set -euo pipefail
 
 VM="${RUST_JS_VM:-rustjs}"
@@ -32,7 +34,14 @@ tart exec "$VM" bash -lc "
   mountpoint -q /mnt/shared || sudo mount -t virtiofs com.apple.virtio-fs.automount /mnt/shared
   . \"\$HOME/.cargo/env\"
   export PATH=\"\$HOME/.bun/bin:\$PATH\" NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
-  rsync -a --delete --exclude target/ --exclude node_modules/ /mnt/shared/rust-js/ \"\$HOME/rust-js/\"
+  rsync -a --delete --filter=':- .gitignore' /mnt/shared/rust-js/ \"\$HOME/rust-js/\"
   cd \"\$HOME/rust-js\"
-  $cmd
+  touch /tmp/rust-js-synced
+  status=0
+  ( $cmd ) || status=\$?
+  git ls-files -z --cached --others --exclude-standard |
+    while IFS= read -r -d '' file; do [ \"\$file\" -nt /tmp/rust-js-synced ] && printf '%s\\0' \"\$file\"; done |
+    rsync -rtp --omit-dir-times --from0 --files-from=- ./ /mnt/shared/rust-js/
+  # Not \`exit\`, which would run the login shell's logout script.
+  (exit \$status)
 "

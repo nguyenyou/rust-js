@@ -1,6 +1,7 @@
 # rustc run-pass UI tests out of scope, and why (ADR 0089).
 # Rewritten by `bun scripts/rustc-suite.ts --bless`.
-abi/abi-sysv64-register-usage.rs	needs a capability of its own
+abi/abi-sysv64-arg-passing.rs	is for some targets only
+abi/abi-sysv64-register-usage.rs	is for some targets only
 abi/cross-crate/anon-extern-mod-cross-crate-2.rs	needs another crate
 abi/cross-crate/duplicated-external-mods.rs	needs another crate
 abi/custom.rs	is for some targets only

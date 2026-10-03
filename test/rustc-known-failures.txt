@@ -167,7 +167,6 @@ destructuring-assignment/drop-order.rs	error: rust-js does not support a `let` o
 drop/drop-noncopyable-raw-pointer.rs	error: rust-js does not support values of type `*const u8` yet
 drop/drop-on-untaken-arm-raw-ptr.rs	error: rust-js does not support values of type `*mut std::boxed::Box<(dyn std::ops::Fn() + 'static)>` yet
 drop/drop-order-comparisons-let-chains.rs	error: rust-js does not support a temporary with a destructor here yet
-drop/drop-struct-as-object.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/drop-with-trait-bound-calls-method-on-self.rs	error: rust-js does not support generic trait methods, where a type may have a destructor yet
 drop/dropck_legal_cycles.rs	error: rust-js does not support user implementations of this standard or external trait yet
 drop/for-expr-temporary-drop-scope.rs	error: rust-js does not support a temporary with a destructor here yet
@@ -175,14 +174,12 @@ drop/if-let-guards-2.rs	error: rust-js does not support a temporary with a destr
 drop/issue-21486.rs	error: rust-js does not support a struct update from a value with a destructor yet
 drop/issue-23338-ensure-param-drop-order.rs	error: rust-js does not support a temporary with a destructor in a branch yet
 drop/issue-23611-enum-swap-in-drop.rs	error: rust-js does not support assigning a whole value through a `&mut` yet
-drop/issue-48962.rs	error: rust-js does not support moving a value with a destructor here yet
 drop/issue-90752-raw-ptr-shenanigans.rs	error: rust-js does not support values of type `*mut std::option::Option<(S<'_>, S<'_>)>` yet
 drop/multiple-drop-safe-code-25549.rs	error: rust-js does not support a `Holder<dyn Trait>`, whose last field is a `dyn` yet
 drop/nested-return-drop-order.rs	error: rust-js does not support a temporary with a destructor here yet
 drop/or-pattern-drop-order.rs	error: rust-js does not support `std::iter::Iterator::collect` of a value with a destructor yet
 drop/rc-trait-object-double-drop.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 drop/static-issue-17302.rs	error: rust-js does not support a struct update from a value with a destructor yet
-drop/trait-object-drop-10802.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 dropck/compound-type-of-raw-pointers.rs	error: rust-js does not support values of type `*const NoisyDrop<&std::vec::Vec<i32>>` yet
 dropck/issue-29844.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<<Resources as ResourcesTrait<'_>>::DescriptorSet>) is !null` yet
 dropck/issue-34053.rs	error: rust-js does not support a temporary with a destructor here yet

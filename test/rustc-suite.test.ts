@@ -21,6 +21,8 @@ test("a test is in scope unless a directive says it needs what a case can't have
   expect(scope("//@ run-pass\n//@ needs-threads\nfn main() {}\n")).toEqual({ skip: "needs a capability of its own" });
   expect(scope("//@ run-pass\n//@ only-x86_64\nfn main() {}\n")).toEqual({ skip: "is for some targets only" });
   expect(scope("//@ run-pass\n//@ only-x86_64 (a comment)\nfn main() {}\n")).toEqual({ skip: "is for some targets only" });
+  expect(scope("//@ run-pass\n//@ ignore-aarch64\nfn main() {}\n")).toEqual({ skip: "is for some targets only" });
+  expect(scope("//@ run-pass\n//@ ignore-x86_64\nfn main() {}\n")).toEqual({ skip: "is for some targets only" });
   expect(scope("//@ run-pass\n//@compile-flags: -O\nfn main() {}\n")).toEqual({ skip: "needs flags or an environment of its own" });
   expect(scope("//@ run-pass\n//@ ignore-wasm32\nfn main() {}\n")).toEqual({ skip: "doesn't apply to wasm, whose integers rust-js has" });
   expect(scope("//@ run-pass\nmod helper;\nfn main() {}\n")).toEqual({ skip: "has modules in other files" });

@@ -121,5 +121,4 @@ A new kind of value, construct or analysis goes with its kind above: a
 question that emits nothing in a module of its own, checked as the others
 are, and lowering in the module of the construct. Check the generated JS
 reads as a person would write it, and run the checks in
-[AGENTS.md](../AGENTS.md), on a Linux VM where tests build native
-programs.
+[AGENTS.md](../AGENTS.md), in its Linux VM.

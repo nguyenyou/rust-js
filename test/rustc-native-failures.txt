@@ -1,6 +1,5 @@
 # rustc run-pass UI tests native Rust gives no answer for here, and why (ADR 0089).
 # Rewritten by `bun scripts/rustc-suite.ts --bless`.
-abi/abi-sysv64-arg-passing.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/anon-extern-mod.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/c-stack-as-value.rs	rustc: error: linking with `cc` failed: exit status: 1
 abi/cabi-int-widening.rs	rustc: error: linking with `cc` failed: exit status: 1

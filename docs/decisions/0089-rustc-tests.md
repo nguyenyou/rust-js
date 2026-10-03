@@ -25,7 +25,11 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
   says why:** it needs another crate, has revisions, needs flags, threads
   or a subprocess, is for some targets, reads files beside it, or its own
   output changes from run to run (a `HashMap`'s order). The counts of each
-  are printed; none is hidden.
+  are printed; none is hidden. A test ignored on an x86_64 or an Arm
+  machine, `ignore-aarch64`, is for some targets too: the two machines
+  that run these would answer it differently, as `abi-sysv64-arg-passing`,
+  which links on Arm and not on x86_64. (Amended when an Arm VM began
+  blessing the lists.)
 - **So is a test of a feature stable Rust doesn't have**, `#![feature(async_drop)]`:
   rust-js takes stable Rust (ADR 0109), and refuses a program's own
   `#![feature]`, so no program of its can be one. The pinned rustc says
@@ -99,17 +103,20 @@ and stderr, and return, under Node (and Bun, until ADR 0095).
   build's were, in about five minutes, checked as one run, or blessed into a new
   list to download; or only the tests and directories named, each said to
   be as the list says or not. Locally, on macOS, each new binary is checked
-  before its first run, which makes a full run an hour or more unless the
-  terminal is a developer tool (System Settings › Privacy & Security ›
-  Developer Tools).
+  before its first run, which makes a full run an hour or more. In a Linux
+  VM on the same Mac, a full run takes about a minute, with the workflow's
+  verdicts, so they're checked and blessed there, and the lists committed
+  with the change that moves them (AGENTS.md); the workflow confirms, now
+  and then, that an x86_64 machine agrees. (Amended: the workflow blessed
+  them, and its lists were committed after.)
 - rust-js checks programs for `wasm32-unknown-unknown` (ADR 0090), and the
   native binary is the 64-bit machine's: a test that asks the width, as
   `cfg(target_pointer_width)`, asks each its own.
 - Before ADR 0090, two tests compiled and answered otherwise,
   `const-negation` and `bitwise-ops-platform`: rustc worked out `usize`
   constants at 64 bits.
-- The known failures are a release build's on Linux, as the workflow makes
-  them, and as `bun run test:rustc` builds: a debug build's deeper stack
+- The known failures are a release build's on Linux, as the VM and the
+  workflow make them, and as `bun run test:rustc` builds: a debug build's deeper stack
   overflows on a test or two a release build passes.
 - Which features a crate enables itself, and whether it registers
   `rust_js`, is read from its root's attributes as rustc configures them,
