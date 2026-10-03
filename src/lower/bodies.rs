@@ -464,6 +464,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     locals: std::mem::take(&mut self.locals),
                     evidence: std::mem::replace(&mut self.given.evidence, evidence),
                     self_args: self.given.self_args.replace(self_args),
+                    self_env: self.given.self_env.replace(self.typing_env),
                     typing_env: std::mem::replace(&mut self.typing_env, typing_env),
                 }))
             }
@@ -497,12 +498,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     locals,
                     evidence,
                     self_args,
+                    self_env,
                     typing_env,
                 } = *scope;
                 self.names = names;
                 self.locals = locals;
                 self.given.evidence = evidence;
                 self.given.self_args = self_args;
+                self.given.self_env = self_env;
                 self.typing_env = typing_env;
             }
         }

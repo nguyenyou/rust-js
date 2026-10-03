@@ -338,7 +338,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     Expr::call(Expr::var("$asciiCase"), vec![b]),
                 )
             }
-            Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
+            Std::ToString => {
+                let (value, ty) = (arg(), generic_args.type_at(0));
+                // A generic `T: ToString`'s, through its dictionary, where it
+                // has no `Display` bound to show it with (ADR 0049).
+                let display = ty::TraitRef::new(self.tcx, self.display_trait(), [ty]);
+                let to_string = ty::TraitRef::new(self.tcx, self.to_string_trait(), [ty]);
+                match self.is_unknown(ty) && self.evidence_for(display).is_none() {
+                    true if let Some(dictionary) = self.evidence_for(to_string) => {
+                        Expr::call(Expr::member(dictionary, "to_string"), vec![value])
+                    }
+                    _ => self.display_string(value, ty, span)?,
+                }
+            }
             _ => return Ok(None),
         }))
     }

@@ -202,4 +202,12 @@ export const mutations: Mutation[] = [
     replace: "            \"RefCellRefMut\",\n",
     tests: ["test/corpus.test.ts", "-t", "^locks"],
   },
+  {
+    name: "to-string-not-operational",
+    breaks: "a `T: ToString` bound is given no dictionary, and `x.to_string()` asks for a `Display`",
+    file: "src/lower/recognition.rs",
+    find: "        || tcx.is_diagnostic_item(Symbol::intern(\"ToString\"), id)\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
+  },
 ];

@@ -1779,6 +1779,8 @@ pub(super) fn operational(tcx: TyCtxt<'_>, foreign: &super::library::Foreign<'_,
         || tcx.is_diagnostic_item(Symbol::intern("Display"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Debug"), id)
         || tcx.is_diagnostic_item(Symbol::intern("Default"), id)
+        // Std's of a `Display`: `{ to_string }`, what it shows.
+        || tcx.is_diagnostic_item(Symbol::intern("ToString"), id)
         // A `dyn Error`'s (ADR 0141), its `Display` and `Debug` its supertraits'.
         || tcx.is_diagnostic_item(Symbol::intern("Error"), id)
         // Its evidence is the writer or reader itself (ADR 0081).

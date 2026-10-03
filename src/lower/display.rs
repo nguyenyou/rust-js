@@ -729,6 +729,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    pub(super) fn to_string_trait(&self) -> DefId {
+        self.tcx
+            .get_diagnostic_item(Symbol::intern("ToString"))
+            .expect("std has `ToString`")
+    }
+
     pub(super) fn debug_trait(&self) -> DefId {
         self.tcx
             .get_diagnostic_item(Symbol::intern("Debug"))

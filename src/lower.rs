@@ -263,6 +263,7 @@ struct ItemScope<'tcx> {
     locals: Locals,
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
     self_args: Option<ty::GenericArgsRef<'tcx>>,
+    self_env: Option<ty::TypingEnv<'tcx>>,
     typing_env: ty::TypingEnv<'tcx>,
 }
 
@@ -359,6 +360,9 @@ struct Given<'tcx> {
     /// In a trait's default body copied into an impl (ADR 0049): the impl's
     /// arguments for the trait's parameters, `Self` among them.
     self_args: Option<ty::GenericArgsRef<'tcx>>,
+    /// And the impl's typing environment, where what its arguments name
+    /// resolves: the body's own is its trait's.
+    self_env: Option<ty::TypingEnv<'tcx>>,
     /// In a generic type's derived `serialize` or `deserialize` (ADR
     /// 0080): each type parameter, and the parameter that writes or reads it.
     codec_params: Vec<(Ty<'tcx>, String)>,

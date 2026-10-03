@@ -12,15 +12,11 @@ associated-consts/mismatched_impl_ty_3.rs	error: rust-js does not support this c
 associated-type-bounds/rpit.rs	error: rust-js does not support values of type `<impl Tr1 + std::clone::Clone + std::iter::Iterator + std::ops::Add<u8> + std::convert::Into<u8> as Tr1>::As1` yet
 associated-type-bounds/union-bounds.rs	error: rust-js does not support values of type `_Un7<'_, '_, T>` yet
 associated-types/assoc-type-in-extern-fn-signature.rs	error: rust-js does not support an `extern` declaration of this crate's own `#[no_mangle]` function yet
-associated-types/assoc-type-projection-in-default-method.rs	error: rust-js does not support implementation evidence for `<I as DigitCollection>` yet
 associated-types/associated-item-long-paths.rs	error: rust-js does not support `size_of` of a type parameter yet
 associated-types/associated-types-binding-in-trait.rs	error: rust-js does not support iterating over `<T as BitIter>::Iter` yet
 associated-types/associated-types-conditional-dispatch.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 associated-types/associated-types-doubleendediterator-object.rs	error: rust-js does not support values of type `dyn std::iter::DoubleEndedIterator<Item = isize>` yet
 associated-types/associated-types-iterator-binding.rs	error: rust-js does not support `&mut` to a `T` yet
-associated-types/associated-types-normalize-in-bounds-binding.rs	error: rust-js does not support implementation evidence for `<T as FnLike<u32>>` yet
-associated-types/associated-types-projection-in-where-clause.rs	error: rust-js does not support implementation evidence for `<J as NonZero>` yet
-associated-types/issue-23208.rs	error: rust-js does not support implementation evidence for `<T as TheSuperTrait<u32>>` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support labeled blocks yet
@@ -51,7 +47,7 @@ cast/cast-rfc0401-vtable-kinds.rs	error: rust-js does not support values of type
 cast/cast-rfc0401.rs	error: rust-js does not support values of type `*const [u8; 1]` yet
 cast/cast-to-infer-ty.rs	error: rust-js does not support values of type `*const i32` yet
 cast/cast.rs	error: rust-js does not support values of type `*const &str` yet
-cast/codegen-object-shim.rs	error: rust-js does not support `{}` of a `dyn std::string::ToString` yet
+cast/codegen-object-shim.rs	error: rust-js does not support this trait function value yet
 cast/coercion-as-explicit-cast.rs	error: rust-js does not support this expression yet
 cast/negative-integer-cast-to-pointer.rs	error: rust-js does not support values of type `*const ()` yet
 cast/supported-cast.rs	error: rust-js does not support values of type `*const std::string::String` yet
@@ -227,7 +223,6 @@ packed/packed-struct-generic-layout.rs	error: rust-js does not support calling `
 packed/packed-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 packed/packed-struct-optimized-enum.rs	error: rust-js does not support this expression yet
 packed/packed-tuple-struct-layout.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-parser/ufcs-return-unused-parens.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs	error: rust-js does not support moving part of a value with a destructor yet
 privacy/pub-extern-privacy.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 process/env-vars.rs	error: rust-js does not support iterating over `std::env::VarsOs` yet
@@ -283,11 +278,8 @@ traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops:
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support trait method `Q::q` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<Point<S> as Positioned<S>>` yet
+traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<S as std::ops::Add>` yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
-traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
-traits/trait-upcasting/multiple-supertraits-modulo-normalization.rs	error: rust-js does not support this trait upcast yet
-traits/with-bounds-default.rs	error: rust-js does not support implementation evidence for `<std::option::Option<T> as Getter<T>>` yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet
 type/type-name-basic.rs	error: rust-js does not support `type_name` of a type parameter yet

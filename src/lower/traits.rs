@@ -498,7 +498,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     fn super_evidence(&self, from: ty::TraitRef<'tcx>, to: ty::TraitRef<'tcx>, value: Expr) -> Option<Expr> {
-        if self.tcx.erase_and_anonymize_regions(from) == self.tcx.erase_and_anonymize_regions(to) {
+        // As rustc says what they are here: `<I as Int>::T: NonZero` is
+        // `J: NonZero` of an `I: Int<T = J>`.
+        let normalized = |tr: ty::TraitRef<'tcx>| {
+            self.tcx
+                .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(tr))
+                .unwrap_or_else(|_| self.tcx.erase_and_anonymize_regions(tr))
+        };
+        if normalized(from) == normalized(to) {
             return Some(value);
         }
         // A std trait's dictionary, like `Copy`'s, has no supertraits in it,
@@ -569,10 +576,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
         let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
         let display = tr.def_id == self.display_trait();
+        let to_string = tr.def_id == self.to_string_trait();
         let debug = tr.def_id == self.debug_trait();
         let ord = tr.def_id == self.ord_trait();
         let partial_ord = tr.def_id == self.partial_ord_trait();
-        if (default || clone || eq || display || debug || ord || partial_ord) && !self.has_user_impl(tr.def_id, ty) {
+        if (default || clone || eq || display || to_string || debug || ord || partial_ord)
+            && !self.has_user_impl(tr.def_id, ty)
+        {
             if debug {
                 // Given a `Formatter`'s options, where the crate's writers are (ADRs 0058, 0137).
                 let (params, pretty): (Vec<js::Pattern>, _) = match self.writers_take_options() {
@@ -599,6 +609,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             if display {
                 let fmt = self.display_fn(ty, span)?;
                 return Ok(Expr::object(vec![Prop::Field("fmt".into(), fmt)]));
+            }
+            // `ToString` is std's of a `Display`: what that shows.
+            if to_string {
+                let fmt = self.display_fn(ty, span)?;
+                return Ok(Expr::object(vec![Prop::Field("to_string".into(), fmt)]));
             }
             if eq {
                 let eq = self.eq_fn(ty, span)?;
@@ -839,6 +854,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.tcx.fn_trait_kind_from_def_id(trait_id).is_some() {
             return Ok(None);
         }
+        // `x.to_string()` is std's, as its `Display` shows it, or a generic
+        // `T: ToString`'s dictionary's, which the string call decides: of a
+        // `dyn ToString` too, which has no pair to call through.
+        if trait_id == self.to_string_trait() {
+            return Ok(None);
+        }
         // In a copied default, `Self` is the impl's type: a call on it
         // resolves to the impl's method, called directly.
         let generic_args = match self.given.self_args {
@@ -889,7 +910,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 values,
             )));
         }
-        if let Some(instance) = self.resolve_instance(id, generic_args)?
+        // In a copied default, what the impl's arguments name resolves in
+        // the impl's typing environment.
+        let resolved = match self.given.self_env {
+            Some(typing_env) => self
+                .tcx
+                .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(generic_args))
+                .ok()
+                .and_then(|args| ty::Instance::try_resolve(self.tcx, typing_env, id, args).transpose())
+                .transpose()?,
+            None => self.resolve_instance(id, generic_args)?,
+        };
+        if let Some(instance) = resolved
             && self.is_rust_fn(instance.def_id())
             && self.tcx.trait_of_assoc(instance.def_id()).is_none()
         {

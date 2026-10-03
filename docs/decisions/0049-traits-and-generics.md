@@ -229,6 +229,18 @@ and simplicity over formatting throughput. `f64::max` and `min`, including
 function values, use helpers that ignore a single NaN operand as Rust does.
 Floating-point sums start at negative zero, matching Rust's `Sum` identity.
 
+- **A bound is found as rustc says it is where it's asked:** `<I as Int>::T:
+  NonZero` is the evidence for `J: NonZero` of an `I: Int<T = J>`, and a
+  supertrait `Produce<<Self as Source>::Item>` is `Produce<u32>` of a
+  `Source<Item = u32>`. (Amended: they were compared as written.)
+- **`T: ToString` is a dictionary,** `{ to_string }`, std's of a type's
+  `Display`: `TToString.to_string(x)`, where `T` has no `Display` bound to
+  show it with.
+- **A default copied into a generic impl resolves a call on its `Self` in
+  the impl's typing environment:** `self.get()` of `impl<T: Clone>
+  Getter<T> for Option<T>` is the impl's `get`. In the trait's, the impl's
+  `T` would be read as the trait's `Self`.
+
 ## Why
 
 - Existing payloads remain ordinary JS values, including values supplied by JS.
