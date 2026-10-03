@@ -4,10 +4,12 @@ mod debug;
 mod drops;
 mod mutation;
 mod naming;
+mod type_facts;
 mod validation;
 
 use super::bindings;
 use super::bindings::{Export, is_binding};
+use super::recognition::TypeFact;
 use super::traits;
 use super::{Body, FnInfo, TestFn, module_path};
 use debug::{derived_debug, uses_format_options, uses_pretty_debug};
@@ -23,6 +25,7 @@ use rustc_middle::ty::{Ty, TyCtxt, TypeVisitableExt};
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use type_facts::type_fact_params;
 pub(super) use validation::is_thread_local;
 use validation::{in_thread_local, reject_static_references, reject_unsupported};
 
@@ -124,6 +127,9 @@ pub(super) struct AnalyzedCrate<'a, 'tcx> {
     /// Each generic function's type parameters it's given a drop function
     /// for (ADR 0098), by their indices.
     pub drop_params: HashMap<DefId, Vec<u32>>,
+    /// Each generic function's type parameters it's given a size, an
+    /// alignment or a name of (ADR 0145), by their indices.
+    pub type_facts: HashMap<DefId, Vec<(u32, TypeFact)>>,
     pub generic_consts: HashSet<DefId>,
     /// Whether the crate shows anything with `{:#?}`, or asks a `Formatter`
     /// if it's alternate: then its `Debug` functions take whether (ADR 0137).
@@ -286,6 +292,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
     let mutated = mutated_types(tcx, all_bodies);
     let changed_vecs = changed_vecs(tcx, all_bodies);
     let drop_params = drop_params(tcx, all_bodies, &fns, &foreign, library);
+    let type_facts = type_fact_params(tcx, all_bodies, &fns, library);
     let generic_consts = generic_consts(tcx, all_bodies);
     let pretty_debug = uses_pretty_debug(tcx, all_bodies);
     let format_options = uses_format_options(tcx, all_bodies);
@@ -310,6 +317,7 @@ pub(super) fn analyze_crate<'a, 'tcx>(
         mutated,
         changed_vecs,
         drop_params,
+        type_facts,
         generic_consts,
         pretty_debug,
         format_options,

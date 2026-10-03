@@ -43,14 +43,6 @@ export const mutations: Mutation[] = [
     tests: ["test/diagnostics.test.ts", "-t", "std &mut"],
   },
   {
-    name: "type-name-unerased",
-    breaks: "`type_name` names the type as written, `Vec<Option<&str>>`, not rustc's paths",
-    file: "src/lower/calls.rs",
-    find: "            return Ok(Expr::str(rustc_const_eval::util::type_name(self.tcx, of)));",
-    replace: "            return Ok(Expr::str(of.to_string()));",
-    tests: ["test/corpus.test.ts","-t","std_odds"],
-  },
-  {
     name: "cmp-max-unknown",
     breaks: "`cmp::max(a, b)` of what isn't a number is refused",
     file: "src/lower/calls.rs",

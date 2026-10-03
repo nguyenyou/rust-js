@@ -50,4 +50,20 @@ export const mutations: Mutation[] = [
     replace: "            .layout_of(self.typing_env.as_query_input(of))\n",
     tests: ["test/corpus.test.ts","-t","future_sizes"],
   },
+  {
+    name: "type-fact-of-wrong-kind",
+    breaks: "`align_of::<T>()` reads the size its caller gave",
+    file: "src/lower/numbers.rs",
+    find: "                .find(|&&(index, given, _)| index == param.index && given == fact)",
+    replace: "                .find(|&&(index, _, _)| index == param.index)",
+    tests: ["test/corpus.test.ts", "-t", "type_facts"],
+  },
+  {
+    name: "type-name-unerased",
+    breaks: "`type_name` names the type as written, `Vec<Option<&str>>`, not rustc's paths",
+    file: "src/lower/numbers.rs",
+    find: "        Ok(Expr::str(rustc_const_eval::util::type_name(self.tcx, of)))",
+    replace: "        Ok(Expr::str(of.to_string()))",
+    tests: ["test/corpus.test.ts", "-t", "std_odds"],
+  },
 ];

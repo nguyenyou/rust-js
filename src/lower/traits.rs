@@ -3,7 +3,7 @@
 
 use super::bindings;
 use super::drops::Drops;
-use super::recognition::TraitCall;
+use super::recognition::{TraitCall, TypeFact};
 use super::representation::{const_js, eval_const};
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
@@ -457,6 +457,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.given.evidence.push((tr, Expr::var(&name)));
             js::Pattern::from(name)
         }));
+        // Then each fact it asks of a type parameter, `TSize` (ADR 0145).
+        for &(index, fact) in self.krate.type_facts.get(&id).into_iter().flatten() {
+            let param = self.tcx.generics_of(id).param_at(index as usize, self.tcx);
+            let word = match fact {
+                TypeFact::Size => "Size",
+                TypeFact::Align => "Align",
+                TypeFact::Name => "Name",
+            };
+            let name = self.fresh(&format!("{}{word}", param.name));
+            self.given.type_facts.push((index, fact, Expr::var(&name)));
+            params.push(name.into());
+        }
         // Then a drop function for each type parameter a caller gives a value
         // with a destructor, `dropT` (ADR 0098).
         for &index in self.krate.drop_params.get(&id).into_iter().flatten() {
@@ -787,6 +799,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .instantiate(self.tcx, args)
                 .skip_normalization();
             values.push(self.dictionary(bound, span)?);
+        }
+        // Each fact it asks of a type parameter, of the type given for it (ADR 0145).
+        let facts = self.krate.type_facts.get(&id).cloned().unwrap_or_default();
+        for (index, fact) in facts {
+            values.push(self.type_fact_value(args.type_at(index as usize), fact, span)?);
         }
         // Each drop function it takes: a type's with nothing to drop is none,
         // left out at the end (ADR 0098).

@@ -84,7 +84,7 @@ use crate::runtime::Helper;
 pub use analysis::{collect_bodies, collect_initializers};
 use bindings::{Export, JsForm, is_binding, js_form, js_name};
 pub use pipeline::lower_crate;
-use recognition::Std;
+use recognition::{Std, TypeFact};
 use representation::{
     Num, char_value, const_js, eval_const, f32_literal, is_fieldless_enum, num_literal, ordering_value, static_value,
     variant_field,
@@ -275,6 +275,8 @@ struct CrateFacts<'a, 'tcx> {
     changed_vecs: &'a HashSet<Ty<'tcx>>,
     /// Each generic function's type parameters it's given a drop for (ADR 0098).
     drop_params: &'a HashMap<DefId, Vec<u32>>,
+    /// Each generic function's type parameters it's given a fact of (ADR 0145).
+    type_facts: &'a HashMap<DefId, Vec<(u32, TypeFact)>>,
     closures: &'a HashMap<LocalDefId, &'a Body<'tcx>>,
     bodies: &'a HashMap<DefId, &'a Body<'tcx>>,
     fns: &'a HashMap<DefId, FnInfo>,
@@ -352,6 +354,8 @@ struct Given<'tcx> {
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
     /// Each const parameter it's given, by its index: `N` (ADR 0107).
     const_params: Vec<(u32, Expr)>,
+    /// Each fact of a type parameter it's given, `TSize` (ADR 0145).
+    type_facts: Vec<(u32, TypeFact, Expr)>,
     /// In a trait's default body copied into an impl (ADR 0049): the impl's
     /// arguments for the trait's parameters, `Self` among them.
     self_args: Option<ty::GenericArgsRef<'tcx>>,

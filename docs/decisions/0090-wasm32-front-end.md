@@ -79,7 +79,8 @@ cfg!(target_pointer_width = "32")// true
 - **`size_of::<T>()`, `align_of::<T>()` and a sized value's
   `size_of_val` are the wasm32 target's,** as rustc works them out, as a
   `const` of one already was: a number in the JS. A type parameter's is
-  rejected, as a generic function is one JS function for every type, and
-  so is an unsized value's. A type with a pointer or a `usize` in it is
+  given by the caller (ADR 0145), and an unsized value's is rejected.
+  (Amended: a type parameter's was rejected, as a generic function is one
+  JS function for every type.) A type with a pointer or a `usize` in it is
   smaller than on a 64-bit machine, as its `usize` is. 27 of rustc's 42
-  tests that stopped here pass (`size_of.rs`, `size_of_generic.rs`).
+  tests that stopped here pass (`size_of.rs`; a type parameter's in `type_facts.rs`).

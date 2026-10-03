@@ -404,4 +404,12 @@ export const mutations: Mutation[] = [
     replace: "                let _ = (name, supertrait);",
     tests: ["test/corpus.test.ts", "-t", "dyn_generic"],
   },
+  {
+    name: "type-facts-not-given",
+    breaks: "a call of a generic function that asks `size_of::<T>()` gives it no size",
+    file: "src/lower/traits.rs",
+    find: "            values.push(self.type_fact_value(args.type_at(index as usize), fact, span)?);",
+    replace: "            let _ = (index, fact);",
+    tests: ["test/corpus.test.ts", "-t", "type_facts"],
+  },
 ];

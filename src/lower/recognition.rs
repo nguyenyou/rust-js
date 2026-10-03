@@ -2038,3 +2038,28 @@ pub(super) fn is_dyn_iter<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
     matches!(ty.kind(), ty::Dynamic(traits, ..)
         if traits.principal_def_id().is_some_and(|id| tcx.is_diagnostic_item(sym::Iterator, id)))
 }
+
+/// What `size_of`, `align_of` and `type_name` tell of a type (ADR 0145).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub(crate) enum TypeFact {
+    Size,
+    Align,
+    Name,
+}
+
+/// The fact `def_id` asks of its type argument: `size_of` and `size_of_val`
+/// its size, `align_of` its alignment, `type_name` and `type_name_of_val`
+/// its name. None of any other function.
+pub(crate) fn type_fact(tcx: TyCtxt<'_>, def_id: DefId) -> Option<TypeFact> {
+    let diagnostic = |name: &str| tcx.is_diagnostic_item(Symbol::intern(name), def_id);
+    if diagnostic("mem_size_of") || diagnostic("mem_size_of_val") {
+        return Some(TypeFact::Size);
+    }
+    if diagnostic("mem_align_of") {
+        return Some(TypeFact::Align);
+    }
+    match tcx.def_path_str(def_id).as_str() {
+        "std::any::type_name" | "std::any::type_name_of_val" => Some(TypeFact::Name),
+        _ => None,
+    }
+}

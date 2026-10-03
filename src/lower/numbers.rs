@@ -6,7 +6,7 @@
 
 use super::calls::Call;
 use super::discriminants;
-use super::recognition::Std;
+use super::recognition::{Std, TypeFact};
 use super::representation::{Num, is_fieldless_enum};
 use super::{FnCx, R};
 use crate::js::StmtKind;
@@ -768,10 +768,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // The size rustc works out for the wasm32 target, which rust-js
             // checks programs for, as a `const` of it has (ADR 0090). A
             // generic function is one JS function for every type, so a type
-            // parameter's has no one answer.
+            // parameter's is given by its caller (ADR 0145).
             Std::SizeOf | Std::AlignOf | Std::SizeOfVal => {
                 let of = generic_args.types().next().expect("a size's type argument");
-                let bytes = self.layout_bytes(known, of, span)?;
+                let fact = match known {
+                    Std::AlignOf => TypeFact::Align,
+                    _ => TypeFact::Size,
+                };
+                let bytes = match of.kind() {
+                    ty::Param(_) => self.type_fact_value(of, fact, span)?,
+                    _ => Expr::int(self.layout_bytes(known, of, span)?),
+                };
                 // What's measured still runs, if it does anything.
                 if matches!(known, Std::SizeOfVal) {
                     let measured = arg();
@@ -779,10 +786,40 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         out.push(StmtKind::Expr(measured).at(js_span));
                     }
                 }
-                Expr::int(bytes)
+                bytes
             }
             _ => return Ok(None),
         }))
+    }
+
+    /// A fact of `of` (ADR 0145): its size or alignment, as rustc works it out
+    /// for the wasm32 target, or its name; of a type parameter, the one this
+    /// function was given for it.
+    pub(super) fn type_fact_value(&self, of: Ty<'tcx>, fact: TypeFact, span: Span) -> R<Expr> {
+        let (what, known) = match fact {
+            TypeFact::Size => ("size_of", Std::SizeOf),
+            TypeFact::Align => ("align_of", Std::AlignOf),
+            TypeFact::Name => ("type_name", Std::TypeName { of_val: false }),
+        };
+        if let ty::Param(param) = of.kind() {
+            return self
+                .given
+                .type_facts
+                .iter()
+                .find(|&&(index, given, _)| index == param.index && given == fact)
+                .map(|(_, _, value)| value.clone())
+                .ok_or_else(|| self.unsupported(span, &format!("`{what}` of a type parameter")));
+        }
+        if fact != TypeFact::Name {
+            return Ok(Expr::int(self.layout_bytes(known, of, span)?));
+        }
+        if of.has_param() {
+            return Err(self.unsupported(span, "`type_name` of a type parameter"));
+        }
+        let of = self
+            .tcx
+            .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(of));
+        Ok(Expr::str(rustc_const_eval::util::type_name(self.tcx, of)))
     }
 
     /// The bytes `size_of`, `align_of` or `size_of_val` gives for `of`.

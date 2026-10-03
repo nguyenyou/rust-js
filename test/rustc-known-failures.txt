@@ -100,7 +100,6 @@ consts/const-fn-val.rs	error: rust-js does not support statics of type `Bar<fn()
 consts/const-int-arithmetic.rs	error: rust-js does not support `{:?}` of a `i128` yet
 consts/const-int-saturating-arith.rs	error: rust-js does not support this constant yet
 consts/const-region-ptrs-noncopy.rs	error: rust-js does not support this expression yet
-consts/const-size_of-align_of.rs	error: rust-js does not support `size_of` of a type parameter yet
 consts/const-typeid-of-rpass.rs	error: rust-js does not support statics of type `std::any::TypeId` yet
 consts/const-vec-of-fns.rs	error: rust-js does not support statics of type `&'static mut [S<fn()>]` yet
 consts/issue-105536-const-val-roundtrip-ptr-eq.rs	error: rust-js does not support constants of type `*const u8` yet
@@ -162,7 +161,6 @@ for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
-functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support `size_of` of a type parameter yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-3.rs	error: rust-js does not support generic associated types yet
@@ -268,7 +266,6 @@ structs-enums/enum-non-c-like-repr-int.rs	error: rust-js does not support values
 structs-enums/tag-align-dyn-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-dyn-variants.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 structs-enums/tag-align-u64.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
-symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `size_of` of a type parameter yet
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send-is-not-static-par-for.rs	error: rust-js does not support a `&mut i32` from `std::iter::Iterator::enumerate` used as a value yet
@@ -283,7 +280,6 @@ traits/dyn-drop-principal.rs	error: rust-js does not support values of type `dyn
 traits/encoder-trait-bounds-regression.rs	error: rust-js does not support calling `std::io::Write::write_fmt` yet
 traits/impl-object-overlap-issue-23853.rs	error: rust-js does not support this trait implementation yet
 traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops::Add::add` yet
-traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `size_of` of a type parameter yet
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support trait method `Q::q` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
@@ -297,7 +293,6 @@ try-trait/try-operator-various-contexts.rs	error: rust-js does not support `pars
 type/type-name-basic.rs	error: rust-js does not support `type_name` of a type parameter yet
 typeck/issue-18937-1.rs	error: rust-js does not support values of type `*mut [U]` yet
 typeck/osstring-str-equality.rs	error: rust-js does not support calling `std::convert::From::from` yet
-typeck/type-name-intrinsic-usage-61894.rs	error: rust-js does not support `type_name` of a type parameter yet
 typeck/typeck_type_placeholder_1.rs	error: rust-js does not support statics of type `TestStruct` yet
 typeck/unify-return-ty.rs	error: rust-js does not support values of type `*const T` yet
 unboxed-closures/type-id-higher-rank.rs	error: rust-js does not support values of type `*const ()` yet

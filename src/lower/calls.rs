@@ -4,7 +4,7 @@ use super::bindings::{JsForm, is_binding, is_method, js_form};
 use super::combinators::Comb;
 use super::combinators::StepOp;
 use super::drops::Drops;
-use super::recognition::{Catching, Std, StreamOp};
+use super::recognition::{Catching, Std, StreamOp, TypeFact};
 use super::{FnCx, R};
 use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
@@ -12,7 +12,7 @@ use crate::runtime::Helper;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind};
-use rustc_middle::ty::{self, Ty, TypeVisitableExt};
+use rustc_middle::ty::{self, Ty};
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, sym};
 
@@ -430,23 +430,16 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => Ok(Expr::undefined()),
             };
         }
-        // rustc's name for the type, as a string; of a type parameter, which
-        // each caller's type names, it's an error.
+        // rustc's name for the type, as a string; of a type parameter, the
+        // one its caller gave (ADR 0145).
         if let Std::TypeName { of_val } = known {
-            let of = generic_args.type_at(0);
-            if of.has_param() {
-                return Err(self.unsupported(span, "`type_name` of a type parameter"));
-            }
             if of_val {
                 let value = self.expr(args[0], out)?;
                 if value.has_effects() {
                     out.push(StmtKind::Expr(value).at(self.js_span(span)));
                 }
             }
-            let of = self
-                .tcx
-                .normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(of));
-            return Ok(Expr::str(rustc_const_eval::util::type_name(self.tcx, of)));
+            return self.type_fact_value(generic_args.type_at(0), TypeFact::Name, span);
         }
         if let Std::Comb(comb) = known {
             return self.comb_call(comb, args, generic_args, span, out);

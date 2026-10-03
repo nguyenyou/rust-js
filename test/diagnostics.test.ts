@@ -53,6 +53,8 @@ for (const [name, source, message, crate] of [
   ["an Rc<dyn> of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let _: std::rc::Rc<dyn Send> = std::rc::Rc::new(D); }', "a `dyn` of a value with a destructor"],
   // A std call given an iterator whose destructors rust-js can't follow would drop what it skips silently.
   ["last of owned items", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f(v: Vec<D>) -> Option<D> { v.into_iter().last() }', "`std::iter::Iterator::last` of a value with a destructor"],
+  // A size of a type parameter is its caller's (ADR 0145), but `size_of_val` of an unsized one is the value's.
+  ["size_of_val of an unsized type parameter", 'pub fn f<T: ?Sized>(x: &T) -> usize { std::mem::size_of_val(x) }\npub fn g() -> usize { f("ab") }', "`size_of` of a type parameter"],
   ["an Rc of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let r = std::rc::Rc::new(D); drop(r); }', "a std type holding a value with a destructor, `std::rc::Rc<D>`"],
   ["a user impl of a std trait", 'pub struct C;\nimpl std::hash::Hasher for C { fn finish(&self) -> u64 { 0 } fn write(&mut self, _: &[u8]) {} }', "user implementations of this standard or external trait"],
   ["comparing another crate's struct", 'pub fn f(a: std::time::Duration, b: std::time::Duration) -> bool { a < b }', "does not support"],
