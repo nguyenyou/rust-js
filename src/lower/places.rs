@@ -325,6 +325,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
+    /// The cell a guard is of, `m` in `m.lock().unwrap()` or `c.borrow_mut()`
+    /// (ADR 0144): the place it's at.
+    pub(super) fn guarded_cell(&self, e: ExprId) -> Option<ExprId> {
+        let ExprKind::Call { fun, ref args, .. } = self.thir[self.strip(e)].kind else {
+            return None;
+        };
+        match self.std_fn(fun)? {
+            Std::UnwrapOk => self.guarded_cell(args[0]),
+            Std::Borrow | Std::Lock => Some(match self.thir[self.strip(args[0])].kind {
+                ExprKind::Borrow { arg, .. } => arg,
+                _ => args[0],
+            }),
+            _ => None,
+        }
+    }
+
     /// What a reference made with `&` or `&mut` refers to, which is the JS
     /// value itself: `&v[i]` is the element, not a copy of it.
     pub(super) fn referent(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {

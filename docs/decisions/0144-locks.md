@@ -40,7 +40,15 @@ is the value it points at, as an `Rc` is:**
   value, as for any `Ok(x)` just made.
 - **A guard is what it guards,** `MutexGuard`, `RwLockReadGuard` and
   `RwLockWriteGuard` as `Ref` and `RefMut` are (ADR 0025): one held in a
-  variable is the object, and one of a number in a variable is an error.
+  variable is the object.
+- **A guard of a number, a string or the like held in a variable names the
+  cell's `value`,** as a `&mut` held in one names its place (ADR 0099):
+  `let mut n = m.lock().unwrap(); *n += 1;` is `m.value = (m.value + 1) | 0`,
+  and so is a `RefCell`'s `borrow_mut()`. While the guard lives nothing
+  else can use the cell, so a write through it is a write to `m.value`. Its
+  place is fixed where it's locked: `slots[i].lock()` keeps the `i` of
+  that moment. One of a cell that isn't a place, a call's result, is still
+  an error.
 - **An `Arc` is wherever an `Rc` is:** shown, compared, cloned, defaulted
   and written to JSON as what it holds.
 - **Still errors:** `try_lock`, `is_poisoned`, `Arc::strong_count`, `{:?}`
@@ -66,5 +74,4 @@ is the value it points at, as an `Rc` is:**
 - A program that locks twice on one thread, `m.lock()` while a guard of
   `m` is alive, hangs natively and doesn't in JS: nothing checks the lock,
   as nothing checks a `RefCell`'s borrows.
-- `let mut n = m.lock().unwrap(); *n += 1;` of a `Mutex<i32>` is an error,
-  as a `RefMut<i32>` in a variable is.
+- `drop(guard)` of a guard, which has no destructor in JS, is nothing.

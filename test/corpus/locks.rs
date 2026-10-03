@@ -1,6 +1,9 @@
 // A `Mutex` or an `RwLock` on one thread is a `RefCell` that can't be
 // contested (ADR 0025): `{ value }`, whose `lock()` is always `Ok`, and
-// `*m.lock().unwrap() += 1` is `m.value += 1`. An `Arc` is an `Rc`.
+// `*m.lock().unwrap() += 1` is `m.value += 1`. An `Arc` is an `Rc`. A
+// guard of a number held in a variable names the cell's `value`, as a
+// `&mut` held in one names its place (ADR 0099).
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Debug)]
@@ -42,4 +45,36 @@ fn main() {
     let m = Mutex::new(String::from("x"));
     m.lock().unwrap().push('y');
     println!("{}", m.into_inner().unwrap());
+
+    let counter = Mutex::new(0);
+    {
+        let mut num = counter.lock().unwrap();
+        *num += 1;
+        *num *= 10;
+        println!("inside {}", *num);
+    }
+    println!("{:?}", *counter.lock().unwrap());
+    let cell = RefCell::new(1.5);
+    {
+        let mut v = cell.borrow_mut();
+        *v += 1.0;
+        let r = *v;
+        println!("{} {}", r, v.to_string());
+    }
+    let text = RwLock::new(String::from("a"));
+    {
+        let mut w = text.write().unwrap();
+        w.push('b');
+        *w += "c";
+    }
+    let slots = vec![Mutex::new(1), Mutex::new(2)];
+    let mut i = 0;
+    let mut first = slots[i].lock().unwrap();
+    i += 1;
+    *first += 10;
+    println!("{} {}", *first, i);
+    drop(first);
+    println!("{:?}", slots.iter().map(|m| *m.lock().unwrap()).collect::<Vec<_>>());
+    let r = text.read().unwrap();
+    println!("{} {} {}", *r, r.len(), cell.borrow());
 }

@@ -10,4 +10,13 @@ export const mutations: Mutation[] = [
     replace: "                out.push(StmtKind::Assign(slot.clone(), next).at(js_span));\n                slot\n",
     tests: ["test/corpus.test.ts", "-t", "atomics"],
   },
+  {
+    name: "drop-of-nothing-kept",
+    breaks: "`drop(guard)` keeps an unused `const value = ..`: right, but not the JS a person writes",
+    file: "src/lower/cells.rs",
+    find: "                if !self.has_drops(ty) {",
+    replace: "                if false {",
+    tests: ["test/corpus.test.ts", "-t", "^locks"],
+    snapshots: true,
+  },
 ];

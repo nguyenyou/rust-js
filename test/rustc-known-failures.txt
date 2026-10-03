@@ -217,7 +217,7 @@ numbers-arithmetic/integer-literal-suffix-inference-2.rs	error: rust-js does not
 or-patterns/issue-70413-no-unreachable-pat-and-guard.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 or-patterns/search-via-bindings.rs	error: rust-js does not support a guard of a `|` pattern binding a name at another place in each alternative yet
 overloaded/fixup-deref-mut.rs	error: rust-js does not support values of type `*mut Point` yet
-overloaded/overloaded_deref_with_ref_pattern_issue15609.rs	error: rust-js does not support values of type `std::cell::RefMut<'_, i32>` yet
+overloaded/overloaded_deref_with_ref_pattern_issue15609.rs	error: rust-js does not support `ref mut` bindings to this type yet
 overloaded/overloaded_deref_with_ref_pattern.rs	error: rust-js does not support `ref mut` bindings to this type yet
 overloaded/overloaded-deref-count.rs	error: rust-js does not support assigning to this place yet
 overloaded/overloaded-index-autoderef.rs	error: rust-js does not support a `&mut` of this in a variable yet

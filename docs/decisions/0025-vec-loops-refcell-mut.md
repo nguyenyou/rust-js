@@ -59,8 +59,9 @@ for (let i = 0; i < n; i++) { .. }        // for i in 0..n
 `borrow_mut()` are its `value`, so `*c.borrow_mut() += 1` is
 `c.value = c.value + 1 | 0`, and `state.borrow_mut().todos.push(t)` is
 `state.value.todos.push(t)`. A guard (`Ref`, `RefMut`) held in a variable is
-the object it guards. That's only allowed when the guarded value is an
-object: a guarded number in a variable would be a copy, not a place.
+the object it guards. A guarded number in a variable names the cell's
+`value` (ADR 0144). (Amended: it was an error, since a copy wouldn't be a
+place.)
 
 **`&mut` to an object is the object**, just as `&` is (ADR 0023). An object
 here means a struct, tuple, `Vec`, `Cell`, `RefCell` or JS object. Changes

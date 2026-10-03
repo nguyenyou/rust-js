@@ -275,6 +275,36 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             );
             return Ok(());
         }
+        // `let mut n = m.lock().unwrap();` of a number: `n` names the cell's
+        // `value`, as a `&mut` names its place, and the guard keeps anything
+        // else from using it meanwhile (ADRs 0025, 0099, 0144).
+        if let PatKind::Binding {
+            var,
+            mode: BindingMode(ByRef::No, _),
+            subpattern: None,
+            ty,
+            ..
+        } = pat.kind
+            && self.is_guard(ty)
+            && let ty::Adt(_, args) = ty.kind()
+            && !args.types().next().is_some_and(|guarded| self.is_object(guarded))
+            && let Some(init) = init
+            && let Some(cell) = self.guarded_cell(init)
+            && (self.in_element(cell) || self.place(cell).is_some())
+        {
+            // Fixed where it's locked, as a `&mut`'s place is.
+            let place = Expr::member(self.fixed_place(cell, pat.span, out)?, "value");
+            self.bind_alias(var);
+            self.locals.vars.insert(
+                var,
+                Var {
+                    place,
+                    mutable: true,
+                    depth: self.loops.len(),
+                },
+            );
+            return Ok(());
+        }
         let span = self.js_span(span);
         match &pat.kind {
             PatKind::Binding {

@@ -39,6 +39,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Std::Drop => {
                 let ty = self.thir[args[0]].ty;
                 let value = arg();
+                // Nothing to drop, a guard say: only what computing it does.
+                if !self.has_drops(ty) {
+                    if value.has_effects() {
+                        out.push(StmtKind::Expr(value).at(js_span));
+                    }
+                    return Ok(Some(Expr::undefined()));
+                }
                 let value = self.droppable(value, ty, out);
                 self.drop_value(value, ty, span, out)?;
                 Expr::undefined()
