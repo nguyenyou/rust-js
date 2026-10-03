@@ -70,8 +70,8 @@ export const mutations: Mutation[] = [
     name: "item-bindings-as-cells",
     breaks: "`Some(v)` of `m.get_mut(&1)` is a cell, and `*v + 1` is `v.value + 1` of the number",
     file: "src/lower/patterns.rs",
-    find: "                if items {\n                    self.locals.items.insert(b.var);",
-    replace: "                if false {\n                    self.locals.items.insert(b.var);",
+    find: "                if items {\n                    self.bind_item(b.var);",
+    replace: "                if false {\n                    self.bind_item(b.var);",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_std_items"],
   },
   {

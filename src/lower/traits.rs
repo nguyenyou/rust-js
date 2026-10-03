@@ -1048,8 +1048,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // A `&dyn Debug` is the string it shows (ADR 0060).
         if self.is_dyn_debug(target) && !self.is_dyn_debug(source) {
-            let pretty = self.writing.dyn_debug.clone();
-            return self.debug_string_with(value, self.pointee(source), span, &pretty);
+            return self.dyn_debug_string(value, self.pointee(source), span);
         }
         // `&Fat<Bar>` to `&Fat<dyn ToBar>`: the struct's last field would
         // be a `dyn`'s value and impl, or a `dyn Debug`'s string, which it

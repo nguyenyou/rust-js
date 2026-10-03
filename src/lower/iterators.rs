@@ -105,7 +105,67 @@ fn sensitive(known: Std) -> bool {
     )
 }
 
+/// The locals stepped through, each a `$iter` that knows where it is (ADR
+/// 0071): those `next()` is called on, or that are lent as a `&mut dyn
+/// Iterator`, in the bodies being lowered, and those bound as one.
+#[derive(Default)]
+pub(super) struct Stepping {
+    stepped: HashSet<LocalVarId>,
+    bound: HashSet<LocalVarId>,
+}
+
+impl Stepping {
+    pub(super) fn of(stepped: &HashSet<LocalVarId>) -> Stepping {
+        Stepping {
+            stepped: stepped.clone(),
+            bound: HashSet::new(),
+        }
+    }
+}
+
+/// What a body inside another takes from the enclosing one's `Stepping`
+/// while it's lowered, given back as it ends.
+pub(super) struct EnclosingStepping {
+    stepped: HashSet<LocalVarId>,
+    bound: Option<HashSet<LocalVarId>>,
+}
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// Start lowering a body inside the one being lowered, whose own stepped
+    /// locals are `own`: a closure's, as well as the enclosing body's, which
+    /// it sees; a copied default's, an item of its own, instead of them.
+    pub(super) fn enter_body_stepping(&mut self, own: &HashSet<LocalVarId>, item: bool) -> EnclosingStepping {
+        let stepped = self.stepping.stepped.clone();
+        let bound = match item {
+            true => {
+                self.stepping.stepped = own.clone();
+                Some(std::mem::take(&mut self.stepping.bound))
+            }
+            false => {
+                self.stepping.stepped.extend(own);
+                None
+            }
+        };
+        EnclosingStepping { stepped, bound }
+    }
+
+    pub(super) fn leave_body_stepping(&mut self, enclosing: EnclosingStepping) {
+        self.stepping.stepped = enclosing.stepped;
+        if let Some(bound) = enclosing.bound {
+            self.stepping.bound = bound;
+        }
+    }
+
+    /// Is `var` stepped through, so it's bound as a `$iter`?
+    pub(super) fn steps_through(&self, var: LocalVarId) -> bool {
+        self.stepping.stepped.contains(&var)
+    }
+
+    /// `var` is bound as a `$iter`.
+    pub(super) fn bound_as_iter(&mut self, var: LocalVarId) {
+        self.stepping.bound.insert(var);
+    }
+
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
     fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {
@@ -859,5 +919,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Ok(None),
         }))
+    }
+
+    /// Does `e` name one that knows where it is: a `Peekable`, or a local
+    /// `next()` steps through?
+    pub(super) fn is_stepping(&self, e: ExprId) -> bool {
+        let e = match self.thir[self.strip(e)].kind {
+            ExprKind::Borrow { arg, .. } => self.strip(arg),
+            _ => self.strip(e),
+        };
+        let ty = self.thir[e].ty;
+        self.is_peekable(ty)
+            || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.stepping.bound.contains(&id))
     }
 }

@@ -103,7 +103,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }) = param.pat.as_deref()
             {
                 let name = self.bind(*var, name.as_str(), false);
-                self.locals.boxes.insert(*var);
+                self.bind_boxed(*var);
                 names.push(js::Pattern::Name(name));
                 continue;
             }
@@ -415,23 +415,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         owner: DefId,
         nested: Nested<'tcx>,
     ) -> R<Enclosing<'a, 'tcx>> {
-        let own = body.facts.stepped.iter().copied();
         let thir = std::mem::replace(&mut self.thir, &body.thir);
         let body_facts = std::mem::replace(&mut self.body_facts, &body.facts);
         let body_owner = std::mem::replace(&mut self.body_owner, owner);
-        let stepped = self.stepped.clone();
+        let stepping = self.enter_body_stepping(&body.facts.stepped, matches!(nested, Nested::Default { .. }));
+        let mut default_drops = None;
         let kind = match nested {
-            Nested::Closure { names } => {
-                self.stepped.extend(own);
-                EnclosingKind::Closure {
-                    loops: std::mem::take(&mut self.loops),
-                    names: std::mem::replace(&mut self.names, names),
-                }
-            }
-            Nested::Coroutine => {
-                self.stepped.extend(own);
-                EnclosingKind::Coroutine
-            }
+            Nested::Closure { names } => EnclosingKind::Closure {
+                loops: std::mem::take(&mut self.loops),
+                names: std::mem::replace(&mut self.names, names),
+            },
+            Nested::Coroutine => EnclosingKind::Coroutine,
             Nested::Default {
                 evidence,
                 self_args,
@@ -439,9 +433,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 drops,
                 unsupported,
             } => {
-                self.stepped = own.collect();
+                default_drops = Some((drops, unsupported));
                 EnclosingKind::Default(Box::new(ItemScope {
-                    drops: self.swap_drops(drops, unsupported),
                     names: self.names.clone(),
                     locals: std::mem::take(&mut self.locals),
                     evidence: std::mem::replace(&mut self.given.evidence, evidence),
@@ -450,25 +443,23 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }))
             }
         };
-        self.drop_facts()?;
         Ok(Enclosing {
             thir,
             body_facts,
             body_owner,
-            stepped,
-            scopes: self.take_scopes(),
+            stepping,
+            drops: self.enter_body_drops(default_drops)?,
             kind,
         })
     }
 
     /// Finish the body `enter_body` started, and go back to the enclosing one.
     pub(super) fn leave_body(&mut self, enclosing: Enclosing<'a, 'tcx>) -> R<()> {
-        self.check_drops()?;
+        self.leave_body_drops(enclosing.drops)?;
         self.thir = enclosing.thir;
         self.body_facts = enclosing.body_facts;
         self.body_owner = enclosing.body_owner;
-        self.stepped = enclosing.stepped;
-        self.give_scopes(enclosing.scopes);
+        self.leave_body_stepping(enclosing.stepping);
         match enclosing.kind {
             EnclosingKind::Closure { loops, names } => {
                 self.loops = loops;
@@ -482,14 +473,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     evidence,
                     self_args,
                     typing_env,
-                    drops,
                 } = *scope;
                 self.names = names;
                 self.locals = locals;
                 self.given.evidence = evidence;
                 self.given.self_args = self_args;
                 self.typing_env = typing_env;
-                self.restore_drops(drops);
             }
         }
         Ok(())

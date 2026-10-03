@@ -71,7 +71,7 @@ export const mutations: Mutation[] = [
     name: "item-subject-refused",
     breaks: "`match map.get_mut(&key) { Some(value) => .. }` is refused, as `get_mut` kept is",
     file: "src/lower/mut_refs.rs",
-    find: "        self.locals.item_calls.insert(fun);\n        true\n",
+    find: "        self.mark_item_call(fun);\n        true\n",
     replace: "        false\n",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_std_items"],
   },

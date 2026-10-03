@@ -38,9 +38,12 @@ Four layers, each allowed to depend only on what's left of it:
 ## Inside the front end
 
 The front end turns one function's THIR into JS. `FnCx` holds what that
-takes. Its state is grouped by concern: what a generic item is given
+takes. Its state is grouped by concern, each group read and written only
+by the module that owns it, which others ask: what a generic item is given
 (`Given`), what writing to a `Formatter` knows (`display::Writing`), what
-iterator chains are beyond their types (`iterators::Chains`), what walks of
+iterator chains are beyond their types (`iterators::Chains`), which locals
+are stepped through (`iterators::Stepping`), what the `&mut`s to values JS
+can't change in place are (`mut_refs::MutRefs`, in `Locals`), what walks of
 types found (`TypeWalks`), and what's dropped where (`drops::DropState`).
 
 Its modules come in four kinds.

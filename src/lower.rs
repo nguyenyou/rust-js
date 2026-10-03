@@ -167,29 +167,9 @@ struct Var {
 #[derive(Default)]
 struct Locals {
     vars: HashMap<LocalVarId, Var>,
-    /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
-    /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
-    /// in (ADR 0059). While it lives, nothing else can change that entry.
-    slots: HashMap<LocalVarId, (Expr, Expr)>,
-    /// Locals `next()` is called on that are bound as a `$iter`, which
-    /// `next()` can step (ADR 0071).
-    iterators: HashSet<LocalVarId>,
-    /// Parameters that are a `&mut` to a value JS can't change in place, a
-    /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
-    boxes: HashSet<LocalVarId>,
-    /// Variables bound once to a `&mut` of a value that isn't an object:
-    /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
-    aliases: HashSet<LocalVarId>,
-    /// The `let`s a temporary a `&mut` is to has as its home, `&mut Some(3)`
-    /// matched: places its `ref mut` bindings write (ADR 0099).
-    temporaries: HashSet<String>,
-    /// The std calls a pattern matches whose `&mut`s to values JS can't
-    /// change in place are the items, `m.get_mut(&k)`'s: bound, each is
-    /// the item, not a cell (ADR 0099).
-    item_calls: HashSet<ExprId>,
-    /// Their bindings: `*v` reads the item, but `v` has no place to give
-    /// as a `&mut`, which would write the binding's copy (ADR 0099).
-    items: HashSet<LocalVarId>,
+    /// What the `&mut`s to values JS can't change in place are (ADRs 0059,
+    /// 0072, 0099).
+    mut_refs: mut_refs::MutRefs,
 }
 
 /// A variable bound by a pattern, and the place in the subject it matched.
@@ -262,8 +242,8 @@ struct Enclosing<'a, 'tcx> {
     thir: &'a Thir<'tcx>,
     body_facts: &'a body_queries::BodyFacts,
     body_owner: DefId,
-    stepped: HashSet<LocalVarId>,
-    scopes: drops::BodyScopes<'tcx>,
+    stepping: iterators::EnclosingStepping,
+    drops: drops::EnclosingDrops<'tcx>,
     kind: EnclosingKind<'tcx>,
 }
 
@@ -283,7 +263,6 @@ struct ItemScope<'tcx> {
     evidence: Vec<(ty::TraitRef<'tcx>, Expr)>,
     self_args: Option<ty::GenericArgsRef<'tcx>>,
     typing_env: ty::TypingEnv<'tcx>,
-    drops: drops::SwappedDrops<'tcx>,
 }
 
 /// Immutable analysis inputs shared by function lowering.
@@ -347,9 +326,8 @@ struct FnCx<'a, 'tcx> {
     writing: display::Writing,
     /// What this function's iterator chains are, beyond their types.
     chains: iterators::Chains,
-    /// Locals that `next()` is called on (ADR 0071): an iterator over an
-    /// array that's stepped through, a `$iter` object that knows where it is.
-    stepped: HashSet<LocalVarId>,
+    /// The locals stepped through, each a `$iter` (ADR 0071).
+    stepping: iterators::Stepping,
     /// The recursive types being cloned, and the function each one's clone
     /// is (`clone_value`), which a clone inside it calls.
     cloning: Vec<(Ty<'tcx>, String)>,
@@ -486,7 +464,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.lower_match(scrutinee, arms, dest, out)
             }
             // A function that writes to a `Formatter` returns what it wrote (ADR 0054).
-            ExprKind::Return { value } if let Some((_, name)) = self.writing.writer.clone() => {
+            ExprKind::Return { value } if let Some(name) = self.written() => {
                 if let Some(v) = value {
                     self.stmt(v, &Dest::Discard, out)?;
                 }
@@ -748,7 +726,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 arg,
             } if self.is_cell(self.thir[arg].ty)
                 && self.thir[self.strip_refs(arg)].ty == self.thir[arg].ty
-                && matches!(self.thir[self.strip_refs(arg)].kind, ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.locals.boxes.contains(&id)) =>
+                && matches!(self.thir[self.strip_refs(arg)].kind, ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.is_boxed(id)) =>
             {
                 self.read(self.strip_refs(arg), out)
             }
@@ -765,7 +743,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 arg,
             } if let ExprKind::Deref { arg: inner } = self.thir[self.strip(arg)].kind
                 && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
-                && self.locals.boxes.contains(&id) =>
+                && self.is_boxed(id) =>
             {
                 Ok(self.locals.vars[&id].place.clone())
             }
@@ -1058,7 +1036,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 // An operator's, `v[i]`'s `*index_mut(&mut v, i)`: its `&mut` is the
                 // item, read or written where it is and never kept (ADR 0099).
                 if !from_hir_call {
-                    self.locals.item_calls.insert(fun);
+                    self.mark_item_call(fun);
                 }
                 let value = self.call(fun, args, false, span, out)?;
                 self.generic_result(fun, value, span)

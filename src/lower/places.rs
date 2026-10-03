@@ -100,7 +100,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind else {
             return None;
         };
-        let (map, key) = self.locals.slots.get(&id)?.clone();
+        let (map, key) = self.slot(id)?.clone();
         Some(PreparedPlace::Slot {
             local: self.locals.vars[&id].place.clone(),
             map,
@@ -195,7 +195,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return false;
         }
         match self.thir[self.strip(e)].kind {
-            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => self.locals.boxes.contains(&id),
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } => self.is_boxed(id),
             ExprKind::Field { .. } | ExprKind::Index { .. } | ExprKind::Deref { .. } => true,
             // `if c { a } else { b }` of cells.
             ExprKind::If {
@@ -242,7 +242,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Deref { arg }
                 if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } =
                     self.thir[self.strip(arg)].kind
-                    && self.locals.boxes.contains(&id) =>
+                    && self.is_boxed(id) =>
             {
                 let (cell, _) = self.place(arg)?;
                 // A handle on a place, as a binding of a matched `&mut x` is: `x`.
@@ -342,7 +342,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let js::ExprKind::Var(name) = &place.kind else {
             return false;
         };
-        self.locals.temporaries.contains(name)
+        self.is_temporary_home(name)
             || self
                 .locals
                 .vars
@@ -385,7 +385,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             matches!(self.thir[r].ty.kind(), ty::Ref(..))
                 && match self.thir[self.strip(r)].kind {
                     ExprKind::VarRef { id } => {
-                        self.locals.vars.get(&id).is_some_and(|v| v.mutable) && !self.locals.aliases.contains(&id)
+                        self.locals.vars.get(&id).is_some_and(|v| v.mutable) && !self.is_alias(id)
                     }
                     _ => true,
                 }
@@ -630,8 +630,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // One that names a place, as a `ref mut` binding does, writes it.
         let names_place = |arg: ExprId| match self.thir[self.strip(arg)].kind {
             ExprKind::VarRef { id } => {
-                self.locals.boxes.contains(&id)
-                    || self.locals.aliases.contains(&id)
+                self.is_boxed(id)
+                    || self.is_alias(id)
                     || self
                         .locals
                         .vars
@@ -663,14 +663,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A `&mut` in a variable is its place (ADR 0099). Read as a value,
         // `generic(y)`, it would be the place's value, not a `&mut`.
         if let ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } = self.thir[self.strip(e)].kind
-            && (self.locals.aliases.contains(&id) || self.is_cell(ty))
-            && !self.locals.boxes.contains(&id)
+            && (self.is_alias(id) || self.is_cell(ty))
+            && !self.is_boxed(id)
             && matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
         {
             // A `&mut` to a number that a variable names the place of, a `let
             // y = &mut x` or a `ref mut` binding, as a value: a handle on it.
             // Not a std call's item, whose binding is a copy.
-            if self.locals.items.contains(&id) {
+            if self.is_item(id) {
                 return Err(self.unsupported(self.thir[e].span, &format!("a `{ty}` from a std call used as a value")));
             }
             if self.is_cell(ty) {

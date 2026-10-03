@@ -178,7 +178,9 @@ pub fn lower_crate<'tcx>(
             jsx: false,
             writing: Default::default(),
             chains: Default::default(),
-            stepped: body.map_or_else(HashSet::new, |body| body.facts.stepped.clone()),
+            stepping: body.map_or_else(Default::default, |body| {
+                super::iterators::Stepping::of(&body.facts.stepped)
+            }),
             cloning: Vec::new(),
             item: def_id,
             walks: Default::default(),

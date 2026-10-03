@@ -73,15 +73,27 @@ pub(super) struct Statement<'tcx> {
     temps: Vec<Temp<'tcx>>,
 }
 
+/// A copied default's drops: the drop functions of its trait's type
+/// parameters, by index, and those it can't make, with why (ADR 0098).
+pub(super) type DefaultDrops<'tcx> = (HashMap<u32, String>, HashMap<u32, (Ty<'tcx>, &'static str)>);
+
+/// What a body inside another, a closure's or a copied default's, takes
+/// from the drops of the one it's in while it's lowered, given back as it
+/// ends: its statement and scopes, and a default's, the item's drops.
+pub(super) struct EnclosingDrops<'tcx> {
+    scopes: BodyScopes<'tcx>,
+    swapped: Option<SwappedDrops<'tcx>>,
+}
+
 /// The statement and the expressions being lowered, whose temporaries a
 /// body inside them, a closure's, has none of: it has its own.
-pub(super) struct BodyScopes<'tcx> {
+struct BodyScopes<'tcx> {
     statement: Statement<'tcx>,
     open: Vec<(region::Scope, Vec<Temp<'tcx>>)>,
 }
 
 /// A function's drops while a copied default body has its own.
-pub(super) struct SwappedDrops<'tcx> {
+struct SwappedDrops<'tcx> {
     params: HashMap<u32, String>,
     used: HashSet<u32>,
     unsupported: HashMap<u32, (Ty<'tcx>, &'static str)>,
@@ -834,16 +846,40 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.place_temps(statement.temps, lowered, span, out)
     }
 
+    /// Start lowering a body inside the one being lowered: its own facts, and
+    /// none of the enclosing one's statement and scopes. A copied default's,
+    /// `default`, is given its trait's type parameters' drops and those it
+    /// can't make (ADR 0098).
+    pub(super) fn enter_body_drops(&mut self, default: Option<DefaultDrops<'tcx>>) -> R<EnclosingDrops<'tcx>> {
+        let swapped = default.map(|(drops, unsupported)| self.swap_drops(drops, unsupported));
+        self.drop_facts()?;
+        Ok(EnclosingDrops {
+            scopes: self.take_scopes(),
+            swapped,
+        })
+    }
+
+    /// Finish the body `enter_body_drops` started: every owner it has had a
+    /// scope, and every move its flag cleared, and the enclosing body's back.
+    pub(super) fn leave_body_drops(&mut self, enclosing: EnclosingDrops<'tcx>) -> R<()> {
+        self.check_drops()?;
+        self.give_scopes(enclosing.scopes);
+        if let Some(swapped) = enclosing.swapped {
+            self.restore_drops(swapped);
+        }
+        Ok(())
+    }
+
     /// The enclosing body's statement and expressions, while a body inside
     /// it is lowered.
-    pub(super) fn take_scopes(&mut self) -> BodyScopes<'tcx> {
+    fn take_scopes(&mut self) -> BodyScopes<'tcx> {
         BodyScopes {
             statement: std::mem::take(&mut self.drop_state.statement),
             open: std::mem::take(&mut self.drop_state.open),
         }
     }
 
-    pub(super) fn give_scopes(&mut self, scopes: BodyScopes<'tcx>) {
+    fn give_scopes(&mut self, scopes: BodyScopes<'tcx>) {
         self.drop_state.statement = scopes.statement;
         self.drop_state.open = scopes.open;
     }
@@ -978,7 +1014,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// trait's type parameters, `Self` among them (ADR 0049): each is what the
     /// impl's argument for it drops, with the impl's own drops. What was
     /// there, and what was found with it, is given back by `restore_drops`.
-    pub(super) fn swap_drops(
+    fn swap_drops(
         &mut self,
         drops: HashMap<u32, String>,
         unsupported: HashMap<u32, (Ty<'tcx>, &'static str)>,
@@ -999,7 +1035,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.drop_state.used_drops.clone()
     }
 
-    pub(super) fn restore_drops(&mut self, swapped: SwappedDrops<'tcx>) {
+    fn restore_drops(&mut self, swapped: SwappedDrops<'tcx>) {
         self.drop_state.param_drops = swapped.params;
         self.drop_state.used_drops = swapped.used;
         self.drop_state.unsupported_params = swapped.unsupported;

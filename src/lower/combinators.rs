@@ -113,18 +113,6 @@ pub(super) enum HeapOp {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// Does `e` name one that knows where it is: a `Peekable`, or a local
-    /// `next()` steps through?
-    fn is_stepping(&self, e: ExprId) -> bool {
-        let e = match self.thir[self.strip(e)].kind {
-            ExprKind::Borrow { arg, .. } => self.strip(arg),
-            _ => self.strip(e),
-        };
-        let ty = self.thir[e].ty;
-        self.is_peekable(ty)
-            || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.locals.iterators.contains(&id))
-    }
-
     /// Is `e` a place, not an iterator just made?
     fn is_kept(&self, e: ExprId) -> bool {
         let e = match self.thir[self.strip(e)].kind {

@@ -10,9 +10,36 @@ use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// How an argument is given to a function that takes boxes (`call_with_boxes`).
+/// What the `&mut`s to values JS can't change in place, in the body being
+/// lowered, are: boxes, aliases of places, a map's entry, or a std call's
+/// items. Only this module reads or writes them.
+#[derive(Default)]
+pub(super) struct MutRefs {
+    /// A `&mut` to a map's value that's a primitive, `if let Some(n) =
+    /// m.get_mut(&k)`: a copy of it, and the map and key a write puts it back
+    /// in (ADR 0059). While it lives, nothing else can change that entry.
+    slots: HashMap<LocalVarId, (Expr, Expr)>,
+    /// Parameters that are a `&mut` to a value JS can't change in place, a
+    /// `String` or a number: a `{ value }` box the caller copies back (ADR 0072).
+    boxes: HashSet<LocalVarId>,
+    /// Variables bound once to a `&mut` of a value that isn't an object:
+    /// each names the place it borrowed, so `*y = 5` writes it (ADR 0099).
+    aliases: HashSet<LocalVarId>,
+    /// The `let`s a temporary a `&mut` is to has as its home, `&mut Some(3)`
+    /// matched: places its `ref mut` bindings write (ADR 0099).
+    temporaries: HashSet<String>,
+    /// The std calls a pattern matches whose `&mut`s to values JS can't
+    /// change in place are the items, `m.get_mut(&k)`'s: bound, each is
+    /// the item, not a cell (ADR 0099).
+    item_calls: HashSet<ExprId>,
+    /// Their bindings: `*v` reads the item, but `v` has no place to give
+    /// as a `&mut`, which would write the binding's copy (ADR 0099).
+    items: HashSet<LocalVarId>,
+}
+
 pub(super) enum ArgForm {
     /// As any argument is.
     Value,
@@ -30,6 +57,62 @@ pub(super) enum Callee<'tcx> {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// `var` is a `{ value }` box of a `String` or a number, as a `&mut`
+    /// parameter is (ADR 0072).
+    pub(super) fn bind_boxed(&mut self, var: LocalVarId) {
+        self.locals.mut_refs.boxes.insert(var);
+    }
+
+    pub(super) fn is_boxed(&self, var: LocalVarId) -> bool {
+        self.locals.mut_refs.boxes.contains(&var)
+    }
+
+    /// `var` names the place a `&mut` it's bound to borrowed (ADR 0099).
+    pub(super) fn bind_alias(&mut self, var: LocalVarId) {
+        self.locals.mut_refs.aliases.insert(var);
+    }
+
+    pub(super) fn is_alias(&self, var: LocalVarId) -> bool {
+        self.locals.mut_refs.aliases.contains(&var)
+    }
+
+    /// `var` is a copy of a map's entry, `map` and `key` where a write puts
+    /// it back (ADR 0059).
+    pub(super) fn bind_slot(&mut self, var: LocalVarId, slot: (Expr, Expr)) {
+        self.locals.mut_refs.slots.insert(var, slot);
+    }
+
+    pub(super) fn slot(&self, var: LocalVarId) -> Option<&(Expr, Expr)> {
+        self.locals.mut_refs.slots.get(&var)
+    }
+
+    /// `name`, a `let`, is the home of a temporary a `&mut` is to (ADR 0099).
+    pub(super) fn home_temporary(&mut self, name: String) {
+        self.locals.mut_refs.temporaries.insert(name);
+    }
+
+    pub(super) fn is_temporary_home(&self, name: &str) -> bool {
+        self.locals.mut_refs.temporaries.contains(name)
+    }
+
+    /// `call`, a std call a pattern matches, has its items as its `&mut`s.
+    pub(super) fn mark_item_call(&mut self, call: ExprId) {
+        self.locals.mut_refs.item_calls.insert(call);
+    }
+
+    pub(super) fn is_item_call(&self, call: ExprId) -> bool {
+        self.locals.mut_refs.item_calls.contains(&call)
+    }
+
+    /// `var` is bound to one of those items.
+    pub(super) fn bind_item(&mut self, var: LocalVarId) {
+        self.locals.mut_refs.items.insert(var);
+    }
+
+    pub(super) fn is_item(&self, var: LocalVarId) -> bool {
+        self.locals.mut_refs.items.contains(&var)
+    }
+
     /// What a `&mut` argument points at, to read and write: `p` of `&mut p`,
     /// or a box's `value` (ADR 0074). A place with an item in it isn't one:
     /// its index would be evaluated at each use.
@@ -39,7 +122,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return self.assignee(place);
             }
         } else if let ExprKind::VarRef { id } = self.thir[self.strip(arg)].kind
-            && self.locals.boxes.contains(&id)
+            && self.is_boxed(id)
             && let Some((boxed, _)) = self.place(arg)
         {
             return Ok(Expr::member(boxed, "value"));
@@ -87,11 +170,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 None if self.is_temporary(arg) => self.expr(arg, out),
                 None => self.referent(arg, out),
             },
-            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.locals.boxes.contains(&id) => {
-                self.place(e)
-                    .map(|(place, _)| place)
-                    .ok_or_else(|| self.unsupported(span, "comparing this `&mut`"))
-            }
+            ExprKind::VarRef { id } | ExprKind::UpvarRef { var_hir_id: id, .. } if !self.is_boxed(id) => self
+                .place(e)
+                .map(|(place, _)| place)
+                .ok_or_else(|| self.unsupported(span, "comparing this `&mut`")),
             _ if self.is_cell_value(e) => Ok(Expr::member(self.expr(e, out)?, "value")),
             _ => Err(self.unsupported(span, "comparing this `&mut`")),
         }
@@ -131,7 +213,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.is_rust_fn(def_id) || self.makes_items(self.thir[e].ty, generic_args, args).is_none() {
             return false;
         }
-        self.locals.item_calls.insert(fun);
+        self.mark_item_call(fun);
         true
     }
 
@@ -232,7 +314,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // the value, as an object impl's `&mut self` is, what's in it.
         if let ExprKind::Deref { arg: inner } = self.thir[self.strip(place)].kind
             && let ExprKind::VarRef { id } = self.thir[self.strip(inner)].kind
-            && self.locals.boxes.contains(&id)
+            && self.is_boxed(id)
         {
             return if param_box || generic {
                 ArgForm::Value

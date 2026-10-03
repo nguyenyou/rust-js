@@ -20,14 +20,14 @@ use rustc_span::{Span, Symbol};
 pub(super) struct Writing {
     /// In a function that writes to a `Formatter` (ADR 0054): its variable,
     /// and the JS string that stands for it.
-    pub(super) writer: Option<(Option<LocalVarId>, String)>,
+    writer: Option<(Option<LocalVarId>, String)>,
     /// In such a function of a crate that shows anything pretty (ADR 0137):
     /// the parameter that says whether it's `{:#?}`.
-    pub(super) alternate: Option<Expr>,
+    alternate: Option<Expr>,
     /// How a `&dyn Debug` made here shows its value: pretty as its writer's
     /// `alternate` says, while a derived `Debug`'s or a builder's
     /// arguments are lowered (ADR 0137), plain anywhere else.
-    pub(super) dyn_debug: Pretty,
+    dyn_debug: Pretty,
 }
 
 #[derive(Clone, Default)]
@@ -50,6 +50,34 @@ impl Pretty {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// In a function that writes to a `Formatter` (ADR 0054): the JS string
+    /// it's written, which a `return` gives back.
+    pub(super) fn written(&self) -> Option<String> {
+        self.writing.writer.as_ref().map(|(_, name)| name.clone())
+    }
+
+    /// In a pretty writer (ADR 0137): its parameter that says whether it's
+    /// `{:#?}`, which `f.alternate()` is.
+    pub(super) fn writer_alternate(&self) -> Option<Expr> {
+        self.writing.alternate.clone()
+    }
+
+    /// `lower`, during which a `&dyn Debug` made shows its value as `pretty`
+    /// says: a derived `Debug`'s or a builder's arguments (ADR 0137).
+    pub(super) fn with_dyn_debug<T>(&mut self, pretty: Pretty, lower: impl FnOnce(&mut Self) -> T) -> T {
+        let outer = std::mem::replace(&mut self.writing.dyn_debug, pretty);
+        let made = lower(self);
+        self.writing.dyn_debug = outer;
+        made
+    }
+
+    /// `value`, of type `ty`, made a `&dyn Debug` here: the string it shows
+    /// (ADR 0060), pretty or plain as `with_dyn_debug` says.
+    pub(super) fn dyn_debug_string(&mut self, value: Expr, ty: Ty<'tcx>, span: Span) -> R<Expr> {
+        let pretty = self.writing.dyn_debug.clone();
+        self.debug_string_with(value, ty, span, &pretty)
+    }
+
     /// The JS parameters of a function that writes to a formatter, and its
     /// body in `out`: `let f = ""`, the writes, and `return f`. Just
     /// `return s` if it writes once.

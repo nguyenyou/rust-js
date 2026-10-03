@@ -3,14 +3,6 @@ import type { Mutation } from "../../mutations";
 
 export const mutations: Mutation[] = [
   {
-    name: "closure-stepped-iterators",
-    breaks: "a closure's body doesn't find its own stepped iterators, and `it.next()` in one is rejected",
-    file: "src/lower/bodies.rs",
-    find: "            Nested::Closure { names } => {\n                self.stepped.extend(own);\n",
-    replace: "            Nested::Closure { names } => {\n",
-    tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
-  },
-  {
     name: "drop-ref-parameter",
     breaks: "a parameter bound by `ref` isn't dropped as its function ends",
     file: "src/lower/bodies.rs",

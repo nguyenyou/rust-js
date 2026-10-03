@@ -267,9 +267,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && self.tcx.def_path_str(def_id).starts_with("std::fmt::Formatter")
         {
             return self
-                .writing
-                .alternate
-                .clone()
+                .writer_alternate()
                 .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"))
                 .map(Some);
         }
@@ -363,7 +361,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // A `&mut` it made itself, to a value JS can't change in place, is the
         // item, not a cell (ADR 0099): only a pattern takes it apart.
         if let Some(cell) = self.makes_items(output, generic_args, args)
-            && !self.locals.item_calls.contains(&fun)
+            && !self.is_item_call(fun)
         {
             let path = self.tcx.def_path_str(def_id);
             return Err(self.unsupported(span, &format!("a `{cell}` from `{path}` used as a value")));

@@ -110,8 +110,8 @@ export const mutations: Mutation[] = [
     name: "operator-items-refused",
     breaks: "`bump(&mut counts[1])` is refused, `index_mut`'s `&mut` taken for one a std call gives to keep",
     file: "src/lower.rs",
-    find: "                if !from_hir_call {\n                    self.locals.item_calls.insert(fun);",
-    replace: "                if false {\n                    self.locals.item_calls.insert(fun);",
+    find: "                if !from_hir_call {\n                    self.mark_item_call(fun);",
+    replace: "                if false {\n                    self.mark_item_call(fun);",
     tests: ["test/corpus.test.ts", "-t", "trait_mut_self_value"],
   },
   {

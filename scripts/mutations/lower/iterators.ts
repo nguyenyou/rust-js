@@ -237,4 +237,12 @@ export const mutations: Mutation[] = [
     replace: "                && false;",
     tests: ["test/corpus.test.ts", "-t", "iterator_sources"],
   },
+  {
+    name: "closure-stepped-iterators",
+    breaks: "a closure's body doesn't find its own stepped iterators, and `it.next()` in one is rejected",
+    file: "src/lower/iterators.rs",
+    find: "            false => {\n                self.stepping.stepped.extend(own);\n",
+    replace: "            false => {\n",
+    tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
+  },
 ];

@@ -262,7 +262,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             } if mode.1 == Mutability::Not && mode.0 == ByRef::No && !self.contains_mutated(*ty) => {
                 self.check_value_ty(*ty, f.pat.span)?;
                 if self.is_cell(*ty) {
-                    self.locals.boxes.insert(*var);
+                    self.bind_boxed(*var);
                 }
                 js::Pattern::Name(self.bind(*var, name.as_str(), false))
             }
@@ -496,7 +496,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
         };
         let name = self.fresh("i");
-        self.locals.aliases.insert(var);
+        self.bind_alias(var);
         self.locals.vars.insert(
             var,
             Var {

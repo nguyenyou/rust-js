@@ -123,7 +123,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ..
         } = pat.kind
             && let Some(init) = init
-            && self.stepped.contains(&var)
+            && self.steps_through(var)
             && self.is_array_iter(ty)
             && !self.is_lazy_value(init)
             && !self.is_peekable(ty)
@@ -134,7 +134,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::Iter);
             let value = Expr::call(Expr::var("$iter"), vec![items]);
             let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
-            self.locals.iterators.insert(var);
+            self.bound_as_iter(var);
             let kind = if mutability == Mutability::Mut {
                 StmtKind::Let(name, Some(value))
             } else {
@@ -248,7 +248,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             && !self.is_object(inner)
             && let Some(init) = init
             && let moved = match self.thir[self.strip(init)].kind {
-                ExprKind::VarRef { id } => self.locals.aliases.contains(&id).then_some(id),
+                ExprKind::VarRef { id } => self.is_alias(id).then_some(id),
                 _ => None,
             }
             && let Some(borrowed) = self.mut_borrowed(init).or(moved.map(|_| init))
@@ -264,7 +264,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 None => self.fixed_place(borrowed, pat.span, out)?,
             };
-            self.locals.aliases.insert(var);
+            self.bind_alias(var);
             self.locals.vars.insert(
                 var,
                 Var {
@@ -330,7 +330,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 };
                 // `let mut r = &mut x;`: a cell, whose `value` is `x` (ADR 0099).
                 if mode.0 == ByRef::No && self.is_cell(*ty) {
-                    self.locals.boxes.insert(*var);
+                    self.bind_boxed(*var);
                 }
                 if let Some(owned) = owned {
                     self.own(*var, Expr::var(&name), owned, pat.span, out)?;
@@ -468,7 +468,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let value = self.expr(arg, out)?;
                 let name = self.fresh(base);
                 out.push(StmtKind::Let(name.clone(), Some(value)).at(self.js_span(self.thir[e].span)));
-                self.locals.temporaries.insert(name.clone());
+                self.home_temporary(name.clone());
                 return Ok((cell(Expr::var(&name), self), false));
             }
         }
@@ -562,9 +562,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // `Some(r)` of an `Option<&mut i32>`: `r` is a cell (ADR 0099).
             if !b.by_ref_mut && self.is_cell(b.ty) {
                 if items {
-                    self.locals.items.insert(b.var);
+                    self.bind_item(b.var);
                 } else {
-                    self.locals.boxes.insert(b.var);
+                    self.bind_boxed(b.var);
                 }
             }
             // A place that's computed, like `$someValue(o)`, goes in a `const`.
@@ -580,7 +580,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     && matches!(*b.ty.kind(), ty::Ref(_, inner, _) if !self.is_object(inner))
                     && self.is_let(&b.place)
                 {
-                    self.locals.aliases.insert(b.var);
+                    self.bind_alias(b.var);
                 }
                 self.locals.vars.insert(
                     b.var,
@@ -968,7 +968,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let name = self.bind(*var, name.as_str(), true);
         let there = Expr::call(Expr::member(map.clone(), "get"), vec![key.clone()]);
         out.push(StmtKind::Let(name.clone(), Some(there)).at(self.js_span(pat.span)));
-        self.locals.slots.insert(*var, (map, key));
+        self.bind_slot(*var, (map, key));
         Ok(Some(Expr::bin(Op::LooseNe, Expr::var(&name), Expr::null())))
     }
 

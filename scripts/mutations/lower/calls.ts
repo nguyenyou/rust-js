@@ -38,7 +38,7 @@ export const mutations: Mutation[] = [
     name: "std-items-accepted",
     breaks: "`m.get_mut(&k)` kept or passed on is taken for a cell, and `*v` reads `v.value` of the number itself",
     file: "src/lower/calls.rs",
-    find: "            && !self.locals.item_calls.contains(&fun)\n",
+    find: "            && !self.is_item_call(fun)\n",
     replace: "            && false\n",
     tests: ["test/diagnostics.test.ts", "-t", "std &mut"],
   },
