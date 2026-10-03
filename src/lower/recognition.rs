@@ -304,32 +304,45 @@ pub(super) enum Json {
 
 impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn classify(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<Std> {
+        if let Some(decided) = self.classify_fn(def_id, args) {
+            return decided;
+        }
+        if let Some(trait_) = self.tcx.trait_of_assoc(def_id) {
+            return self.classify_trait_method(def_id, trait_, args);
+        }
+        self.classify_inherent(def_id, args)
+    }
+
+    /// A free function's, or one rust-js knows by its identity, as `mem::swap`
+    /// and `Box::new`: `Some` once decided, of what it is or that it's none
+    /// of std's, and `None` to look further, as a method.
+    fn classify_fn(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<Option<Std>> {
         let tcx = self.tcx;
         let diagnostic = |name: &str| tcx.is_diagnostic_item(Symbol::intern(name), def_id);
         let self_ty = args.types().next();
         if diagnostic("mem_size_of") {
-            return Some(Std::SizeOf);
+            return Some(Some(Std::SizeOf));
         }
         if diagnostic("mem_align_of") {
-            return Some(Std::AlignOf);
+            return Some(Some(Std::AlignOf));
         }
         if diagnostic("mem_size_of_val") {
-            return Some(Std::SizeOfVal);
+            return Some(Some(Std::SizeOfVal));
         }
         if diagnostic("mem_drop") {
-            return Some(Std::Drop);
+            return Some(Some(Std::Drop));
         }
         if diagnostic("mem_forget") {
-            return Some(Std::Forget);
+            return Some(Some(Std::Forget));
         }
         if diagnostic("mem_swap") {
-            return Some(Std::Swap);
+            return Some(Some(Std::Swap));
         }
         if diagnostic("mem_replace") {
-            return Some(Std::Replace);
+            return Some(Some(Std::Replace));
         }
         if tcx.crate_name(def_id.krate) == sym::core && tcx.def_path_str(def_id) == "std::mem::take" {
-            return Some(Std::MemTake);
+            return Some(Some(Std::MemTake));
         }
         // `cmp::max(a, b)` of numbers is `a.max(b)`'s (ADR 0136); of anything
         // else, the call is lowered as `Ord::max`'s.
@@ -341,21 +354,21 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             }
             && self_ty.and_then(Num::of).is_some_and(|num| !num.float())
         {
-            return Some(Std::MaxOf(max));
+            return Some(Some(Std::MaxOf(max)));
         }
         if tcx.is_lang_item(def_id, LangItem::RangeInclusiveNew) {
-            return Some(Std::Range(RangeOp::New));
+            return Some(Some(Std::Range(RangeOp::New)));
         }
         if tcx.crate_name(def_id.krate) == sym::std {
             match tcx.def_path_str(def_id).as_str() {
-                "std::io::stdout" | "std::io::stderr" => return Some(Std::Stream(StreamOp::Open)),
+                "std::io::stdout" | "std::io::stderr" => return Some(Some(Std::Stream(StreamOp::Open))),
                 _ => {}
             }
         }
         if tcx.crate_name(def_id.krate) == sym::core {
             match tcx.def_path_str(def_id).as_str() {
-                "std::any::type_name" => return Some(Std::TypeName { of_val: false }),
-                "std::any::type_name_of_val" => return Some(Std::TypeName { of_val: true }),
+                "std::any::type_name" => return Some(Some(Std::TypeName { of_val: false })),
+                "std::any::type_name_of_val" => return Some(Some(Std::TypeName { of_val: true })),
                 _ => {}
             }
         }
@@ -372,7 +385,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 _ => None,
             };
             if let Some(source) = source {
-                return Some(Std::IterSource(source));
+                return Some(Some(Std::IterSource(source)));
             }
         }
         // `hint::black_box(x)` is `x`: it only hides `x` from an optimizer.
@@ -381,13 +394,13 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         if tcx.item_name(def_id).as_str() == "black_box"
             && ((krate == sym::core && tcx.def_path_str(def_id).contains("hint")) || krate.as_str() == "test")
         {
-            return Some(Std::Same);
+            return Some(Some(Std::Same));
         }
         if diagnostic("box_new") {
-            return Some(Std::Same);
+            return Some(Some(Std::Same));
         }
         if diagnostic("box_assume_init_into_vec_unsafe") {
-            return Some(Std::VecMacro);
+            return Some(Some(Std::VecMacro));
         }
         // `char::from_digit`, `std::char::from_digit` and `from_u32`.
         let char_fn = |name: &str| {
@@ -396,27 +409,27 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 && tcx.def_path_str(def_id).contains("char")
         };
         if char_fn("from_digit") {
-            return Some(Std::FromDigit);
+            return Some(Some(Std::FromDigit));
         }
         if char_fn("from_u32") {
-            return Some(Std::FromU32);
+            return Some(Some(Std::FromU32));
         }
         if tcx.crate_name(def_id.krate).as_str() == "serde_json" {
             match tcx.item_name(def_id).as_str() {
-                "to_string" => return Some(Std::ToJson(false)),
-                "to_string_pretty" => return Some(Std::ToJson(true)),
-                "from_str" => return Some(Std::FromJson),
+                "to_string" => return Some(Some(Std::ToJson(false))),
+                "to_string_pretty" => return Some(Some(Std::ToJson(true))),
+                "from_str" => return Some(Some(Std::FromJson)),
                 _ => {}
             }
         }
         if diagnostic("vec_from_elem") {
-            return Some(Std::FromElem);
+            return Some(Some(Std::FromElem));
         }
         if diagnostic("to_string_method") {
-            return Some(Std::ToString);
+            return Some(Some(Std::ToString));
         }
         if diagnostic("option_unwrap") || diagnostic("option_expect") {
-            return Some(Std::Unwrap);
+            return Some(Some(Std::Unwrap));
         }
         // `format!(..)` is `must_use(format(format_args!(..)))`, and the
         // arguments are a string already (ADR 0034).
@@ -427,36 +440,36 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             && Num::of(tcx.type_of(imp).instantiate_identity().skip_normalization()).is_some_and(Num::float)
         {
             match name.as_str() {
-                "max" => return Some(Std::MaxOf(true)),
-                "min" => return Some(Std::MaxOf(false)),
+                "max" => return Some(Some(Std::MaxOf(true))),
+                "min" => return Some(Some(Std::MaxOf(false))),
                 _ => {}
             }
         }
         if (krate == sym::alloc && name.as_str() == "format" && tcx.def_path_str(def_id).ends_with("fmt::format"))
             || (krate == sym::core && name.as_str() == "must_use")
         {
-            return Some(Std::Same);
+            return Some(Some(Std::Same));
         }
         if tcx.is_lang_item(def_id, LangItem::Panic) {
-            return Some(Std::Panic);
+            return Some(Some(Std::Panic));
         }
         if krate == sym::std {
             match tcx.def_path_str(def_id).as_str() {
-                "std::io::_print" => return Some(Std::Print { error: false }),
-                "std::io::_eprint" => return Some(Std::Print { error: true }),
-                "std::rt::begin_panic" => return Some(Std::BeginPanic),
+                "std::io::_print" => return Some(Some(Std::Print { error: false })),
+                "std::io::_eprint" => return Some(Some(Std::Print { error: true })),
+                "std::rt::begin_panic" => return Some(Some(Std::BeginPanic)),
                 _ => {}
             }
         }
         if tcx.is_lang_item(def_id, LangItem::PanicFmt) {
-            return Some(Std::PanicFmt);
+            return Some(Some(Std::PanicFmt));
         }
         if tcx.crate_name(def_id.krate) == sym::core && tcx.item_name(def_id).as_str() == "assert_failed" {
-            return Some(Std::AssertFailed);
+            return Some(Some(Std::AssertFailed));
         }
         if diagnostic("deref_method") || diagnostic("deref_mut_method") {
             // A reference to what's inside is the same JS value (ADR 0024 for JS objects).
-            let ty = self_ty?;
+            let Some(ty) = self_ty else { return Some(None) };
             let same = self.is_string_like(ty)
                 || self.is_js_object(ty)
                 || self.is_std_adt(ty, sym::Rc)
@@ -464,266 +477,278 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 || ["RefCellRef", "RefCellRefMut"]
                     .into_iter()
                     .any(|name| self.is_std_adt(ty, Symbol::intern(name)));
-            return same.then_some(Std::Same);
+            return Some(same.then_some(Std::Same));
         }
-        if let Some(trait_) = tcx.trait_of_assoc(def_id) {
-            let ty = self_ty?;
-            if Num::of(ty.peel_refs()).is_some() || ty.peel_refs().is_bool() {
-                let operators = [(LangItem::Neg, UnOp::Neg), (LangItem::Not, UnOp::Not)];
-                if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
-                    return Some(Std::UnaryOperator(op));
-                }
+        None
+    }
+
+    /// A trait's method: an operator's, a comparison's, an iterator's, a
+    /// conversion's.
+    fn classify_trait_method(&self, def_id: DefId, trait_: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<Std> {
+        let tcx = self.tcx;
+        let self_ty = args.types().next();
+        let ty = self_ty?;
+        if Num::of(ty.peel_refs()).is_some() || ty.peel_refs().is_bool() {
+            let operators = [(LangItem::Neg, UnOp::Neg), (LangItem::Not, UnOp::Not)];
+            if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                return Some(Std::UnaryOperator(op));
             }
-            if Num::of(ty.peel_refs()).is_some() {
-                let operators = [
-                    (LangItem::Add, BinOp::Add),
-                    (LangItem::Sub, BinOp::Sub),
-                    (LangItem::Mul, BinOp::Mul),
-                    (LangItem::Div, BinOp::Div),
-                    (LangItem::Rem, BinOp::Rem),
-                    (LangItem::BitAnd, BinOp::BitAnd),
-                    (LangItem::BitOr, BinOp::BitOr),
-                    (LangItem::BitXor, BinOp::BitXor),
-                    (LangItem::Shl, BinOp::Shl),
-                    (LangItem::Shr, BinOp::Shr),
-                ];
-                if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
-                    return Some(Std::Operator(op));
-                }
-                // `total += x` with a `&u32` `x`: the same assignment as with a `u32`.
-                let assigning = [
-                    (LangItem::AddAssign, BinOp::Add),
-                    (LangItem::SubAssign, BinOp::Sub),
-                    (LangItem::MulAssign, BinOp::Mul),
-                    (LangItem::DivAssign, BinOp::Div),
-                    (LangItem::RemAssign, BinOp::Rem),
-                    (LangItem::BitAndAssign, BinOp::BitAnd),
-                    (LangItem::BitOrAssign, BinOp::BitOr),
-                    (LangItem::BitXorAssign, BinOp::BitXor),
-                    (LangItem::ShlAssign, BinOp::Shl),
-                    (LangItem::ShrAssign, BinOp::Shr),
-                ];
-                if let Some(&(_, op)) = assigning.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
-                    return Some(Std::AssignOperator(op));
-                }
-                if tcx.is_lang_item(trait_, LangItem::PartialOrd) {
-                    return Some(Std::Operator(match tcx.item_name(def_id).as_str() {
-                        "lt" => BinOp::Lt,
-                        "le" => BinOp::Le,
-                        "gt" => BinOp::Gt,
-                        "ge" => BinOp::Ge,
-                        _ => return None,
-                    }));
-                }
+        }
+        if Num::of(ty.peel_refs()).is_some() {
+            let operators = [
+                (LangItem::Add, BinOp::Add),
+                (LangItem::Sub, BinOp::Sub),
+                (LangItem::Mul, BinOp::Mul),
+                (LangItem::Div, BinOp::Div),
+                (LangItem::Rem, BinOp::Rem),
+                (LangItem::BitAnd, BinOp::BitAnd),
+                (LangItem::BitOr, BinOp::BitOr),
+                (LangItem::BitXor, BinOp::BitXor),
+                (LangItem::Shl, BinOp::Shl),
+                (LangItem::Shr, BinOp::Shr),
+            ];
+            if let Some(&(_, op)) = operators.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                return Some(Std::Operator(op));
             }
-            // `m[k]` of a map: its value, or a panic, as `get(k).expect(..)`.
-            if tcx.is_lang_item(trait_, LangItem::Index) && self.is_map(ty) && !self.is_set(ty) {
-                return Some(Std::Map(MapOp::Index));
+            // `total += x` with a `&u32` `x`: the same assignment as with a `u32`.
+            let assigning = [
+                (LangItem::AddAssign, BinOp::Add),
+                (LangItem::SubAssign, BinOp::Sub),
+                (LangItem::MulAssign, BinOp::Mul),
+                (LangItem::DivAssign, BinOp::Div),
+                (LangItem::RemAssign, BinOp::Rem),
+                (LangItem::BitAndAssign, BinOp::BitAnd),
+                (LangItem::BitOrAssign, BinOp::BitOr),
+                (LangItem::BitXorAssign, BinOp::BitXor),
+                (LangItem::ShlAssign, BinOp::Shl),
+                (LangItem::ShrAssign, BinOp::Shr),
+            ];
+            if let Some(&(_, op)) = assigning.iter().find(|(item, _)| tcx.is_lang_item(trait_, *item)) {
+                return Some(Std::AssignOperator(op));
             }
-            // `&v[a..b]` of a slice, an array or a `Vec` (ADR 0063).
-            if tcx.is_lang_item(trait_, LangItem::Index)
-                && let Some(range) = args.types().nth(1)
-                && self.range_kind(range).is_some()
-                && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_vec_like(ty.peel_refs()))
-            {
-                return Some(Std::Text(TextOp::Slice));
-            }
-            // `&s[a..b]` of a string: by its UTF-8 bytes (ADR 0138).
-            if tcx.is_lang_item(trait_, LangItem::Index)
-                && let Some(range) = args.types().nth(1)
-                && self.range_kind(range).is_some()
-                && self.is_string_like(ty)
-            {
-                return Some(Std::Text(TextOp::StrSlice));
-            }
-            // `v[i]` of a `Vec` is a slice's, checked the same way.
-            if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
-                && self.is_vec_like(ty.peel_refs())
-                && args.types().nth(1).is_some_and(|i| i.is_usize())
-            {
-                return Some(Std::Index);
-            }
-            if tcx.is_lang_item(trait_, LangItem::Add) {
-                return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
-            }
-            // `s += t` is `s.push_str(t)`.
-            if tcx.is_lang_item(trait_, LangItem::AddAssign) && self.is_lang_adt(ty.peel_refs(), LangItem::String) {
-                return Some(Std::PushStr);
-            }
-            // A map's or a set's `into_iter()`: its entries, as an array (ADR 0059).
-            // A `for` over one takes the `Map` itself.
-            if tcx.is_diagnostic_item(sym::IntoIterator, trait_) && self.is_map(ty) {
-                return Some(Std::Map(MapOp::Iter(Part::Entries)));
-            }
-            // An iterator is a JS array (ADR 0036), and a `split` one of strings
-            // (ADR 0034). Its adapters are the array's methods.
-            if tcx.is_diagnostic_item(sym::Iterator, trait_) {
-                let collects_string = || {
-                    args.types()
-                        .nth(1)
-                        .is_some_and(|b| self.is_lang_adt(b, LangItem::String))
-                };
-                return Some(match tcx.item_name(def_id).as_str() {
-                    // A `Range`'s and an `a..`'s move its `start` (ADR 0129).
-                    "next"
-                        if matches!(
-                            self.range_kind(ty.peel_refs()),
-                            Some(RangeKind::Exclusive | RangeKind::From)
-                        ) =>
-                    {
-                        Std::Range(RangeOp::Next)
-                    }
-                    // One of the crate's own is its impl's `next` (ADR 0055).
-                    "next" if !self.is_user_iterator(ty) => Std::Step(StepOp::Next),
-                    "peekable" => Std::Step(StepOp::Peekable),
-                    "map" => Std::ArrayMethod("map"),
-                    "filter" => Std::ArrayMethod("filter"),
-                    "any" => Std::ArrayMethod("some"),
-                    "all" => Std::ArrayMethod("every"),
-                    "find" => Std::ArrayMethod("find"),
-                    "for_each" => Std::ArrayMethod("forEach"),
-                    "enumerate" => Std::Enumerate,
-                    "rev" => Std::Rev,
-                    "skip" => Std::Skip,
-                    "take" => Std::Take,
-                    "fold" => Std::Fold,
-                    "sum" => Std::Sum,
-                    "position" => Std::Position,
-                    "max" => Std::Extreme(true),
-                    "min" => Std::Extreme(false),
-                    "last" => Std::Last,
-                    "count" => Std::Len,
-                    name if let Some(comb) = methods::iterator(name) => Std::IterComb(comb),
-                    "copied" | "cloned" => Std::Cloned,
-                    "fuse" => Std::Fuse,
-                    "collect" if collects_string() => Std::CollectString,
-                    "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
-                        let set = args.types().nth(1).is_some_and(|b| self.is_set(b));
-                        Std::Map(MapOp::From { set })
-                    }
-                    "collect" => Std::Collect,
+            if tcx.is_lang_item(trait_, LangItem::PartialOrd) {
+                return Some(Std::Operator(match tcx.item_name(def_id).as_str() {
+                    "lt" => BinOp::Lt,
+                    "le" => BinOp::Le,
+                    "gt" => BinOp::Gt,
+                    "ge" => BinOp::Ge,
                     _ => return None,
-                });
+                }));
             }
-            if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
-                && tcx.item_name(def_id).as_str() == "into_iter"
-                && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_vec_like(ty.peel_refs()))
+        }
+        // `m[k]` of a map: its value, or a panic, as `get(k).expect(..)`.
+        if tcx.is_lang_item(trait_, LangItem::Index) && self.is_map(ty) && !self.is_set(ty) {
+            return Some(Std::Map(MapOp::Index));
+        }
+        // `&v[a..b]` of a slice, an array or a `Vec` (ADR 0063).
+        if tcx.is_lang_item(trait_, LangItem::Index)
+            && let Some(range) = args.types().nth(1)
+            && self.range_kind(range).is_some()
+            && (ty.peel_refs().is_slice() || ty.peel_refs().is_array() || self.is_vec_like(ty.peel_refs()))
+        {
+            return Some(Std::Text(TextOp::Slice));
+        }
+        // `&s[a..b]` of a string: by its UTF-8 bytes (ADR 0138).
+        if tcx.is_lang_item(trait_, LangItem::Index)
+            && let Some(range) = args.types().nth(1)
+            && self.range_kind(range).is_some()
+            && self.is_string_like(ty)
+        {
+            return Some(Std::Text(TextOp::StrSlice));
+        }
+        // `v[i]` of a `Vec` is a slice's, checked the same way.
+        if (tcx.is_lang_item(trait_, LangItem::Index) || tcx.is_lang_item(trait_, LangItem::IndexMut))
+            && self.is_vec_like(ty.peel_refs())
+            && args.types().nth(1).is_some_and(|i| i.is_usize())
+        {
+            return Some(Std::Index);
+        }
+        if tcx.is_lang_item(trait_, LangItem::Add) {
+            return self.is_lang_adt(ty, LangItem::String).then_some(Std::Concat);
+        }
+        // `s += t` is `s.push_str(t)`.
+        if tcx.is_lang_item(trait_, LangItem::AddAssign) && self.is_lang_adt(ty.peel_refs(), LangItem::String) {
+            return Some(Std::PushStr);
+        }
+        // A map's or a set's `into_iter()`: its entries, as an array (ADR 0059).
+        // A `for` over one takes the `Map` itself.
+        if tcx.is_diagnostic_item(sym::IntoIterator, trait_) && self.is_map(ty) {
+            return Some(Std::Map(MapOp::Iter(Part::Entries)));
+        }
+        // An iterator is a JS array (ADR 0036), and a `split` one of strings
+        // (ADR 0034). Its adapters are the array's methods.
+        if tcx.is_diagnostic_item(sym::Iterator, trait_) {
+            let collects_string = || {
+                args.types()
+                    .nth(1)
+                    .is_some_and(|b| self.is_lang_adt(b, LangItem::String))
+            };
+            return Some(match tcx.item_name(def_id).as_str() {
+                // A `Range`'s and an `a..`'s move its `start` (ADR 0129).
+                "next"
+                    if matches!(
+                        self.range_kind(ty.peel_refs()),
+                        Some(RangeKind::Exclusive | RangeKind::From)
+                    ) =>
+                {
+                    Std::Range(RangeOp::Next)
+                }
+                // One of the crate's own is its impl's `next` (ADR 0055).
+                "next" if !self.is_user_iterator(ty) => Std::Step(StepOp::Next),
+                "peekable" => Std::Step(StepOp::Peekable),
+                "map" => Std::ArrayMethod("map"),
+                "filter" => Std::ArrayMethod("filter"),
+                "any" => Std::ArrayMethod("some"),
+                "all" => Std::ArrayMethod("every"),
+                "find" => Std::ArrayMethod("find"),
+                "for_each" => Std::ArrayMethod("forEach"),
+                "enumerate" => Std::Enumerate,
+                "rev" => Std::Rev,
+                "skip" => Std::Skip,
+                "take" => Std::Take,
+                "fold" => Std::Fold,
+                "sum" => Std::Sum,
+                "position" => Std::Position,
+                "max" => Std::Extreme(true),
+                "min" => Std::Extreme(false),
+                "last" => Std::Last,
+                "count" => Std::Len,
+                name if let Some(comb) = methods::iterator(name) => Std::IterComb(comb),
+                "copied" | "cloned" => Std::Cloned,
+                "fuse" => Std::Fuse,
+                "collect" if collects_string() => Std::CollectString,
+                "collect" if args.types().nth(1).is_some_and(|b| self.is_map(b)) => {
+                    let set = args.types().nth(1).is_some_and(|b| self.is_set(b));
+                    Std::Map(MapOp::From { set })
+                }
+                "collect" => Std::Collect,
+                _ => return None,
+            });
+        }
+        if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
+            && tcx.item_name(def_id).as_str() == "into_iter"
+            && (ty.peel_refs().is_array() || ty.peel_refs().is_slice() || self.is_vec_like(ty.peel_refs()))
+        {
+            return Some(Std::Same);
+        }
+        // A range is an iterator already, and its `len` and `next_back`
+        // are its bounds' (ADR 0129).
+        if let Some(kind) = self.range_kind(ty) {
+            let stepped = matches!(kind, RangeKind::Exclusive | RangeKind::Inclusive);
+            let name = tcx.item_name(def_id);
+            match name.as_str() {
+                "into_iter" if tcx.is_diagnostic_item(sym::IntoIterator, trait_) => return Some(Std::Same),
+                "len" if stepped && tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator" => {
+                    return Some(Std::Range(RangeOp::Len));
+                }
+                "next_back"
+                    if kind == RangeKind::Exclusive
+                        && tcx.get_diagnostic_item(Symbol::intern("DoubleEndedIterator")) == Some(trait_) =>
+                {
+                    return Some(Std::Range(RangeOp::NextBack));
+                }
+                _ => {}
+            }
+        }
+        // An `Option`'s, or a `&Option`'s: a `&mut` one's items are places.
+        if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
+            && tcx.item_name(def_id).as_str() == "into_iter"
+            && !matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
+            && self.is_lang_adt(ty.peel_refs(), LangItem::Option)
+        {
+            return Some(Std::OptionIter);
+        }
+        // `cmp`, `max` and `min` of what JS's `<` orders the same way.
+        if tcx.is_diagnostic_item(sym::Ord, trait_) {
+            let peeled = ty.peel_refs();
+            let comparable = Num::of(peeled).is_some() || peeled.is_bool() || self.is_string_like(peeled);
+            return match tcx.item_name(def_id).as_str() {
+                "cmp" if comparable => Some(Std::Cmp),
+                "max" if Num::of(peeled).is_some() => Some(Std::MaxOf(true)),
+                "min" if Num::of(peeled).is_some() => Some(Std::MaxOf(false)),
+                _ => None,
+            };
+        }
+        // Writing to a standard stream (ADR 0132).
+        if let Some(error) = self.stream(ty.peel_refs())
+            && tcx.def_path_str(trait_) == "std::io::Write"
+        {
+            return match tcx.item_name(def_id).as_str() {
+                "write_fmt" => Some(Std::Stream(StreamOp::Write { error })),
+                "flush" => Some(Std::Stream(StreamOp::Nothing)),
+                _ => None,
+            };
+        }
+        // `v.extend(items)` (ADR 0062).
+        if is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
+            return Some(Std::Comb(Comb::Extend));
+        }
+        // `VecDeque::from(v)` is a copy of `v`, which may be a clone that
+        // was never made (ADR 0052); `BinaryHeap::from(v)` puts one in heap order.
+        if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("VecDeque")) {
+            return Some(Std::ToVec);
+        }
+        if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("BinaryHeap")) {
+            return Some(Std::Heap(HeapOp::From));
+        }
+        // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
+        if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
+            let set = self.is_set(ty);
+            return Some(Std::Map(MapOp::From { set }));
+        }
+        // std's own conversions that change nothing in JS (ADR 0063): to a
+        // `String` from a `&str` or a `char`, and between numbers, which
+        // only widen.
+        let (from_ty, to_ty) = if tcx.is_diagnostic_item(sym::Into, trait_) {
+            (Some(ty), args.types().nth(1))
+        } else if tcx.is_diagnostic_item(sym::From, trait_) {
+            (args.types().nth(1), Some(ty))
+        } else {
+            (None, None)
+        };
+        if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty) {
+            if self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty) {
+                return Some(Std::Same);
+            }
+            // Into a `Box`, which is its value (ADR 0023): `Box::from(x)`, and
+            // a `Vec`'s items as a boxed slice.
+            if let ty::Adt(_, boxed) = to_ty.kind()
+                && to_ty.is_box()
+                && (boxed.type_at(0) == from_ty
+                    || matches!((boxed.type_at(0).kind(), from_ty.kind()), (ty::Slice(item), ty::Adt(_, vec))
+                        if self.is_std_adt(from_ty, sym::Vec) && vec.type_at(0) == *item))
             {
                 return Some(Std::Same);
             }
-            // A range is an iterator already, and its `len` and `next_back`
-            // are its bounds' (ADR 0129).
-            if let Some(kind) = self.range_kind(ty) {
-                let stepped = matches!(kind, RangeKind::Exclusive | RangeKind::Inclusive);
-                let name = tcx.item_name(def_id);
-                match name.as_str() {
-                    "into_iter" if tcx.is_diagnostic_item(sym::IntoIterator, trait_) => return Some(Std::Same),
-                    "len" if stepped && tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator" => {
-                        return Some(Std::Range(RangeOp::Len));
-                    }
-                    "next_back"
-                        if kind == RangeKind::Exclusive
-                            && tcx.get_diagnostic_item(Symbol::intern("DoubleEndedIterator")) == Some(trait_) =>
-                    {
-                        return Some(Std::Range(RangeOp::NextBack));
-                    }
-                    _ => {}
-                }
+            // Into a BigInt from a number (ADR 0086), else the same.
+            if let (Some(from), Some(to)) = (Num::of(from_ty.peel_refs()), Num::of(to_ty)) {
+                return Some(if to.big() && !from.big() { Std::ToBig } else { Std::Same });
             }
-            // An `Option`'s, or a `&Option`'s: a `&mut` one's items are places.
-            if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
-                && tcx.item_name(def_id).as_str() == "into_iter"
-                && !matches!(ty.kind(), ty::Ref(_, _, Mutability::Mut))
-                && self.is_lang_adt(ty.peel_refs(), LangItem::Option)
-            {
-                return Some(Std::OptionIter);
-            }
-            // `cmp`, `max` and `min` of what JS's `<` orders the same way.
-            if tcx.is_diagnostic_item(sym::Ord, trait_) {
-                let peeled = ty.peel_refs();
-                let comparable = Num::of(peeled).is_some() || peeled.is_bool() || self.is_string_like(peeled);
-                return match tcx.item_name(def_id).as_str() {
-                    "cmp" if comparable => Some(Std::Cmp),
-                    "max" if Num::of(peeled).is_some() => Some(Std::MaxOf(true)),
-                    "min" if Num::of(peeled).is_some() => Some(Std::MaxOf(false)),
-                    _ => None,
-                };
-            }
-            // Writing to a standard stream (ADR 0132).
-            if let Some(error) = self.stream(ty.peel_refs())
-                && tcx.def_path_str(trait_) == "std::io::Write"
-            {
-                return match tcx.item_name(def_id).as_str() {
-                    "write_fmt" => Some(Std::Stream(StreamOp::Write { error })),
-                    "flush" => Some(Std::Stream(StreamOp::Nothing)),
-                    _ => None,
-                };
-            }
-            // `v.extend(items)` (ADR 0062).
-            if is_extend(tcx, trait_) && self.is_vec_like(ty.peel_refs()) {
-                return Some(Std::Comb(Comb::Extend));
-            }
-            // `VecDeque::from(v)` is a copy of `v`, which may be a clone that
-            // was never made (ADR 0052); `BinaryHeap::from(v)` puts one in heap order.
-            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("VecDeque")) {
-                return Some(Std::ToVec);
-            }
-            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_std_adt(ty, Symbol::intern("BinaryHeap")) {
-                return Some(Std::Heap(HeapOp::From));
-            }
-            // `HashMap::from([(k, v)])`: `new Map([[k, v]])`.
-            if tcx.is_diagnostic_item(sym::From, trait_) && self.is_map(ty) {
-                let set = self.is_set(ty);
-                return Some(Std::Map(MapOp::From { set }));
-            }
-            // std's own conversions that change nothing in JS (ADR 0063): to a
-            // `String` from a `&str` or a `char`, and between numbers, which
-            // only widen.
-            let (from_ty, to_ty) = if tcx.is_diagnostic_item(sym::Into, trait_) {
-                (Some(ty), args.types().nth(1))
-            } else if tcx.is_diagnostic_item(sym::From, trait_) {
-                (args.types().nth(1), Some(ty))
-            } else {
-                (None, None)
-            };
-            if let (Some(from_ty), Some(to_ty)) = (from_ty, to_ty) {
-                if self.is_lang_adt(to_ty, LangItem::String) && self.is_string_like(from_ty) {
-                    return Some(Std::Same);
-                }
-                // Into a `Box`, which is its value (ADR 0023): `Box::from(x)`, and
-                // a `Vec`'s items as a boxed slice.
-                if let ty::Adt(_, boxed) = to_ty.kind()
-                    && to_ty.is_box()
-                    && (boxed.type_at(0) == from_ty
-                        || matches!((boxed.type_at(0).kind(), from_ty.kind()), (ty::Slice(item), ty::Adt(_, vec))
-                            if self.is_std_adt(from_ty, sym::Vec) && vec.type_at(0) == *item))
-                {
-                    return Some(Std::Same);
-                }
-                // Into a BigInt from a number (ADR 0086), else the same.
-                if let (Some(from), Some(to)) = (Num::of(from_ty.peel_refs()), Num::of(to_ty)) {
-                    return Some(if to.big() && !from.big() { Std::ToBig } else { Std::Same });
-                }
-            }
-            // Between integers, which may not fit.
-            let into = tcx.is_diagnostic_item(sym::TryInto, trait_);
-            let (from_ty, to_ty) = if into {
-                (Some(ty), args.types().nth(1))
-            } else if tcx.is_diagnostic_item(sym::TryFrom, trait_) {
-                (args.types().nth(1), Some(ty))
-            } else {
-                (None, None)
-            };
-            if let (Some(from), Some(to)) = (from_ty.and_then(|t| Num::of(t.peel_refs())), to_ty.and_then(Num::of))
-                && !from.float()
-                && !to.float()
-            {
-                return Some(Std::TryFromInt { into });
-            }
-            let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
-            let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
-            return (from_str || to_owned).then_some(Std::Same);
         }
+        // Between integers, which may not fit.
+        let into = tcx.is_diagnostic_item(sym::TryInto, trait_);
+        let (from_ty, to_ty) = if into {
+            (Some(ty), args.types().nth(1))
+        } else if tcx.is_diagnostic_item(sym::TryFrom, trait_) {
+            (args.types().nth(1), Some(ty))
+        } else {
+            (None, None)
+        };
+        if let (Some(from), Some(to)) = (from_ty.and_then(|t| Num::of(t.peel_refs())), to_ty.and_then(Num::of))
+            && !from.float()
+            && !to.float()
+        {
+            return Some(Std::TryFromInt { into });
+        }
+        let from_str = tcx.is_diagnostic_item(sym::From, trait_) && self.is_lang_adt(ty, LangItem::String);
+        let to_owned = tcx.is_diagnostic_item(Symbol::intern("ToOwned"), trait_) && ty.is_str();
+        (from_str || to_owned).then_some(Std::Same)
+    }
+
+    /// A method of a std type's own, by its type and its name.
+    fn classify_inherent(&self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) -> Option<Std> {
+        let tcx = self.tcx;
+        let self_ty = args.types().next();
         let owner = tcx
             .type_of(tcx.inherent_impl_of_assoc(def_id)?)
             .instantiate_identity()
