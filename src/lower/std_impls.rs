@@ -117,6 +117,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Err(self.unsupported(span, "cloning a closure that changes what it captured"))
             };
         }
+        // A channel's sender: one more, of the same queue (ADR 0142).
+        if self.recognition().channel_end(ty) == Some(super::recognition::ChannelEnd::Sender) {
+            self.runtime.insert(Helper::Channel);
+            return Ok(Expr::call(Expr::var("$cloneSender"), vec![place]));
+        }
         if !self.needs_clone(ty) {
             return Ok(place);
         }

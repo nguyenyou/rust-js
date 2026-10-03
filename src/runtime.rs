@@ -104,6 +104,7 @@ helpers! {
     JsonValue,
     JsonError,
     StringError,
+    Channel,
     LowerExp,
     FromDigit,
     FromU32,
@@ -569,6 +570,7 @@ impl Helper {
             // shows one: a place only when it has one (line 0 is none).
             Helper::JsonError => include_str!("runtime/json_error.js"),
             Helper::StringError => include_str!("runtime/string_error.js"),
+            Helper::Channel => include_str!("runtime/channel.js"),
             // A `serde_json::Error` on its way out: a message, and where in the
             // text, line 0 when it's not about a place.
             Helper::JsonFail => include_str!("runtime/json_fail.js"),

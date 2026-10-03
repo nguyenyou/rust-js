@@ -2,6 +2,7 @@
 //! string it writes. Its formatter is a local string, each write is `f += s`,
 //! and `fmt::Result`, which is always `Ok`, is nothing at all.
 
+use super::recognition::ChannelError;
 use super::recognition::WriteCall;
 use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
@@ -658,6 +659,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let num = Num::of(ty);
         if self.is_dyn_debug(ty) {
             return Ok(value);
+        }
+        // A channel's errors (ADR 0142), as std shows them: `TryRecvError` is
+        // its variant's name already.
+        if let Some(error) = self.recognition().channel_error(ty) {
+            return Ok(match error {
+                ChannelError::Recv => Expr::str("RecvError"),
+                ChannelError::TryRecv => value,
+                ChannelError::Send => Expr::str("SendError { .. }"),
+            });
         }
         if let Some(shown) = self.dyn_written(value.clone(), self.shown_type(ty), self.debug_trait(), span)? {
             return Ok(shown);

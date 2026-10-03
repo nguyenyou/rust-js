@@ -43,6 +43,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 return None;
             }
+            // A channel's end, the queue it shares (ADR 0142), of its items.
+            ty::Adt(_, args) if self.recognition().channel_end(ty).is_some() => {
+                return self.unsupported_in(args.type_at(0), seen);
+            }
             // A JS iterator, of its `Item`s.
             ty::Dynamic(traits, ..) if self.recognition().is_dyn_iter(ty) => {
                 return traits

@@ -66,4 +66,12 @@ export const mutations: Mutation[] = [
     replace: "            ty::Slice(_) if false => Expr::array(Vec::new()),",
     tests: ["test/corpus.test.ts","-t","std_odds"],
   },
+  {
+    name: "sender-clone-uncounted",
+    breaks: "a sender's clone is the same sender, not one more, so dropping both drops one too many",
+    file: "src/lower/std_impls.rs",
+    find: "            return Ok(Expr::call(Expr::var(\"$cloneSender\"), vec![place]));",
+    replace: "            return Ok(place);",
+    tests: ["test/corpus.test.ts", "-t", "channels"],
+  },
 ];

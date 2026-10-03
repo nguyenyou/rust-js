@@ -142,6 +142,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 true => Drops::Unsupported(ty, "a value of an associated type, where a type may have a destructor"),
                 false => Drops::Nothing,
             },
+            // A channel's end: one sender fewer, or no receiver (ADR 0142). The
+            // queue would drop what's still in it, its own way.
+            ty::Adt(_, args) if self.recognition().channel_end(ty).is_some() => {
+                match self.drops_in(args.type_at(0), walk) {
+                    Drops::Nothing => Drops::Runs,
+                    _ => Drops::Unsupported(ty, "a channel of a value with a destructor"),
+                }
+            }
             // Never dropped, or dropped by hand.
             ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
             ty::Adt(adt, args) => {

@@ -63,9 +63,6 @@ borrowck/reborrow-in-match-ref-mut-option.rs	error: rust-js does not support val
 borrowck/ref-mut-rebind-does-not-affect-outer.rs	error: rust-js does not support `ref mut` bindings to this type yet
 borrowck/two-phase-multiple-activations.rs	error: rust-js does not support values of type `(*const core::io::error::Custom) is !null` yet
 box/unit/unique-in-vec-copy.rs	error: rust-js does not support assigning to this place yet
-box/unit/unique-send.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-builtin-superkinds/builtin-superkinds-capabilities-transitive.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
-builtin-superkinds/builtin-superkinds-capabilities.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<T>>` yet
 cast/as-cast-unifies-raw-pointer-and-fn-type.rs	error: rust-js does not support values of type `*const T` yet
 cast/cast-not-treated-as-lvalue.rs	error: rust-js does not support this expression yet
 cast/cast-ptr-to-fat-ptr.rs	error: rust-js does not support this expression yet
@@ -188,7 +185,6 @@ for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
-functions-closures/closure-bounds-can-capture-chan.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 functions-closures/closure-to-fn-coercion.rs	error: rust-js does not support `size_of` of a type parameter yet
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/const-generics-gat-in-trait-return-type-2.rs	error: rust-js does not support generic associated types yet
@@ -284,7 +280,6 @@ regions/regions-no-bound-in-argument-cleanup.rs	error: rust-js does not support 
 regions/regions-static-bound-rpass.rs	error: rust-js does not support values of type `&mut &()` yet
 resolve/reference-clone-nonclone-11820.rs	error: rust-js does not support values of type `std::option::Option<NoClone>` yet
 return/ret-bang.rs	error: rust-js does not support values of type `!` yet
-rfcs/rfc-0107-bind-by-move-pattern-guards/bind-by-move-no-guards.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 rfcs/rfc-1789-as-cell/from-mut.rs	error: rust-js does not support calling `std::cell::Cell::<T>::from_mut` yet
 rfcs/rfc-2005-default-binding-mode/general.rs	error: rust-js does not support `&mut` to a `&mut std::option::Option<i32>` yet
 rfcs/rfc-2091-track-caller/file-is-nul-terminated.rs	error: rust-js does not support values of type `(*const str) is !null` yet
@@ -296,7 +291,6 @@ rfcs/rfc-2497-if-let-chains/then-else-blocks.rs	error: rust-js does not support 
 rfcs/rfc-3348-c-string-literals/basic.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 rfcs/rfc-3348-c-string-literals/non-ascii.rs	error: rust-js does not support calling `std::ffi::CStr::to_bytes_with_nul` yet
 self/arbitrary_self_types_nested.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<std::rc::Rc<std::boxed::Box<Ty>>>) is !null` yet
-self/builtin-superkinds-self-type.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
 self/self-in-mut-slot-default-method.rs	error: rust-js does not support `&mut` to a `Self` yet
 statics/issue-17718-static-unsafe-interior.rs	error: rust-js does not support statics of type `MyUnsafePack<isize>` yet
 statics/static-function-pointer.rs	error: rust-js does not support statics of type `fn(isize) -> isize` yet
@@ -316,16 +310,10 @@ symbol-names/struct-constructor-mangling.rs	error: rust-js does not support `siz
 threads-sendsync/send_str_hashmap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send_str_treemap.rs	error: rust-js does not support values of type `std::borrow::Cow<'_, str>` yet
 threads-sendsync/send-is-not-static-par-for.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
-threads-sendsync/send-type-inference.rs	error: rust-js does not support values of type `*mut std::sync::mpmc::counter::Counter<std::sync::mpmc::array::Channel<std::sync::mpsc::Sender<Command<K, V>>>>` yet
-threads-sendsync/sendable-class.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
+threads-sendsync/send-type-inference.rs	error: rust-js does not support a channel of a value with a destructor, `std::sync::mpsc::Sender<std::sync::mpsc::Sender<Command<K, V>>>`, yet
 threads-sendsync/sync-send-iterators-in-libcollections.rs	error: rust-js does not support calling `std::collections::BinaryHeap::<T, A>::drain` yet
 threads-sendsync/sync-send-iterators-in-libcore.rs	error: rust-js does not support calling `core::str::<impl str>::escape_debug` yet
-threads-sendsync/task-comm-16.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-threads-sendsync/task-comm-4.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-threads-sendsync/task-comm-5.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-threads-sendsync/task-comm-6.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-threads-sendsync/task-comm-chan-nil.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
-threads-sendsync/trivial-message.rs	error: rust-js does not support calling `std::sync::mpsc::channel` yet
+threads-sendsync/task-comm-16.rs	error: rust-js does not support calling `std::string::String::as_bytes` yet
 threads-sendsync/yield2.rs	error: rust-js does not support calling `std::thread::yield_now` yet
 traits/bug-7183-generics.rs	error: rust-js does not support values of type `std::option::Option<std::option::Option<isize>>` yet
 traits/coercion.rs	error: rust-js does not support values of type `dyn std::io::Write` yet

@@ -19,9 +19,11 @@ use rustc_span::Span;
 use rustc_span::def_id::DefId;
 
 use super::bindings::variant_name;
+use super::recognition::ChannelEnd;
 use super::representation::variant_field;
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
+use crate::runtime::Helper;
 
 mod facts;
 mod types;
@@ -267,6 +269,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() => self.drop_in(value, args.type_at(0), span, made, out)?,
             ty::Adt(_, args) if self.is_vec_like(ty) => self.drop_items(value, args.type_at(0), span, made, out)?,
+            // A channel's end (ADR 0142).
+            ty::Adt(..) if let Some(end) = self.recognition().channel_end(ty) => {
+                self.runtime.insert(Helper::Channel);
+                let drop = match end {
+                    ChannelEnd::Sender => "$dropSender",
+                    ChannelEnd::Receiver => "$dropReceiver",
+                };
+                out.push(StmtKind::Expr(Expr::call(Expr::var(drop), vec![value])).at(js_span));
+            }
             // What a closure holds: the variables it took, where it was made.
             // Only there, or in a closure made inside it, can JS see them.
             ty::Closure(def_id, _) => {

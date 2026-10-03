@@ -3266,6 +3266,47 @@ export function $stringError() {
   };
 }
 
+// A channel on one thread is a queue (ADR 0142), shared by its ends: both
+// are the one object, which counts its senders and knows if its receiver
+// is still there.
+export function $channel() {
+  const channel = { queue: [], senders: 1, receiving: true };
+  return [channel, channel];
+}
+
+export function $send(channel, item) {
+  if (!channel.receiving) return { TAG: "Err", _0: [item] };
+  channel.queue.push(item);
+  return { TAG: "Ok", _0: undefined };
+}
+
+// Rust's `recv` waits for another thread to send; on one, none can, so an
+// empty channel whose senders are all there would wait forever.
+export function $recv(channel) {
+  if (channel.queue.length > 0) return { TAG: "Ok", _0: channel.queue.shift() };
+  if (channel.senders === 0) return { TAG: "Err", _0: undefined };
+  throw new Error("`recv` of an empty channel would wait forever: no other thread can send");
+}
+
+export function $tryRecv(channel) {
+  if (channel.queue.length > 0) return { TAG: "Ok", _0: channel.queue.shift() };
+  return { TAG: "Err", _0: channel.senders === 0 ? "Disconnected" : "Empty" };
+}
+
+export function $cloneSender(channel) {
+  channel.senders += 1;
+  return channel;
+}
+
+export function $dropSender(channel) {
+  channel.senders -= 1;
+}
+
+export function $dropReceiver(channel) {
+  channel.receiving = false;
+  channel.queue.length = 0;
+}
+
 export function $lowerExp(x) {
   if (Number.isNaN(x)) return "NaN";
   if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";

@@ -42,4 +42,12 @@ export const mutations: Mutation[] = [
     replace: "                Drops::Runs if true || self.takes_whole(*def_id) => Drops::Runs,",
     tests: ["test/traits.test.ts", "-t", "closure holding part"],
   },
+  {
+    name: "channel-ends-drop-nothing",
+    breaks: "a channel's ends have no destructor, so a sender dropped still counts",
+    file: "src/lower/drops/types.rs",
+    find: "                match self.drops_in(args.type_at(0), walk) {\n                    Drops::Nothing => Drops::Runs,\n                    _ => Drops::Unsupported(ty, \"a channel of a value with a destructor\"),",
+    replace: "                match self.drops_in(args.type_at(0), walk) {\n                    Drops::Nothing => Drops::Nothing,\n                    _ => Drops::Unsupported(ty, \"a channel of a value with a destructor\"),",
+    tests: ["test/corpus.test.ts", "-t", "channels"],
+  },
 ];

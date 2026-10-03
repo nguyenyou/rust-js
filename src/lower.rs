@@ -43,6 +43,7 @@ mod bodies;
 mod body_queries;
 mod calls;
 mod cells;
+mod channels;
 mod combinators;
 mod copies;
 mod display;

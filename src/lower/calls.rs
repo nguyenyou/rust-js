@@ -603,6 +603,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(js) = self.cell_call(known, call, &mut values, out)? {
             return Ok(js);
         }
+        if let Some(js) = self.channel_call(known, call, &mut values, out)? {
+            return Ok(js);
+        }
         if let Some(js) = self.numeric_call(known, call, &mut values, out)? {
             return Ok(js);
         }
@@ -688,6 +691,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::OptionMap
             | Std::OptionIter
             | Std::OptionCloned => unreachable!("lowered by option_call"),
+            Std::Channel(_) => unreachable!("lowered by channel_call"),
             Std::CellNew
             | Std::CellGet
             | Std::CellSet

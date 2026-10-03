@@ -29,6 +29,33 @@ pub(super) struct Recognition<'a, 'tcx> {
     pub foreign: &'a super::library::Foreign<'a, 'tcx>,
 }
 
+/// What a channel does (ADR 0142).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ChannelOp {
+    New,
+    Send,
+    Recv,
+    TryRecv,
+}
+
+/// A channel's end: the sending one or the receiving one (ADR 0142).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ChannelEnd {
+    Sender,
+    Receiver,
+}
+
+/// A channel's error (ADR 0142).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ChannelError {
+    /// `RecvError`, of a `recv` of a channel with no senders left.
+    Recv,
+    /// `TryRecvError`, `Empty` or `Disconnected`.
+    TryRecv,
+    /// `SendError(item)`, of a `send` to a channel with no receiver.
+    Send,
+}
+
 /// The std functions whose JS meaning rust-js knows (ADRs 0023, 0025).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Std {
@@ -55,6 +82,8 @@ pub(super) enum Std {
     Fuse,
     /// `v[i]` of a `Vec`, `Index::index` or `IndexMut::index_mut`: `$index(v, i)`.
     Index,
+    /// A channel's: `mpsc::channel()`, `send`, `recv` and `try_recv` (ADR 0142).
+    Channel(ChannelOp),
     /// `Cell::new(x)` and `RefCell::new(x)`: `{ value: x }`.
     CellNew,
     CellGet,
@@ -334,6 +363,9 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         if diagnostic("mem_forget") {
             return Some(Some(Std::Forget));
+        }
+        if tcx.def_path_str(def_id) == "std::sync::mpsc::channel" {
+            return Some(Some(Std::Channel(ChannelOp::New)));
         }
         if diagnostic("mem_swap") {
             return Some(Some(Std::Swap));
@@ -773,6 +805,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         let chars = matches!(owner.kind(), ty::Adt(adt, _) if tcx.crate_name(adt.did().krate) == sym::core
             && tcx.item_name(adt.did()).as_str() == "Chars");
         let own = match name.as_str() {
+            "send" if self.channel_end(owner) == Some(ChannelEnd::Sender) => Some(Std::Channel(ChannelOp::Send)),
+            "recv" if self.channel_end(owner) == Some(ChannelEnd::Receiver) => Some(Std::Channel(ChannelOp::Recv)),
+            "try_recv" if self.channel_end(owner) == Some(ChannelEnd::Receiver) => {
+                Some(Std::Channel(ChannelOp::TryRecv))
+            }
             "peek" if peekable => Some(Std::Step(StepOp::Peek)),
             "next_if" if peekable => Some(Std::Step(StepOp::NextIf)),
             "next_if_eq" if peekable => Some(Std::Step(StepOp::NextIfEq)),
@@ -1095,6 +1132,35 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
     pub(super) fn is_peekable(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.peel_refs().kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == rustc_span::sym::core
             && self.tcx.item_name(adt.did()).as_str() == "Peekable")
+    }
+
+    /// A channel's end, `mpsc::Sender` or `mpsc::Receiver` (ADR 0142).
+    pub(super) fn channel_end(&self, ty: Ty<'tcx>) -> Option<ChannelEnd> {
+        let ty::Adt(adt, _) = ty.kind() else {
+            return None;
+        };
+        match self.tcx.def_path_str(adt.did()).as_str() {
+            "std::sync::mpsc::Sender" => Some(ChannelEnd::Sender),
+            "std::sync::mpsc::Receiver" => Some(ChannelEnd::Receiver),
+            _ => None,
+        }
+    }
+
+    /// A channel's error, which std defines with its multi-producer channels.
+    pub(super) fn channel_error(&self, ty: Ty<'tcx>) -> Option<ChannelError> {
+        let ty::Adt(adt, _) = ty.kind() else {
+            return None;
+        };
+        let path = self.tcx.def_path_str(adt.did());
+        if !path.starts_with("std::sync::mpsc::") && !path.starts_with("std::sync::mpmc::") {
+            return None;
+        }
+        match self.tcx.item_name(adt.did()).as_str() {
+            "RecvError" => Some(ChannelError::Recv),
+            "TryRecvError" => Some(ChannelError::TryRecv),
+            "SendError" => Some(ChannelError::Send),
+            _ => None,
+        }
     }
 
     /// A `dyn Iterator`, boxed or lent: a JS iterator, whatever made it.
