@@ -1,7 +1,7 @@
 //! Read-only questions about a captured THIR body. No emission state, names,
 //! dependencies or JavaScript: these answers cannot change lowering as a side effect.
 
-use super::recognition::{StdItem, is_std_method};
+use super::recognition::{StdItem, is_std_def, is_std_method};
 use rustc_hir::{HirId, LangItem};
 use rustc_middle::middle::region;
 use rustc_middle::mir::BorrowKind;
@@ -243,7 +243,8 @@ fn lent(thir: &Thir<'_>, e: ExprId) -> ExprId {
 
 /// The locals a body calls `next()` on, directly or through `&mut`: the
 /// ones that must know where they are (ADR 0071). So is one lent as a
-/// `&mut dyn Iterator`, which what it's lent to steps through.
+/// `&mut dyn Iterator`, or to a function of the crate's that takes a `&mut`
+/// to a generic iterator, which what it's lent to steps through.
 pub(super) fn stepped_locals<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>) -> HashSet<LocalVarId> {
     let mut stepped = HashSet::new();
     for expr in thir.exprs.iter() {
@@ -268,15 +269,54 @@ pub(super) fn stepped_locals<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>) -> Hash
         let Some(&receiver) = args.first() else {
             continue;
         };
-        let receiver = match thir[strip(thir, receiver)].kind {
-            ExprKind::Borrow { arg, .. } => strip(thir, arg),
-            _ => strip(thir, receiver),
-        };
-        if steps && let ExprKind::VarRef { id } = thir[receiver].kind {
+        if steps && let Some(id) = stepped_local(thir, receiver) {
             stepped.insert(id);
+        }
+        if def_id.is_local() {
+            let inputs = tcx
+                .fn_sig(def_id)
+                .instantiate_identity()
+                .skip_normalization()
+                .skip_binder()
+                .inputs();
+            for (&arg, &input) in args.iter().zip(inputs) {
+                if let ty::Ref(_, inner, rustc_ast::Mutability::Mut) = *input.kind()
+                    && lends_iterator(tcx, def_id, inner)
+                    && let Some(id) = stepped_local(thir, arg)
+                {
+                    stepped.insert(id);
+                }
+            }
         }
     }
     stepped
+}
+
+/// The local an iterator argument is: `it` of `it`, `&mut it` or `&mut *it`.
+fn stepped_local(thir: &Thir<'_>, e: ExprId) -> Option<LocalVarId> {
+    let mut e = strip(thir, e);
+    while let ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } = thir[e].kind {
+        e = strip(thir, arg);
+    }
+    match thir[e].kind {
+        ExprKind::VarRef { id } => Some(id),
+        _ => None,
+    }
+}
+
+/// Is `ty`, of `callee`'s parameter `&mut ty`, a generic iterator: a type
+/// parameter, an `impl Iterator` too, that `callee` bounds by `Iterator`?
+fn lends_iterator<'tcx>(tcx: TyCtxt<'tcx>, callee: rustc_span::def_id::DefId, ty: ty::Ty<'tcx>) -> bool {
+    matches!(ty.kind(), ty::Param(_))
+        && tcx
+            .predicates_of(callee)
+            .instantiate_identity(tcx)
+            .into_iter()
+            .any(|(clause, _)| {
+                clause.skip_normalization().as_trait_clause().is_some_and(|tr| {
+                    tr.self_ty().skip_binder() == ty && is_std_def(tcx, tr.def_id(), StdItem::Iterator)
+                })
+            })
 }
 
 /// Does `thir` read a static? A static's value, made where its module loads,

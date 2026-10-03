@@ -269,4 +269,20 @@ export const mutations: Mutation[] = [
     replace: "        let value = if false {",
     tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
   },
+  {
+    name: "lent-iterator-closable",
+    breaks: "a lazy chain lent to `it.take(2)` is closed by it, and its lender's `next()` finds it done",
+    file: "src/lower/iterators.rs",
+    find: "        self.runtime.insert(Helper::Lent);\n        Expr::call(Expr::var(\"$lent\"), vec![it])",
+    replace: "        Expr::call(Expr::member(Expr::var(\"Iterator\"), \"from\"), vec![it])",
+    tests: ["test/corpus.test.ts", "-t", "lent_iterators"],
+  },
+  {
+    name: "lent-field-iterator-allowed",
+    breaks: "an iterator kept in a field is lent as it is, an array that doesn't know where it is",
+    file: "src/lower/iterators.rs",
+    find: "            && !self.is_lazy_value(lent_place)\n",
+    replace: "            && false\n",
+    tests: ["test/diagnostics.test.ts", "-t", "lending an iterator kept in a field"],
+  },
 ];

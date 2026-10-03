@@ -173,6 +173,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value])
     }
 
+    /// `$lent(it)`: a generic iterator lent as a `&mut`, which steps `it` and
+    /// can't close it, as its lender goes on stepping it (ADR 0071).
+    pub(super) fn lent_iterator(&mut self, it: Expr) -> Expr {
+        self.runtime.insert(Helper::Lent);
+        Expr::call(Expr::var("$lent"), vec![it])
+    }
+
     /// `$iter(items)`: a JS iterator of an array that knows where it is
     /// (ADR 0071).
     pub(super) fn stepped_items(&mut self, items: Expr) -> Expr {
@@ -234,6 +241,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(rustc_middle::traits::ImplSource::Param(_))
             )
         })
+    }
+
+    /// An argument given where `callee` takes a generic iterator, `input`,
+    /// by value or lent as `&mut`: an iterator of the crate's own, or a
+    /// range, as a JS iterator, a wrapper of what it steps (ADRs 0061, 0071).
+    /// Anything else is `value` itself.
+    pub(super) fn iterator_arg(
+        &mut self,
+        (callee, input): (DefId, ty::Ty<'tcx>),
+        (arg, value): (ExprId, Expr),
+        given: ty::Ty<'tcx>,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let (input, given, lent) = match *input.kind() {
+            ty::Ref(_, inner, rustc_ast::Mutability::Mut) => (inner, given.peel_refs(), true),
+            _ => (input, given, false),
+        };
+        if !matches!(input.kind(), ty::Param(_)) {
+            return Ok(value);
+        }
+        if self.given_as_iterator(callee, input, given) {
+            return self.iter_source(value, given, span, out);
+        }
+        // Lent, it must know where it is: a local stepped through does, and a
+        // lazy one, a JS iterator, but an array kept anywhere else doesn't
+        // (ADR 0071).
+        let lent_place = self.boxed_or_lent(arg);
+        if lent
+            && !self.is_stepping(arg)
+            && !self.is_lazy_value(lent_place)
+            && (self.is_array_iter(given) || self.is_generic_iter(given))
+        {
+            return Err(self.unsupported(span, "lending an iterator that isn't a local"));
+        }
+        Ok(value)
     }
 
     /// An iterator of the crate's own as a JS one, `$iterator(it,
@@ -961,10 +1004,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Does `e` name one that knows where it is: a `Peekable`, or a local
     /// `next()` steps through?
     pub(super) fn is_stepping(&self, e: ExprId) -> bool {
-        let e = match self.thir[self.strip(e)].kind {
-            ExprKind::Borrow { arg, .. } => self.strip(arg),
-            _ => self.strip(e),
-        };
+        // `it`, `&mut it`, or `&mut *it` of a `&mut` to one.
+        let mut e = self.strip(e);
+        while let ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } = self.thir[e].kind {
+            e = self.strip(arg);
+        }
         let ty = self.thir[e].ty;
         self.is_peekable(ty)
             || matches!(self.thir[e].kind, ExprKind::VarRef { id } if self.stepping.bound.contains(&id))

@@ -3873,6 +3873,13 @@ export function $formatFloat(value, options, show) {
   return $formatted(precision === undefined ? show(value) : $toFixed(value, precision), options, true);
 }
 
+// A JS iterator lent as a `&mut` (ADR 0071): it steps `it`, and what takes
+// from it and stops early, as `take` or a loop that breaks does, closes
+// this, not `it`, which its lender goes on stepping.
+export function $lent(it) {
+  return Iterator.from({ next: () => it.next() });
+}
+
 export function $cmpIn(names, a, b) {
   return $cmp(names.indexOf(a), names.indexOf(b));
 }

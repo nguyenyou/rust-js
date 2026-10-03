@@ -84,7 +84,10 @@ for (const [name, source, message, crate] of [
   ["a generic const expression", "#![feature(generic_const_exprs)]\n#![allow(incomplete_features)]\nfn count<const N: usize>() -> usize { N }\nfn one_more<const N: usize>() -> usize where [(); N + 1]: { count::<{ N + 1 }>() }\npub fn f() -> usize { one_more::<2>() }", "this const argument"],
   ["an externally implementable item", "#![feature(extern_item_impls)]\n#[eii(hello)]\nstatic HELLO: u64;\n#[hello]\nstatic HELLO_IMPL: u64 = 5;\npub fn f() -> u64 { HELLO }", "externally implementable items"],
   ["a generic trait method, where a type has a destructor", "pub struct Guard;\nimpl Drop for Guard { fn drop(&mut self) {} }\npub trait Keep { fn keep<T>(&self, t: T) -> usize; }", "generic trait methods, where a type may have a destructor"],
-  ["a &mut to an iterator of a type parameter", 'pub fn first<I: Iterator<Item = i32>>(it: &mut I) -> Option<i32> { it.next() }', "does not support values of type `&mut I`"],
+  // A generic iterator lent as `&mut` is the lender's, which must know where it is (ADR 0071): a field's doesn't.
+  // A trait's method is called through a dictionary, whose `&mut self` is a handle (ADR 0099).
+  ["a &mut to a generic iterator in a trait's method", 'pub trait Step { fn step(&mut self) -> Option<u32>; }\nimpl<I: Iterator<Item = u32>> Step for I { fn step(&mut self) -> Option<u32> { self.next() } }', "of a trait's method"],
+  ["lending an iterator kept in a field", 'pub struct P { pub v: std::vec::IntoIter<u32> }\nfn first<I: Iterator<Item = u32>>(it: &mut I) -> Option<u32> { it.next() }\npub fn f(p: &mut P) -> Option<u32> { first(&mut p.v) }', "lending an iterator that isn't a local"],
   ["ref mut through a reference variable, replaced whole", 'pub struct P { pub x: u32 }\n#[allow(unused_mut)] pub fn f() -> u32 { let mut a = P { x: 1 }; let mut cur = &mut a; match *cur { ref mut n => *n = P { x: 2 } } a.x }', "assigning a whole value through a `&mut`"],
   ["{:.2e}", 'pub fn f(x: f64) -> String { format!("{:.2e}", x) }', "`{:.2e}` and the like"],
   ["malformed import", '#[rust_js::import("./style.css")]\nconst _: () = ();\npub fn f() {}', "write it"],

@@ -18,4 +18,12 @@ export const mutations: Mutation[] = [
     replace: "            && let ExprKind::VarRef { id } = thir[lent(thir, source)].kind\n        {\n            let _ = id;",
     tests: ["test/corpus.test.ts", "-t", "dyn_iterators"],
   },
+  {
+    name: "lent-local-unstepped",
+    breaks: "a `Vec`'s iterator lent to `skip(&mut it, 2)` is an array, which what it's lent to can't step",
+    file: "src/lower/body_queries.rs",
+    find: "                    && lends_iterator(tcx, def_id, inner)\n",
+    replace: "                    && false\n",
+    tests: ["test/corpus.test.ts", "-t", "lent_iterators"],
+  },
 ];

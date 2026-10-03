@@ -74,7 +74,7 @@ const_prop/dont-propagate-generic-instance.rs	error: rust-js does not support `t
 const-generics/type-dependent/issue-61936.rs	error: rust-js does not support calling `std::mem::zeroed` yet
 const-generics/type-dependent/issue-69816.rs	error: rust-js does not support `Default` of `[<T as std::iter::Iterator>::Item; N]` yet
 const-generics/type-dependent/issue-70507.rs	error: rust-js does not support calling `core::slice::<impl [T]>::split_at` yet
-const-generics/type-dependent/issue-71805.rs	error: rust-js does not support values of type `&mut I` yet
+const-generics/type-dependent/issue-71805.rs	error: rust-js does not support `&mut` to a `I` of a trait's method yet
 const-ptr/pointer-address-stability.rs	error: rust-js does not support this expression yet
 consts/cast-discriminant-zst-enum.rs	error: rust-js does not support values of type `i128` yet
 consts/const_constructor/const-construct-call.rs	error: rust-js does not support constants of type `std::panic::AssertUnwindSafe<(std::option::Option<i32>, std::result::Result<i32, bool>)>` yet
@@ -156,7 +156,7 @@ foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi
 function-pointer/function-pointer-comparison-54696.rs	error: rust-js does not support `==` on `fn()` yet
 functions-closures/clone-closure.rs	error: rust-js does not support cloning a closure that changes what it captured yet
 generic-associated-types/issue-76826.rs	error: rust-js does not support calling `core::slice::<impl [T]>::get_mut` yet
-generic-associated-types/streaming_iterator.rs	error: rust-js does not support values of type `&mut I` yet
+generic-associated-types/streaming_iterator.rs	error: rust-js does not support `&mut` to a `I` of a trait's method yet
 higher-ranked/trait-bounds/assoc-type-projection-method.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet

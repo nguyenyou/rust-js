@@ -127,7 +127,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Ref(_, inner, Mutability::Not) => return self.unsupported_in(*inner, seen),
             // `&mut` to a JS object is the object; to anything else, it would
             // need a place to point at.
-            ty::Ref(_, inner, Mutability::Mut) if self.is_object(*inner) || self.is_callable(*inner) => {
+            // And to a generic iterator, the JS iterator it steps (ADR 0071).
+            ty::Ref(_, inner, Mutability::Mut)
+                if self.is_object(*inner) || self.is_callable(*inner) || self.is_generic_iter(*inner) =>
+            {
                 return self.unsupported_in(*inner, seen);
             }
             // A `&mut` to anything else is a cell (ADR 0099).

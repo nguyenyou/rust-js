@@ -433,11 +433,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     let mut value = self.expr(arg, out)?;
                     // An iterator of the crate's own, given where a generic one
                     // goes, is a JS iterator (ADR 0061).
-                    if let Some(&input) = inputs.get(i)
-                        && matches!(input.kind(), ty::Param(_))
-                        && self.given_as_iterator(def_id, input, self.thir[arg].ty)
-                    {
-                        value = self.iter_source(value, self.thir[arg].ty, span, out)?;
+                    if let Some(&input) = inputs.get(i) {
+                        value = self.iterator_arg((def_id, input), (arg, value), self.thir[arg].ty, span, out)?;
                     }
                     let value = if value.reads_same() {
                         value

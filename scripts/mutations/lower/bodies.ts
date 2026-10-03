@@ -50,4 +50,20 @@ export const mutations: Mutation[] = [
     replace: "                && false\n",
     tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
   },
+  {
+    name: "lent-iterator-param-unbound",
+    breaks: "`it: &mut I` of a generic iterator is the lender's value as it is, and `it.take(2)` of it is an error",
+    file: "src/lower/bodies.rs",
+    find: "            if let ty::Ref(_, inner, Mutability::Mut) = *param.ty.kind()\n                && self.is_generic_iter(inner)\n",
+    replace: "            if let ty::Ref(_, inner, Mutability::Mut) = *param.ty.kind()\n                && false && self.is_generic_iter(inner)\n",
+    tests: ["test/corpus.test.ts", "-t", "lent_iterators"],
+  },
+  {
+    name: "lent-iterator-in-trait-method",
+    breaks: "a trait's `&mut self` method of a generic iterator steps the handle a dictionary gives it, and throws",
+    file: "src/lower/bodies.rs",
+    find: "                if self.tcx.trait_of_assoc(owner).is_some() || self.tcx.trait_impl_of_assoc(owner).is_some() {",
+    replace: "                if false {",
+    tests: ["test/diagnostics.test.ts", "-t", "generic iterator in a trait's method"],
+  },
 ];

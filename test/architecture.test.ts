@@ -141,6 +141,7 @@ test("each group of a function's state is read and written by its owner", () => 
 const idioms: [string, RegExp, string[]][] = [
   ["Iterator.from", /Expr::var\("Iterator"\),\s*"from"/, ["src/lower/iterators.rs"]],
   ["$iter", /"\$iter"|Helper::Iter\b/, ["src/lower/iterators.rs"]],
+  ["$lent", /"\$lent"|Helper::Lent\b/, ["src/lower/iterators.rs"]],
   ["$someNone", /\$someNone/, ["src/lower/options.rs"]],
 ];
 test("a JS form of a concept is written by the concept's owner", () => {

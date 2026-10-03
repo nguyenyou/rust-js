@@ -175,6 +175,7 @@ helpers! {
     Pad,
     Formatted,
     FormatFloat,
+    Lent,
     CmpIn,
     CmpItems,
     ThenCmp,
@@ -433,6 +434,7 @@ impl Helper {
             Helper::Pad => include_str!("runtime/pad.js"),
             Helper::Formatted => include_str!("runtime/formatted.js"),
             Helper::FormatFloat => include_str!("runtime/format_float.js"),
+            Helper::Lent => include_str!("runtime/lent.js"),
             // `partial_cmp` of `f64`s: `None` if either is `NaN`.
             Helper::PartialCmp => include_str!("runtime/partial_cmp.js"),
             // A fieldless enum's variants, in the order they're declared.

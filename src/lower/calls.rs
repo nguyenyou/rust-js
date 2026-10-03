@@ -161,10 +161,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .inputs()
                 .to_vec();
             for ((value, &arg), input) in values.iter_mut().zip(args).zip(inputs) {
-                if matches!(input.kind(), ty::Param(_)) && self.given_as_iterator(def_id, input, self.thir[arg].ty) {
-                    let taken = std::mem::replace(value, Expr::undefined());
-                    *value = self.iter_source(taken, self.thir[arg].ty, span, out)?;
-                }
+                let taken = std::mem::replace(value, Expr::undefined());
+                *value = self.iterator_arg((def_id, input), (arg, taken), self.thir[arg].ty, span, out)?;
             }
             let mut args = values;
             args.extend(self.evidence_args(def_id, generic_args, span)?);

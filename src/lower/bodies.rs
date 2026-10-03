@@ -132,6 +132,35 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 names.push(js::Pattern::Name(name));
                 continue;
             }
+            // `it: &mut I` of a generic iterator: what it's lent, which it steps
+            // and can't close, `it = $lent(it)` (ADR 0071).
+            if let ty::Ref(_, inner, Mutability::Mut) = *param.ty.kind()
+                && self.is_generic_iter(inner)
+                && let Some(Pat {
+                    kind:
+                        PatKind::Binding {
+                            name,
+                            var,
+                            mode: BindingMode(ByRef::No, _),
+                            subpattern: None,
+                            ..
+                        },
+                    ..
+                }) = param.pat.as_deref()
+            {
+                // A trait's method is called through a dictionary, whose
+                // `&mut` to a generic value is a handle on it (ADR 0099).
+                let owner = self.body_owner;
+                if self.tcx.trait_of_assoc(owner).is_some() || self.tcx.trait_impl_of_assoc(owner).is_some() {
+                    return Err(self.unsupported(span, &format!("`&mut` to a `{inner}` of a trait's method")));
+                }
+                let name = self.bind(*var, name.as_str(), true);
+                let lent = self.lent_iterator(Expr::var(&name));
+                out.push(StmtKind::Assign(Expr::var(&name), lent).at(js::Span::NONE));
+                self.bound_as_iter(*var);
+                names.push(js::Pattern::Name(name));
+                continue;
+            }
             // `mut it: I` of a generic iterator that `it.next()` steps through: a
             // JS iterator from here on, `it = Iterator.from(it)` (ADR 0071).
             if let Some(Pat {

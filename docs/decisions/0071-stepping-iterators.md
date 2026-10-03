@@ -46,6 +46,15 @@ on:
   what's left goes to `collect` or a `for` loop as it is. `it.by_ref()` is
   still an error: a JS iterator helper, as `take`, closes what it takes
   from. (Amended: `next()` of one was an error, a `&mut` to a `I`.)
+- **A generic iterator lent as a `&mut`, `fn skip<I: Iterator>(it: &mut I)`,
+  is the lender's JS iterator:** the lender's local is bound as one that
+  knows where it is, `$iter(v)`, as one it steps itself is, a lazy one and
+  the crate's own already being one, and the borrower binds `it =
+  $lent(it)`, which steps `it` and can't close it: what the borrower stops
+  early, a `take(2)` or a loop that breaks, the lender goes on stepping.
+  Lending one kept anywhere but a local, a field's, is an error, and so is
+  a trait's `&mut self` method of one, which a dictionary gives a handle.
+  (Amended: a `&mut` to a generic iterator was an error.)
 - **`peekable()` of a lazy iterator** is an error: its items would have to
   be worked out first, which could change what runs when, or never end.
 - **Items that could look like `None`** are an error, since `$next` is
