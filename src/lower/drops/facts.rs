@@ -288,6 +288,12 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
             Some(ExprKind::Index { lhs, .. } | ExprKind::AssignOp { lhs, .. }) if *lhs == child => Taken::Nothing,
             // Written over: its old value is dropped where it's lowered.
             Some(ExprKind::Assign { lhs, .. }) if *lhs == child => Taken::Nothing,
+            // What a box holds, `*b`: borrowed, as a method's `&self` takes it,
+            // or moved out, which leaves the box nothing to drop.
+            Some(ExprKind::Deref { arg }) if *arg == child => match self.projection_moved() {
+                true => Taken::Whole,
+                false => Taken::Nothing,
+            },
             Some(ExprKind::Field { lhs, .. }) if *lhs == child => {
                 // A field moved out, `consume(pair.a)`: a part of its own.
                 match self.moved_projection() {
@@ -383,7 +389,8 @@ impl<'c, 'a, 'tcx> Finder<'c, 'a, 'tcx> {
         for &parent in self.stack.iter().rev().skip(1) {
             match &self.thir[parent].kind {
                 ExprKind::Scope { .. } | ExprKind::PlaceTypeAscription { .. } => {}
-                ExprKind::Field { lhs, .. } if *lhs == child => {}
+                // A box's value, `*b`, as a field's: borrowed, or moved out.
+                ExprKind::Field { lhs, .. } | ExprKind::Deref { arg: lhs } if *lhs == child => {}
                 ExprKind::Borrow { arg, .. } | ExprKind::RawBorrow { arg, .. } if *arg == child => return false,
                 ExprKind::Assign { lhs, .. } | ExprKind::AssignOp { lhs, .. } | ExprKind::Index { lhs, .. }
                     if *lhs == child =>
@@ -584,7 +591,17 @@ impl<'c, 'a, 'tcx> Visitor<'a, 'tcx> for Finder<'c, 'a, 'tcx> {
                         _ => (target, from),
                     },
                 };
-                matches!(to.kind(), ty::Dynamic(..)) && self.cx.drops(from) != Drops::Nothing
+                // A reference owns nothing to drop. What owns one drops it
+                // through its dictionary's `$drop`, as Rust's vtable has it:
+                // a `dyn` of a trait of the crate's, or a library's, which is
+                // a value and its dictionary. Of another, as `dyn Send`, or of
+                // what rust-js can't drop, there's nowhere for it.
+                !target.is_ref()
+                    && matches!(to.kind(), ty::Dynamic(predicates, ..) if match self.cx.drops(from) {
+                        Drops::Nothing => false,
+                        Drops::Runs => !predicates.principal_def_id().is_some_and(|id| self.cx.is_rust_trait(id)),
+                        Drops::Unsupported(..) => true,
+                    })
             } =>
             {
                 self.problem(expr.span, "a `dyn` of a value with a destructor");

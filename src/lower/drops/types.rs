@@ -170,6 +170,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => parts(walk),
                 }
             }
+            // A trait object of the crate's trait, or a library's: whatever it
+            // holds, whose dictionary has its drop, where a type may have one.
+            ty::Dynamic(predicates, ..) if predicates.principal_def_id().is_some_and(|id| self.is_rust_trait(id)) => {
+                match self.may_have_destructors() {
+                    true => Drops::Runs,
+                    false => Drops::Nothing,
+                }
+            }
             _ => Drops::Nothing,
         };
         walk.seen.pop();

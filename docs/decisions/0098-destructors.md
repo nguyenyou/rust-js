@@ -289,6 +289,19 @@ function main() {
   `collect` lets those stages through the check of std calls: a chain of
   owned items nothing drains, or one with `take`, which leaves some, is
   still an error.
+- **A `dyn` drops what it holds through its dictionary**, as Rust's
+  vtable does: a dictionary of a type with a destructor has its drop,
+  `$drop`, a name no Rust method can have, and dropping a `dyn` of the
+  crate's trait, or a library's, is `shape.impl.$drop?.(shape.value)`. A
+  `Vec` of them, a field and a parameter drop theirs as they drop any
+  value. A `&dyn` owns nothing to drop. A `dyn` of std's traits, `Box<dyn Send>`
+  or `Box<dyn Any>`, has no dictionary of rust-js's to carry one, and is
+  an error. (Amended: a `dyn` of one was an error.)
+- **A box's value, `*b`, is a part of it,** as a field is: a method
+  called through the box borrows it, and moving it out, `let n = *b`,
+  moves what the box owns, which clears its flag. Putting one back, `*b =
+  Noisy(..)`, drops the old value only if the box still owns it, and sets
+  the flag again. (Amended: either was an error.)
 - **`mem::drop(x)` drops `x`, and `mem::forget` and `ManuallyDrop` don't.**
   A static is never dropped (ADR 0096). `mem::swap(&mut a, &mut b)` is `const t = a;
   a = b; b = t;` and `mem::replace(&mut a, v)` `const old = a; a = v;`, of
@@ -303,7 +316,8 @@ function main() {
 
 **Rejected for now, with an error that says so:** an `Rc`, an `Arc` or a
 thread-local holding a value with a destructor (it runs when the last
-reference goes, which JS doesn't count), and a `dyn Trait` of one.
+reference goes, which JS doesn't count), and a `dyn` of one of std's
+traits.
 
 ## Why
 

@@ -1226,6 +1226,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             };
             props.push(Prop::Field(bindings::fn_name(self.tcx, item.def_id), value));
         }
+        // Its type's drop, as Rust's vtable has it: what dropping a `dyn` of it
+        // runs (ADR 0098). A name no Rust method can have.
+        if self.drops(tr.self_ty()) == Drops::Runs
+            && let Some(drop) = self.drop_function(tr.self_ty(), span)?
+        {
+            props.push(Prop::Field("$drop".into(), drop));
+        }
         let object = Expr::object(props);
         let undefined = Expr::bin(Op::Eq, Expr::var(cache), Expr::undefined());
         let mut body = Vec::new();

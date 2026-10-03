@@ -80,6 +80,9 @@ function wrapPeek(TClone, dropT) {
   }
   return $traitImpl($wrapPeek, [TClone, dropT], () => ({
     peek: (arg0) => wrapPeek_peek(arg0, TClone, dropT),
+    $drop: (wrap) => {
+      dropT?.(wrap[0]);
+    },
   }));
 }
 
@@ -102,6 +105,9 @@ function wrapPass(dropT) {
         }
       }
     },
+    $drop: (wrap$1) => {
+      dropT?.(wrap$1[0]);
+    },
   }));
 }
 
@@ -123,6 +129,9 @@ function wrapTake(dropT) {
       };
       dropSelf?.(self);
     },
+    $drop: (wrap$1) => {
+      dropT?.(wrap$1[0]);
+    },
   }));
 }
 
@@ -138,6 +147,10 @@ function pairTake(dropA, dropB) {
       };
       dropSelf?.(self);
     },
+    $drop: (pair$1) => {
+      dropA?.(pair$1[0]);
+      dropB?.(pair$1[1]);
+    },
   }));
 }
 
@@ -147,6 +160,7 @@ function loudTake() {
       take: (self) => {
         loudDrop_drop?.(self);
       },
+      $drop: loudDrop_drop,
     };
   }
   return $loudTake;

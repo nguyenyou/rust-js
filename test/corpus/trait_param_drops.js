@@ -47,15 +47,42 @@ function main() {
     noisyDrop_drop,
   );
   console.log(`${sinkTakeA_take(undefined, [8], noisyDrop_drop)}`);
-  const all = [
-    { value: undefined, impl: sinkTakeA(noisyDrop_drop) },
-    { value: undefined, impl: keepTakeA(noisyDrop_drop) },
-    { value: [1], impl: wrapTakeNoisy({ default: () => 0 }) },
-  ];
-  for (const [i, t] of all.entries()) {
-    console.log(`${t.impl.take(t.value, [(10 + (i & 255)) & 255])}`);
+  const box = { value: undefined, impl: sinkTakeA(noisyDrop_drop) };
+  let box$live = true;
+  let tmp;
+  let box$1;
+  let box$1$live;
+  let arg;
+  let all;
+  try {
+    tmp = box;
+    box$1 = { value: undefined, impl: keepTakeA(noisyDrop_drop) };
+    box$1$live = true;
+    try {
+      arg = { value: [1], impl: wrapTakeNoisy({ default: () => 0 }) };
+      box$live = false;
+      box$1$live = false;
+      all = [tmp, box$1, arg];
+    } finally {
+      if (box$1$live) {
+        box$1.impl.$drop?.(box$1.value);
+      }
+    }
+  } finally {
+    if (box$live) {
+      box.impl.$drop?.(box.value);
+    }
   }
-  console.log("end");
+  try {
+    for (const [i, t] of all.entries()) {
+      console.log(`${t.impl.take(t.value, [(10 + (i & 255)) & 255])}`);
+    }
+    console.log("end");
+  } finally {
+    for (const item of all) {
+      item.impl.$drop?.(item.value);
+    }
+  }
 }
 
 export function entry() {
@@ -154,6 +181,9 @@ function relayTakeA(STakeA, dropA, dropS) {
   return $traitImpl($relayTakeA, [STakeA, dropA, dropS], () => ({
     take: (arg0, arg1) => relayTakeA_take(arg0, arg1, STakeA, dropA, dropS),
     make: (arg0) => relayTakeA_make(arg0, STakeA, dropA, dropS),
+    $drop: (relay) => {
+      dropS?.(relay[0]);
+    },
   }));
 }
 
@@ -176,6 +206,9 @@ function wrapTakeNoisy(TDefault, dropT) {
       }
     },
     make: (arg0) => wrapTakeNoisy_make(arg0, TDefault, dropT),
+    $drop: (wrap$1) => {
+      dropT?.(wrap$1[0]);
+    },
   }));
 }
 

@@ -97,6 +97,9 @@ function wrapConsume(TClone, dropT) {
   }
   return $traitImpl($wrapConsume, [TClone, dropT], () => ({
     consume: (arg0) => wrapConsume_consume(arg0, TClone, dropT),
+    $drop: (wrap) => {
+      dropT?.(wrap[0]);
+    },
   }));
 }
 
@@ -104,7 +107,12 @@ function wrapTake(dropT) {
   if ($wrapTake === undefined) {
     $wrapTake = new WeakMap();
   }
-  return $traitImpl($wrapTake, [dropT], () => ({ take: (arg0) => wrapTake_take(arg0, dropT) }));
+  return $traitImpl($wrapTake, [dropT], () => ({
+    take: (arg0) => wrapTake_take(arg0, dropT),
+    $drop: (wrap) => {
+      dropT?.(wrap[0]);
+    },
+  }));
 }
 
 function wrapReset(TDefault, dropT) {
@@ -113,12 +121,15 @@ function wrapReset(TDefault, dropT) {
   }
   return $traitImpl($wrapReset, [TDefault, dropT], () => ({
     reset: (arg0) => wrapReset_reset(arg0.value, TDefault, dropT),
+    $drop: (wrap) => {
+      dropT?.(wrap[0]);
+    },
   }));
 }
 
 export function loudDefault() {
   if ($loudDefault === undefined) {
-    $loudDefault = { default: loudDefault_default };
+    $loudDefault = { default: loudDefault_default, $drop: loudDrop_drop };
   }
   return $loudDefault;
 }

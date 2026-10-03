@@ -258,6 +258,17 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     self.drop_in(place, ty, span, made, out)?;
                 }
             }
+            // A `dyn`'s: its dictionary's `$drop`, if what it holds has one.
+            ty::Dynamic(..) => {
+                let drop = Expr::member(Expr::member(value.clone(), "impl"), "$drop");
+                out.push(
+                    StmtKind::Expr(Expr {
+                        kind: js::ExprKind::OptionalCall(Box::new(drop), vec![Expr::member(value, "value")]),
+                        span: js_span,
+                    })
+                    .at(js_span),
+                );
+            }
             // `dropT?.(value)`: the caller's drop, if its `T` has one.
             ty::Param(param) => {
                 self.drop_state.used_drops.insert(param.index);
@@ -1071,6 +1082,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn moved(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<()> {
         let e = self.strip(e);
         let facts = self.drop_facts()?;
+        // `*b` of a box: what it holds is moved out, which is all the box owns.
+        let e = match self.thir[e].kind {
+            ExprKind::Deref { arg } if facts.moves.contains(&self.strip(arg)) => self.strip(arg),
+            _ => e,
+        };
         let key = std::ptr::from_ref(self.thir) as usize;
         // A part moved out, `pair.a`: its flag.
         let flag = if let Some((var, path)) = facts.part_moves.get(&e) {
@@ -1160,6 +1176,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         let flag = match self.thir[self.strip(lhs)].kind {
             ExprKind::VarRef { id } => self.drop_state.flags.get(&id).cloned(),
+            // A box's value that may have moved, `*b = ..` after `consume(*b)`:
+            // the box's own flag, as it was cleared by the move.
+            ExprKind::Deref { arg } if self.thir[arg].ty.is_box() => match self.thir[self.strip(arg)].kind {
+                ExprKind::VarRef { id } => self.drop_state.flags.get(&id).cloned(),
+                _ => None,
+            },
             // A part that may have moved, `pair.a = ..` after `consume(pair.a)`.
             _ => self.body_query().place_path(lhs).and_then(|(var, fields)| {
                 let path: Path = fields.into_iter().map(|f| (None, f)).collect();
