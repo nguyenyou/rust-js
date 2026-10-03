@@ -178,4 +178,12 @@ export const mutations: Mutation[] = [
     replace: "            let place = Expr::member(self.place(cell).map_or_else(Expr::undefined, |(p, _)| p), \"value\");",
     tests: ["test/corpus.test.ts", "-t", "^locks"],
   },
+  {
+    name: "stepped-generic-let-unbound",
+    breaks: "`let mut it = it;` of a generic iterator stepped through is an error",
+    file: "src/lower/patterns.rs",
+    find: "            && self.steps_through(var)\n            && self.is_generic_iter(ty)\n",
+    replace: "            && false\n",
+    tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
+  },
 ];

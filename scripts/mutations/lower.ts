@@ -70,8 +70,8 @@ export const mutations: Mutation[] = [
     name: "closure-mut-refused",
     breaks: "`call(&mut tick)` of a closure is refused: a `&mut` to a closure isn't the closure",
     file: "src/lower.rs",
-    find: "            } if self.is_object(self.thir[arg].ty) || self.is_callable(self.thir[arg].ty) => match self.place(arg) {",
-    replace: "            } if self.is_object(self.thir[arg].ty) => match self.place(arg) {",
+    find: "            } if self.is_object(self.thir[arg].ty) || self.is_callable(self.thir[arg].ty) || self.is_stepping(arg) => {",
+    replace: "            } if self.is_object(self.thir[arg].ty) || self.is_stepping(arg) => {",
     tests: ["test/corpus.test.ts", "-t", "closure_mut_ref"],
   },
   {
@@ -235,5 +235,13 @@ export const mutations: Mutation[] = [
     find: "let value = match self.scope_has_temps() && !value.is_constant() {",
     replace: "let value = match false {",
     tests: ["test/corpus.test.ts", "-t", "scope_temporaries"],
+  },
+  {
+    name: "stepped-borrow-refused",
+    breaks: "`it.next()` of a generic iterator stepped through takes a `&mut` to it, an error",
+    file: "src/lower.rs",
+    find: " || self.is_stepping(arg) => {\n                match self.place(arg) {",
+    replace: " => {\n                match self.place(arg) {",
+    tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
   },
 ];

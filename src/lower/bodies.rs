@@ -132,6 +132,29 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 names.push(js::Pattern::Name(name));
                 continue;
             }
+            // `mut it: I` of a generic iterator that `it.next()` steps through: a
+            // JS iterator from here on, `it = Iterator.from(it)` (ADR 0071).
+            if let Some(Pat {
+                kind:
+                    PatKind::Binding {
+                        name,
+                        var,
+                        mode: BindingMode(ByRef::No, _),
+                        subpattern: None,
+                        ..
+                    },
+                ..
+            }) = param.pat.as_deref()
+                && self.steps_through(*var)
+                && self.is_generic_iter(param.ty)
+            {
+                let name = self.bind(*var, name.as_str(), true);
+                let iterator = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![Expr::var(&name)]);
+                out.push(StmtKind::Assign(Expr::var(&name), iterator).at(js::Span::NONE));
+                self.bound_as_iter(*var);
+                names.push(js::Pattern::Name(name));
+                continue;
+            }
             self.check_value_ty(param.ty, span)?;
             // `|&x|`: a reference is the value (ADR 0023), so the parameter is `x`.
             let mut inner = param.pat.as_deref();

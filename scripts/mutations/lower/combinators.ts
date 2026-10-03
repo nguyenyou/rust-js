@@ -98,4 +98,12 @@ export const mutations: Mutation[] = [
     replace: "            StepOp::Next if false && self.is_generic_iter(receiver_ty) && !self.is_kept(args[0]) => {",
     tests: ["test/corpus.test.ts", "-t", "generic_associated_types"],
   },
+  {
+    name: "stepped-generic-rest",
+    breaks: "what's left of a generic iterator stepped through is `$rest` of it, which only a `$iter` has",
+    file: "src/lower/combinators.rs",
+    find: "        if self.is_stepping(e) && !self.is_generic_iter(self.thir[e].ty) {",
+    replace: "        if self.is_stepping(e) {",
+    tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
+  },
 ];

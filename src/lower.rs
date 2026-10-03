@@ -759,15 +759,18 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             {
                 Ok(self.locals.vars[&id].place.clone())
             }
-            // `&mut` to a JS object is the object (ADR 0025), and to a closure
-            // the closure (ADR 0099).
+            // `&mut` to a JS object is the object (ADR 0025), to a closure the
+            // closure (ADR 0099), and to an iterator stepped through the one
+            // that knows where it is (ADR 0071).
             ExprKind::Borrow {
                 borrow_kind: BorrowKind::Mut { .. },
                 arg,
-            } if self.is_object(self.thir[arg].ty) || self.is_callable(self.thir[arg].ty) => match self.place(arg) {
-                Some((place, _)) => Ok(place),
-                None => self.referent(arg, out),
-            },
+            } if self.is_object(self.thir[arg].ty) || self.is_callable(self.thir[arg].ty) || self.is_stepping(arg) => {
+                match self.place(arg) {
+                    Some((place, _)) => Ok(place),
+                    None => self.referent(arg, out),
+                }
+            }
             // `&mut *e` of a `&mut` that isn't a variable's: `e`'s own, a cell
             // kept in a field or given back by a block, a branch or a call of
             // the crate's (ADR 0099). Not a std call's, as `v[i]`'s `index_mut`

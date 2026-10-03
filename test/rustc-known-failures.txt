@@ -15,7 +15,7 @@ associated-types/assoc-type-in-extern-fn-signature.rs	error: rust-js does not su
 associated-types/associated-item-long-paths.rs	error: rust-js does not support `size_of` of a type parameter yet
 associated-types/associated-types-conditional-dispatch.rs	error: rust-js does not support calling `std::ops::Deref::deref` yet
 associated-types/associated-types-doubleendediterator-object.rs	error: rust-js does not support values of type `dyn std::iter::DoubleEndedIterator<Item = isize>` yet
-associated-types/associated-types-iterator-binding.rs	error: rust-js does not support `&mut` to a `T` yet
+associated-types/associated-types-iterator-binding.rs	error: rust-js does not support calling `std::iter::DoubleEndedIterator::next_back` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support labeled blocks yet

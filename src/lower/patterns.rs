@@ -143,6 +143,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             out.push(kind.at(self.js_span(span)));
             return Ok(());
         }
+        // `let mut it = it;` of a generic iterator stepped through: a JS
+        // iterator, `Iterator.from(it)`, which knows where it is (ADR 0071).
+        if let PatKind::Binding {
+            name,
+            var,
+            mode: BindingMode(ByRef::No, mutability),
+            subpattern: None,
+            ty,
+            ..
+        } = pat.kind
+            && let Some(init) = init
+            && self.steps_through(var)
+            && self.is_generic_iter(ty)
+        {
+            let value = self.expr(init, out)?;
+            let value = Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]);
+            let name = self.bind(var, name.as_str(), mutability == Mutability::Mut);
+            self.bound_as_iter(var);
+            let kind = if mutability == Mutability::Mut {
+                StmtKind::Let(name, Some(value))
+            } else {
+                StmtKind::Const(name, value)
+            };
+            out.push(kind.at(self.js_span(span)));
+            return Ok(());
+        }
         // `let f = { let c = ..; move |n| .. };`: the block's statements
         // first, then `const f = ..` of its value. Every local has a JS name
         // of its own, so none of them can clash where they now are.

@@ -42,4 +42,12 @@ export const mutations: Mutation[] = [
     replace: "        let _ = flags;\n",
     tests: ["test/corpus.test.ts", "-t", "closure_drops"],
   },
+  {
+    name: "stepped-generic-param-unbound",
+    breaks: "`mut it: I` that `it.next()` steps through is an error, where it's a JS iterator",
+    file: "src/lower/bodies.rs",
+    find: "                && self.steps_through(*var)\n                && self.is_generic_iter(param.ty)\n",
+    replace: "                && false\n",
+    tests: ["test/corpus.test.ts", "-t", "kept_generic_iterators"],
+  },
 ];

@@ -40,6 +40,12 @@ on:
 - **`next()` of one kept elsewhere,** a `Chars` in a field or a parameter,
   or used in a closure, is an error: it would have to be a `$iter` wherever
   it came from. A `Peekable` is one everywhere, so the error says to use it.
+- **A generic iterator stepped through, `mut it: I` or `let mut it = it;`,
+  is a JS iterator from where it's bound:** `it = Iterator.from(it)`, an
+  array's, a lazy one's or the crate's own alike, `$next(it)` steps it, and
+  what's left goes to `collect` or a `for` loop as it is. `it.by_ref()` is
+  still an error: a JS iterator helper, as `take`, closes what it takes
+  from. (Amended: `next()` of one was an error, a `&mut` to a `I`.)
 - **`peekable()` of a lazy iterator** is an error: its items would have to
   be worked out first, which could change what runs when, or never end.
 - **Items that could look like `None`** are an error, since `$next` is

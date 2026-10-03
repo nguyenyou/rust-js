@@ -129,7 +129,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// the items it has left, `$rest(it)`, which it then has none of.
     pub(super) fn iter_value(&mut self, e: ExprId, out: &mut Vec<Stmt>) -> R<Expr> {
         let value = self.expr(e, out)?;
-        if self.is_stepping(e) {
+        // A generic one is a JS iterator, which gives what it has left.
+        if self.is_stepping(e) && !self.is_generic_iter(self.thir[e].ty) {
             self.runtime.insert(Helper::Rest);
             return Ok(Expr::call(Expr::var("$rest"), vec![value]));
         }
