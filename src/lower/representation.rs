@@ -354,6 +354,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             || self.is_js_object(ty)
             // A slice or an array is a JS array: `&mut` to one, as `sort` takes, is it.
             || ty.is_slice()
+            // A `dyn Iterator` is a JS iterator, which steps itself.
+            || self.recognition().is_dyn_iter(ty)
             || ty.is_array()
             || ["Cell", "RefCell", "Atomic"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
             || self.is_vec_like(ty)
@@ -708,6 +710,13 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .is_some_and(|id| id.is_local() && self.dyn_supported(id)) =>
             {
                 return None;
+            }
+            // A JS iterator, of its `Item`s.
+            ty::Dynamic(traits, ..) if self.recognition().is_dyn_iter(ty) => {
+                return traits
+                    .projection_bounds()
+                    .find_map(|item| item.skip_binder().term.as_type())
+                    .and_then(|item| self.unsupported_in(item, seen));
             }
             // A JS value from an `extern` block, and closures: JS functions.
             ty::Foreign(_) | ty::Closure(..) | ty::CoroutineClosure(..) | ty::FnDef(..) | ty::FnPtr(..) => return None,

@@ -5,6 +5,7 @@ use rustc_hir::{HirId, LangItem};
 use rustc_middle::middle::region;
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, Pat, PatKind, Thir};
+use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::sym;
 use std::collections::{HashMap, HashSet};
@@ -231,11 +232,32 @@ pub(super) fn strip(thir: &Thir<'_>, mut e: ExprId) -> ExprId {
     }
 }
 
+/// What `&mut it`, reborrowed or not, lends: `it`.
+fn lent(thir: &Thir<'_>, e: ExprId) -> ExprId {
+    let e = strip(thir, e);
+    match thir[e].kind {
+        ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } => lent(thir, arg),
+        _ => e,
+    }
+}
+
 /// The locals a body calls `next()` on, directly or through `&mut`: the
-/// ones that must know where they are (ADR 0071).
-pub(super) fn stepped_locals(tcx: TyCtxt<'_>, thir: &Thir<'_>) -> HashSet<LocalVarId> {
+/// ones that must know where they are (ADR 0071). So is one lent as a
+/// `&mut dyn Iterator`, which what it's lent to steps through.
+pub(super) fn stepped_locals<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>) -> HashSet<LocalVarId> {
     let mut stepped = HashSet::new();
     for expr in thir.exprs.iter() {
+        if let ExprKind::PointerCoercion {
+            cast: PointerCoercion::Unsize,
+            source,
+            ..
+        } = expr.kind
+            && expr.ty.is_ref()
+            && super::recognition::is_dyn_iter(tcx, expr.ty)
+            && let ExprKind::VarRef { id } = thir[lent(thir, source)].kind
+        {
+            stepped.insert(id);
+        }
         let ExprKind::Call { fun, ref args, .. } = expr.kind else {
             continue;
         };

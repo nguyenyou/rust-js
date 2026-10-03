@@ -72,7 +72,7 @@ cast/as-cast-unifies-raw-pointer-and-fn-type.rs	error: rust-js does not support 
 cast/cast-not-treated-as-lvalue.rs	error: rust-js does not support this expression yet
 cast/cast-ptr-to-fat-ptr.rs	error: rust-js does not support this expression yet
 cast/cast-rfc0401-vtable-kinds.rs	error: rust-js does not support values of type `*const FooS<T>` yet
-cast/cast-rfc0401.rs	error: rust-js does not support `next()` of a `dyn std::iter::Iterator<Item = u32>` kept in a field, a parameter or a closure: make it a `Peekable`
+cast/cast-rfc0401.rs	error: rust-js does not support values of type `*const [u8; 1]` yet
 cast/cast-to-infer-ty.rs	error: rust-js does not support values of type `*const i32` yet
 cast/cast.rs	error: rust-js does not support values of type `*const &str` yet
 cast/codegen-object-shim.rs	error: rust-js does not support `{}` of a `dyn std::string::ToString` yet
@@ -84,7 +84,6 @@ closures/2229_closure_analysis/match/match-edge-cases_1.rs	error: rust-js does n
 closures/2229_closure_analysis/migrations/insignificant_drop.rs	error: rust-js does not support calling `std::sync::Mutex::<T>::new` yet
 closures/2229_closure_analysis/run_pass/unsafe_ptr.rs	error: rust-js does not support values of type `*const S` yet
 closures/call-fnmut-trait-object-via-ref-mut.rs	error: rust-js does not support `ref mut` bindings to this type yet
-closures/explicit-return-in-closure-and-outer-fn.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = usize>` yet
 closures/once-move-out-on-heap.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<bool>) is !null` yet
 closures/region-obligations-closure-and-projection.rs	error: rust-js does not support values of type `*mut u8` yet
 codegen/arm-collect-into-vec-codegen-regression.rs	error: rust-js does not support values of type `*mut ()` yet
@@ -212,7 +211,6 @@ generic-associated-types/issue-76826.rs	error: rust-js does not support generic 
 generic-associated-types/iterable.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/streaming_iterator.rs	error: rust-js does not support generic associated types yet
 higher-ranked/trait-bounds/assoc-type-projection-method.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
-impl-trait/closure-in-impl-trait.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = [(); 4]>` yet
 impl-trait/example-st.rs	error: rust-js does not support this method of an `Option` of a generic type yet
 impl-trait/issues/issue-49685.rs	error: rust-js does not support values of type `std::option::Option<()>` yet
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
@@ -228,7 +226,6 @@ issues/issue-42552.rs	error: rust-js does not support values of type `<std::iter
 issues/issue-4541.rs	error: rust-js does not support calling `std::env::args` yet
 issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::Args` yet
 iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
-iterators/for-loop-over-mut-iterator-21655.rs	error: rust-js does not support values of type `&mut dyn std::iter::Iterator<Item = i32>` yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
 iterators/iter-map-fold-type-length.rs	error: rust-js does not support `&mut` to a `I` yet
 layout/aggregate-lang/struct-offsets.rs	error: rust-js does not support values of type `u128` yet
@@ -366,8 +363,6 @@ traits/issue-43132.rs	error: rust-js does not support implementation evidence fo
 traits/multidispatch-infer-convert-target.rs	error: rust-js does not support `size_of` of a type parameter yet
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support implementation evidence for `<dyn Q as Q>` yet
-traits/object/dyn-iter-box-and-ref-impl-iter.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = i32>` yet
-traits/object/iterator-methods-on-boxed-trait-object.rs	error: rust-js does not support values of type `dyn std::iter::Iterator<Item = i32>` yet
 traits/object/lifetime-first.rs	error: rust-js does not support values of type `dyn std::fmt::Display` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
 traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<Point<S> as Positioned<S>>` yet

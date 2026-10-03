@@ -863,6 +863,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let item = self.checked_index(lhs, values);
                 Ok(self.copy_if_needed(item, ty))
             }
+            // A `dyn Iterator` is a JS iterator.
+            ExprKind::PointerCoercion {
+                cast: PointerCoercion::Unsize,
+                source,
+                ..
+            } if self.recognition().is_dyn_iter(ty) => self.dyn_iterator(source, span, out),
             // `Box<closure>` to `Box<dyn FnMut()>`: the same JS function.
             ExprKind::PointerCoercion {
                 cast: PointerCoercion::Unsize,

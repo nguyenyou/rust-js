@@ -224,6 +224,7 @@ Each record says what we decided, why, what we rejected, and what it costs.
 - [0137 `{:#?}` is pretty Debug, and a writer is told whether](decisions/0137-pretty-debug.md)
 - [0138 A string's length, slices and offsets count its UTF-8 bytes](decisions/0138-string-byte-counts.md)
 - [0139 A chain whose stages do what can be seen runs in Rust's order](decisions/0139-lazy-chains.md)
+- [0140 An iterator trait object is a JS iterator](decisions/0140-iterator-trait-objects.md)
 - [0050 Snapshots of the generated JS, reviewed as diffs](decisions/0050-snapshots.md)
 - [0026 Tests are Rust's `#[test]`, run by `bun test` in happy-dom](decisions/0026-testing.md)
 - [0027 Real-browser tests: Playwright Test and Vitest's browser mode, on Bun](decisions/0027-real-browser-tests.md)

@@ -1097,6 +1097,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             && self.tcx.item_name(adt.did()).as_str() == "Peekable")
     }
 
+    /// A `dyn Iterator`, boxed or lent: a JS iterator, whatever made it.
+    pub(super) fn is_dyn_iter(&self, ty: Ty<'tcx>) -> bool {
+        is_dyn_iter(self.tcx, ty)
+    }
+
     pub(super) fn is_user_iterator(&self, ty: ty::Ty<'tcx>) -> bool {
         let iterator = self.tcx.get_diagnostic_item(sym::Iterator).expect("std has `Iterator`");
         matches!(ty.peel_refs().kind(), ty::Adt(..)) && self.has_user_impl(iterator, ty.peel_refs())
@@ -1780,6 +1785,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
             || self.range_kind(ty) == Some(RangeKind::From)
             || self.is_user_iterator(ty)
             || self.is_generic_iter(ty)
+            || self.is_dyn_iter(ty)
             || matches!(ty.kind(), ty::Adt(_, args) if self.is_array_iter(ty) && args.types().any(|t| self.is_lazy_iter(t)))
     }
 }
@@ -1920,4 +1926,12 @@ pub(super) fn ordering_value(tcx: TyCtxt<'_>, enum_def: DefId, variant: Symbol) 
         "Equal" => 0,
         _ => 1,
     })
+}
+
+/// `dyn Iterator`, behind a reference or a `Box`, or not.
+pub(super) fn is_dyn_iter<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
+    let ty = ty.peel_refs();
+    let ty = ty.boxed_ty().unwrap_or(ty);
+    matches!(ty.kind(), ty::Dynamic(traits, ..)
+        if traits.principal_def_id().is_some_and(|id| tcx.is_diagnostic_item(sym::Iterator, id)))
 }

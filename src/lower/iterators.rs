@@ -222,6 +222,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         Ok(Expr::call(Expr::var("$iterator"), list))
     }
 
+    /// A value given where a `dyn Iterator` goes, `Box::new(it)` or `&mut it`:
+    /// a JS iterator, with JS's lazy helpers. One already is itself: a lazy
+    /// chain, another `dyn`, one of the crate's own as `$iterator` makes it.
+    /// Anything else, an array or a stepped local's `$iter`, is
+    /// `Iterator.from` of it, which shares a `$iter`'s place. Its chain runs
+    /// item by item, as what it's given to takes them (ADR 0139).
+    pub(super) fn dyn_iterator(&mut self, source: ExprId, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        let inner = self.boxed_or_lent(source);
+        self.mark_lazy_chain(inner, true);
+        let value = self.expr(source, out)?;
+        let ty = self.reveal(self.thir[inner].ty);
+        if self.is_user_iterator(ty) || self.is_generic_iter(ty) {
+            return self.iter_source(value, ty, span, out);
+        }
+        let value = self.iter_source(value, ty, span, out)?;
+        if self.recognition().is_dyn_iter(ty) || self.is_lazy_value(inner) {
+            return Ok(value);
+        }
+        Ok(Expr::call(Expr::member(Expr::var("Iterator"), "from"), vec![value]))
+    }
+
+    /// What `Box::new(it)` boxes, or `&mut it` lends, reborrowed or not: `it`.
+    fn boxed_or_lent(&self, e: ExprId) -> ExprId {
+        let e = self.strip(e);
+        match self.thir[e].kind {
+            ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } => self.boxed_or_lent(arg),
+            ExprKind::Call { fun, ref args, .. }
+                if let &ty::FnDef(id, _) = self.thir[fun].ty.kind()
+                    && self.tcx.is_diagnostic_item(Symbol::intern("box_new"), id) =>
+            {
+                self.boxed_or_lent(args[0])
+            }
+            _ => e,
+        }
+    }
+
     /// What an iterator of type `iterator` yields: its `Item`.
     pub(super) fn iterator_item(&self, iterator: ty::Ty<'tcx>) -> Option<ty::Ty<'tcx>> {
         let trait_id = self.tcx.get_diagnostic_item(sym::Iterator)?;
