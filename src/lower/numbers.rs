@@ -15,7 +15,7 @@ use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::mir::{AssignOp, BinOp, UnOp};
 use rustc_middle::thir::ExprId;
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::Span;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -783,5 +783,32 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Ok(None),
         }))
+    }
+
+    /// The bytes `size_of`, `align_of` or `size_of_val` gives for `of`.
+    pub(super) fn layout_bytes(&self, known: Std, of: Ty<'tcx>, span: Span) -> R<i128> {
+        let name = match known {
+            Std::SizeOf => "size_of",
+            Std::AlignOf => "align_of",
+            _ => "size_of_val",
+        };
+        if of.has_param() {
+            return Err(self.unsupported(span, &format!("`{name}` of a type parameter")));
+        }
+        if !of.is_sized(self.tcx, self.typing_env) {
+            return Err(self.unsupported(span, &format!("`{name}` of a value without one size")));
+        }
+        // Of a type without parameters, as codegen asks: 1.98 finds an
+        // `async fn`'s future too generic to lay out otherwise (ADR 0109).
+        let layout = self
+            .tcx
+            .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))
+            .map_err(|_| self.unsupported(span, &format!("`{name}` of this type")))?;
+        let bytes = if matches!(known, Std::AlignOf) {
+            layout.align.abi.bytes()
+        } else {
+            layout.size.bytes()
+        };
+        Ok(bytes as i128)
     }
 }

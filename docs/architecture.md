@@ -55,7 +55,8 @@ Each is checked to stay that way.
 | `effects.rs` | What evaluating an expression, or calling a closure, can do that can be seen |
 | `drops/types.rs` | What dropping a type runs |
 | `drops/facts.rs` | What a body owns and moves, found before it's lowered |
-| `analysis.rs` | What the whole crate is, before any function is lowered |
+| `analysis.rs`, `analysis/` | What the whole crate is, before any function is lowered: what it refuses, the names its items have in JS, the types it changes in place, its drops' and `Debug`'s needs |
+| `shortcuts.rs` | Nothing of its own: `self.is_map(ty)` for `self.recognition().is_map(ty)`, each question answered in `recognition.rs` |
 
 **Lowering of Rust's constructs.**
 
@@ -65,17 +66,24 @@ Each is checked to stay that way.
 | `bodies.rs` | Functions, closures and nested bodies: setup, captures, entry and exit |
 | `patterns.rs` | Bindings, destructuring, `match`, `if let` and let-chains |
 | `loops.rs` | Loops and labels |
-| `places.rs` | Reading, borrowing and writing places |
+| `places.rs` | Reading, borrowing and writing places, and `mem::swap` and `replace` of them |
+| `mut_refs.rs` | A `&mut` to a value JS can't change in place, given to a call or given back by one: a box, the place, or a std call's items |
 | `drops.rs` | Destructors: scopes, flags, temporaries, and the JS that drops |
-| `representation.rs` | How each Rust value is represented, copied and validated |
-| `traits.rs`, `std_impls.rs`, `ordering.rs` | Traits: dictionaries, evidence, `dyn`; `Clone`, `Default`, `PartialEq`, `Ord` |
+| `representation.rs` | How each Rust value is represented: its shape, an `Option`'s payload, a cell, a number |
+| `copies.rs` | When a value is copied: where it's read, if something changes one of its kind in place |
+| `support.rs` | What rust-js can represent, and the error where a value it can't is made or bound |
+| `aggregates.rs` | Structs, variants and tuple structs made, by fields or a struct update, and constructors as values |
+| `results.rs` | `?`, and the `From` that converts its error |
+| `items.rs` | References to items: what a function or a binding is in JS, whether it's the crate's, which impl a call runs |
+| `traits.rs`, `std_impls.rs`, `ordering.rs` | Traits: dictionaries, evidence, `dyn`, calls of an impl's method; `Clone`, `Default`, `PartialEq`, `Ord` |
 | `display.rs`, `format_args.rs`, `format_spec.rs` | `Display` and `Debug`, `format_args!`, placeholders' options |
 | `serde.rs`, `serde/` | serde's derives and serde_json |
 | `jsx.rs`, `jsx_api.rs`, `bindings.rs` | JSX, and bindings to JavaScript |
 | `library.rs`, `sources.rs`, `pipeline.rs` | Libraries' contracts, source files, and the crate as a whole |
 
-**Std's functions.** A call is lowered by `calls.rs::call`, a short
-dispatcher:
+**Calls.** A call is lowered by `calls.rs::call`, a short dispatcher;
+what a function is in JS is `items.rs`'s, and a `&mut` given to one
+`mut_refs.rs`'s:
 
 ```text
  call(f, args)

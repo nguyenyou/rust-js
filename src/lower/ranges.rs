@@ -70,10 +70,6 @@ pub(super) enum RangeOp {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    pub(super) fn range_kind(&self, ty: Ty<'tcx>) -> Option<RangeKind> {
-        self.recognition().range_kind(ty)
-    }
-
     /// What a range's bounds are: the `u32` of a `Range<u32>`.
     pub(super) fn range_index(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
         match ty.kind() {

@@ -106,22 +106,6 @@ fn sensitive(known: Std) -> bool {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// Is `ty` an iterator of the crate's own (ADR 0055)? `&mut` of one is too.
-    pub(super) fn is_user_iterator(&self, ty: ty::Ty<'tcx>) -> bool {
-        self.recognition().is_user_iterator(ty)
-    }
-
-    /// A type parameter that's an `Iterator`: `I: Iterator<Item = u32>`, or
-    /// `impl Iterator` as a parameter's type (ADR 0061).
-    pub(super) fn is_generic_iter(&self, ty: ty::Ty<'tcx>) -> bool {
-        self.recognition().is_generic_iter(ty)
-    }
-
-    /// A type parameter with a bound of the std trait `name`.
-    pub(super) fn bounded_by(&self, ty: ty::Ty<'tcx>, name: Symbol) -> bool {
-        self.recognition().bounded_by(ty, name)
-    }
-
     /// An iterator that's a JS iterator, not an array (ADR 0055): one of the
     /// crate's own, or std's adapters on one.
     fn is_lazy_iter(&self, ty: ty::Ty<'tcx>) -> bool {

@@ -113,11 +113,6 @@ pub(super) enum HeapOp {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// Is `ty` a `Peekable`, which is always a `$iter` (ADR 0071)?
-    pub(super) fn is_peekable(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_peekable(ty)
-    }
-
     /// Does `e` name one that knows where it is: a `Peekable`, or a local
     /// `next()` steps through?
     fn is_stepping(&self, e: ExprId) -> bool {

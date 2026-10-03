@@ -2,7 +2,7 @@
 //! template decoded, and the values it shows written into a JS template
 //! literal, in Rust's order (ADRs 0034, 0058, 0066).
 
-use super::calls::{Call, without_newline};
+use super::calls::Call;
 use super::display::Pretty;
 use super::format_spec::Spec;
 use super::{FnCx, R, Std};
@@ -423,5 +423,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Ok(None),
         }))
+    }
+}
+
+/// `"a\n"` or `` `a ${x}\n` ``: the line, `"a"`, without the newline
+/// `println!` ends it with. Anything else is given back.
+pub(super) fn without_newline(text: Expr) -> Result<Expr, Expr> {
+    match &text.kind {
+        js::ExprKind::Str(s) if s.ends_with('\n') => Ok(Expr::str(&s[..s.len() - 1])),
+        js::ExprKind::Template(texts, values) if texts.last().is_some_and(|last| last.ends_with('\n')) => {
+            let mut texts = texts.clone();
+            texts.last_mut().expect("a template has a last text").pop();
+            Ok(Expr::template(texts, values.clone()))
+        }
+        _ => Err(text),
     }
 }

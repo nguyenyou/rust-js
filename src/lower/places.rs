@@ -717,4 +717,60 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             _ => Err(self.unsupported(self.thir[e].span, "reading this")),
         }
     }
+
+    /// `mem::swap(&mut a, &mut b)`: `const t = a; a = b; b = t;`, and
+    /// `mem::replace(&mut a, v)`: `const old = a; a = v;`, and `old`. While
+    /// the call has a place's `&mut`, nothing else can use the place, so
+    /// writing each in turn is exact. Neither drops what it moves out: it's
+    /// the other place's now, or returned (ADR 0098), when it's used.
+    pub(super) fn swap_or_replace(
+        &mut self,
+        known: Std,
+        args: &[ExprId],
+        discarded: bool,
+        span: Span,
+        out: &mut Vec<Stmt>,
+    ) -> R<Expr> {
+        let js_span = self.js_span(span);
+        let a = self.mut_place(args[0], span)?;
+        let (b, b_place) = match known {
+            Std::Swap => {
+                let b = self.mut_place(args[1], span)?;
+                (b.clone(), Some(b))
+            }
+            // `None`, and what's in a `Some`, boxed where a generic one is
+            // (ADR 0051).
+            Std::OptionTake => (Expr::undefined(), None),
+            Std::OptionReplace => {
+                let value = self.expr(args[1], out)?;
+                let item = self
+                    .option_of(self.thir[args[0]].ty.peel_refs())
+                    .expect("an `Option` has a `T`");
+                let value = if self.boxed_payload(item) {
+                    self.some(value)
+                } else {
+                    value
+                };
+                (value, None)
+            }
+            Std::MemTake => {
+                let ty = self.thir[args[0]].ty.peel_refs();
+                (self.default_value(ty, span)?, None)
+            }
+            _ => (self.expr(args[1], out)?, None),
+        };
+        if b_place.is_none() && discarded {
+            out.push(StmtKind::Assign(a, b).at(js_span));
+            return Ok(Expr::undefined());
+        }
+        let old = self.spill(if b_place.is_some() { "t" } else { "old" }, a.clone(), out);
+        out.push(StmtKind::Assign(a, b).at(js_span));
+        match b_place {
+            Some(b) => {
+                out.push(StmtKind::Assign(b, old).at(js_span));
+                Ok(Expr::undefined())
+            }
+            None => Ok(old),
+        }
+    }
 }

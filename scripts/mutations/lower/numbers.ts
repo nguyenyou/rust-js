@@ -34,4 +34,20 @@ export const mutations: Mutation[] = [
     replace: "            NumOp::Exp2 => rounded(Expr::bin(Op::Pow, Expr::num(std::f64::consts::E), arg())),",
     tests: ["test/corpus.test.ts","-t","std_methods"],
   },
+  {
+    name: "size-align-swap",
+    breaks: "`align_of` is the type's size",
+    file: "src/lower/numbers.rs",
+    find: "        let bytes = if matches!(known, Std::AlignOf) {\n            layout.align.abi.bytes()",
+    replace: "        let bytes = if matches!(known, Std::AlignOf) {\n            layout.size.bytes()",
+    tests: ["test/corpus.test.ts", "-t", "size_of\\.rs"],
+  },
+  {
+    name: "layout-in-function-environment",
+    breaks: "`size_of_val` of a generic `async fn`'s future is laid out in the function's environment, where 1.98 finds it too generic, and is refused",
+    file: "src/lower/numbers.rs",
+    find: "            .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(of))\n",
+    replace: "            .layout_of(self.typing_env.as_query_input(of))\n",
+    tests: ["test/corpus.test.ts","-t","future_sizes"],
+  },
 ];

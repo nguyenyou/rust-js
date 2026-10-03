@@ -16,15 +16,6 @@ use rustc_span::Span;
 use rustc_span::def_id::DefId;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// `serde_json::Value`, `Number` or `Map`.
-    pub(in crate::lower) fn json_type(&self, ty: Ty<'tcx>) -> Option<Json> {
-        self.recognition().json_type(ty)
-    }
-
-    pub(in crate::lower) fn is_json_map(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_json_map(ty)
-    }
-
     pub(in crate::lower) fn is_json_number(&self, ty: Ty<'tcx>) -> bool {
         self.json_type(ty) == Some(Json::Number)
     }

@@ -50,22 +50,6 @@ impl Pretty {
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    pub(super) fn display_trait(&self) -> DefId {
-        self.recognition().display_trait()
-    }
-
-    /// `fmt::Result`, as `Display::fmt` returns it.
-    pub(super) fn is_fmt_result(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_fmt_result(ty)
-    }
-
-    /// Which parameter of `def_id` is the `Formatter` it writes to, if it
-    /// takes one and returns a `fmt::Result`. In JS it returns the string
-    /// instead, and takes no formatter.
-    pub(super) fn formatter_param(&self, def_id: DefId) -> Option<usize> {
-        self.recognition().formatter_param(def_id)
-    }
-
     /// The JS parameters of a function that writes to a formatter, and its
     /// body in `out`: `let f = ""`, the writes, and `return f`. Just
     /// `return s` if it writes once.
@@ -601,17 +585,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.shows_inside(ty) => args.types().next().expect("what it holds").peel_refs(),
             _ => ty,
         }
-    }
-
-    /// `ParseIntError`, `TryFromIntError` and the like, which rust-js holds as their message
-    /// (ADR 0063): `e.to_string()` is the message itself.
-    pub(super) fn is_parse_error(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_parse_error(ty)
-    }
-
-    /// `serde_json::Error`: `{ message, line, column }` (ADR 0077).
-    pub(super) fn is_json_error(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_json_error(ty)
     }
 
     pub(super) fn debug_trait(&self) -> DefId {

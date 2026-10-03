@@ -911,13 +911,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
     }
 
-    /// `#[serde(from = "T")]`, `try_from` or `into` on `adt`: `T`, from the
-    /// derive's call of `From::from`, `TryFrom::try_from` or `Into::into`
-    /// (the trait `convert` names), whose types rustc worked out.
-    fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
-        self.recognition().conversion(adt, convert, serialize)
-    }
-
     /// `<to as From<from>>::from(value)` (or `TryFrom`), of the crate's own impl.
     fn convert(&mut self, convert: Symbol, to: Ty<'tcx>, from: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
         let trait_id = self.tcx.get_diagnostic_item(convert).expect("std has it");

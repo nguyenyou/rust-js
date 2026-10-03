@@ -26,11 +26,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.tcx.require_lang_item(LangItem::PartialOrd, DUMMY_SP)
     }
 
-    /// `std::cmp::Reverse`, which has no diagnostic item of its own.
-    pub(super) fn is_reverse(&self, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_reverse(ty)
-    }
-
     /// Does JS's `<` order `ty` as Rust does? Numbers, strings, `char`s,
     /// `bool`s (`false < true`), and `Ordering`s, which are numbers.
     pub(super) fn is_primitive_ord(&self, ty: Ty<'tcx>) -> bool {

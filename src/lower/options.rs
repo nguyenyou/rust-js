@@ -7,7 +7,7 @@ use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
-use rustc_middle::ty::{self};
+use rustc_middle::ty::{self, Ty};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// An `Option`'s or a `Result`'s method, and `bool::then` (ADRs 0030, 0062): `None` if `known` is another.
@@ -231,5 +231,43 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => return Ok(None),
         }))
+    }
+
+    /// `Some` of `items[index]`, or `None` if there's none (ADR 0051).
+    pub(super) fn some_at(&mut self, items: Expr, index: Expr) -> Expr {
+        self.runtime.insert(Helper::SomeAt);
+        Expr::call(Expr::var("$someAt"), vec![items, index])
+    }
+
+    /// `Some(value)` of a generic `T` (ADR 0051): `$some(value)`.
+    pub(super) fn some(&mut self, value: Expr) -> Expr {
+        self.runtime.insert(Helper::Some);
+        Expr::call(Expr::var("$some"), vec![value])
+    }
+
+    /// An `Option<T>`'s items, as its `iter()` gives them (ADR 0128):
+    /// `option == null ? [] : [option]`.
+    pub(super) fn option_items(&mut self, option: Expr, item: Ty<'tcx>, out: &mut Vec<Stmt>) -> Expr {
+        let option = if option.reads_same() {
+            option
+        } else {
+            self.spill("option", option, out)
+        };
+        let value = if self.boxed_payload(item) {
+            self.some_value(option.clone())
+        } else {
+            option.clone()
+        };
+        Expr::cond(
+            Expr::bin(Op::LooseEq, option, Expr::null()),
+            Expr::array(vec![]),
+            Expr::array(vec![value]),
+        )
+    }
+
+    /// What's in an `Option` of a generic `T` (ADR 0051): `$someValue(option)`.
+    pub(super) fn some_value(&mut self, option: Expr) -> Expr {
+        self.runtime.insert(Helper::SomeValue);
+        Expr::call(Expr::var("$someValue"), vec![option])
     }
 }

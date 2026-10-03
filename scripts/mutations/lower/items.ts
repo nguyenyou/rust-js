@@ -1,0 +1,61 @@
+// Mutations of src/lower/items.rs (ADR 0093).
+import type { Mutation } from "../../mutations";
+
+export const mutations: Mutation[] = [
+  {
+    name: "binding-value-bare",
+    breaks: "a binding as a value is the JS function itself, which `.map` gives each index too: `parseInt(text, i)`",
+    file: "src/lower/items.rs",
+    find: "            (JsForm::Call(name), None) => Expr::call(self.js_ref(&name), values),\n            (JsForm::New(name), None) => Expr::new_(self.js_ref(&name), values),\n            (JsForm::Get(name), Some(this)) if values.is_empty() && !name.contains('#') => Expr::member(this, name),",
+    replace: "            (JsForm::Call(name), None) => return Ok(self.js_ref(&name)),\n            (JsForm::New(name), None) => Expr::new_(self.js_ref(&name), values),\n            (JsForm::Get(name), Some(this)) if values.is_empty() && !name.contains('#') => Expr::member(this, name),",
+    tests: ["test/jsx.test.ts", "-t", "a binding is a value"],
+  },
+  {
+    name: "callee-unresolved",
+    breaks: "`checked.push(1)` through the crate's `DerefMut` pushes onto its handle, and `k.slot()` is taken for a std call's items",
+    file: "src/lower/items.rs",
+    find: "        self.impl_method(def_id, args)\n            .ok()\n            .flatten()\n            .or_else(|| self.resolve_into(def_id, args))\n",
+    replace: "        None.or_else(|| self.resolve_into(def_id, args))\n",
+    tests: ["test/corpus.test.ts","-t","generic_mut_ref_kept"],
+  },
+  {
+    name: "instance-args-unnormalized",
+    breaks: "an impl method is resolved with an associated type rustc can't normalize here, and rustc panics",
+    file: "src/lower/items.rs",
+    find: "        let Ok(args) = self\n            .tcx\n            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(args))\n        else {\n            return Ok(None);\n        };\n        ty::Instance::try_resolve(",
+    replace: "        ty::Instance::try_resolve(",
+    tests: ["test/diagnostics.test.ts","-t","refused not crashed"],
+  },
+  {
+    name: "f32-fn-value-unrounded",
+    breaks: "`.map(f32::sqrt)` is a double's square root, no `f32`, where its call is rounded to one",
+    file: "src/lower/items.rs",
+    find: "                    Some(num @ Num::F32) if !matches!(function, \"floor\" | \"ceil\" | \"trunc\" | \"abs\") => num.wrap(value),",
+    replace: "                    Some(num @ Num::F32) if false && !matches!(function, \"floor\" | \"ceil\" | \"trunc\" | \"abs\") => num.wrap(value),",
+    tests: ["test/corpus.test.ts","-t","function_values"],
+  },
+  {
+    name: "size-of-value-unknown",
+    breaks: "`size_of::<u16>` as a value is refused",
+    file: "src/lower/items.rs",
+    find: "            Std::SizeOf | Std::AlignOf => {\n                let bytes = self.layout_bytes(known, args.type_at(0), span)?;",
+    replace: "            Std::SizeOf | Std::AlignOf if false => {\n                let bytes = self.layout_bytes(known, args.type_at(0), span)?;",
+    tests: ["test/corpus.test.ts","-t","expression_values"],
+  },
+  {
+    name: "drop-value-skips-destructor",
+    breaks: "`drop` as a value runs no destructor",
+    file: "src/lower/items.rs",
+    find: "                if known == Std::Drop {\n                    self.drop_value(",
+    replace: "                if false && known == Std::Drop {\n                    self.drop_value(",
+    tests: ["test/corpus.test.ts","-t","expression_values"],
+  },
+  {
+    name: "is-some-value-negated",
+    breaks: "`Option::is_some` as a value is `is_none`",
+    file: "src/lower/items.rs",
+    find: "            Std::IsSome => Expr::bin(Op::LooseNe, x, Expr::null()),",
+    replace: "            Std::IsSome => Expr::bin(Op::LooseEq, x, Expr::null()),",
+    tests: ["test/corpus.test.ts","-t","expression_values"],
+  },
+];

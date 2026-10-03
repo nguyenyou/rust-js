@@ -1511,4 +1511,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     _ => true,
                 })
     }
+
+    /// `method` of the hand-written impl for the trait's `args`, called
+    /// directly: `counterClone_clone(c)`.
+    pub(super) fn impl_call(
+        &mut self,
+        method: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+        mut values: Vec<Expr>,
+        span: Span,
+    ) -> R<Expr> {
+        let args = self.tcx.erase_and_anonymize_regions(args);
+        let instance = self
+            .resolve_instance(method, args)?
+            .filter(|i| self.is_rust_fn(i.def_id()))
+            .ok_or_else(|| self.unsupported(span, "this implementation"))?;
+        values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
+        Ok(Expr::call(self.fn_ref(instance.def_id()), values))
+    }
 }

@@ -106,4 +106,20 @@ export const mutations: Mutation[] = [
     replace: "            && !self.locals.boxes.contains(&id)\n            && false",
     tests: ["test/corpus.test.ts", "-t", "mut_ref_kept"],
   },
+  {
+    name: "swap-one-way",
+    breaks: "`mem::swap` writes the first place and leaves the second as it was",
+    file: "src/lower/places.rs",
+    find: "                out.push(StmtKind::Assign(b, old).at(js_span));\n",
+    replace: "                drop((b, old));\n",
+    tests: ["test/corpus.test.ts", "-t", "swap_replace"],
+  },
+  {
+    name: "option-take-keeps",
+    breaks: "`opt.take()` leaves the value where it was",
+    file: "src/lower/places.rs",
+    find: "            Std::OptionTake => (Expr::undefined(), None),",
+    replace: "            Std::OptionTake => (self.mut_place(args[0], span)?, None),",
+    tests: ["test/corpus.test.ts","-t","std_methods"],
+  },
 ];

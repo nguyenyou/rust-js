@@ -16,45 +16,6 @@ use rustc_span::def_id::DefId;
 use rustc_span::{Span, Symbol, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
-    /// The trait's arguments for `Self = ty`, with `ty` for any others too:
-    /// `PartialEq`'s `Rhs` is `Self` unless it says otherwise.
-    pub(super) fn args_of(&self, trait_id: DefId, ty: Ty<'tcx>) -> ty::GenericArgsRef<'tcx> {
-        self.recognition().args_of(trait_id, ty)
-    }
-
-    /// Does `ty` use a hand-written impl of `trait_id` from this crate?
-    pub(super) fn has_user_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
-        self.recognition().has_user_impl(trait_id, ty)
-    }
-
-    /// Is the crate's impl of `trait_id` for `ty` a `#[derive]`d one?
-    pub(super) fn is_derived_impl(&self, trait_id: DefId, ty: Ty<'tcx>) -> bool {
-        self.recognition().is_derived_impl(trait_id, ty)
-    }
-
-    /// Is `tr` a hand-written impl from this crate?
-    pub(super) fn is_user_impl(&self, tr: ty::TraitRef<'tcx>) -> bool {
-        self.recognition().is_user_impl(tr)
-    }
-
-    /// `method` of the hand-written impl for the trait's `args`, called
-    /// directly: `counterClone_clone(c)`.
-    pub(super) fn impl_call(
-        &mut self,
-        method: DefId,
-        args: ty::GenericArgsRef<'tcx>,
-        mut values: Vec<Expr>,
-        span: Span,
-    ) -> R<Expr> {
-        let args = self.tcx.erase_and_anonymize_regions(args);
-        let instance = self
-            .resolve_instance(method, args)?
-            .filter(|i| self.is_rust_fn(i.def_id()))
-            .ok_or_else(|| self.unsupported(span, "this implementation"))?;
-        values.extend(self.evidence_args(instance.def_id(), instance.args, span)?);
-        Ok(Expr::call(self.fn_ref(instance.def_id()), values))
-    }
-
     pub(super) fn clone_trait(&self) -> DefId {
         self.tcx.require_lang_item(LangItem::Clone, rustc_span::DUMMY_SP)
     }
@@ -124,10 +85,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A type rust-js compiled: the crate's own, or a library's (ADR 0100).
     pub(super) fn is_rust_adt(&self, id: DefId) -> bool {
         id.is_local() || self.krate.foreign.in_library(id)
-    }
-
-    pub(super) fn is_std(&self, id: DefId) -> bool {
-        self.recognition().is_std(id)
     }
 
     /// std enums whose fields are what JS has: `Option`, `Result`, `Ordering`.
