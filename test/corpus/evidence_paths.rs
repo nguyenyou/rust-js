@@ -1,8 +1,10 @@
 // A bound is found however it's written (ADR 0049): `<I as Int>::T: NonZero`
 // is `J: NonZero` of an `I: Int<T = J>`, a supertrait's arguments are what
 // they normalize to, `T: ToString` is a dictionary of its own, and a
-// default copied into a generic impl calls the impl's methods.
+// default copied into a generic impl calls the impl's methods, given the
+// impl's dictionaries and its trait's.
 use std::fmt;
+use std::ops::Add;
 
 trait Int {
     type T;
@@ -101,10 +103,56 @@ where
     }
 }
 
+trait Positioned<S> {
+    fn set_x(&mut self, s: S);
+    fn x(&self) -> S;
+}
+
+trait Movable<S: Add<Output = S>>: Positioned<S> {
+    fn translate(&mut self, dx: S) -> S {
+        let before = self.x();
+        let x = self.x() + dx;
+        self.set_x(x);
+        before
+    }
+}
+
+struct Point<S> {
+    x: S,
+}
+
+impl<S: Clone> Positioned<S> for Point<S> {
+    fn set_x(&mut self, x: S) {
+        self.x = x;
+    }
+    fn x(&self) -> S {
+        self.x.clone()
+    }
+}
+
+impl<S: Clone + Add<Output = S>> Movable<S> for Point<S> {}
+
+#[derive(Debug, Clone)]
+struct Bag(Vec<u32>);
+
+impl Add for Bag {
+    type Output = Bag;
+    fn add(mut self, other: Bag) -> Bag {
+        self.0.extend(other.0);
+        self
+    }
+}
+
 fn main() {
     println!("{} {}", check(Small(3), 1u8), check(Small(3), 0u8));
     println!("{}", produced(&21));
     println!("{} {} {}", shout(12), shout("abc"), shout(Celsius(21.5)));
     println!("{:?} {:?}", Some(4).twice(), Some("hi".to_string()).twice());
     println!("{}", vec![1u8, 2, 3].into_iter().digit_sum());
+    let mut p = Point { x: 1 };
+    let before = p.translate(3);
+    println!("{} {}", before, p.x());
+    let mut bag = Point { x: Bag(vec![1]) };
+    let before = bag.translate(Bag(vec![2, 3]));
+    println!("{:?} {:?}", before, bag.x());
 }

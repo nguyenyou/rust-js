@@ -238,8 +238,11 @@ Floating-point sums start at negative zero, matching Rust's `Sum` identity.
   show it with.
 - **A default copied into a generic impl resolves a call on its `Self` in
   the impl's typing environment:** `self.get()` of `impl<T: Clone>
-  Getter<T> for Option<T>` is the impl's `get`. In the trait's, the impl's
-  `T` would be read as the trait's `Self`.
+  Getter<T> for Option<T>` is the impl's `get`, given `self.value` where
+  it takes `&mut self`. In the trait's, the impl's `T` would be read as the
+  trait's `Self`. The default is given the impl's own dictionaries,
+  `SClone` and `SAdd`, with its trait's: a call on the impl's types, as
+  the body's resolve to, is given what the impl was.
 
 ## Why
 

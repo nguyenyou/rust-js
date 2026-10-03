@@ -278,7 +278,6 @@ traits/issue-3979-generics.rs	error: rust-js does not support calling `std::ops:
 traits/object-one-type-two-traits.rs	error: rust-js does not support calling `<(dyn std::any::Any + 'static)>::is` yet
 traits/object/ambiguity-vtable-segfault.rs	error: rust-js does not support trait method `Q::q` yet
 traits/principal-less-objects.rs	error: rust-js does not support a `dyn` of a value with a destructor yet
-traits/superdefault-generics.rs	error: rust-js does not support implementation evidence for `<S as std::ops::Add>` yet
 traits/trait-implementation-restriction-5988.rs	error: rust-js does not support this trait implementation yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet

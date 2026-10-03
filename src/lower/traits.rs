@@ -910,18 +910,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 values,
             )));
         }
-        // In a copied default, what the impl's arguments name resolves in
-        // the impl's typing environment.
-        let resolved = match self.given.self_env {
-            Some(typing_env) => self
-                .tcx
-                .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(generic_args))
-                .ok()
-                .and_then(|args| ty::Instance::try_resolve(self.tcx, typing_env, id, args).transpose())
-                .transpose()?,
-            None => self.resolve_instance(id, generic_args)?,
-        };
-        if let Some(instance) = resolved
+        if let Some(instance) = self.resolve_self_instance(id, generic_args)?
             && self.is_rust_fn(instance.def_id())
             && self.tcx.trait_of_assoc(instance.def_id()).is_none()
         {
@@ -1536,6 +1525,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .skip_normalization();
             specialized.push((bound, self.dictionary(concrete, span)?));
         }
+        // And the impl's own, `SClone` of `impl<S: Clone> Movable<S> for
+        // Point<S>`: a call on the impl's types, which the body's resolve
+        // to, is given them.
+        specialized.extend(self.given.evidence.iter().cloned());
         // Its trait's type parameters, `Self` among them, drop as the impl's
         // arguments for them do, with the impl's drops (ADR 0098): each is
         // made here, and the body is given it by name.

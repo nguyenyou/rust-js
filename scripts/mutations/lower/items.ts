@@ -58,4 +58,13 @@ export const mutations: Mutation[] = [
     replace: "            Std::IsSome => Expr::bin(Op::LooseEq, x, Expr::null()),",
     tests: ["test/corpus.test.ts","-t","expression_values"],
   },
+  {
+    name: "default-resolved-in-trait-env",
+    breaks: "a default copied into `impl<T> Getter<T> for Option<T>` calls the impl's methods through its dictionary, not directly: right, but not the JS a person writes",
+    file: "src/lower/items.rs",
+    find: "        let typing_env = self.given.self_env.unwrap_or(self.typing_env);",
+    replace: "        let typing_env = self.typing_env;",
+    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
+    snapshots: true,
+  },
 ];

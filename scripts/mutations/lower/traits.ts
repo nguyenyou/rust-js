@@ -429,14 +429,6 @@ export const mutations: Mutation[] = [
     tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
   },
   {
-    name: "default-resolved-in-trait-env",
-    breaks: "a default copied into `impl<T> Getter<T> for Option<T>` can't call the impl's `get`",
-    file: "src/lower/traits.rs",
-    find: "        let resolved = match self.given.self_env {",
-    replace: "        let resolved = match None::<ty::TypingEnv<'tcx>> {",
-    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
-  },
-  {
     name: "to-string-through-dictionary",
     breaks: "`x.to_string()` of a known type, or a `dyn ToString`, goes through a dictionary it's made for it",
     file: "src/lower/traits.rs",
@@ -444,5 +436,13 @@ export const mutations: Mutation[] = [
     replace: "",
     tests: ["test/corpus.test.ts", "-t", "^locks"],
     snapshots: true,
+  },
+  {
+    name: "default-without-impl-evidence",
+    breaks: "a default copied into a generic impl gives the impl's methods a clone that copies nothing, not the impl's `SClone`",
+    file: "src/lower/traits.rs",
+    find: "        specialized.extend(self.given.evidence.iter().cloned());\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "evidence_paths"],
   },
 ];

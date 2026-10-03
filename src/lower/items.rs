@@ -174,6 +174,24 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         ty::Instance::try_resolve(self.tcx, self.typing_env, def_id, args)
     }
 
+    /// `resolve_instance` of a call whose arguments a copied default's
+    /// `Self` was replaced in (ADR 0049): they're the impl's, which resolve in
+    /// the impl's typing environment, as its own body's types don't.
+    pub(super) fn resolve_self_instance(
+        &self,
+        def_id: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Result<Option<ty::Instance<'tcx>>, rustc_span::ErrorGuaranteed> {
+        let typing_env = self.given.self_env.unwrap_or(self.typing_env);
+        let Ok(args) = self
+            .tcx
+            .try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(args))
+        else {
+            return Ok(None);
+        };
+        ty::Instance::try_resolve(self.tcx, typing_env, def_id, args)
+    }
+
     /// `Into::<U>::into` of a `T` as `<U as From<T>>::from`, and
     /// `TryInto` as `TryFrom`, if that's a hand-written impl.
     pub(super) fn resolve_into(
@@ -294,7 +312,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             None => generic_args,
         };
         Ok(self
-            .resolve_instance(id, generic_args)?
+            .resolve_self_instance(id, generic_args)?
             .filter(|instance| {
                 self.is_rust_fn(instance.def_id()) && self.tcx.trait_of_assoc(instance.def_id()).is_none()
             })
