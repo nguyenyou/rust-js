@@ -1,0 +1,69 @@
+// Mutations of src/lower/std_impls.rs (ADR 0093).
+import type { Mutation } from "../../mutations";
+
+export const mutations: Mutation[] = [
+  {
+    name: "library-recursive-clone-inline",
+    breaks: "a clone of a library's type inside itself isn't a function that calls itself, and never ends",
+    file: "src/lower/std_impls.rs",
+    find: "        id.is_local() || self.krate.foreign.in_library(id)\n",
+    replace: "        id.is_local()\n",
+    tests: ["test/crates.test.ts", "-t", "two crates: tree"],
+  },
+  {
+    name: "eq-without-cells",
+    breaks: "`o == Some(&mut 7)` of an `Option<&mut i32>` compares the cells, not what they point at",
+    file: "src/lower/std_impls.rs",
+    find: "        let (a, _) = self.through_refs(a, ty);\n        let (b, ty) = self.through_refs(b, ty);\n        if self.is_primitive_eq(ty) {",
+    replace: "        let ty = ty.peel_refs();\n        if self.is_primitive_eq(ty) {",
+    tests: ["test/corpus.test.ts", "-t", "mut_ref_compare"],
+  },
+  {
+    name: "primitive-eq-on-cells",
+    breaks: "`==` of what holds `&mut`s to numbers is JS's `===` of the cells",
+    file: "src/lower/std_impls.rs",
+    find: "    fn is_primitive_eq(&self, ty: Ty<'tcx>) -> bool {\n        // A `&mut` to a number is a cell, an object (ADR 0099).\n        if self.has_cell_layer(ty) {",
+    replace: "    fn is_primitive_eq(&self, ty: Ty<'tcx>) -> bool {\n        // A `&mut` to a number is a cell, an object (ADR 0099).\n        if false && self.has_cell_layer(ty) {",
+    tests: ["test/corpus.test.ts", "-t", "mut_ref_compare"],
+  },
+  {
+    name: "value-key-clone-shares-keys",
+    breaks: "a map's clone shares its keys, which a consumed original's owner then changes",
+    file: "src/lower/std_impls.rs",
+    find: "                let key = key.filter(|&k| self.is_value_key(k) && self.needs_clone(k));",
+    replace: "                let key = key.filter(|&k| false && self.is_value_key(k) && self.needs_clone(k));",
+    tests: ["test/corpus.test.ts", "-t", "value_keys"],
+  },
+  {
+    name: "range-eq-unknown",
+    breaks: "`(1..4) == (1..4)` is refused",
+    file: "src/lower/std_impls.rs",
+    find: "        if let Some(kind) = self.range_kind(ty) {\n            let index = self.range_index(ty);\n            let a = self.range_parts(a, kind, out);",
+    replace: "        if false && let Some(kind) = self.range_kind(ty) {\n            let index = self.range_index(ty);\n            let a = self.range_parts(a, kind, out);",
+    tests: ["test/corpus.test.ts","-t","range_values"],
+  },
+  {
+    name: "default-str-unknown",
+    breaks: "`Default` of a `&str` is refused",
+    file: "src/lower/std_impls.rs",
+    find: "            ty::Ref(_, inner, _) if inner.is_str() => Expr::str(\"\"),",
+    replace: "            ty::Ref(_, inner, _) if inner.is_str() && false => Expr::str(\"\"),",
+    tests: ["test/corpus.test.ts","-t","std_odds"],
+  },
+  {
+    name: "default-array-empty",
+    breaks: "`Default` of a `[u16; 3]` is no items",
+    file: "src/lower/std_impls.rs",
+    find: "                Expr::array((0..len).map(|_| self.default_value(*item, span)).collect::<R<_>>()?)",
+    replace: "                Expr::array((0..len).skip(len as usize).map(|_| self.default_value(*item, span)).collect::<R<_>>()?)",
+    tests: ["test/corpus.test.ts","-t","std_odds"],
+  },
+  {
+    name: "default-boxed-slice-unknown",
+    breaks: "`Default` of a `Box<[bool]>` is refused",
+    file: "src/lower/std_impls.rs",
+    find: "            ty::Slice(_) => Expr::array(Vec::new()),",
+    replace: "            ty::Slice(_) if false => Expr::array(Vec::new()),",
+    tests: ["test/corpus.test.ts","-t","std_odds"],
+  },
+];

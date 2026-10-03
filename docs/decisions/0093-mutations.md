@@ -14,7 +14,11 @@ didn't, and the generator was taught what it lacked.
 ## Decision
 
 **`scripts/mutations.ts` puts known bugs back, one at a time, and runs the
-tests named for each against the compiler built with it.** A mutation is a
+tests named for each against the compiler built with it.** The mutations
+are in `scripts/mutations/`, one list for each source file, at its path
+from `src/`: `src/lower/traits.rs`'s in `scripts/mutations/lower/traits.ts`,
+so code that moves takes its mutations with it. (Amended: one list for
+all, 3,400 lines by its 400th.) A mutation is a
 change to one place in the compiler's source, found exactly as it's
 written, and what it breaks, as Rust would see it:
 

@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { judge, mutate, mutations } from "../scripts/mutations";
+import { judge, lists, mutate, mutations } from "../scripts/mutations";
 import type { Exit } from "./child";
 import { root } from "./support";
 
@@ -17,6 +17,14 @@ test("every mutation applies to the compiler as it is, once", () => {
     const mutated = mutate(readFileSync(join(root, m.file), "utf8"), m);
     expect([m.name, typeof mutated === "string" ? "applies" : mutated.problem]).toEqual([m.name, "applies"]);
     expect(m.tests.length).toBeGreaterThan(0);
+  }
+});
+
+// So code that moves takes its mutations with it, to the list of where it went.
+test("each source file's mutations are in its own list", () => {
+  for (const list of lists) {
+    const source = `src/${list.path.replace(/\.ts$/, "")}`;
+    for (const m of list.mutations) expect([m.name, m.file.replace(/\.[a-z]+$/, "")]).toEqual([m.name, source]);
   }
 });
 

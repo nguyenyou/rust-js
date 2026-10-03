@@ -114,7 +114,8 @@ A std function or method rust-js doesn't know yet:
    for a string's, and so on. If it needs a runtime helper, add
    `src/runtime/<name>.js` and name it in `runtime.rs`.
 3. **Prove it**: a corpus case in `test/corpus/`, compared with native Rust;
-   mutations in `scripts/mutations.ts`, each a bug its tests must catch;
+   mutations in its module's list in `scripts/mutations/`, each a bug its
+   tests must catch;
    and a design decision in `docs/decisions/` if it's a new choice.
 
 A new kind of value, construct or analysis goes with its kind above: a
