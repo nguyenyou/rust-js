@@ -235,4 +235,20 @@ export const mutations: Mutation[] = [
     replace: "                        .is_some_and(|b| false && self.is_std_type(b, StdItem::Result)) =>",
     tests: ["test/corpus.test.ts", "-t", "collect_fallible|calculator"],
   },
+  {
+    name: "str-bytes-not-an-array",
+    breaks: "a `for` over `s.bytes()` is an error, as its `Bytes` isn't an array",
+    file: "src/lower/recognition.rs",
+    find: '                    "std::str::Bytes",\n',
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "str_bytes"],
+  },
+  {
+    name: "iterator-len-unrecognized",
+    breaks: "`it.len()` of an iterator is an error",
+    file: "src/lower/recognition.rs",
+    find: '        if tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator"\n            && tcx.item_name(def_id).as_str() == "len"\n            && self.range_kind(ty.peel_refs()).is_none()\n',
+    replace: '        if tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator"\n            && tcx.item_name(def_id).as_str() == "len_"\n            && self.range_kind(ty.peel_refs()).is_none()\n',
+    tests: ["test/corpus.test.ts", "-t", "str_bytes"],
+  },
 ];

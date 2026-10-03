@@ -59,6 +59,9 @@ for (const [name, source, message, crate] of [
   ["to_string of a dyn ToString", 'pub fn f(x: &dyn ToString) -> String { x.to_string() }', "dyn std::string::ToString"],
   // `collect()` into a `Result` or an `Option` is of an array (ADR 0036).
   ["collecting into a Result of a String", 'pub fn f(v: Vec<Result<char, ()>>) -> Result<String, ()> { v.into_iter().collect() }', "collecting into a"],
+  // `len()` takes no item, so it runs none of a chain's closures (ADR 0036).
+  ["len of a chain whose closure prints", 'pub fn f(v: &[u32]) -> usize { v.iter().map(|x| { println!("{x}"); x }).len() }', "`len()` of an iterator whose closures do what can be seen"],
+  ["len of a Peekable", 'pub fn f(v: &[u32]) -> usize { let mut p = v.iter().peekable(); p.peek(); p.len() }', "`len()` of a `Peekable`"],
   ["an Rc of a value with a destructor", 'pub struct D;\nimpl Drop for D { fn drop(&mut self) {} }\npub fn f() { let r = std::rc::Rc::new(D); drop(r); }', "a std type holding a value with a destructor, `std::rc::Rc<D>`"],
   ["a user impl of a std trait", 'pub struct C;\nimpl std::hash::Hasher for C { fn finish(&self) -> u64 { 0 } fn write(&mut self, _: &[u8]) {} }', "user implementations of this standard or external trait"],
   ["comparing another crate's struct", 'pub fn f(a: std::time::Duration, b: std::time::Duration) -> bool { a < b }', "does not support"],

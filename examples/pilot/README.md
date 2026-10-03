@@ -67,11 +67,12 @@ Fixed in the binding crates, each with a test:
   `webapi` and `js` crates', named as ReScript's (ADR 0102), and the pilot
   declares no bindings but Sonner's.
 
+Fixed in the compiler since, for M3.4: **iterating `str::bytes()`** (ADR
+0126), which the pilot needed before it had `js::encode_uri_component`,
+and **`Result::as_ref`**, for which the form used `.ok()`.
+
 Worked around here, for M3.4:
 
-- **Iterating `str::bytes()`** isn't supported; the pilot doesn't need it
-  now that it has `js::encode_uri_component`.
-- **`Result::as_ref`** isn't supported: the form uses `.ok()`.
 - **The bindings are a path into this repository** (`../../../react`) until
   the resources are published (M4); an app outside it would depend on its
   installed `@rust-js/resources/react`.

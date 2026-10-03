@@ -31,6 +31,7 @@ methods, and Scala.js's collections are Scala's own.
 | `.rev()`, `.skip(n)`, `.take(n)` | `.toReversed()`, `.slice(n)`, `.slice(0, n)` |
 | `.fold(init, f)`, `.sum()` | `.reduce(f, init)`, `.reduce((a, b) => a + b, 0)`, wrapped (ADR 0011) |
 | `.count()`, `.last()` | `.length`, `.at(-1)` |
+| `.len()` of an `ExactSizeIterator` | `.length`, or `it.items.length - it.at` of one stepped through (ADR 0055): what it has left. It takes no item, so runs no closure: one of a chain whose closures do what can be seen, and a `Peekable`'s, are errors. |
 | `.position(p)`, `.max()`, `.min()` | `$position`, `$max`, `$min`: options (ADR 0030) |
 | `.collect::<Vec<_>>()`, `.collect::<String>()` | a new array (an adapter's result already is one; otherwise `.slice()`), `.join("")` |
 | `.collect::<Result<Vec<_>, _>>()`, `.collect::<Option<Vec<_>>>()` | `$collectResults(items)`, `$collectOptions(items)`: the first `Err` or `None`, where it stops, or the values. A chain whose stages do what can be seen runs lazily up to it (ADR 0139). Into a `Result` or an `Option` of anything but an array is an error. (Amended: it was the array, unwrapped.) |

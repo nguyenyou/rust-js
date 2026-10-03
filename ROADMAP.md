@@ -183,7 +183,7 @@ pilot. No delivery dates are assigned yet.
   binding as a value and a package's component as a JSX tag are fixed, and
   options objects (`RequestInit`, listener options) and the JS language's
   globals are the `webapi` and `js` crates' ([ADR 0102](docs/decisions/0102-js-and-webapi.md));
-  `str::bytes()` iteration and `Result::as_ref` are worked around there. Demonstrate error
+  `str::bytes()` iteration ([ADR 0126](docs/decisions/0126-byte-strings.md)) and `Result::as_ref`, worked around there, are fixed. Demonstrate error
   recovery, Fast Refresh, source-level debugging, and a deployed production
   bundle. Record any remaining limitations in the supported contract.
 
@@ -320,16 +320,16 @@ tooling while preserving rust-js's own readable-output goals.
   cases found and fixed two miscompilations (nested element writes, repeated
   index effects in compound assignment). rustc's own `run-pass` UI tests run
   the same way (`bun run test:rustc`, [ADR 0089](docs/decisions/0089-rustc-tests.md)):
-  1,898 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
+  1,899 of 2,206 in scope pass at the pinned stable release, 1.98.1, every
   other one is a clear rejection, none a crash or a wrong answer, and the
   [known failures](test/rustc-known-failures.txt) only shrink. A test of a
   feature stable Rust doesn't have is out of scope, as no program of
   rust-js's can use one (`7962214`). Programs written as a person would
   probe what the rustc suite doesn't: the first, an interpreter of arithmetic
   (the [`calculator`](test/corpus/calculator.rs) case), found `collect()`
-  into a `Result` returning the array of `Result`s. The 308 rejections, by kind: values of
+  into a `Result` returning the array of `Result`s. The 307 rejections, by kind: values of
   a type rust-js doesn't support (95; raw pointers the most common),
-  std calls (71; intrinsics the most),
+  std calls (70; intrinsics the most),
   expressions (13), constants of a type (17), statics of a type (15),
   and user implementations of a std trait (6: `Hash` and `Hasher`,
   `fmt::Write`, `Future` and `Wake`). A user `fmt::Write` stays refused:

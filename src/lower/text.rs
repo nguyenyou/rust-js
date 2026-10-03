@@ -29,7 +29,7 @@ pub(super) enum TextOp {
     /// `c.to_uppercase()`: its `char`s, as JS's own mapping gives them (`ß` is `SS`).
     CharCase(bool),
     Lines,
-    /// `s.as_bytes()`: its UTF-8 bytes, a copy, as nothing writes through it (ADR 0126).
+    /// `s.as_bytes()` and `s.bytes()`: its UTF-8 bytes, a copy, as nothing writes through it (ADR 0126).
     Bytes,
     /// `s.split(|c| ..)` and `s.contains(|c| ..)`: a closure as the pattern.
     SplitBy,

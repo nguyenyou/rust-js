@@ -458,6 +458,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Std::Heap(op) = known {
             return self.heap_call(op, args, span, out);
         }
+        if known == Std::IterLen {
+            return self.iter_len(args[0], span, out);
+        }
         if known == Std::DequeRemove {
             let [items, at]: [Expr; 2] = self.operands(args, out)?.try_into().ok().expect("a deque and an index");
             self.runtime.insert(Helper::RemoveOpt);
@@ -644,6 +647,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::Number(_)
             | Std::FromElem
             | Std::Heap(_)
+            | Std::IterLen
             | Std::DequeRemove
             | Std::Step(_)
             | Std::ToJson(_)

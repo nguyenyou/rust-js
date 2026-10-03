@@ -113,6 +113,8 @@ pub(super) enum Std {
     VecMacro,
     Push,
     Len,
+    /// `it.len()` of an `ExactSizeIterator`: how many items it has left.
+    IterLen,
     Clear,
     Retain,
     /// `panic!("..")`, `assert!(..)`: `throw new Error(..)`.
@@ -668,6 +670,14 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 "collect" => Std::Collect,
                 _ => return None,
             });
+        }
+        // An iterator's `len()` is its `count()`, without taking its items.
+        if tcx.def_path_str(trait_) == "std::iter::ExactSizeIterator"
+            && tcx.item_name(def_id).as_str() == "len"
+            && self.range_kind(ty.peel_refs()).is_none()
+            && self.is_array_iter(ty.peel_refs())
+        {
+            return Some(Std::IterLen);
         }
         if tcx.is_diagnostic_item(sym::IntoIterator, trait_)
             && tcx.item_name(def_id).as_str() == "into_iter"
@@ -1562,6 +1572,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 || [
                     "std::slice::Iter",
                     "std::vec::IntoIter",
+                    "std::str::Bytes",
                     "std::str::Chars",
                     "std::str::CharIndices",
                     "std::str::SplitWhitespace",

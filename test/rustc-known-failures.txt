@@ -149,7 +149,6 @@ for-loop-while/for-loop-has-unit-body.rs	error: rust-js does not support calling
 for-loop-while/foreach-external-iterators-hashmap-break-restart.rs	error: rust-js does not support calling `std::iter::Iterator::by_ref` yet
 for-loop-while/issue-69841.rs	error: rust-js does not support calling `std::hint::unreachable_unchecked` yet
 for-loop-while/label_break_value.rs	error: rust-js does not support labeled blocks yet
-for-loop-while/linear-for-loop.rs	error: rust-js does not support iterating over `std::str::Bytes<'_>` yet
 for-loop-while/loop-diverges.rs	error: rust-js does not support values of type `!` yet
 for-loop-while/loop-no-reinit-needed-post-bot.rs	error: rust-js does not support values of type `!` yet
 foreign/foreign-fn-linkname.rs	error: rust-js does not support calling `std::ffi::CString::new` yet
@@ -168,7 +167,7 @@ issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_
 issues/issue-42148.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
 issues/issue-4541.rs	error: rust-js does not support calling `std::env::args` yet
 issues/issue-4542.rs	error: rust-js does not support iterating over `std::env::Args` yet
-iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support calling `core::str::<impl str>::bytes` yet
+iterators/bytes-iterator-clone-12677.rs	error: rust-js does not support cloning `std::str::Bytes<'_>` yet
 iterators/into-iter-on-boxed-slices-lint.rs	error: rust-js does not support calling `std::vec::Vec::<T, A>::into_boxed_slice` yet
 iterators/iter-map-fold-type-length.rs	error: rust-js does not support `&mut` to a `I` yet
 layout/aggregate-lang/struct-offsets.rs	error: rust-js does not support values of type `u128` yet

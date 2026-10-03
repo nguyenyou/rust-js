@@ -1031,6 +1031,26 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }))
     }
 
+    /// `it.len()`: the items `it` has left, without taking them. Rust runs
+    /// none of its closures, so a chain whose closures do what can be seen
+    /// isn't counted; one stepped through is a `$iter`, its items after `at`.
+    pub(super) fn iter_len(&mut self, receiver: ExprId, span: Span, out: &mut Vec<Stmt>) -> R<Expr> {
+        self.mark_lazy_chain(receiver, true);
+        if self.is_lazy_value(receiver) {
+            return Err(self.unsupported(span, "`len()` of an iterator whose closures do what can be seen"));
+        }
+        if self.is_stepping(receiver) {
+            if self.is_peekable(self.thir[receiver].ty.peel_refs()) {
+                return Err(self.unsupported(span, "`len()` of a `Peekable`"));
+            }
+            let it = self.expr(receiver, out)?;
+            let items = Expr::member(Expr::member(it.clone(), "items"), "length");
+            return Ok(Expr::bin(Op::Sub, items, Expr::member(it, "at")));
+        }
+        let items = self.expr(receiver, out)?;
+        Ok(Expr::member(items, "length"))
+    }
+
     /// Does `e` name one that knows where it is: a `Peekable`, or a local
     /// `next()` steps through?
     pub(super) fn is_stepping(&self, e: ExprId) -> bool {

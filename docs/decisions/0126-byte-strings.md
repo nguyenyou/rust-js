@@ -16,6 +16,7 @@ JS string, of UTF-16 units, not of the UTF-8 bytes Rust's is (ADR 0063).
 | `b"GET"` | `[71, 69, 84]` |
 | `b"a\xff"` | `[97, 255]`: every byte, not only ASCII |
 | `s.as_bytes()` | `Array.from(new TextEncoder().encode(s))` |
+| `s.bytes()` | the same array, an iterator as any array is (ADR 0036) |
 | `[a, b].as_slice()` of an array | the array |
 
 - **A byte string is its bytes**, written out, as an array of `u8`s is.
@@ -34,5 +35,6 @@ JS string, of UTF-16 units, not of the UTF-8 bytes Rust's is (ADR 0063).
 ## Consequences
 
 - Byte strings and `as_bytes()` compile, compared with native Rust by the
-  `byte_strings` corpus case.
+  `byte_strings` corpus case, and `bytes()`, by `str_bytes`. (Amended:
+  `bytes()` was an error, which the pilot worked around.)
 - A C string, `c"..."`, and `str::from_utf8` are still errors.
