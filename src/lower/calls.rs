@@ -36,6 +36,18 @@ enum Callee<'tcx> {
     Dictionary(DefId, ty::GenericArgsRef<'tcx>, Expr),
 }
 
+/// A call being lowered: what's called, which function that is, its
+/// arguments, and whether its value is used.
+#[derive(Clone, Copy)]
+struct Call<'c, 'tcx> {
+    fun: ExprId,
+    def_id: DefId,
+    generic_args: ty::GenericArgsRef<'tcx>,
+    args: &'c [ExprId],
+    discarded: bool,
+    span: Span,
+}
+
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Which std function `fun` is, if rust-js knows what it means in JS.
     pub(super) fn std_fn(&self, fun: ExprId) -> Option<Std> {
@@ -76,8 +88,42 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (def_id, generic_args) = self
             .resolve_into(def_id, generic_args)
             .unwrap_or((def_id, generic_args));
+        let call = Call {
+            fun,
+            def_id,
+            generic_args,
+            args,
+            discarded,
+            span,
+        };
+        if let Some(value) = self.special_call(call, fun_span, out)? {
+            return Ok(value);
+        }
+        let Some(known) = self.std_fn(fun) else {
+            let path = self.tcx.def_path_str(def_id);
+            // A library's, that its manifest doesn't list (ADR 0100).
+            if let Some(why) = self.krate.foreign.unlisted(def_id) {
+                return Err(self.tcx.dcx().span_err(self.thir[fun].span, why));
+            }
+            return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
+        };
+        self.std_call(known, call, out)
+    }
+
+    /// A call of what isn't one of std's functions: the crate's own, a
+    /// binding's (ADR 0021), a closure's, a trait method's, and what rust-js
+    /// writes its own way. `None` if it's std's.
+    fn special_call(&mut self, call: Call<'_, 'tcx>, fun_span: js::Span, out: &mut Vec<Stmt>) -> R<Option<Expr>> {
+        let Call {
+            fun,
+            def_id,
+            generic_args,
+            args,
+            discarded,
+            span,
+        } = call;
         if let Some(callee) = self.boxed_callee(def_id, generic_args, args, span)? {
-            return self.call_with_boxes(callee, args, discarded, span, out);
+            return self.call_with_boxes(callee, args, discarded, span, out).map(Some);
         }
         // `x == &mut 1` or `p < q` of `&mut`s to values JS can't change in
         // place: of what they point at, whatever each `&mut` is (ADR 0099).
@@ -98,7 +144,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .map(|&a| self.pointee_value(a, span, out))
                 .collect::<R<Vec<_>>>()?;
             if let Some(compared) = self.trait_call(def_id, pointees, values.clone(), span, out)? {
-                return Ok(compared);
+                return Ok(Some(compared));
             }
             // `p < q` of numbers: the operator, as of `&i32`s.
             if let Some(Std::Operator(op)) = self.std_fn(fun)
@@ -106,15 +152,15 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     <[Expr; 2]>::try_from(values).map_err(|_| self.unsupported(span, "comparing `&mut`s"))?
             {
                 let ty = pointees.types().next().expect("a comparison has a type");
-                return self.binary(op, left, right, None, ty, span);
+                return self.binary(op, left, right, None, ty, span).map(Some);
             }
             return Err(self.unsupported(span, "comparing `&mut`s"));
         }
         if let Some(written) = self.write_call(def_id, generic_args, args, span, out)? {
-            return Ok(written);
+            return Ok(Some(written));
         }
         if let Some(written) = self.debug_builder(def_id, args, span, out)? {
-            return Ok(written);
+            return Ok(Some(written));
         }
         if self.is_rust_fn(def_id) && self.tcx.trait_of_assoc(def_id).is_none() {
             let callee = self.fn_ref(def_id);
@@ -137,7 +183,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             let mut args = values;
             args.extend(self.evidence_args(def_id, generic_args, span)?);
-            return Ok(Expr::call(callee.or_at(fun_span), args));
+            return Ok(Some(Expr::call(callee.or_at(fun_span), args)));
         }
         if is_binding(self.tcx, def_id) {
             // An `#[eii]` function is declared in an `extern` block too, but
@@ -146,9 +192,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return Err(self.unsupported(span, "externally implementable items, `#[eii]`,"));
             }
             match js_form(self.tcx, def_id) {
-                JsForm::Jsx(tag) => return self.jsx(&tag, args, span, out),
-                JsForm::Prop(name) => return self.jsx_prop(name.as_deref(), args, span, out),
-                JsForm::Object(keys) => return self.object_binding(&keys, args, span, out),
+                JsForm::Jsx(tag) => return self.jsx(&tag, args, span, out).map(Some),
+                JsForm::Prop(name) => return self.jsx_prop(name.as_deref(), args, span, out).map(Some),
+                JsForm::Object(keys) => return self.object_binding(&keys, args, span, out).map(Some),
                 _ => {}
             }
             let mut values = self.operands(args, out)?;
@@ -187,7 +233,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     return Err(self.unsupported(self.thir[fun].span, &what));
                 }
             };
-            return Ok(self.catching(def_id, value));
+            return Ok(Some(self.catching(def_id, value)));
         }
         // Calling a closure, `f(a, b)`, is `Fn::call(&f, (a, b))`: in JS, `f(a, b)`.
         if let Some(fn_trait) = self.tcx.trait_of_assoc(def_id)
@@ -207,7 +253,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             list.extend(fields.iter().copied());
             let mut values = self.operands(&list, out)?;
             let callee = values.remove(0);
-            return Ok(Expr::call(callee, values));
+            return Ok(Some(Expr::call(callee, values)));
         }
         if self
             .tcx
@@ -222,7 +268,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             let values = self.operands(args, &mut pending)?;
             if let Some(call) = self.trait_call(def_id, generic_args, values, span, &mut pending)? {
                 out.extend(pending);
-                return Ok(call);
+                return Ok(Some(call));
             }
         }
         // A `fmt::Result` is nothing in JS (ADR 0054), without `Result`'s methods.
@@ -240,7 +286,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .writing
                 .alternate
                 .clone()
-                .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"));
+                .ok_or_else(|| self.unsupported(span, "`alternate()` of a `Formatter` here"))
+                .map(Some);
         }
         // `cmp::max(a, b)` of what isn't a number: `Ord::max(a, b)`'s (ADR 0136).
         if self.std_fn(fun).is_none()
@@ -260,17 +307,22 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .expect("`Ord` has `max` and `min`");
             let values = self.operands(args, out)?;
             if let Some(call) = self.trait_call(method, generic_args, values, span, out)? {
-                return Ok(call);
+                return Ok(Some(call));
             }
         }
-        let Some(known) = self.std_fn(fun) else {
-            let path = self.tcx.def_path_str(def_id);
-            // A library's, that its manifest doesn't list (ADR 0100).
-            if let Some(why) = self.krate.foreign.unlisted(def_id) {
-                return Err(self.tcx.dcx().span_err(self.thir[fun].span, why));
-            }
-            return Err(self.unsupported(self.thir[fun].span, &format!("calling `{path}`")));
-        };
+        Ok(None)
+    }
+
+    /// A call of one of std's functions rust-js knows (ADR 0023), `known`.
+    fn std_call(&mut self, known: Std, call: Call<'_, 'tcx>, out: &mut Vec<Stmt>) -> R<Expr> {
+        let Call {
+            fun,
+            def_id,
+            generic_args,
+            args,
+            discarded,
+            span,
+        } = call;
         // One that takes a value with a destructor, or changes a place that
         // holds one, must keep or give back what it takes: these do. Another
         // might drop it, which JS wouldn't (ADR 0098). A value whose drops
