@@ -2,12 +2,16 @@
 //! template decoded, and the values it shows written into a JS template
 //! literal, in Rust's order (ADRs 0034, 0058, 0066).
 
+use super::calls::{Call, without_newline};
 use super::display::Pretty;
 use super::format_spec::Spec;
 use super::{FnCx, R, Std};
 use crate::js;
+use crate::js::StmtKind;
 use crate::js::{Expr, Op, Stmt};
+use crate::runtime::Helper;
 use rustc_ast::LitKind;
+use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
@@ -361,4 +365,63 @@ pub(super) fn decode_template(template: &[u8]) -> Option<Vec<Piece>> {
         }
     }
     Some(pieces)
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// What `print!`, `panic!` and `format_args!` hand their values to (ADRs 0026, 0034): `None` if `known` is another.
+    pub(super) fn print_call(
+        &mut self,
+        known: Std,
+        call: Call<'_, 'tcx>,
+        values: &mut std::vec::IntoIter<Expr>,
+        out: &mut Vec<Stmt>,
+    ) -> R<Option<Expr>> {
+        let Call { generic_args, span, .. } = call;
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        let js_span = self.js_span(span);
+        Ok(Some(match known {
+            Std::Panic | Std::PanicFmt => {
+                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
+                Expr::undefined()
+            }
+            // A `&str` or a `String` is the panic's message, as Rust's hook
+            // shows it; another payload, `panic!(5)`, has none.
+            Std::BeginPanic => {
+                let payload = generic_args.types().next().expect("`begin_panic` has a type argument");
+                let text = matches!(payload.kind(), ty::Ref(_, inner, _) if inner.is_str())
+                    || self.is_lang_adt(payload, LangItem::String);
+                if !text {
+                    return Err(self.unsupported(span, "a panic whose payload isn't text"));
+                }
+                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
+                Expr::undefined()
+            }
+            // A whole line is `console.log`'s, which ends it; text that may
+            // not end one is written as it is (ADR 0087).
+            Std::Print { error } => match without_newline(arg()) {
+                Ok(line) => Expr::call(
+                    Expr::member(Expr::var("console"), if error { "error" } else { "log" }),
+                    vec![line],
+                ),
+                Err(text) => {
+                    self.runtime.insert(Helper::Print);
+                    Expr::call(Expr::var(if error { "$eprint" } else { "$print" }), vec![text])
+                }
+            },
+            Std::FmtStr => arg(),
+            Std::FmtDisplay => {
+                let ty = generic_args.types().next().expect("`new_display` has a type argument");
+                self.display_string(arg(), ty, span)?
+            }
+            Std::FmtDebug => {
+                let ty = generic_args.types().next().expect("`new_debug` has a type argument");
+                self.debug_string(arg(), ty, span)?
+            }
+            // Only in a `format_args!` it recognizes whole (ADR 0058).
+            Std::FmtRadix(_) | Std::FmtExp(_) | Std::FmtUsize => {
+                return Err(self.unsupported(span, "`{:x}` and the like here"));
+            }
+            _ => return Ok(None),
+        }))
+    }
 }

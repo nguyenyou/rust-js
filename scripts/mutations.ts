@@ -132,7 +132,7 @@ export const mutations: Mutation[] = [
   {
     name: "begin-panic-payload",
     breaks: "`panic!(5)` before edition 2021 throws a message Rust never shows",
-    file: "src/lower/calls.rs",
+    file: "src/lower/format_args.rs",
     find: "                if !text {",
     replace: "                if false && !text {",
     tests: ["test/corpus.test.ts", "-t", "begin_panic_value"],
@@ -220,7 +220,7 @@ export const mutations: Mutation[] = [
   {
     name: "atomic-fetch-new-value",
     breaks: "an atomic's `fetch_add` and the like give the new value, not the old",
-    file: "src/lower/calls.rs",
+    file: "src/lower/cells.rs",
     find: "                out.push(StmtKind::Assign(slot, next).at(js_span));\n                previous\n",
     replace: "                out.push(StmtKind::Assign(slot.clone(), next).at(js_span));\n                slot\n",
     tests: ["test/corpus.test.ts", "-t", "atomics"],
@@ -1879,7 +1879,7 @@ export const mutations: Mutation[] = [
   {
     name: "repeat-uncloned",
     breaks: "`repeat(vec![0])` gives the one `Vec` each time, where Rust clones it",
-    file: "src/lower/calls.rs",
+    file: "src/lower/iterators.rs",
     find: "                if self.needs_clone(item) {\n                    list.push(self.clone_fn(\"value\", item, span)?);",
     replace: "                if false && self.needs_clone(item) {\n                    list.push(self.clone_fn(\"value\", item, span)?);",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],
@@ -1887,7 +1887,7 @@ export const mutations: Mutation[] = [
   {
     name: "successors-unboxed",
     breaks: "a generic `successors` gives its boxed `Some`s, not what's in them",
-    file: "src/lower/calls.rs",
+    file: "src/lower/iterators.rs",
     find: "                let boxed = self.boxed_payload(item);\n                if self.can_be_nullish(item) && !boxed {",
     replace: "                let boxed = self.boxed_payload(item);\n                let boxed = boxed && false;\n                if self.can_be_nullish(item) && !boxed {",
     tests: ["test/corpus.test.ts","-t","iterator_sources"],

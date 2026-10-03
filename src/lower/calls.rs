@@ -1,7 +1,7 @@
 //! Calls to local functions, JavaScript bindings, closures and standard operations.
 
 use super::bindings::{self, JsForm, is_binding, is_method, js_form, js_import};
-use super::combinators::{IterSource, StepOp};
+use super::combinators::StepOp;
 use super::drops::Drops;
 use super::numbers::NumOp;
 use super::recognition::{Catching, Std, StreamOp};
@@ -9,7 +9,7 @@ use super::representation::Num;
 use super::text::TextOp;
 use super::{FnCx, R, camel_case, global};
 use crate::js;
-use crate::js::{Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
+use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{LangItem, find_attr};
@@ -39,13 +39,13 @@ enum Callee<'tcx> {
 /// A call being lowered: what's called, which function that is, its
 /// arguments, and whether its value is used.
 #[derive(Clone, Copy)]
-struct Call<'c, 'tcx> {
-    fun: ExprId,
-    def_id: DefId,
-    generic_args: ty::GenericArgsRef<'tcx>,
-    args: &'c [ExprId],
-    discarded: bool,
-    span: Span,
+pub(super) struct Call<'c, 'tcx> {
+    pub(super) fun: ExprId,
+    pub(super) def_id: DefId,
+    pub(super) generic_args: ty::GenericArgsRef<'tcx>,
+    pub(super) args: &'c [ExprId],
+    pub(super) discarded: bool,
+    pub(super) span: Span,
 }
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
@@ -614,8 +614,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return self.swap_or_replace(known, args, discarded, span, out);
         }
         let mut values = self.operands(args, out)?.into_iter();
+        if let Some(js) = self.vec_call(known, call, &mut values, boxed, out)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.option_call(known, call, &mut values, boxed, out)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.cell_call(known, call, &mut values, out)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.numeric_call(known, call, &mut values, out)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.iter_source_call(known, call, &mut values)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.string_call(known, call, &mut values)? {
+            return Ok(js);
+        }
+        if let Some(js) = self.print_call(known, call, &mut values, out)? {
+            return Ok(js);
+        }
         let mut arg = || values.next().expect("rustc checked the arguments");
-        let js_span = self.js_span(span);
         Ok(match known {
             Std::Swap | Std::Replace | Std::OptionTake | Std::OptionReplace | Std::MemTake => {
                 unreachable!("lowered from their places, above")
@@ -624,155 +644,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // its counting, so a clone is the same object.
             Std::Same => arg(),
             Std::Pointee => self.through_refs(arg(), self.thir[args[0]].ty).0,
-            Std::ToBig => Expr::call(Expr::var("BigInt"), vec![arg()]),
-            Std::TryFromInt { into } => {
-                let target = if into {
-                    generic_args.type_at(1)
-                } else {
-                    generic_args.type_at(0)
-                };
-                let num = self.num(target, span)?;
-                let (lo, hi) = num.range();
-                self.runtime.insert(Helper::TryFromInt);
-                Expr::call(Expr::var("$tryFromInt"), vec![arg(), num.literal(lo), num.literal(hi)])
-            }
-            // A `Cell` or `RefCell` is `{ value }`, so everyone sharing it sees a change.
-            Std::CellNew => Expr::object(vec![Prop::Field("value".into(), arg())]),
-            Std::CellGet => self.copy_if_needed(Expr::member(arg(), "value"), generic_args.type_at(0)),
-            Std::CellSet => {
-                let (cell, value) = (arg(), arg());
-                out.push(StmtKind::Assign(Expr::member(cell, "value"), value).at(js_span));
-                Expr::undefined()
-            }
-            // A `Ref` or `RefMut` guard is what it guards: the object itself.
-            Std::Borrow => Expr::member(arg(), "value"),
-            // `mem::drop(x)` is `x`'s destructor, run now (ADR 0098).
-            Std::Drop => {
-                let ty = self.thir[args[0]].ty;
-                let value = arg();
-                let value = self.droppable(value, ty, out);
-                self.drop_value(value, ty, span, out)?;
-                Expr::undefined()
-            }
-            Std::Forget => {
-                let value = arg();
-                if value.has_effects() {
-                    out.push(StmtKind::Expr(value).at(js_span));
-                }
-                Expr::undefined()
-            }
-            // An atomic's operation (ADR 0096) is the plain one on its `{ value }`:
-            // JS runs a module on one thread, so every ordering holds. Each
-            // ordering is evaluated, and not used.
-            Std::AtomicLoad
-            | Std::AtomicStore
-            | Std::AtomicSwap
-            | Std::AtomicFetch(_)
-            | Std::AtomicFetchMax(_)
-            | Std::AtomicCompareExchange => {
-                let ty::Adt(_, atomic) = self.thir[args[0]].ty.peel_refs().kind() else {
-                    return Err(self.unsupported(span, "this atomic"));
-                };
-                let item = atomic.type_at(0);
-                let operands = match known {
-                    Std::AtomicLoad => 0,
-                    Std::AtomicCompareExchange => 2,
-                    _ => 1,
-                };
-                let cell = arg();
-                let cell = if operands > 0 && !cell.reads_same() {
-                    self.spill("atomic", cell, out)
-                } else {
-                    cell
-                };
-                let given: Vec<Expr> = (0..operands)
-                    .map(|_| arg())
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .map(|v| {
-                        if v.reads_same() {
-                            v
-                        } else {
-                            self.spill("operand", v, out)
-                        }
-                    })
-                    .collect();
-                for ordering in values.by_ref() {
-                    if ordering.has_effects() {
-                        out.push(StmtKind::Expr(ordering).at(js_span));
-                    }
-                }
-                let slot = Expr::member(cell, "value");
-                if known == Std::AtomicLoad {
-                    return Ok(slot);
-                }
-                let [v, rest @ ..] = &given[..] else {
-                    unreachable!("an atomic's operand");
-                };
-                if known == Std::AtomicStore {
-                    out.push(StmtKind::Assign(slot, v.clone()).at(js_span));
-                    return Ok(Expr::undefined());
-                }
-                let previous = self.spill("previous", slot.clone(), out);
-                let next = match known {
-                    Std::AtomicSwap => v.clone(),
-                    Std::AtomicFetch(op) => self.binary(op, previous.clone(), v.clone(), None, item, span)?,
-                    Std::AtomicFetchMax(max) => {
-                        let op = if max { Op::Gt } else { Op::Lt };
-                        Expr::cond(Expr::bin(op, previous.clone(), v.clone()), previous.clone(), v.clone())
-                    }
-                    _ => {
-                        let done = self.spill("exchanged", Expr::bin(Op::Eq, previous.clone(), v.clone()), out);
-                        out.push(
-                            StmtKind::If(
-                                done.clone(),
-                                vec![StmtKind::Assign(slot, rest[0].clone()).at(js_span)],
-                                None,
-                            )
-                            .at(js_span),
-                        );
-                        let result = |tag: &str| {
-                            Expr::object(vec![
-                                Prop::Field("TAG".into(), Expr::str(tag)),
-                                Prop::Field("_0".into(), previous.clone()),
-                            ])
-                        };
-                        return Ok(Expr::cond(done, result("Ok"), result("Err")));
-                    }
-                };
-                out.push(StmtKind::Assign(slot, next).at(js_span));
-                previous
-            }
-            Std::Concat => Expr::bin(Op::Add, arg(), arg()),
-            Std::Method("pop") if boxed => {
-                self.runtime.insert(Helper::Pop);
-                Expr::call(Expr::var("$pop"), vec![arg()])
-            }
-            Std::Method(name) => {
-                let this = arg();
-                let rest: Vec<Expr> = (1..args.len()).map(|_| arg()).collect();
-                // A pattern that may be empty, which Rust matches at each
-                // char's boundary and JS between UTF-16 units (ADR 0063).
-                let may_be_empty = matches!(name, "replaceAll" | "split")
-                    && !generic_args.types().next().is_some_and(|p| p.is_char())
-                    && !matches!(&rest[0].kind, js::ExprKind::Str(s) if !s.is_empty());
-                if may_be_empty {
-                    self.runtime.insert(Helper::EmptyPattern);
-                    let helper = if name == "split" { "$split" } else { "$replace" };
-                    return Ok(Expr::call(Expr::var(helper), [vec![this], rest].concat()));
-                }
-                Expr::call(Expr::member(this, name), rest)
-            }
-            Std::StripPrefix | Std::StripSuffix | Std::SplitOnce | Std::RsplitOnce => {
-                let (helper, name) = match known {
-                    Std::StripPrefix => (Helper::StripPrefix, "$stripPrefix"),
-                    Std::StripSuffix => (Helper::StripSuffix, "$stripSuffix"),
-                    Std::SplitOnce => (Helper::SplitOnce, "$splitOnce"),
-                    _ => (Helper::RsplitOnce, "$rsplitOnce"),
-                };
-                self.runtime.insert(helper);
-                Expr::call(Expr::var(name), vec![arg(), arg()])
-            }
             Std::Last
             | Std::Cloned
             | Std::Fuse
@@ -791,403 +662,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::SortByKey => {
                 unreachable!("handled above")
             }
-            Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
-            Std::First if boxed => {
-                let items = arg();
-                self.some_at(items, Expr::int(0))
-            }
-            Std::SliceLast if boxed => {
-                let mut items = arg();
-                if items.has_effects() {
-                    items = self.spill("items", items, out);
-                }
-                let last = Expr::bin(Op::Sub, Expr::member(items.clone(), "length"), Expr::int(1));
-                self.some_at(items, last)
-            }
-            Std::First => Expr::index(arg(), Expr::int(0)),
-            Std::FromDigit => {
-                self.runtime.insert(Helper::FromDigit);
-                Expr::call(Expr::var("$fromDigit"), vec![arg(), arg()])
-            }
-            Std::FromU32 => {
-                self.runtime.insert(Helper::FromU32);
-                Expr::call(Expr::var("$fromU32"), vec![arg()])
-            }
-            Std::SliceGet => {
-                let items = arg();
-                Expr::index(items, arg())
-            }
-            Std::SliceLast => Expr::call(Expr::member(arg(), "at"), vec![Expr::int(-1)]),
-            // A copy, unless it's an array just written: `vec![3, 4].into()`.
-            Std::ToVec => match arg() {
-                items if matches!(items.kind, js::ExprKind::Array(_)) => items,
-                items => Expr::call(Expr::member(items, "slice"), vec![]),
-            },
-            Std::SortBy => {
-                let (v, compare) = (arg(), arg());
-                Expr::call(Expr::member(v, "sort"), vec![compare])
-            }
-            Std::Cmp => {
-                self.runtime.insert(Helper::Cmp);
-                Expr::call(Expr::var("$cmp"), vec![arg(), arg()])
-            }
-            Std::MaxOf(max) => {
-                let num = Num::of(self.thir[args[0]].ty.peel_refs());
-                let callee = if num.is_some_and(Num::float) {
-                    self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
-                    Expr::var(if max { "$f64Max" } else { "$f64Min" })
-                } else if num.is_some_and(Num::big) {
-                    // `Math.max` takes numbers only.
-                    self.runtime.insert(Helper::BigMinMax);
-                    Expr::var(if max { "$bigMax" } else { "$bigMin" })
-                } else {
-                    Expr::member(Expr::var("Math"), if max { "max" } else { "min" })
-                };
-                Expr::call(callee, vec![arg(), arg()])
-            }
-            // An `Ordering` is -1, 0 or 1: `Equal` is the one that's falsy.
-            Std::Operator(op) => {
-                let ty = generic_args
-                    .types()
-                    .next()
-                    .expect("an operator's trait has a type")
-                    .peel_refs();
-                let (l, r) = (arg(), arg());
-                // `a << &n` of an `i64` `n`: its type, the trait's `Rhs`.
-                let r = match generic_args.types().nth(1) {
-                    Some(rhs) => super::numbers::shift_amount_of(op, r, ty, rhs),
-                    None => r,
-                };
-                self.binary(op, l, r, None, ty, span)?
-            }
-            Std::UnaryOperator(op) => {
-                let ty = generic_args
-                    .types()
-                    .next()
-                    .expect("an operator's trait has a type")
-                    .peel_refs();
-                let a = arg();
-                self.unary(op, a, ty, span)?
-            }
-            Std::LocalWith => {
-                let (key, f) = (arg(), arg());
-                apply(f, vec![key])
-            }
-            Std::LocalBorrow => {
-                let (key, f) = (arg(), arg());
-                apply(f, vec![Expr::member(key, "value")])
-            }
-            Std::Then => Expr::bin(Op::Or, arg(), arg()),
-            Std::ThenWith => {
-                let (first, next) = (arg(), arg());
-                // `then_with(|| a.cmp(b))` is `first || $cmp(a, b)`: the closure's body in place.
-                let then = match next.kind {
-                    js::ExprKind::Arrow(ref params, ref body) if params.is_empty() => match body.as_slice() {
-                        [
-                            js::Stmt {
-                                kind: StmtKind::Return(Some(value)),
-                                ..
-                            },
-                        ] => value.clone(),
-                        _ => Expr::call(next.clone(), vec![]),
-                    },
-                    _ => Expr::call(next.clone(), vec![]),
-                };
-                Expr::bin(Op::Or, first, then)
-            }
-            Std::Reverse => Expr::unary(UnaryOp::Neg, arg()),
-            Std::IsOk(ok) => Expr::bin(
-                if ok { Op::Eq } else { Op::Ne },
-                Expr::member(arg(), "TAG"),
-                Expr::str("Ok"),
-            ),
-            Std::UnwrapOk => {
-                let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
-                // An `Ok(x)` just made, as a `to_value` that can't fail is: `x`.
-                if let js::ExprKind::Object(props) = &list[0].kind
-                    && let [Prop::Field(tag, name), Prop::Field(field, value)] = props.as_slice()
-                    && (tag.as_str(), field.as_str()) == ("TAG", "_0")
-                    && matches!(&name.kind, js::ExprKind::Str(s) if s == "Ok")
-                    && list[1..].iter().all(|e| !e.has_effects())
-                {
-                    return Ok(value.clone());
-                }
-                // A parse error is its message (ADR 0063), which `$debug` would
-                // show as a string: its own `Debug`, `ParseIntError { kind: .. }`.
-                if let Some(error) = generic_args.types().nth(1)
-                    && self.is_parse_error(error)
-                {
-                    let e = self.fresh("e");
-                    let shown = self.debug_string(Expr::var(&e), error, span)?;
-                    if list.len() == 1 {
-                        list.push(Expr::undefined());
-                    }
-                    list.push(Expr::arrow(
-                        vec![e.into()],
-                        vec![StmtKind::Return(Some(shown)).at(js::Span::NONE)],
-                    ));
-                }
-                self.runtime.insert(Helper::UnwrapOk);
-                Expr::call(Expr::var("$unwrapOk"), list)
-            }
-            Std::UnwrapErr => {
-                self.runtime.insert(Helper::UnwrapErr);
-                let list = (0..args.len()).map(|_| arg()).collect();
-                Expr::call(Expr::var("$unwrapErr"), list)
-            }
-            // `r.TAG === "Ok" ? r._0 : d`, with `r` computed once, and `d` too,
-            // before the test, as Rust does.
-            Std::ResultOk | Std::ResultOr => {
-                let mut result = arg();
-                if result.has_effects() {
-                    result = self.spill("result", result, out);
-                }
-                let otherwise = match known {
-                    Std::ResultOr => {
-                        let d = arg();
-                        if d.has_effects() {
-                            self.spill("fallback", d, out)
-                        } else {
-                            d
-                        }
-                    }
-                    _ => Expr::undefined(),
-                };
-                let ok = Expr::bin(Op::Eq, Expr::member(result.clone(), "TAG"), Expr::str("Ok"));
-                let value = Expr::member(result, "_0");
-                let value = if boxed { self.some(value) } else { value };
-                Expr::cond(ok, value, otherwise)
-            }
             Std::PushStr | Std::AssignOperator(_) => unreachable!("handled above"),
-            Std::IsSome => Expr::bin(Op::LooseNe, arg(), Expr::null()),
-            Std::IsNone => Expr::bin(Op::LooseEq, arg(), Expr::null()),
-            Std::Unwrap => {
-                self.runtime.insert(Helper::Unwrap);
-                // `expect` has a message too.
-                let list = (0..args.len()).map(|_| arg()).collect();
-                let unwrapped = Expr::call(Expr::var("$unwrap"), list);
-                if self.boxed_payload(generic_args.type_at(0)) {
-                    self.some_value(unwrapped)
-                } else {
-                    unwrapped
-                }
-            }
-            // `??` skips its right side when it isn't needed, and Rust
-            // evaluates it either way: one with effects runs first, in order.
-            Std::UnwrapOr => {
-                let (mut option, mut default) = (arg(), arg());
-                if default.has_effects() {
-                    if option.has_effects() {
-                        option = self.spill("option", option, out);
-                    }
-                    default = self.spill("fallback", default, out);
-                }
-                // Of a generic `T` (ADR 0051): `$someValue(o ?? $some(d))`.
-                if self.boxed_payload(generic_args.type_at(0)) {
-                    let default = self.some(default);
-                    self.some_value(Expr::bin(Op::Coalesce, option, default))
-                } else {
-                    Expr::bin(Op::Coalesce, option, default)
-                }
-            }
-            // `o.map(|x| value)` is `o != null ? value : undefined`, with the
-            // option for `x`, read once: `const h = half(n); h != null ? h + 1 : undefined`.
-            // A function, or a closure of statements, is called with it.
-            Std::OptionMap => {
-                let (option, f) = (arg(), arg());
-                let mapped = generic_args.type_at(1);
-                if self.can_be_nullish(mapped) && !self.boxed_payload(mapped) {
-                    let what = format!("`map` to a `{mapped}`, whose `Some` would be `None` in JS");
-                    return Err(self.unsupported(span, &what));
-                }
-                // `|_| 7` has no parameter left (ADR 0038): `Some(None)`.
-                let param = match &f.kind {
-                    js::ExprKind::Arrow(params, _) if params.len() <= 1 => Some(params.first().cloned()),
-                    _ => None,
-                };
-                let body = match &f.kind {
-                    js::ExprKind::Arrow(_, body) => match body.as_slice() {
-                        [
-                            js::Stmt {
-                                kind: StmtKind::Return(Some(value)),
-                                ..
-                            },
-                        ] => Some(value.clone()),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                let base = match &param {
-                    Some(Some(js::Pattern::Name(name))) => name.clone(),
-                    _ => "option".to_string(),
-                };
-                let option = match option.kind {
-                    js::ExprKind::Var(_) => option,
-                    _ => self.spill(&base, option, out),
-                };
-                // Of a generic `T`, the closure gets what's inside (ADR 0051).
-                let present = Expr::bin(Op::LooseNe, option.clone(), Expr::null());
-                let option = if self.boxed_payload(generic_args.type_at(0)) {
-                    self.some_value(option)
-                } else {
-                    option
-                };
-                let value = param.zip(body).and_then(|(param, body)| {
-                    let with = |name: &str| match &param {
-                        None => None,
-                        Some(js::Pattern::Name(p)) => (p == name).then(|| option.clone()),
-                        Some(js::Pattern::Array(items)) => items
-                            .iter()
-                            .position(|item| item.as_deref() == Some(name))
-                            .map(|i| Expr::index(option.clone(), Expr::int(i as i128))),
-                        Some(js::Pattern::Object(fields)) => fields
-                            .iter()
-                            .find(|(_, var)| var == name)
-                            .map(|(field, _)| Expr::member(option.clone(), field.clone())),
-                    };
-                    body.substitute(&with)
-                });
-                let value = match value {
-                    Some(value) => value,
-                    // Not `((h) => { .. })(h)`: the closure gets a name first.
-                    None if matches!(f.kind, js::ExprKind::Arrow(..)) => {
-                        let f = self.spill("map", f, out);
-                        Expr::call(f, vec![option.clone()])
-                    }
-                    None => Expr::call(f, vec![option.clone()]),
-                };
-                let value = if self.boxed_payload(mapped) {
-                    self.some(value)
-                } else {
-                    value
-                };
-                Expr::cond(present, value, Expr::undefined())
-            }
-            Std::StringNew => Expr::str(""),
-            Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
-            Std::IsEmpty => Expr::bin(Op::Eq, Expr::member(arg(), "length"), Expr::num(0)),
-            Std::VecNew => Expr::array(vec![]),
-            Std::AsciiCase { upper } => {
-                self.runtime.insert(Helper::AsciiCase);
-                let mut list = vec![arg()];
-                if upper {
-                    list.push(Expr::bool(true));
-                }
-                Expr::call(Expr::var("$asciiCase"), list)
-            }
-            Std::AsciiEq => {
-                self.runtime.insert(Helper::AsciiCase);
-                let (a, b) = (arg(), arg());
-                Expr::bin(
-                    Op::Eq,
-                    Expr::call(Expr::var("$asciiCase"), vec![a]),
-                    Expr::call(Expr::var("$asciiCase"), vec![b]),
-                )
-            }
-            Std::Append => {
-                self.runtime.insert(Helper::Append);
-                Expr::call(Expr::var("$append"), vec![arg(), arg()])
-            }
-            Std::OptionIter => {
-                let item = self
-                    .option_of(self.thir[args[0]].ty.peel_refs())
-                    .expect("an `Option` has a `T`");
-                let option = arg();
-                self.option_items(option, item, out)
-            }
-            Std::IterSource(IterSource::Once) => Expr::array(vec![arg()]),
-            Std::IterSource(IterSource::Empty) => Expr::array(vec![]),
-            Std::IterSource(IterSource::Repeat) => {
-                let value = arg();
-                let item = generic_args.type_at(0);
-                let mut list = vec![value];
-                if self.needs_clone(item) {
-                    list.push(self.clone_fn("value", item, span)?);
-                }
-                self.runtime.insert(Helper::Repeating);
-                Expr::call(Expr::var("$repeating"), list)
-            }
-            Std::IterSource(IterSource::RepeatWith) => {
-                self.runtime.insert(Helper::RepeatingWith);
-                Expr::call(Expr::var("$repeatingWith"), vec![arg()])
-            }
-            // Their closures' `Option`s: a generic `Some` is boxed (ADR 0051).
-            Std::IterSource(source @ (IterSource::Successors | IterSource::FromFn)) => {
-                let item = generic_args.type_at(0);
-                let (helper, name, what) = match source {
-                    IterSource::Successors => (Helper::Successors, "$successors", "successors"),
-                    _ => (Helper::FromFn, "$fromFn", "from_fn"),
-                };
-                let boxed = self.boxed_payload(item);
-                if self.can_be_nullish(item) && !boxed {
-                    let what = format!("`{what}` of a `{item}`, whose `Some` would be `None` in JS");
-                    return Err(self.unsupported(span, &what));
-                }
-                let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
-                if boxed {
-                    list.push(Expr::bool(true));
-                }
-                self.runtime.insert(helper);
-                Expr::call(Expr::var(name), list)
-            }
             Std::VecMacro | Std::FmtNew | Std::AssertFailed => unreachable!("handled above"),
-            Std::Panic | Std::PanicFmt => {
-                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
-                Expr::undefined()
-            }
-            // The size rustc works out for the wasm32 target, which rust-js
-            // checks programs for, as a `const` of it has (ADR 0090). A
-            // generic function is one JS function for every type, so a type
-            // parameter's has no one answer.
-            Std::SizeOf | Std::AlignOf | Std::SizeOfVal => {
-                let of = generic_args.types().next().expect("a size's type argument");
-                let bytes = self.layout_bytes(known, of, span)?;
-                // What's measured still runs, if it does anything.
-                if matches!(known, Std::SizeOfVal) {
-                    let measured = arg();
-                    if measured.has_effects() {
-                        out.push(StmtKind::Expr(measured).at(js_span));
-                    }
-                }
-                Expr::int(bytes)
-            }
-            // A `&str` or a `String` is the panic's message, as Rust's hook
-            // shows it; another payload, `panic!(5)`, has none.
-            Std::BeginPanic => {
-                let payload = generic_args.types().next().expect("`begin_panic` has a type argument");
-                let text = matches!(payload.kind(), ty::Ref(_, inner, _) if inner.is_str())
-                    || self.is_lang_adt(payload, LangItem::String);
-                if !text {
-                    return Err(self.unsupported(span, "a panic whose payload isn't text"));
-                }
-                out.push(StmtKind::Throw(Expr::new_(Expr::var("Error"), vec![arg()])).at(js_span));
-                Expr::undefined()
-            }
-            // A whole line is `console.log`'s, which ends it; text that may
-            // not end one is written as it is (ADR 0087).
-            Std::Print { error } => match without_newline(arg()) {
-                Ok(line) => Expr::call(
-                    Expr::member(Expr::var("console"), if error { "error" } else { "log" }),
-                    vec![line],
-                ),
-                Err(text) => {
-                    self.runtime.insert(Helper::Print);
-                    Expr::call(Expr::var(if error { "$eprint" } else { "$print" }), vec![text])
-                }
-            },
-            Std::FmtStr => arg(),
-            Std::FmtDisplay => {
-                let ty = generic_args.types().next().expect("`new_display` has a type argument");
-                self.display_string(arg(), ty, span)?
-            }
-            Std::FmtDebug => {
-                let ty = generic_args.types().next().expect("`new_debug` has a type argument");
-                self.debug_string(arg(), ty, span)?
-            }
-            // Only in a `format_args!` it recognizes whole (ADR 0058).
-            Std::FmtRadix(_) | Std::FmtExp(_) | Std::FmtUsize => {
-                return Err(self.unsupported(span, "`{:x}` and the like here"));
-            }
             Std::Map(_)
             | Std::Range(_)
             | Std::Stream(_)
@@ -1204,46 +680,82 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             | Std::FromJson => {
                 unreachable!("handled above")
             }
-            // `Some(&x)` is `x`, and its clone is `x`'s.
-            Std::OptionCloned => {
-                let item = generic_args.types().next().expect("`Option<T>` has a `T`");
-                let value = arg();
-                let ty = ty::Ty::new_adt(
-                    self.tcx,
-                    self.tcx.adt_def(self.tcx.require_lang_item(LangItem::Option, span)),
-                    self.tcx.mk_args(&[item.into()]),
-                );
-                self.clone_value(value, ty, span, out)?
-            }
-            Std::Push => {
-                let (v, x) = (arg(), arg());
-                Expr::call(Expr::member(v, "push"), vec![x])
-            }
-            // `count()` of a JS iterator (ADR 0055) takes all of it.
-            Std::Len if self.is_lazy_value(args[0]) => {
-                let items = self.iter_source(arg(), self.thir[args[0]].ty, span, out)?;
-                Expr::member(Expr::call(Expr::member(items, "toArray"), vec![]), "length")
-            }
-            // A range's, which is an object, is its items' (ADR 0129).
-            Std::Len if self.range_kind(self.thir[args[0]].ty.peel_refs()).is_some() => {
-                let items = self.iter_source(arg(), self.thir[args[0]].ty.peel_refs(), span, out)?;
-                Expr::member(items, "length")
-            }
-            Std::Len => Expr::member(arg(), "length"),
-            Std::Index => {
-                self.runtime.insert(Helper::Index);
-                Expr::call(Expr::var("$index"), vec![arg(), arg()])
-            }
-            Std::Clear => {
-                out.push(StmtKind::Assign(Expr::member(arg(), "length"), Expr::num(0)).at(js_span));
-                Expr::undefined()
-            }
-            Std::Retain => {
-                self.runtime.insert(Helper::Retain);
-                let (v, keep) = (arg(), arg());
-                Expr::call(Expr::var("$retain"), vec![v, keep])
-            }
-            Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
+            Std::Method(_)
+            | Std::First
+            | Std::SliceLast
+            | Std::SliceGet
+            | Std::ToVec
+            | Std::SortBy
+            | Std::IsEmpty
+            | Std::VecNew
+            | Std::Append
+            | Std::Push
+            | Std::Len
+            | Std::Index
+            | Std::Clear
+            | Std::Retain => unreachable!("lowered by vec_call"),
+            Std::Then
+            | Std::ThenWith
+            | Std::IsOk(_)
+            | Std::UnwrapOk
+            | Std::UnwrapErr
+            | Std::ResultOk
+            | Std::ResultOr
+            | Std::IsSome
+            | Std::IsNone
+            | Std::Unwrap
+            | Std::UnwrapOr
+            | Std::OptionMap
+            | Std::OptionIter
+            | Std::OptionCloned => unreachable!("lowered by option_call"),
+            Std::CellNew
+            | Std::CellGet
+            | Std::CellSet
+            | Std::Borrow
+            | Std::Drop
+            | Std::Forget
+            | Std::AtomicLoad
+            | Std::AtomicStore
+            | Std::AtomicSwap
+            | Std::AtomicFetch(_)
+            | Std::AtomicFetchMax(_)
+            | Std::AtomicCompareExchange
+            | Std::LocalWith
+            | Std::LocalBorrow => unreachable!("lowered by cell_call"),
+            Std::ToBig
+            | Std::TryFromInt { .. }
+            | Std::FromDigit
+            | Std::FromU32
+            | Std::Cmp
+            | Std::MaxOf(_)
+            | Std::Operator(_)
+            | Std::UnaryOperator(_)
+            | Std::Reverse
+            | Std::SizeOf
+            | Std::AlignOf
+            | Std::SizeOfVal => unreachable!("lowered by numeric_call"),
+            Std::IterSource(_) => unreachable!("lowered by iter_source_call"),
+            Std::Concat
+            | Std::StripPrefix
+            | Std::StripSuffix
+            | Std::SplitOnce
+            | Std::RsplitOnce
+            | Std::Chars
+            | Std::StringNew
+            | Std::Trim
+            | Std::AsciiCase { .. }
+            | Std::AsciiEq
+            | Std::ToString => unreachable!("lowered by string_call"),
+            Std::Panic
+            | Std::PanicFmt
+            | Std::BeginPanic
+            | Std::Print { .. }
+            | Std::FmtStr
+            | Std::FmtDisplay
+            | Std::FmtDebug
+            | Std::FmtRadix(_)
+            | Std::FmtExp(_)
+            | Std::FmtUsize => unreachable!("lowered by print_call"),
         })
     }
 
@@ -1755,7 +1267,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// an arrow of one parameter, doing what a call does. `None` for one
     /// that isn't one of these.
     /// The bytes `size_of`, `align_of` or `size_of_val` gives for `of`.
-    fn layout_bytes(&self, known: Std, of: Ty<'tcx>, span: Span) -> R<i128> {
+    pub(super) fn layout_bytes(&self, known: Std, of: Ty<'tcx>, span: Span) -> R<i128> {
         let name = match known {
             Std::SizeOf => "size_of",
             Std::AlignOf => "align_of",
@@ -2072,7 +1584,7 @@ pub(super) fn apply(f: Expr, args: Vec<Expr>) -> Expr {
 
 /// `"a\n"` or `` `a ${x}\n` ``: the line, `"a"`, without the newline
 /// `println!` ends it with. Anything else is given back.
-fn without_newline(text: Expr) -> Result<Expr, Expr> {
+pub(super) fn without_newline(text: Expr) -> Result<Expr, Expr> {
     match &text.kind {
         js::ExprKind::Str(s) if s.ends_with('\n') => Ok(Expr::str(&s[..s.len() - 1])),
         js::ExprKind::Template(texts, values) if texts.last().is_some_and(|last| last.ends_with('\n')) => {

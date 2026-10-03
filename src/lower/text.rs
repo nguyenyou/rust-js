@@ -3,9 +3,12 @@
 //! questions are regular expressions of the Unicode properties Rust uses:
 //! `c.is_whitespace()` is `/^\p{White_Space}$/u.test(c)`.
 
+use super::calls::Call;
 use super::ranges::RangeKind;
+use super::recognition::Std;
 use super::representation::Num;
 use super::{FnCx, R};
+use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
@@ -270,5 +273,73 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut list = vec![items, start];
         list.extend(end);
         Ok(Expr::call(Expr::var(name), list))
+    }
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// A string's method (ADRs 0034, 0063): `None` if `known` is another.
+    pub(super) fn string_call(
+        &mut self,
+        known: Std,
+        call: Call<'_, 'tcx>,
+        values: &mut std::vec::IntoIter<Expr>,
+    ) -> R<Option<Expr>> {
+        let Call {
+            generic_args,
+            args,
+            span,
+            ..
+        } = call;
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        Ok(Some(match known {
+            Std::Concat => Expr::bin(Op::Add, arg(), arg()),
+            Std::Method(name) => {
+                let this = arg();
+                let rest: Vec<Expr> = (1..args.len()).map(|_| arg()).collect();
+                // A pattern that may be empty, which Rust matches at each
+                // char's boundary and JS between UTF-16 units (ADR 0063).
+                let may_be_empty = matches!(name, "replaceAll" | "split")
+                    && !generic_args.types().next().is_some_and(|p| p.is_char())
+                    && !matches!(&rest[0].kind, js::ExprKind::Str(s) if !s.is_empty());
+                if may_be_empty {
+                    self.runtime.insert(Helper::EmptyPattern);
+                    let helper = if name == "split" { "$split" } else { "$replace" };
+                    return Ok(Some(Expr::call(Expr::var(helper), [vec![this], rest].concat())));
+                }
+                Expr::call(Expr::member(this, name), rest)
+            }
+            Std::StripPrefix | Std::StripSuffix | Std::SplitOnce | Std::RsplitOnce => {
+                let (helper, name) = match known {
+                    Std::StripPrefix => (Helper::StripPrefix, "$stripPrefix"),
+                    Std::StripSuffix => (Helper::StripSuffix, "$stripSuffix"),
+                    Std::SplitOnce => (Helper::SplitOnce, "$splitOnce"),
+                    _ => (Helper::RsplitOnce, "$rsplitOnce"),
+                };
+                self.runtime.insert(helper);
+                Expr::call(Expr::var(name), vec![arg(), arg()])
+            }
+            Std::Chars => Expr::call(Expr::member(Expr::var("Array"), "from"), vec![arg()]),
+            Std::StringNew => Expr::str(""),
+            Std::Trim => Expr::call(Expr::member(arg(), "trim"), vec![]),
+            Std::AsciiCase { upper } => {
+                self.runtime.insert(Helper::AsciiCase);
+                let mut list = vec![arg()];
+                if upper {
+                    list.push(Expr::bool(true));
+                }
+                Expr::call(Expr::var("$asciiCase"), list)
+            }
+            Std::AsciiEq => {
+                self.runtime.insert(Helper::AsciiCase);
+                let (a, b) = (arg(), arg());
+                Expr::bin(
+                    Op::Eq,
+                    Expr::call(Expr::var("$asciiCase"), vec![a]),
+                    Expr::call(Expr::var("$asciiCase"), vec![b]),
+                )
+            }
+            Std::ToString => self.display_string(arg(), generic_args.type_at(0), span)?,
+            _ => return Ok(None),
+        }))
     }
 }

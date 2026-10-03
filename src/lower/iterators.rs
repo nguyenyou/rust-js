@@ -2,7 +2,9 @@
 //! what ends it (ADRs 0036, 0055, 0128), lazy where Rust's order can be seen
 //! (ADR 0139), and what a chain that owns its items drops (ADR 0098).
 
+use super::calls::Call;
 use super::combinators::IterComb;
+use super::combinators::IterSource;
 use super::representation::Num;
 use super::{FnCx, R, Std};
 use crate::js;
@@ -764,5 +766,61 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             _ => unreachable!("not an iterator's method"),
         })
+    }
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// One of std's iterator sources (ADR 0128): `None` if `known` is another.
+    pub(super) fn iter_source_call(
+        &mut self,
+        known: Std,
+        call: Call<'_, 'tcx>,
+        values: &mut std::vec::IntoIter<Expr>,
+    ) -> R<Option<Expr>> {
+        let Call {
+            generic_args,
+            args,
+            span,
+            ..
+        } = call;
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        Ok(Some(match known {
+            Std::IterSource(IterSource::Once) => Expr::array(vec![arg()]),
+            Std::IterSource(IterSource::Empty) => Expr::array(vec![]),
+            Std::IterSource(IterSource::Repeat) => {
+                let value = arg();
+                let item = generic_args.type_at(0);
+                let mut list = vec![value];
+                if self.needs_clone(item) {
+                    list.push(self.clone_fn("value", item, span)?);
+                }
+                self.runtime.insert(Helper::Repeating);
+                Expr::call(Expr::var("$repeating"), list)
+            }
+            Std::IterSource(IterSource::RepeatWith) => {
+                self.runtime.insert(Helper::RepeatingWith);
+                Expr::call(Expr::var("$repeatingWith"), vec![arg()])
+            }
+            // Their closures' `Option`s: a generic `Some` is boxed (ADR 0051).
+            Std::IterSource(source @ (IterSource::Successors | IterSource::FromFn)) => {
+                let item = generic_args.type_at(0);
+                let (helper, name, what) = match source {
+                    IterSource::Successors => (Helper::Successors, "$successors", "successors"),
+                    _ => (Helper::FromFn, "$fromFn", "from_fn"),
+                };
+                let boxed = self.boxed_payload(item);
+                if self.can_be_nullish(item) && !boxed {
+                    let what = format!("`{what}` of a `{item}`, whose `Some` would be `None` in JS");
+                    return Err(self.unsupported(span, &what));
+                }
+                let mut list: Vec<Expr> = (0..args.len()).map(|_| arg()).collect();
+                if boxed {
+                    list.push(Expr::bool(true));
+                }
+                self.runtime.insert(helper);
+                Expr::call(Expr::var(name), list)
+            }
+            _ => return Ok(None),
+        }))
     }
 }

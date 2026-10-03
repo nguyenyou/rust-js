@@ -4,9 +4,12 @@
 //! Rust's answer differs from JS's (`round` of a half, `pow` past 2^53),
 //! a helper gives Rust's.
 
+use super::calls::Call;
 use super::discriminants;
+use super::recognition::Std;
 use super::representation::{Num, is_fieldless_enum};
 use super::{FnCx, R};
+use crate::js::StmtKind;
 use crate::js::{self, Expr, Op, Prop, Stmt, UnaryOp};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
@@ -678,5 +681,107 @@ pub(super) fn assign_op(op: AssignOp) -> BinOp {
         AssignOp::BitOrAssign => BinOp::BitOr,
         AssignOp::ShlAssign => BinOp::Shl,
         AssignOp::ShrAssign => BinOp::Shr,
+    }
+}
+
+impl<'a, 'tcx> FnCx<'a, 'tcx> {
+    /// A number's conversion, comparison, operator or size (ADRs 0011, 0057): `None` if `known` is another.
+    pub(super) fn numeric_call(
+        &mut self,
+        known: Std,
+        call: Call<'_, 'tcx>,
+        values: &mut std::vec::IntoIter<Expr>,
+        out: &mut Vec<Stmt>,
+    ) -> R<Option<Expr>> {
+        let Call {
+            generic_args,
+            args,
+            span,
+            ..
+        } = call;
+        let mut arg = || values.next().expect("rustc checked the arguments");
+        let js_span = self.js_span(span);
+        Ok(Some(match known {
+            Std::ToBig => Expr::call(Expr::var("BigInt"), vec![arg()]),
+            Std::TryFromInt { into } => {
+                let target = if into {
+                    generic_args.type_at(1)
+                } else {
+                    generic_args.type_at(0)
+                };
+                let num = self.num(target, span)?;
+                let (lo, hi) = num.range();
+                self.runtime.insert(Helper::TryFromInt);
+                Expr::call(Expr::var("$tryFromInt"), vec![arg(), num.literal(lo), num.literal(hi)])
+            }
+            Std::FromDigit => {
+                self.runtime.insert(Helper::FromDigit);
+                Expr::call(Expr::var("$fromDigit"), vec![arg(), arg()])
+            }
+            Std::FromU32 => {
+                self.runtime.insert(Helper::FromU32);
+                Expr::call(Expr::var("$fromU32"), vec![arg()])
+            }
+            Std::Cmp => {
+                self.runtime.insert(Helper::Cmp);
+                Expr::call(Expr::var("$cmp"), vec![arg(), arg()])
+            }
+            Std::MaxOf(max) => {
+                let num = Num::of(self.thir[args[0]].ty.peel_refs());
+                let callee = if num.is_some_and(Num::float) {
+                    self.runtime.insert(if max { Helper::F64Max } else { Helper::F64Min });
+                    Expr::var(if max { "$f64Max" } else { "$f64Min" })
+                } else if num.is_some_and(Num::big) {
+                    // `Math.max` takes numbers only.
+                    self.runtime.insert(Helper::BigMinMax);
+                    Expr::var(if max { "$bigMax" } else { "$bigMin" })
+                } else {
+                    Expr::member(Expr::var("Math"), if max { "max" } else { "min" })
+                };
+                Expr::call(callee, vec![arg(), arg()])
+            }
+            // An `Ordering` is -1, 0 or 1: `Equal` is the one that's falsy.
+            Std::Operator(op) => {
+                let ty = generic_args
+                    .types()
+                    .next()
+                    .expect("an operator's trait has a type")
+                    .peel_refs();
+                let (l, r) = (arg(), arg());
+                // `a << &n` of an `i64` `n`: its type, the trait's `Rhs`.
+                let r = match generic_args.types().nth(1) {
+                    Some(rhs) => super::numbers::shift_amount_of(op, r, ty, rhs),
+                    None => r,
+                };
+                self.binary(op, l, r, None, ty, span)?
+            }
+            Std::UnaryOperator(op) => {
+                let ty = generic_args
+                    .types()
+                    .next()
+                    .expect("an operator's trait has a type")
+                    .peel_refs();
+                let a = arg();
+                self.unary(op, a, ty, span)?
+            }
+            Std::Reverse => Expr::unary(UnaryOp::Neg, arg()),
+            // The size rustc works out for the wasm32 target, which rust-js
+            // checks programs for, as a `const` of it has (ADR 0090). A
+            // generic function is one JS function for every type, so a type
+            // parameter's has no one answer.
+            Std::SizeOf | Std::AlignOf | Std::SizeOfVal => {
+                let of = generic_args.types().next().expect("a size's type argument");
+                let bytes = self.layout_bytes(known, of, span)?;
+                // What's measured still runs, if it does anything.
+                if matches!(known, Std::SizeOfVal) {
+                    let measured = arg();
+                    if measured.has_effects() {
+                        out.push(StmtKind::Expr(measured).at(js_span));
+                    }
+                }
+                Expr::int(bytes)
+            }
+            _ => return Ok(None),
+        }))
     }
 }
