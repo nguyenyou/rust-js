@@ -39,6 +39,9 @@ This folder is where we write those choices down.
 
 ## Code map
 
+[architecture.md](architecture.md) says what's inside `src/lower/`, the
+boundaries between the parts, and where a change goes.
+
 | File | Job |
 |---|---|
 | `src/main.rs` | CLI, rustc callbacks, analysis and the diagnostic gate |
@@ -50,7 +53,7 @@ This folder is where we write those choices down.
 | `src/lower.rs`, `src/lower/` | Crate facts, function lowering, bindings, representations and JSX semantics |
 | `src/lower/serde.rs`, `src/lower/serde/`, `serde/` | `#[serde(..)]` attributes, and JSON written and read as serde_json does; the serde crates, built with the pinned toolchain |
 | `src/runtime/from_json.js` | serde_json's reader, ported to JS |
-| `src/runtime.rs` | Runtime helpers, the `@rust-js/runtime` package's (`runtime/`) |
+| `src/runtime.rs`, `src/runtime/` | Runtime helpers, each a file of its own, the `@rust-js/runtime` package's (`runtime/`) |
 | `src/prepare.rs` | JSX readability preparation after lowering |
 | `src/program.rs`, `src/lower/sources.rs` | Owned linked modules and multi-file source origins |
 | `src/output.rs`, `src/manifest.rs` | Validated artifact plans and the versioned build result |

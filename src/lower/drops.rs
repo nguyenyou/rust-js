@@ -1,5 +1,7 @@
-//! Destructors (ADR 0098): which types have one to run, the JS that runs
-//! it, and where in a body a value that has one is moved.
+//! Destructors (ADR 0098): the scopes, flags and temporaries that drop a
+//! value where rustc does, and the JS that drops it. What dropping a type
+//! runs is `types`'s, and what a body owns and moves, found before it's
+//! lowered, `facts`'.
 //!
 //! A scope that owns such a value is a `try`, and its drops the `finally`.
 //! What this can't do yet is an error, found before any JS is written: a

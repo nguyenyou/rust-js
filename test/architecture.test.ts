@@ -94,6 +94,22 @@ test("iterators.rs alone answers whether a value is lazy", () => {
   }
 });
 
+// A call is lowered by a dispatcher that hands it to what knows it: the
+// crate's own functions, bindings and closures to `special_call`, a std
+// function to `std_call` and its domain's function (vecs.rs, options.rs,
+// cells.rs, ..). Each was a function of a thousand lines once: what's new
+// goes where its kind is, not in the dispatcher.
+test("the dispatchers of calls and of what's called stay short", () => {
+  const length = (file: string, signature: string) => {
+    const lines = read(file).split("\n");
+    const start = lines.findIndex(line => line.startsWith(signature));
+    expect(start, signature).toBeGreaterThanOrEqual(0);
+    return lines.findIndex((line, k) => k > start && line === "    }") - start;
+  };
+  expect(length("src/lower/calls.rs", "    pub(super) fn call(")).toBeLessThanOrEqual(60);
+  expect(length("src/lower/recognition.rs", "    pub(super) fn classify(")).toBeLessThanOrEqual(15);
+});
+
 // Recognition is what the rest asks: it asks neither the destructors'
 // analysis nor the effects one, which ask it.
 test("recognition depends on neither destructors nor effects", () => {

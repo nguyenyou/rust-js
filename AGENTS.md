@@ -34,7 +34,9 @@ interop and tooling. The first production app is an intermediate milestone.
 ## Making changes
 
 Read the relevant [design decisions](docs/README.md), including later
-amendments, and the existing implementation and tests. Verify uncertain
+amendments, and the existing implementation and tests. The
+[architecture](docs/architecture.md) says where a change goes, and which
+boundaries [its test](test/architecture.test.ts) holds it to. Verify uncertain
 library behavior from local source. Follow the existing compiler phases and
 reuse evaluation-order machinery.
 
