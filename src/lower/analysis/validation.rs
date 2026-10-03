@@ -1,6 +1,6 @@
 //! What a crate does that rust-js refuses, found before any of it is lowered.
 
-use crate::lower::recognition::from_serde_derive;
+use crate::lower::recognition::{StdItem, from_serde_derive, is_std_def};
 use crate::lower::traits;
 use crate::lower::{Body, strip};
 use rustc_hir::def::DefKind;
@@ -10,8 +10,8 @@ use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{ExprId, ExprKind, Thir};
 use rustc_middle::ty;
 use rustc_middle::ty::TyCtxt;
+use rustc_span::Symbol;
 use rustc_span::def_id::{DefId, LocalDefId};
-use rustc_span::{Symbol, sym};
 use std::collections::HashSet;
 
 /// Report each item rust-js can't compile yet. False if there was one.
@@ -77,8 +77,8 @@ pub(super) fn reject_unsupported(
                         .instantiate_identity()
                         .skip_normalization()
                         .def_id;
-                    tcx.is_diagnostic_item(sym::Iterator, tr)
-                        || tcx.is_diagnostic_item(sym::TryFrom, tr)
+                    is_std_def(tcx, tr, StdItem::Iterator)
+                        || is_std_def(tcx, tr, StdItem::TryFrom)
                         || traits::is_operator(tcx, tr)
                 }) =>
             {
@@ -159,7 +159,7 @@ pub(super) fn static_of(thir: &Thir<'_>, e: ExprId) -> Option<DefId> {
 /// it. In JS, it's a variable of its module, made from `init`.
 pub(in crate::lower) fn is_thread_local(tcx: TyCtxt<'_>, d: LocalDefId) -> bool {
     matches!(tcx.def_kind(d), DefKind::Const { .. })
-        && matches!(tcx.type_of(d).instantiate_identity().skip_normalization().kind(), ty::Adt(adt, _) if tcx.is_diagnostic_item(Symbol::intern("LocalKey"), adt.did()))
+        && matches!(tcx.type_of(d).instantiate_identity().skip_normalization().kind(), ty::Adt(adt, _) if is_std_def(tcx, adt.did(), StdItem::LocalKey))
 }
 
 /// The thread-local whose block `d` is in, if any.

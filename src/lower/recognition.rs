@@ -1075,6 +1075,11 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         .map(|(_, kind)| kind)
     }
 
+    /// Is `ty` std's `item`?
+    pub(super) fn is_std_type(&self, ty: Ty<'tcx>, item: StdItem) -> bool {
+        self.is_std_adt(ty, item.name())
+    }
+
     pub(super) fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.is_diagnostic_item(name, adt.did()))
     }
@@ -1978,7 +1983,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> Recognition<'a, 'tcx> {
-    pub(super) fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
+    pub(super) fn conversion(&self, adt: DefId, convert: StdItem, serialize: bool) -> Option<Ty<'tcx>> {
         struct Finder<'tcx> {
             tcx: TyCtxt<'tcx>,
             types: &'tcx ty::TypeckResults<'tcx>,
@@ -1996,7 +2001,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
                 intravisit::walk_expr(self, expr);
             }
         }
-        let convert = self.tcx.get_diagnostic_item(convert)?;
+        let convert = self.tcx.get_diagnostic_item(convert.name())?;
         for owner in self.tcx.hir_body_owners() {
             let mut parent = self.tcx.opt_parent(owner.to_def_id());
             while let Some(id) = parent
@@ -2113,4 +2118,135 @@ pub(super) fn formatter_query(tcx: TyCtxt<'_>, def_id: DefId) -> Option<Formatte
         "sign_aware_zero_pad" => FormatterQuery::SignAwareZeroPad,
         _ => return None,
     })
+}
+
+/// A std item another module asks about by name: only recognition.rs spells
+/// std's names, as its diagnostic items, which the rest ask by this.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum StdItem {
+    Any,
+    Atomic,
+    BTreeMap,
+    BTreeSet,
+    BinaryHeap,
+    BoxNew,
+    Cell,
+    Debug,
+    Default,
+    Display,
+    Eq,
+    Error,
+    From,
+    Hash,
+    Into,
+    IntoIterator,
+    Iterator,
+    LocalKey,
+    MaybeUninit,
+    Ord,
+    PhantomData,
+    RefCell,
+    Result,
+    SliceIter,
+    ToString,
+    TryFrom,
+    Vec,
+    VecDeque,
+}
+
+impl StdItem {
+    /// Its diagnostic item's name in std.
+    fn name(self) -> Symbol {
+        match self {
+            StdItem::Any => Symbol::intern("Any"),
+            StdItem::Atomic => Symbol::intern("Atomic"),
+            StdItem::BTreeMap => Symbol::intern("BTreeMap"),
+            StdItem::BTreeSet => Symbol::intern("BTreeSet"),
+            StdItem::BinaryHeap => Symbol::intern("BinaryHeap"),
+            StdItem::BoxNew => Symbol::intern("box_new"),
+            StdItem::Cell => Symbol::intern("Cell"),
+            StdItem::Debug => Symbol::intern("Debug"),
+            StdItem::Default => Symbol::intern("Default"),
+            StdItem::Display => Symbol::intern("Display"),
+            StdItem::Eq => sym::Eq,
+            StdItem::Error => Symbol::intern("Error"),
+            StdItem::From => sym::From,
+            StdItem::Hash => sym::Hash,
+            StdItem::Into => sym::Into,
+            StdItem::IntoIterator => sym::IntoIterator,
+            StdItem::Iterator => sym::Iterator,
+            StdItem::LocalKey => Symbol::intern("LocalKey"),
+            StdItem::MaybeUninit => Symbol::intern("MaybeUninit"),
+            StdItem::Ord => sym::Ord,
+            StdItem::PhantomData => Symbol::intern("PhantomData"),
+            StdItem::RefCell => Symbol::intern("RefCell"),
+            StdItem::Result => sym::Result,
+            StdItem::SliceIter => Symbol::intern("SliceIter"),
+            StdItem::ToString => Symbol::intern("ToString"),
+            StdItem::TryFrom => sym::TryFrom,
+            StdItem::Vec => sym::Vec,
+            StdItem::VecDeque => Symbol::intern("VecDeque"),
+        }
+    }
+}
+
+/// Is `id` std's `item`?
+pub(crate) fn is_std_def(tcx: TyCtxt<'_>, id: DefId, item: StdItem) -> bool {
+    tcx.is_diagnostic_item(item.name(), id)
+}
+
+/// Std's `item`, which every std has.
+pub(crate) fn std_item(tcx: TyCtxt<'_>, item: StdItem) -> DefId {
+    tcx.get_diagnostic_item(item.name()).expect("std has it")
+}
+
+/// The method of `trait_id` named `name`, which it has.
+pub(crate) fn trait_method(tcx: TyCtxt<'_>, trait_id: DefId, name: &str) -> DefId {
+    tcx.associated_item_def_ids(trait_id)
+        .iter()
+        .copied()
+        .find(|&id| tcx.item_name(id).as_str() == name)
+        .expect("the trait has the method")
+}
+
+/// Is `id` the method `name` of std's trait `item`, `Error::source`?
+pub(crate) fn is_std_method(tcx: TyCtxt<'_>, id: DefId, item: StdItem, name: &str) -> bool {
+    tcx.item_name(id).as_str() == name && tcx.trait_of_assoc(id).is_some_and(|tr| is_std_def(tcx, tr, item))
+}
+
+/// `fmt::Arguments::new` and its kin, what `format_args!` makes.
+pub(crate) fn is_arguments_new(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    tcx.item_name(id).as_str() == "new" && tcx.def_path_str(id).starts_with("std::fmt::Arguments")
+}
+
+/// `f.pad(s)` of a `Formatter` (ADR 0143).
+pub(crate) fn is_formatter_pad(tcx: TyCtxt<'_>, id: DefId) -> bool {
+    tcx.item_name(id).as_str() == "pad" && tcx.def_path_str(id).starts_with("std::fmt::Formatter")
+}
+
+/// A std function that runs no code of the crate's (ADR 0069).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum PureStd {
+    /// A question of what it's called on: `len()`, `is_some()`, `is_ok()`.
+    Question,
+    /// A copy or a string of it, which is pure where what it copies is:
+    /// `clone()`, `to_owned()`, `to_string()`, `as_str()`.
+    Copy,
+    /// `Box::new(x)`, which is `x`.
+    BoxNew,
+}
+
+/// Which pure std function `id` is, if it's one.
+pub(crate) fn pure_std(tcx: TyCtxt<'_>, id: DefId) -> Option<PureStd> {
+    if !is_std_item(tcx, id) {
+        return None;
+    }
+    match tcx.item_name(id).as_str() {
+        "len" | "is_empty" | "is_some" | "is_none" | "is_ok" | "is_err" if tcx.trait_of_assoc(id).is_none() => {
+            Some(PureStd::Question)
+        }
+        "clone" | "to_owned" | "to_string" | "as_str" => Some(PureStd::Copy),
+        _ if is_std_def(tcx, id, StdItem::BoxNew) => Some(PureStd::BoxNew),
+        _ => None,
+    }
 }

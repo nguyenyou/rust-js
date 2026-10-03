@@ -1,6 +1,7 @@
 //! Rust value representations, copying, and supported-type validation.
 
 use super::bindings::field_key;
+use super::recognition::{StdItem, is_std_def};
 use super::{FnCx, R, Shape};
 use crate::js;
 use crate::js::{Expr, Op, Prop};
@@ -13,7 +14,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::Ty;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::def_id::{DefId, LocalDefId};
-use rustc_span::{Span, Symbol, sym};
+use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// What an `Option<T>`'s `T` is in JS: through references, `Box` and `Rc`,
@@ -100,8 +101,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.is_unknown(ty)
             && !self.bound_by(ty, param_env, |id| {
                 self.tcx.fn_trait_kind_from_def_id(id).is_some()
-                    || self.tcx.is_diagnostic_item(sym::Iterator, id)
-                    || self.tcx.is_diagnostic_item(sym::IntoIterator, id)
+                    || is_std_def(self.tcx, id, StdItem::Iterator)
+                    || is_std_def(self.tcx, id, StdItem::IntoIterator)
             })
     }
 
@@ -203,7 +204,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             // A `dyn Iterator` is a JS iterator, which steps itself.
             || self.recognition().is_dyn_iter(ty)
             || ty.is_array()
-            || ["Cell", "RefCell", "Atomic"].into_iter().any(|name| self.is_std_adt(ty, Symbol::intern(name)))
+            || [StdItem::Cell, StdItem::RefCell, StdItem::Atomic].into_iter().any(|item| self.is_std_type(ty, item))
             || self.is_vec_like(ty)
             || self.is_map(ty)
             // A `dyn` of the crate's trait is its pair (ADR 0049): a `&mut` to
@@ -637,9 +638,9 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
         // A `Cell` or a `RefCell` is `{ value }`, what its `UnsafeCell` holds,
         // as one made at run time is.
         ty::Adt(adt, _)
-            if ["Cell", "RefCell"]
-                .iter()
-                .any(|name| tcx.is_diagnostic_item(Symbol::intern(name), adt.did())) =>
+            if [StdItem::Cell, StdItem::RefCell]
+                .into_iter()
+                .any(|item| is_std_def(tcx, adt.did(), item)) =>
         {
             let at = adt
                 .non_enum_variant()
@@ -655,7 +656,7 @@ pub(super) fn const_js<'tcx>(tcx: TyCtxt<'tcx>, value: ty::Value<'tcx>) -> Optio
         }
         // An atomic is `{ value }` too (ADR 0096). What it holds is stored
         // as an integer of its size, in a struct that aligns it.
-        ty::Adt(adt, args) if tcx.is_diagnostic_item(Symbol::intern("Atomic"), adt.did()) => {
+        ty::Adt(adt, args) if is_std_def(tcx, adt.did(), StdItem::Atomic) => {
             let mut stored = value.valtree;
             while let ty::ValTreeKind::Branch(items) = &**stored {
                 let [only] = &items[..] else {

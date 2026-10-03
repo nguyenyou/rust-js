@@ -23,14 +23,15 @@
 use super::{Attrs, Rule, SerdeDefault, Tagging};
 use crate::js::{self, Expr, Op, Pattern, Prop, Stmt, StmtKind};
 use crate::lower::bindings::variant_name;
+use crate::lower::recognition::{StdItem, std_item};
 use crate::lower::representation::Num;
 use crate::lower::{FnCx, R, Shape};
 use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_hir::def::CtorKind;
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
 
 /// A struct's or a variant's fields, as `json.struct` and `json.tupleStruct`
 /// take them.
@@ -141,7 +142,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         match ty.kind() {
             ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.json_reader(args.type_at(0), span),
-            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("Result")) => {
+            ty::Adt(_, args) if self.is_std_type(ty, StdItem::Result) => {
                 let (ok, err) = (
                     self.json_reader(args.type_at(0), span)?,
                     self.json_reader(args.type_at(1), span)?,
@@ -149,7 +150,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Ok(Expr::call(reader("result"), vec![ok, err]))
             }
             // A heap would have to be put in its order.
-            ty::Adt(..) if self.is_std_adt(ty, Symbol::intern("BinaryHeap")) => Err(unsupported(self)),
+            ty::Adt(..) if self.is_std_type(ty, StdItem::BinaryHeap) => Err(unsupported(self)),
             ty::Adt(_, args) if self.is_vec_like(ty) => {
                 let read = self.json_reader(args.type_at(0), span)?;
                 Ok(Expr::call(reader("vec"), vec![read]))
@@ -229,7 +230,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let method = |name: &str, args: Vec<Expr>| Expr::call(Expr::member(Expr::var(json), name), args);
         // `#[serde(from = "T")]` and `try_from`: a `T`, read, then converted.
         if container.from || container.try_from {
-            let convert = if container.from { sym::From } else { sym::TryFrom };
+            let convert = if container.from {
+                StdItem::From
+            } else {
+                StdItem::TryFrom
+            };
             let Some(source) = self.conversion(adt.did(), convert, false) else {
                 return Err(self.unsupported(span, "this `#[serde(from)]`"));
             };
@@ -282,7 +287,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// `<to as TryFrom<from>>::Error`.
     fn try_from_error(&self, to: Ty<'tcx>, from: Ty<'tcx>, span: Span) -> R<Ty<'tcx>> {
-        let trait_id = self.tcx.get_diagnostic_item(sym::TryFrom).expect("std has it");
+        let trait_id = std_item(self.tcx, StdItem::TryFrom);
         let error = self
             .tcx
             .associated_items(trait_id)
@@ -318,7 +323,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
                 Some(SerdeDefault::Path) => self.default_path(field.did, span)?,
                 // A `PhantomData`.
-                None if self.is_std_adt(field_ty, Symbol::intern("PhantomData")) => Expr::undefined(),
+                None if self.is_std_type(field_ty, StdItem::PhantomData) => Expr::undefined(),
                 _ => self.default_value(field_ty, span)?,
             });
         }

@@ -3,6 +3,7 @@
 //! hand-written one is called instead.
 
 use super::bindings::variant_name;
+use super::recognition::{StdItem, std_item};
 use super::representation::Num;
 use super::{FnCx, R, Shape, is_fieldless_enum, lower_first};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind, UnaryOp};
@@ -12,8 +13,8 @@ use rustc_hir::LangItem;
 use rustc_hir::def::{DefKind, Res};
 use rustc_middle::traits::ImplSource;
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn clone_trait(&self) -> DefId {
@@ -44,7 +45,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let depth = seen.len();
         let outer = self.walks.clone_assumed.replace(usize::MAX);
         seen.push(ty);
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         let needs = match ty.kind() {
             // A clone of a `&T` is the same reference.
             ty::Ref(..) => false,
@@ -55,7 +56,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.is_vec_like(ty) => {
                 self.vec_changed(ty) || self.needs_clone_in(args.type_at(0), seen)
             }
-            ty::Adt(..) if std("Cell") || std("RefCell") || std("Atomic") => true,
+            ty::Adt(..) if std(StdItem::Cell) || std(StdItem::RefCell) || std(StdItem::Atomic) => true,
             // A map or a set changes in place (ADR 0059).
             ty::Adt(..) if self.is_map(ty) => true,
             ty::Adt(..) if self.is_rc(ty) || self.is_lang_adt(ty, LangItem::String) || self.is_js_object(ty) => false,
@@ -90,7 +91,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// std enums whose fields are what JS has: `Option`, `Result`, `Ordering`.
     fn is_known_std(&self, ty: Ty<'tcx>) -> bool {
         self.is_lang_adt(ty, LangItem::Option)
-            || self.is_std_adt(ty, sym::Result)
+            || self.is_std_type(ty, StdItem::Result)
             || self.is_lang_adt(ty, LangItem::OrderingEnum)
             // Its `PartialEq` and `Clone` are its field's; its order isn't
             // (`cmp_value`).
@@ -212,12 +213,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         } else {
             place
         };
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         match ty.kind() {
             ty::Array(item, _) => self.clone_items(place, *item, span),
             ty::Adt(_, args) if self.is_vec_like(ty) => self.clone_items(place, args.type_at(0), span),
             ty::Adt(_, args) if ty.is_box() => self.clone_value(place, args.type_at(0), span, out),
-            ty::Adt(_, args) if std("Cell") || std("RefCell") => {
+            ty::Adt(_, args) if std(StdItem::Cell) || std(StdItem::RefCell) => {
                 let value = self.clone_value(Expr::member(place, "value"), args.type_at(0), span, out)?;
                 Ok(Expr::object(vec![Prop::Field("value".into(), value)]))
             }
@@ -369,10 +370,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `Default::default()` of `ty`: `0`, `""`, `[]`, a struct of its fields'
     /// defaults, or a call of a hand-written `default`.
     pub(super) fn default_value(&mut self, ty: Ty<'tcx>, span: Span) -> R<Expr> {
-        let default = self
-            .tcx
-            .get_diagnostic_item(Symbol::intern("Default"))
-            .expect("std has `Default`");
+        let default = std_item(self.tcx, StdItem::Default);
         if self.is_unknown(ty) {
             let tr = ty::TraitRef::new(self.tcx, default, [ty]);
             return match self.evidence_for(tr) {
@@ -389,7 +387,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if self.json_type(ty) == Some(super::serde::Json::Value) {
             return Ok(Expr::str("Null"));
         }
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         Ok(match ty.kind() {
             _ if let Some(num) = Num::of(ty) => num.literal(0),
             ty::Bool => Expr::bool(false),
@@ -415,10 +413,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 Expr::new_(class, Vec::new())
             }
             ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.default_value(args.type_at(0), span)?,
-            ty::Adt(_, args) if std("Cell") || std("RefCell") || std("Atomic") => Expr::object(vec![Prop::Field(
-                "value".into(),
-                self.default_value(args.type_at(0), span)?,
-            )]),
+            ty::Adt(_, args) if std(StdItem::Cell) || std(StdItem::RefCell) || std(StdItem::Atomic) => Expr::object(
+                vec![Prop::Field("value".into(), self.default_value(args.type_at(0), span)?)],
+            ),
             ty::Adt(adt, _) if adt.is_enum() && !self.is_std(adt.did()) => {
                 let variant = self
                     .default_variant(default, ty)
@@ -573,12 +570,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Each is read more than once below.
         let a = if a.reads_same() { a } else { self.spill("left", a, out) };
         let b = if b.reads_same() { b } else { self.spill("right", b, out) };
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         match ty.kind() {
             ty::Array(item, _) | ty::Slice(item) => self.eq_items(a, b, *item, span),
             ty::Adt(_, args) if self.is_vec_like(ty) => self.eq_items(a, b, args.type_at(0), span),
             ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.eq_value(a, b, args.type_at(0), span, out),
-            ty::Adt(_, args) if std("Cell") || std("RefCell") => self.eq_value(
+            ty::Adt(_, args) if std(StdItem::Cell) || std(StdItem::RefCell) => self.eq_value(
                 Expr::member(a, "value"),
                 Expr::member(b, "value"),
                 args.type_at(0),

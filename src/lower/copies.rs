@@ -2,6 +2,7 @@
 //! JS shares an object: a copy is made only where one of them may change in
 //! place, which is found once for each type (ADRs 0020, 0052, 0100).
 
+use super::recognition::StdItem;
 use super::{FnCx, Shape};
 use crate::js;
 use crate::js::{Expr, Op, Prop};
@@ -9,7 +10,6 @@ use rustc_ast::Mutability;
 use rustc_hir::LangItem;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
-use rustc_span::sym;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A fresh `ty` value equal to the one at `place`: `{ ...p }`, `[t[0], t[1]]`.
@@ -164,7 +164,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// crate's own, or a library's (ADR 0100), or `Result`.
     pub(super) fn is_copy_enum(&self, ty: Ty<'tcx>) -> bool {
         matches!(ty.kind(), ty::Adt(adt, _) if adt.is_enum()
-            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()) || self.is_std_adt(ty, sym::Result)))
+            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()) || self.is_std_type(ty, StdItem::Result)))
             && self.is_copy(ty)
     }
 

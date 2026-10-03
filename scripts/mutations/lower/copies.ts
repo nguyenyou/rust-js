@@ -38,8 +38,8 @@ export const mutations: Mutation[] = [
     name: "library-copy-enum-shared",
     breaks: "a copy of a library's `Copy` enum with fields is the same object",
     file: "src/lower/copies.rs",
-    find: "            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()) || self.is_std_adt(ty, sym::Result)))\n",
-    replace: "            && (adt.did().is_local() || self.is_std_adt(ty, sym::Result)))\n",
+    find: "            && (adt.did().is_local() || self.krate.foreign.in_library(adt.did()) || self.is_std_type(ty, StdItem::Result)))\n",
+    replace: "            && (adt.did().is_local() || self.is_std_type(ty, StdItem::Result)))\n",
     tests: ["test/crates.test.ts", "-t", "two crates: copy_enum"],
   },
   {

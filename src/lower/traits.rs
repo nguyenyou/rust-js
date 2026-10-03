@@ -3,7 +3,7 @@
 
 use super::bindings;
 use super::drops::Drops;
-use super::recognition::{TraitCall, TypeFact};
+use super::recognition::{StdItem, TraitCall, TypeFact, is_std_def, is_std_method, std_item};
 use super::representation::{const_js, eval_const};
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Prop, StmtKind};
@@ -12,8 +12,8 @@ use rustc_hir::def::DefKind;
 use rustc_hir::{LangItem, Mutability};
 use rustc_middle::traits::{BuiltinImplSource, ImplSource};
 use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
 use std::collections::HashMap;
 
 /// A trait whose bounds take dictionaries (ADR 0049): the crate's own, and
@@ -175,7 +175,7 @@ fn bound_of<'tcx>(
     let mut tr = predicate.trait_ref;
     // `Eq` promises more than `PartialEq`, but it's `PartialEq`'s `eq`
     // that's called.
-    if tcx.is_diagnostic_item(sym::Eq, tr.def_id) {
+    if is_std_def(tcx, tr.def_id, StdItem::Eq) {
         let partial_eq = tcx.require_lang_item(LangItem::PartialEq, tcx.def_span(id));
         tr = ty::TraitRef::new(tcx, partial_eq, [tr.self_ty(), tr.self_ty()]);
     }
@@ -682,7 +682,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // Derived and std impls of `Default` and `Clone` (ADR 0052).
         let ty = tr.self_ty();
-        let default = self.tcx.is_diagnostic_item(Symbol::intern("Default"), tr.def_id);
+        let default = is_std_def(self.tcx, tr.def_id, StdItem::Default);
         let clone = self.tcx.is_lang_item(tr.def_id, LangItem::Clone);
         let eq = self.tcx.is_lang_item(tr.def_id, LangItem::PartialEq);
         let display = tr.def_id == self.display_trait();
@@ -775,10 +775,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         // `x.into()` of a `T: Into<U>` (ADR 0108): std's conversion, the
         // crate's `From`, or of a `T` to itself, the value.
-        if self.tcx.is_diagnostic_item(sym::Into, tr.def_id) {
+        if is_std_def(self.tcx, tr.def_id, StdItem::Into) {
             let into = self.tcx.associated_item_def_ids(tr.def_id)[0];
             let target = tr.args.type_at(1);
-            let from = self.tcx.get_diagnostic_item(sym::From).expect("std has `From`");
+            let from = std_item(self.tcx, StdItem::From);
             let from = self.tcx.associated_item_def_ids(from)[0];
             let from_args = self.tcx.mk_args(&[target.into(), ty.into()]);
             let value = if let Some(known) = self.recognition().classify(into, tr.args)
@@ -1057,7 +1057,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         // Where the types are known, `"paren".into()` and `a.add(b)` are std's,
         // written in place, as ever: a dictionary is for generic code (ADR 0108).
         if (super::recognition::value_operator(self.tcx, trait_id).is_some()
-            || self.tcx.is_diagnostic_item(sym::Into, trait_id))
+            || is_std_def(self.tcx, trait_id, StdItem::Into))
             && !tr.args.has_non_region_param()
         {
             return Ok(None);
@@ -1203,8 +1203,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `From` (ADR 0141): the error's own `Error`, or a message's,
     /// `$stringError()`. None if `to` isn't one.
     pub(super) fn dyn_error_from(&mut self, to: Ty<'tcx>, from: Ty<'tcx>, span: Span) -> R<Option<Expr>> {
-        let error = Symbol::intern("Error");
-        let is_error = |id: DefId| self.tcx.is_diagnostic_item(error, id);
+        let is_error = |id: DefId| is_std_def(self.tcx, id, StdItem::Error);
         let Some(inner) = to.boxed_ty() else {
             return Ok(None);
         };
@@ -1215,25 +1214,21 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             self.runtime.insert(Helper::StringError);
             return Ok(Some(Expr::call(Expr::var("$stringError"), Vec::new())));
         }
-        let error = self.tcx.get_diagnostic_item(error).expect("std has `Error`");
+        let error = std_item(self.tcx, StdItem::Error);
         let tr = ty::TraitRef::new(self.tcx, error, [from]);
         self.dictionary(tr, span).map(Some)
     }
 
     /// `Error::source`, which a `dyn Error`'s dictionary has (ADR 0141).
     fn is_error_source(&self, id: DefId) -> bool {
-        self.tcx.item_name(id) == Symbol::intern("source")
-            && self
-                .tcx
-                .trait_of_assoc(id)
-                .is_some_and(|tr| self.tcx.is_diagnostic_item(Symbol::intern("Error"), tr))
+        is_std_method(self.tcx, id, StdItem::Error, "source")
     }
 
     /// `Display` or `Error`: a std trait whose `dyn` is a pair (ADR 0141).
     pub(super) fn is_std_pair_trait(&self, id: DefId) -> bool {
-        ["Display", "Error"]
+        [StdItem::Display, StdItem::Error]
             .into_iter()
-            .any(|name| self.tcx.is_diagnostic_item(Symbol::intern(name), id))
+            .any(|item| is_std_def(self.tcx, id, item))
     }
 
     fn dyn_trait_ref(&self, ty: Ty<'tcx>, self_ty: Ty<'tcx>) -> Option<ty::TraitRef<'tcx>> {

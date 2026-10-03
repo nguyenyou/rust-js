@@ -218,4 +218,13 @@ export const mutations: Mutation[] = [
     replace: "            ty::Param(_)\n        );\n        unknown && {",
     tests: ["test/corpus.test.ts", "-t", "generic_associated_types"],
   },
+  {
+    name: "std-questions-impure",
+    breaks: "`is_empty()` and the like are taken as doing something: a pure chain is lazy",
+    file: "src/lower/recognition.rs",
+    find: "\"is_err\" if tcx.trait_of_assoc(id).is_none() => {",
+    replace: "\"is_err\" if false => {",
+    tests: ["test/snapshots.test.ts"],
+    snapshots: true,
+  },
 ];

@@ -1,11 +1,11 @@
 //! `?` of an `Option` or a `Result`, and the `From` that converts its error
 //! (ADRs 0052, 0141).
 
+use super::recognition::{StdItem, std_item};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Prop, Stmt, StmtKind};
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
-use rustc_span::sym;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `e?`: the value inside, after returning early with an `Err` or `None`.
@@ -26,7 +26,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return Ok(Expr::undefined());
         }
         let is_option = self.option_of(ty).is_some();
-        if !is_option && !self.is_std_adt(ty, sym::Result) {
+        if !is_option && !self.is_std_type(ty, StdItem::Result) {
             return Err(self.unsupported(span, &format!("`?` on a `{ty}`")));
         }
         // The function's error type: the same as this one's, and the `Err` is
@@ -106,9 +106,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// The function `?` converts an error with, `<to as From<from>>::from`,
     /// if it's one of the crate's own (ADR 0052).
     pub(super) fn error_from(&mut self, to: Ty<'tcx>, from: Ty<'tcx>) -> R<Option<Expr>> {
-        let Some(from_trait) = self.tcx.get_diagnostic_item(sym::From) else {
-            return Ok(None);
-        };
+        let from_trait = std_item(self.tcx, StdItem::From);
         let method = self.tcx.associated_item_def_ids(from_trait)[0];
         let args = self.tcx.mk_args(&[to.into(), from.into()]);
         let Some(instance) = self.resolve_instance(method, args)? else {

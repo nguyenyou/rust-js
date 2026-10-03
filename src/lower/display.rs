@@ -3,8 +3,8 @@
 //! and `fmt::Result`, which is always `Ok`, is nothing at all.
 
 use super::format_spec::Options;
-use super::recognition::WriteCall;
 use super::recognition::{ChannelError, FormatterQuery, Std};
+use super::recognition::{StdItem, WriteCall, std_item};
 use super::representation::{self, Num};
 use super::{Dest, FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -12,8 +12,8 @@ use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, PatKind};
 use rustc_middle::ty::{self, Ty, TypeVisitableExt};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol};
 
 /// What writing to a `Formatter` knows (ADRs 0054, 0137).
 #[derive(Default)]
@@ -745,15 +745,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     pub(super) fn to_string_trait(&self) -> DefId {
-        self.tcx
-            .get_diagnostic_item(Symbol::intern("ToString"))
-            .expect("std has `ToString`")
+        std_item(self.tcx, StdItem::ToString)
     }
 
     pub(super) fn debug_trait(&self) -> DefId {
-        self.tcx
-            .get_diagnostic_item(Symbol::intern("Debug"))
-            .expect("std has `Debug`")
+        std_item(self.tcx, StdItem::Debug)
     }
 
     /// Is `ty` `dyn Debug`, which rust-js holds as the string it shows
@@ -795,7 +791,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(shown) = self.json_value_debug(value.clone(), ty, pretty) {
             return Ok(shown);
         }
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         let num = Num::of(ty);
         if self.is_dyn_debug(ty) {
             return Ok(value);
@@ -963,11 +959,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.debug_string_with(value, args.types().next().expect("what it holds"), span, pretty)
             }
             // An atomic shows what it holds.
-            ty::Adt(_, args) if std("Atomic") => {
+            ty::Adt(_, args) if std(StdItem::Atomic) => {
                 self.debug_string_with(Expr::member(value, "value"), args.type_at(0), span, pretty)
             }
-            ty::Adt(_, args) if std("Cell") || std("RefCell") => {
-                let name = if std("Cell") { "Cell" } else { "RefCell" };
+            ty::Adt(_, args) if std(StdItem::Cell) || std(StdItem::RefCell) => {
+                let name = if std(StdItem::Cell) { "Cell" } else { "RefCell" };
                 let shown = self.debug_string_with(Expr::member(value, "value"), args.type_at(0), span, pretty)?;
                 let plain = join(vec![
                     Expr::str(format!("{name} {{ value: ")),
@@ -997,7 +993,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let plain = join(vec![Expr::str("{"), shown, Expr::str("}")]);
                 Ok(self.pretty_or(pretty, plain, "{", mapped, "}"))
             }
-            ty::Adt(_, args) if std("Result") => {
+            ty::Adt(_, args) if std(StdItem::Result) => {
                 let inside = || Expr::member(Expr::var("result"), "_0");
                 let ok = self.debug_string_with(inside(), args.type_at(0), span, pretty)?;
                 let err = self.debug_string_with(inside(), args.type_at(1), span, pretty)?;
@@ -1140,7 +1136,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         match ty.kind() {
             ty::Tuple(tys) => !tys.is_empty(),
             ty::Adt(_, args) if ty.is_box() || self.is_rc(ty) => self.debug_reads_parts(args.type_at(0)),
-            _ => self.option_of(ty).is_some() || self.is_std_adt(ty, Symbol::intern("Result")),
+            _ => self.option_of(ty).is_some() || self.is_std_type(ty, StdItem::Result),
         }
     }
 

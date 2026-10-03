@@ -4,6 +4,7 @@
 //! as `body_queries`' are: the destructors' analysis asks it (ADR 0098), and
 //! so do iterator chains, of their stages' closures (ADR 0139).
 
+use super::recognition::{PureStd, pure_std};
 use std::collections::HashMap;
 
 use rustc_hir::LangItem;
@@ -11,7 +12,6 @@ use rustc_hir::def::DefKind;
 use rustc_middle::mir::BinOp;
 use rustc_middle::thir::{AdtExprBase, ExprId, ExprKind, PatKind, StmtKind as ThirStmt, Thir};
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::Symbol;
 use rustc_span::def_id::LocalDefId;
 
 use super::Body;
@@ -100,12 +100,11 @@ pub(super) fn cannot_leave_in<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>, e: Exp
                 // std's own, where no code of the crate's runs: a `len()`, a
                 // question of an `Option` or a `Result`, and a copy or a string
                 // of what's simple.
-                None if super::recognition::is_std_item(tcx, id) => match tcx.item_name(id).as_str() {
-                    "len" | "is_empty" | "is_some" | "is_none" | "is_ok" | "is_err" => tcx.trait_of_assoc(id).is_none(),
-                    "clone" | "to_owned" | "to_string" | "as_str" => generic_args.types().all(simple),
-                    _ => tcx.is_diagnostic_item(Symbol::intern("box_new"), id),
+                None => match pure_std(tcx, id) {
+                    Some(PureStd::Question | PureStd::BoxNew) => true,
+                    Some(PureStd::Copy) => generic_args.types().all(simple),
+                    None => false,
                 },
-                None => false,
             };
             call_pure && args.iter().all(|&a| pure(a))
         }

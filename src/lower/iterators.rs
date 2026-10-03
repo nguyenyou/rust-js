@@ -5,6 +5,7 @@
 use super::calls::Call;
 use super::combinators::IterComb;
 use super::combinators::{IterSource, StepOp};
+use super::recognition::{StdItem, is_std_def, std_item, trait_method};
 use super::representation::Num;
 use super::{FnCx, R, Std};
 use crate::js;
@@ -13,8 +14,8 @@ use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId};
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
 use std::collections::HashSet;
 
 /// Whether `known` takes an iterator and iterates it, through
@@ -226,14 +227,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             return false;
         }
         let env = ty::TypingEnv::post_analysis(self.tcx, callee);
-        [sym::Iterator, sym::IntoIterator].into_iter().any(|name| {
-            self.tcx.get_diagnostic_item(name).is_some_and(|id| {
-                let tr = ty::TraitRef::new(self.tcx, id, [input]);
-                matches!(
-                    self.tcx.codegen_select_candidate(env.as_query_input(tr)),
-                    Ok(rustc_middle::traits::ImplSource::Param(_))
-                )
-            })
+        [StdItem::Iterator, StdItem::IntoIterator].into_iter().any(|item| {
+            let tr = ty::TraitRef::new(self.tcx, std_item(self.tcx, item), [input]);
+            matches!(
+                self.tcx.codegen_select_candidate(env.as_query_input(tr)),
+                Ok(rustc_middle::traits::ImplSource::Param(_))
+            )
         })
     }
 
@@ -259,14 +258,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if !self.is_user_iterator(ty) {
             return Ok(value);
         }
-        let iterator = self.tcx.get_diagnostic_item(sym::Iterator).expect("std has `Iterator`");
-        let next = self
-            .tcx
-            .associated_item_def_ids(iterator)
-            .iter()
-            .copied()
-            .find(|&id| self.tcx.item_name(id) == sym::next)
-            .expect("`Iterator` has `next`");
+        let iterator = std_item(self.tcx, StdItem::Iterator);
+        let next = trait_method(self.tcx, iterator, "next");
         let args = self.args_of(iterator, ty.peel_refs());
         // A generic `next` boxes a `Some` that looks like `None` (ADR 0051).
         let boxed = self.resolve_instance(next, args)?.is_some_and(|instance| {
@@ -335,7 +328,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ExprKind::Borrow { arg, .. } | ExprKind::Deref { arg } => self.boxed_or_lent(arg),
             ExprKind::Call { fun, ref args, .. }
                 if let &ty::FnDef(id, _) = self.thir[fun].ty.kind()
-                    && self.tcx.is_diagnostic_item(Symbol::intern("box_new"), id) =>
+                    && is_std_def(self.tcx, id, StdItem::BoxNew) =>
             {
                 self.boxed_or_lent(args[0])
             }
@@ -345,13 +338,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
 
     /// What an iterator of type `iterator` yields: its `Item`.
     pub(super) fn iterator_item(&self, iterator: ty::Ty<'tcx>) -> Option<ty::Ty<'tcx>> {
-        let trait_id = self.tcx.get_diagnostic_item(sym::Iterator)?;
-        let item = self
-            .tcx
-            .associated_item_def_ids(trait_id)
-            .iter()
-            .copied()
-            .find(|&id| self.tcx.item_name(id) == sym::Item)?;
+        let trait_id = std_item(self.tcx, StdItem::Iterator);
+        let item = trait_method(self.tcx, trait_id, "Item");
         let projection = ty::Ty::new_projection(self.tcx, ty::IsRigid::No, item, [iterator]);
         self.tcx
             .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(projection))
@@ -812,7 +800,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let items = if fresh { items } else { method(items, "slice", vec![]) };
                 // Into a `BinaryHeap`: put in heap order, as `BinaryHeap::from` does.
                 match generic_args.types().nth(1) {
-                    Some(target) if self.is_std_adt(target, Symbol::intern("BinaryHeap")) => {
+                    Some(target) if self.is_std_type(target, StdItem::BinaryHeap) => {
                         let item = target.walk().nth(1).and_then(|a| a.as_type()).expect("a heap's item");
                         self.heap_of(item, span)?;
                         let compare = self.cmp_fn(item, false, span)?;

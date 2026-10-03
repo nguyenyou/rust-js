@@ -1,7 +1,7 @@
 //! What dropping takes, crate-wide: the generic parameters given a drop,
 //! and the derives that drop nothing (ADR 0098).
 
-use crate::lower::recognition::serde_impl;
+use crate::lower::recognition::{StdItem, is_std_def, serde_impl};
 use crate::lower::{Body, FnInfo};
 use rustc_hir::LangItem;
 use rustc_hir::def::DefKind;
@@ -9,7 +9,6 @@ use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::def_id::DefId;
-use rustc_span::{Symbol, sym};
 use std::collections::{HashMap, HashSet};
 
 /// The type parameters of the crate's own generic functions that a caller
@@ -173,14 +172,14 @@ pub(super) fn drops_nothing_derived(tcx: TyCtxt<'_>, imp: DefId) -> bool {
     .into_iter()
     .any(|item| tcx.is_lang_item(tr, item))
         || [
-            sym::Eq,
-            sym::Ord,
-            sym::Hash,
-            Symbol::intern("Debug"),
-            Symbol::intern("Default"),
+            StdItem::Eq,
+            StdItem::Ord,
+            StdItem::Hash,
+            StdItem::Debug,
+            StdItem::Default,
         ]
         .into_iter()
-        .any(|name| tcx.is_diagnostic_item(name, tr))
+        .any(|item| is_std_def(tcx, tr, item))
         || serde_impl(tcx, imp).is_some()
 }
 

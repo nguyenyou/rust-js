@@ -286,8 +286,8 @@ export const mutations: Mutation[] = [
     name: "dyn-display-refused",
     breaks: "a `dyn Display` isn't a pair, and is refused",
     file: "src/lower/traits.rs",
-    find: "        [\"Display\", \"Error\"]\n            .into_iter()",
-    replace: "        [\"Error\"]\n            .into_iter()",
+    find: "        [StdItem::Display, StdItem::Error]\n            .into_iter()",
+    replace: "        [StdItem::Error]\n            .into_iter()",
     tests: ["test/corpus.test.ts", "-t", "dyn_display"],
   },
   {

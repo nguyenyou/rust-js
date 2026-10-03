@@ -2,13 +2,14 @@
 //! `{:#?}`, and which derives are shown (ADRs 0060, 0137).
 
 use crate::lower::format_args::{Piece, decode_template};
-use crate::lower::recognition::{FormatterQuery, formatter_query};
+use crate::lower::recognition::{
+    FormatterQuery, StdItem, formatter_query, is_arguments_new, is_formatter_pad, is_std_def,
+};
 use crate::lower::{Body, strip};
 use rustc_hir::def::DefKind;
 use rustc_middle::thir::{ExprId, ExprKind, LocalVarId, Thir};
 use rustc_middle::ty;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Symbol;
 use rustc_span::def_id::DefId;
 use std::collections::HashMap;
 
@@ -48,10 +49,7 @@ fn format_calls(tcx: TyCtxt<'_>, thir: &Thir<'_>) -> Vec<(Vec<Piece>, Option<Vec
             let &ty::FnDef(id, _) = thir[fun].ty.kind() else {
                 return None;
             };
-            if tcx.item_name(id).as_str() != "new"
-                || !tcx.def_path_str(id).starts_with("std::fmt::Arguments")
-                || args.len() != 2
-            {
+            if !is_arguments_new(tcx, id) || args.len() != 2 {
                 return None;
             }
             let ExprKind::Literal { lit, .. } = thir[through(args[0])].kind else {
@@ -84,7 +82,7 @@ pub(super) fn uses_pretty_debug(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bo
         let asks = thir.exprs.iter().any(|expr| {
             matches!(expr.kind, ExprKind::Call { fun, .. }
                 if matches!(*thir[fun].ty.kind(), ty::FnDef(id, _)
-                    if tcx.item_name(id).as_str() == "alternate" && tcx.def_path_str(id).starts_with("std::fmt::Formatter")))
+                    if formatter_query(tcx, id) == Some(FormatterQuery::Alternate)))
         });
         asks || format_calls(tcx, thir).into_iter().any(|(pieces, fields)| {
             let alternates: Vec<usize> = pieces
@@ -120,8 +118,7 @@ pub(super) fn uses_pretty_debug(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bo
 /// argument can't be told is taken to be.
 pub(super) fn uses_format_options(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> bool {
     let asks = |id: DefId| {
-        formatter_query(tcx, id).is_some_and(|query| query != FormatterQuery::Alternate)
-            || (tcx.item_name(id).as_str() == "pad" && tcx.def_path_str(id).starts_with("std::fmt::Formatter"))
+        formatter_query(tcx, id).is_some_and(|query| query != FormatterQuery::Alternate) || is_formatter_pad(tcx, id)
     };
     if all_bodies.iter().any(|body| {
         body.thir.exprs.iter().any(|expr| {
@@ -177,11 +174,12 @@ pub(super) fn uses_format_options(tcx: TyCtxt<'_>, all_bodies: &[&Body<'_>]) -> 
 pub(super) fn derived_debug(tcx: TyCtxt<'_>, id: DefId) -> bool {
     tcx.is_automatically_derived(id)
         && matches!(tcx.def_kind(id), DefKind::Impl { of_trait: true })
-        && tcx.is_diagnostic_item(
-            Symbol::intern("Debug"),
+        && is_std_def(
+            tcx,
             tcx.impl_trait_ref(id)
                 .instantiate_identity()
                 .skip_normalization()
                 .def_id,
+            StdItem::Debug,
         )
 }

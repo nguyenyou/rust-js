@@ -4,6 +4,7 @@ use super::body_queries::ForLoop;
 use super::combinators::IterSource;
 use super::drops::Drops;
 use super::ranges::RangeKind;
+use super::recognition::StdItem;
 use super::representation::Num;
 use super::{Dest, FnCx, Loop, R, Std, Var, fresh_in, is_enumerate_pair, std_impls, without_refs};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -14,7 +15,7 @@ use rustc_hir::{BindingMode, ByRef, HirId, LangItem};
 use rustc_middle::middle::region;
 use rustc_middle::thir::{self, ExprId, ExprKind, PatKind};
 use rustc_middle::ty;
-use rustc_span::{Span, Symbol, sym};
+use rustc_span::{Span, sym};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn lower_loop(
@@ -191,7 +192,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 || peeled.is_array()
                 || peeled.is_slice()
                 || self.is_vec_like(peeled)
-                || self.is_std_adt(peeled, Symbol::intern("SliceIter"))
+                || self.is_std_type(peeled, StdItem::SliceIter)
                 || self.is_str_split(peeled)
                 || self.is_array_iter(peeled)
                 || self.is_lazy_value(f.head)

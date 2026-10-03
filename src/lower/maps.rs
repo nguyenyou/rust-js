@@ -2,7 +2,7 @@
 //! what JS compares by value: numbers, strings, `char`s, `bool`s and
 //! fieldless enums.
 
-use super::recognition::Std;
+use super::recognition::{Std, StdItem};
 use super::representation::{Num, is_fieldless_enum};
 use super::{FnCx, R};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -10,7 +10,7 @@ use crate::runtime::Helper;
 use rustc_hir::LangItem;
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
-use rustc_span::{Span, Symbol};
+use rustc_span::Span;
 
 /// A `HashMap` or `HashSet` method rust-js knows.
 #[derive(Clone, Copy, PartialEq)]
@@ -60,9 +60,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// A `BTreeMap` or `BTreeSet`, whose order is its keys' (ADR 0059).
     pub(super) fn is_sorted(&self, ty: Ty<'tcx>) -> bool {
         let ty = ty.peel_refs();
-        self.is_std_adt(ty, Symbol::intern("BTreeMap"))
-            || self.is_std_adt(ty, Symbol::intern("BTreeSet"))
-            || self.is_json_map(ty)
+        self.is_std_type(ty, StdItem::BTreeMap) || self.is_std_type(ty, StdItem::BTreeSet) || self.is_json_map(ty)
     }
 
     /// What goes over a map or a set, in order: `m` itself for a hashed one,

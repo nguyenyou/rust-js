@@ -1,6 +1,7 @@
 //! What rust-js can represent: a value of a type it can't is an error where
 //! it's made or bound, which says what part of it is the one.
 
+use super::recognition::{StdItem, is_std_def};
 use super::representation::Num;
 use super::{FnCx, R, Shape};
 use rustc_ast::Mutability;
@@ -8,7 +9,7 @@ use rustc_hir as hir;
 use rustc_hir::{BindingMode, ByRef, LangItem};
 use rustc_middle::ty;
 use rustc_middle::ty::Ty;
-use rustc_span::{Span, Symbol};
+use rustc_span::Span;
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn check_value_ty(&self, ty: Ty<'tcx>, span: Span) -> R<()> {
@@ -88,7 +89,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Dynamic(traits, ..)
                 if traits
                     .principal_def_id()
-                    .is_some_and(|t| self.tcx.is_diagnostic_item(Symbol::intern("Any"), t)) =>
+                    .is_some_and(|t| is_std_def(self.tcx, t, StdItem::Any)) =>
             {
                 return None;
             }
@@ -154,7 +155,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 return args.types().next().and_then(|t| self.unsupported_in(t, seen));
             }
             // A thread-local is its value (ADR 0037).
-            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("LocalKey")) => {
+            ty::Adt(_, args) if self.is_std_type(ty, StdItem::LocalKey) => {
                 return args.types().next().and_then(|t| self.unsupported_in(t, seen));
             }
             _ => {}

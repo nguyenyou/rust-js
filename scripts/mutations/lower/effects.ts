@@ -20,13 +20,4 @@ export const mutations: Mutation[] = [
     tests: ["test/snapshots.test.ts"],
     snapshots: true,
   },
-  {
-    name: "std-questions-impure",
-    breaks: "`is_empty()` and the like are taken as doing something: a pure chain is lazy",
-    file: "src/lower/effects.rs",
-    find: "\"is_err\" => tcx.trait_of_assoc(id).is_none(),",
-    replace: "\"is_err\" => false,",
-    tests: ["test/snapshots.test.ts"],
-    snapshots: true,
-  },
 ];

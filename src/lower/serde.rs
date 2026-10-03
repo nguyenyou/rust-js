@@ -28,7 +28,7 @@ mod value;
 pub(super) use super::recognition::Json;
 
 use super::bindings::variant_name;
-use super::recognition::SkipPredicate;
+use super::recognition::{SkipPredicate, StdItem, std_item};
 use super::representation::{Num, variant_field};
 use super::{FnCx, R, lower_first};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -38,7 +38,7 @@ use rustc_hir::def::CtorKind;
 use rustc_hir::{self as hir, intravisit};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, Symbol, sym};
+use rustc_span::{Span, Symbol};
 use std::collections::HashMap;
 
 /// One `#[serde(..)]` item: `rename = "a"`, or `rename(serialize = "a")`.
@@ -497,7 +497,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 self.write_json(value, json, args.type_at(0), span, out)
             }
             // `{"Ok": ..}` or `{"Err": ..}`, as serde's impl writes one.
-            ty::Adt(_, args) if self.is_std_adt(ty, Symbol::intern("Result")) => {
+            ty::Adt(_, args) if self.is_std_type(ty, StdItem::Result) => {
                 let mut branches = Vec::new();
                 for (i, name) in ["Ok", "Err"].into_iter().enumerate() {
                     let mut body = Vec::new();
@@ -631,11 +631,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let ty = Ty::new_adt(self.tcx, adt, args);
         // `#[serde(into = "T")]`: a clone of it, as a `T`, written as one.
         if container.into {
-            let Some(target) = self.conversion(adt.did(), sym::Into, true) else {
+            let Some(target) = self.conversion(adt.did(), StdItem::Into, true) else {
                 return Err(self.unsupported(span, "this `#[serde(into)]`"));
             };
             let cloned = self.clone_value(value, ty, span, out)?;
-            let converted = self.convert(sym::From, target, ty, cloned, span)?;
+            let converted = self.convert(StdItem::From, target, ty, cloned, span)?;
             return self.write_json(converted, json, target, span, out);
         }
         if adt.is_struct() {
@@ -902,8 +902,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     }
 
     /// `<to as From<from>>::from(value)` (or `TryFrom`), of the crate's own impl.
-    fn convert(&mut self, convert: Symbol, to: Ty<'tcx>, from: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
-        let trait_id = self.tcx.get_diagnostic_item(convert).expect("std has it");
+    fn convert(&mut self, convert: StdItem, to: Ty<'tcx>, from: Ty<'tcx>, value: Expr, span: Span) -> R<Expr> {
+        let trait_id = std_item(self.tcx, convert);
         let method = self
             .tcx
             .associated_items(trait_id)

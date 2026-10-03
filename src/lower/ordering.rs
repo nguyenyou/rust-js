@@ -4,7 +4,7 @@
 //! parts compared in turn: `$cmp(a.x, b.x) || $cmp(a.y, b.y)`, since `Equal`
 //! is the one that's falsy.
 
-use super::recognition::OrderingCall;
+use super::recognition::{OrderingCall, StdItem, std_item, trait_method};
 use super::representation::Num;
 use super::{FnCx, R, Shape};
 use crate::js::{self, Expr, Op, Stmt, StmtKind};
@@ -17,9 +17,7 @@ use rustc_span::{DUMMY_SP, Span};
 
 impl<'a, 'tcx> FnCx<'a, 'tcx> {
     pub(super) fn ord_trait(&self) -> DefId {
-        self.tcx
-            .get_diagnostic_item(rustc_span::sym::Ord)
-            .expect("std has `Ord`")
+        std_item(self.tcx, StdItem::Ord)
     }
 
     pub(super) fn partial_ord_trait(&self) -> DefId {
@@ -85,11 +83,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let own_ord = self.has_user_impl(ord, ty);
         let own_partial = self.has_user_impl(partial_ord, ty);
         if own_ord && (!partial || !own_partial) {
-            let cmp = self.method(ord, "cmp");
+            let cmp = trait_method(self.tcx, ord, "cmp");
             return self.impl_call(cmp, self.args_of(ord, ty), vec![a, b], span);
         }
         if own_partial {
-            let cmp = self.method(partial_ord, "partial_cmp");
+            let cmp = trait_method(self.tcx, partial_ord, "partial_cmp");
             return self.impl_call(cmp, self.args_of(partial_ord, ty), vec![a, b], span);
         }
         // Derived. Each is read more than once below.
@@ -194,15 +192,6 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         }
         body.push(StmtKind::Return(Some(order)).at(js::Span::NONE));
         Ok(Expr::arrow(vec!["a".into(), "b".into()], body))
-    }
-
-    fn method(&self, trait_id: DefId, name: &str) -> DefId {
-        self.tcx
-            .associated_item_def_ids(trait_id)
-            .iter()
-            .copied()
-            .find(|&id| self.tcx.item_name(id).as_str() == name)
-            .expect("the trait has the method")
     }
 
     /// `a < b` and the rest, `a.cmp(&b)`, `a.partial_cmp(&b)`, `a.max(b)`

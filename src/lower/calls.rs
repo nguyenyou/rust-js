@@ -4,7 +4,7 @@ use super::bindings::{JsForm, is_binding, is_method, js_form};
 use super::combinators::Comb;
 use super::combinators::StepOp;
 use super::drops::Drops;
-use super::recognition::{Catching, Std, StreamOp, TypeFact};
+use super::recognition::{Catching, Std, StdItem, StreamOp, TypeFact, is_std_def, std_item, trait_method};
 use super::{FnCx, R};
 use crate::js;
 use crate::js::{Expr, Op, Prop, Stmt, StmtKind};
@@ -13,8 +13,8 @@ use rustc_ast::{LitKind, Mutability};
 use rustc_hir::{LangItem, find_attr};
 use rustc_middle::thir::{ExprId, ExprKind};
 use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, sym};
 
 use super::format_args::without_newline;
 
@@ -104,7 +104,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         if let Some(trait_id) = self.tcx.trait_of_assoc(def_id)
             && (self.tcx.is_lang_item(trait_id, LangItem::PartialEq)
                 || self.tcx.is_lang_item(trait_id, LangItem::PartialOrd)
-                || self.tcx.is_diagnostic_item(rustc_span::sym::Ord, trait_id))
+                || is_std_def(self.tcx, trait_id, StdItem::Ord))
             && generic_args.types().next().is_some_and(|t| self.is_cell(t))
         {
             let pointees = self
@@ -279,14 +279,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 _ => None,
             }
         {
-            let ord = self.tcx.get_diagnostic_item(sym::Ord).expect("std has `Ord`");
-            let method = self
-                .tcx
-                .associated_item_def_ids(ord)
-                .iter()
-                .copied()
-                .find(|&id| self.tcx.item_name(id).as_str() == name)
-                .expect("`Ord` has `max` and `min`");
+            let ord = std_item(self.tcx, StdItem::Ord);
+            let method = trait_method(self.tcx, ord, name);
             let values = self.operands(args, out)?;
             if let Some(call) = self.trait_call(method, generic_args, values, span, out)? {
                 return Ok(Some(call));
@@ -743,9 +737,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let tr = self.tcx.trait_of_assoc(def_id)?;
         let mut types = args.types();
         let (first, second) = (types.next()?, types.next()?);
-        if self.tcx.is_diagnostic_item(rustc_span::sym::From, tr) {
+        if is_std_def(self.tcx, tr, StdItem::From) {
             Some((first, second))
-        } else if self.tcx.is_diagnostic_item(rustc_span::sym::Into, tr) {
+        } else if is_std_def(self.tcx, tr, StdItem::Into) {
             Some((second, first))
         } else {
             None

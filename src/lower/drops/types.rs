@@ -2,10 +2,10 @@
 //! its own or a part's, or what rust-js can't run yet, and why. A type is
 //! walked once.
 
+use crate::lower::recognition::StdItem;
 use rustc_hir::LangItem;
 use rustc_middle::thir::LocalVarId;
 use rustc_middle::ty::{self, Ty};
-use rustc_span::Symbol;
 use rustc_span::def_id::DefId;
 
 use super::super::FnCx;
@@ -100,7 +100,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let depth = walk.seen.len();
         let outer = std::mem::replace(&mut walk.reached, usize::MAX);
         walk.seen.push(ty);
-        let std = |name: &str| self.is_std_adt(ty, Symbol::intern(name));
+        let std = |item: StdItem| self.is_std_type(ty, item);
         let all = |cx: &Self, tys: &mut dyn Iterator<Item = Ty<'tcx>>, walk: &mut Walk<'tcx>| {
             let mut found = Drops::Nothing;
             for t in tys {
@@ -151,7 +151,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 }
             }
             // Never dropped, or dropped by hand.
-            ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std("MaybeUninit") => Drops::Nothing,
+            ty::Adt(..) if self.is_lang_adt(ty, LangItem::ManuallyDrop) || std(StdItem::MaybeUninit) => Drops::Nothing,
             ty::Adt(adt, args) => {
                 let own = self.tcx.adt_destructor(adt.did());
                 let parts = |walk: &mut Walk<'tcx>| {
@@ -171,10 +171,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     // A std type that drops what it holds its own way: an
                     // `Rc` when its last clone goes, a map its entries. A `Cell`
                     // drops the old value when it's set.
-                    _ if own.is_some() || std("Cell") || std("RefCell") => match all(self, &mut args.types(), walk) {
-                        Drops::Nothing => Drops::Nothing,
-                        _ => Drops::Unsupported(ty, "a std type holding a value with a destructor"),
-                    },
+                    _ if own.is_some() || std(StdItem::Cell) || std(StdItem::RefCell) => {
+                        match all(self, &mut args.types(), walk) {
+                            Drops::Nothing => Drops::Nothing,
+                            _ => Drops::Unsupported(ty, "a std type holding a value with a destructor"),
+                        }
+                    }
                     _ => parts(walk),
                 }
             }

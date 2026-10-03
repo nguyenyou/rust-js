@@ -85,21 +85,27 @@ Each is checked to stay that way.
 | `library.rs`, `sources.rs`, `pipeline.rs` | Libraries' contracts, source files, and the crate as a whole |
 
 **Who owns what.** A concept that more than one module needs has one
-module that owns it: its state, and the questions about it, which the
-others ask. [architecture.test.ts](../test/architecture.test.ts) holds
-the ones below to it.
+module that owns it: its state, the questions about it, and the JS it's
+written as, which the others ask for. [architecture.test.ts](../test/architecture.test.ts)
+holds the ones below to it, and `bun run architecture` shows where each
+stands: what's read outside its owner, and how much each module knows of
+the rest.
 
 | Concept | Owner | What the others ask |
 |---|---|---|
 | What dropping runs, and where | `drops.rs`, `drops/` | `drop_value`, `moved`, `temporary`, `enter_body_drops` |
 | Whether a value is a JS iterator or an array | `iterators.rs` | `is_lazy_value`, `mark_lazy_chain`, `dyn_iterator` |
-| Locals stepped through, `$iter`s (ADR 0071) | `iterators.rs` | `steps_through`, `bound_as_iter`, `is_stepping` |
+| Locals stepped through, `$iter`s, and a generic iterator as a JS iterator (ADRs 0061, 0071) | `iterators.rs` | `steps_through`, `stepped_value`, `is_stepping`, `js_iterator`, `stepped_items` |
 | `&mut`s to values JS can't change in place | `mut_refs.rs` | `is_boxed`, `is_alias`, `slot`, `is_item_call` |
 | Writing to a `Formatter` | `display.rs` | `written`, `formatter_answer`, `with_dyn_debug` |
 | What a function or a binding is in JS | `items.rs` | `fn_ref`, `js_ref`, `resolve_instance` |
 | Dictionaries and evidence | `traits.rs` | `dictionary`, `evidence_for`, `impl_call` |
+| What a generic function was given: dictionaries, a copied default's arguments, type facts (ADRs 0049, 0145) | `traits.rs` | `in_impl_terms`, `given_evidence`, `given_type_fact`, `resolve_self_instance`, `enter_default` |
+| The box of a `Some` that looks like `None` (ADR 0051) | `options.rs` | `some`, `some_value`, `some_literal`, `is_some_box` |
 | When a value is copied | `copies.rs` | `copy_if_needed`, `contains_mutated` |
+| A cell, a lock, and the place its guard names (ADRs 0025, 0144) | `cells.rs`; `places.rs` for the place | `ref_place`, `guarded_cell` |
 | Which std function a call is | `recognition.rs` | `classify`, and its answers through `shortcuts.rs` |
+| Std's names: which std item a type, trait or function is | `recognition.rs` | `StdItem`, `is_std_type`, `is_std_def`, `std_item`, `trait_method` |
 
 **Calls.** A call is lowered by `calls.rs::call`, a short dispatcher;
 what a function is in JS is `items.rs`'s, and a `&mut` given to one

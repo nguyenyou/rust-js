@@ -12,6 +12,7 @@ use super::bindings::{Export, is_binding};
 use super::recognition::TypeFact;
 use super::traits;
 use super::{Body, FnInfo, TestFn, module_path};
+use crate::lower::recognition::{StdItem, is_std_def};
 use debug::{derived_debug, uses_format_options, uses_pretty_debug};
 use drops::drop_params;
 use mutation::mutated_types;
@@ -22,8 +23,8 @@ use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::ExprKind;
 use rustc_middle::ty;
 use rustc_middle::ty::{Ty, TyCtxt, TypeVisitableExt};
+use rustc_span::Symbol;
 use rustc_span::def_id::{DefId, LocalDefId, LocalModDefId};
-use rustc_span::{Symbol, sym};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use type_facts::type_fact_params;
 pub(super) use validation::is_thread_local;
@@ -387,7 +388,7 @@ fn changed_vecs<'tcx>(tcx: TyCtxt<'tcx>, all_bodies: &[&Body<'tcx>]) -> HashSet<
                 arg,
             } = expr.kind
                 && let ty = body.thir[arg].ty
-                && matches!(ty.kind(), ty::Adt(adt, _) if [sym::Vec, Symbol::intern("VecDeque"), Symbol::intern("BinaryHeap")].into_iter().any(|name| tcx.is_diagnostic_item(name, adt.did())))
+                && matches!(ty.kind(), ty::Adt(adt, _) if [StdItem::Vec, StdItem::VecDeque, StdItem::BinaryHeap].into_iter().any(|item| is_std_def(tcx, adt.did(), item)))
             {
                 changed.insert(ty);
             }

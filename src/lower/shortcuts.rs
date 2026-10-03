@@ -4,7 +4,7 @@
 
 use super::FnCx;
 use super::ranges::RangeKind;
-use super::recognition::Json;
+use super::recognition::{Json, StdItem};
 use rustc_hir::LangItem;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Symbol;
@@ -14,7 +14,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// `#[serde(from = "T")]`, `try_from` or `into` on `adt`: `T`, from the
     /// derive's call of `From::from`, `TryFrom::try_from` or `Into::into`
     /// (the trait `convert` names), whose types rustc worked out.
-    pub(super) fn conversion(&self, adt: DefId, convert: Symbol, serialize: bool) -> Option<Ty<'tcx>> {
+    pub(super) fn conversion(&self, adt: DefId, convert: StdItem, serialize: bool) -> Option<Ty<'tcx>> {
         self.recognition().conversion(adt, convert, serialize)
     }
 
@@ -137,8 +137,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.recognition().option_of(ty)
     }
 
-    pub(super) fn is_std_adt(&self, ty: Ty<'tcx>, name: Symbol) -> bool {
-        self.recognition().is_std_adt(ty, name)
+    pub(super) fn is_std_type(&self, ty: Ty<'tcx>, item: StdItem) -> bool {
+        self.recognition().is_std_type(ty, item)
     }
 
     pub(super) fn is_lang_adt(&self, ty: Ty<'tcx>, item: LangItem) -> bool {

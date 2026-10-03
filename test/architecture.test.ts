@@ -218,6 +218,26 @@ test("library identity checks and method tables stay in recognition", () => {
   }
 });
 
+// Only recognition.rs spells std's names: the rest ask it, `is_std_type(ty,
+// StdItem::Result)`, `std_item(tcx, StdItem::Ord)`. Fourteen modules had 58
+// checks of their own, by diagnostic item, path or method name (the second
+// architecture audit).
+const identity: [string, RegExp][] = [
+  ["a diagnostic item", /\b(?:is|get)_diagnostic_item\s*\(/],
+  ["a std type's name", /Symbol::intern\("[A-Z][A-Za-z]+"\)/],
+  ["a path compared", /def_path_str\([^)]*\)(?:\.as_str\(\))?\s*(?:==|\.starts_with|\.contains)/],
+  ["a method's name compared", /item_name\([^)]*\)(?:\.as_str\(\))?\s*==|match\s+(?:self\.)?tcx\.item_name\([^)]*\)\.as_str\(\)/],
+  ["a std type by its name", /\bis_std_adt\s*\(/],
+];
+test("only recognition spells std's names", () => {
+  const strays: string[] = [];
+  for (const file of ["src/lower.rs", ...files("src/lower")].filter(f => !f.includes("/recognition") && !f.endsWith("/shortcuts.rs"))) {
+    const text = read(file);
+    for (const [what, pattern] of identity) if (pattern.test(text)) strays.push(`${what} in ${file}`);
+  }
+  expect(strays).toEqual([]);
+});
+
 test("Vite delegates build preparation and validates build results", () => {
   const plugin = read("vite-plugin/index.js");
   expect(plugin).not.toMatch(/react\/build\.sh|libreact\.rmeta|rust-toolchain\.toml|child_process/);

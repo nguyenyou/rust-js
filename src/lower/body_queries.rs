@@ -1,13 +1,13 @@
 //! Read-only questions about a captured THIR body. No emission state, names,
 //! dependencies or JavaScript: these answers cannot change lowering as a side effect.
 
+use super::recognition::{StdItem, is_std_method};
 use rustc_hir::{HirId, LangItem};
 use rustc_middle::middle::region;
 use rustc_middle::mir::BorrowKind;
 use rustc_middle::thir::{self, ExprId, ExprKind, LocalVarId, Pat, PatKind, Thir};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::{self, TyCtxt};
-use rustc_span::sym;
 use std::collections::{HashMap, HashSet};
 
 /// The parts of a `for pat in head { body }` (ADR 0025).
@@ -264,10 +264,7 @@ pub(super) fn stepped_locals<'tcx>(tcx: TyCtxt<'tcx>, thir: &Thir<'tcx>) -> Hash
         let &ty::FnDef(def_id, _) = thir[fun].ty.kind() else {
             continue;
         };
-        let steps = tcx
-            .trait_of_assoc(def_id)
-            .is_some_and(|t| tcx.is_diagnostic_item(sym::Iterator, t))
-            && tcx.item_name(def_id) == sym::next;
+        let steps = is_std_method(tcx, def_id, StdItem::Iterator, "next");
         let Some(&receiver) = args.first() else {
             continue;
         };
