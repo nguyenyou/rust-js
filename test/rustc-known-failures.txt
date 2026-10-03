@@ -21,8 +21,6 @@ associated-types/associated-types-iterator-binding.rs	error: rust-js does not su
 associated-types/associated-types-normalize-in-bounds-binding.rs	error: rust-js does not support implementation evidence for `<T as FnLike<u32>>` yet
 associated-types/associated-types-projection-in-where-clause.rs	error: rust-js does not support implementation evidence for `<J as NonZero>` yet
 associated-types/issue-23208.rs	error: rust-js does not support implementation evidence for `<T as TheSuperTrait<u32>>` yet
-associated-types/issue-47139-1.rs	error: rust-js does not support this method of an `Option` of what could look like `None` yet
-associated-types/issue-47139-2.rs	error: rust-js does not support this method of an `Option` of what could look like `None` yet
 async-await/async-fn-size-moved-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/async-fn-size-uninit-locals.rs	error: rust-js does not support user implementations of this standard or external trait yet
 async-await/in-trait/async-default-fn-overridden.rs	error: rust-js does not support labeled blocks yet
@@ -177,13 +175,11 @@ generic-associated-types/issue-76826.rs	error: rust-js does not support generic 
 generic-associated-types/iterable.rs	error: rust-js does not support generic associated types yet
 generic-associated-types/streaming_iterator.rs	error: rust-js does not support generic associated types yet
 higher-ranked/trait-bounds/assoc-type-projection-method.rs	error: rust-js does not support calling `std::iter::IntoIterator::into_iter` yet
-impl-trait/example-st.rs	error: rust-js does not support this method of an `Option` of what could look like `None` yet
 impl-trait/issues/issue-51185.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 impl-trait/nesting.rs	error: rust-js does not support calling `std::convert::Into::into` yet
 indexing/indexing-spans-caller-location.rs	error: rust-js does not support calling `std::panic::Location::<'a>::line` yet
 intrinsics/intrinsics-math.rs	error: rust-js does not support calling `std::f32::<impl f32>::mul_add` yet
 intrinsics/volatile-composite-types.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
-issues/issue-30081.rs	error: rust-js does not support this call, for an `Option` of what could look like `None` yet
 issues/issue-34503.rs	error: rust-js does not support comparing `main::X`s yet
 issues/issue-36474.rs	error: rust-js does not support calling `std::slice::from_raw_parts` yet
 issues/issue-42148.rs	error: rust-js does not support calling `std::ptr::write_volatile` yet
@@ -227,7 +223,6 @@ or-patterns/search-via-bindings.rs	error: rust-js does not support a guard of a 
 overloaded/fixup-deref-mut.rs	error: rust-js does not support values of type `*mut Point` yet
 overloaded/overloaded_deref_with_ref_pattern_issue15609.rs	error: rust-js does not support values of type `std::cell::RefMut<'_, i32>` yet
 overloaded/overloaded_deref_with_ref_pattern.rs	error: rust-js does not support `ref mut` bindings to this type yet
-overloaded/overloaded-autoderef-vtable.rs	error: rust-js does not support this call, for an `Option` of what could look like `None` yet
 overloaded/overloaded-deref-count.rs	error: rust-js does not support assigning to this place yet
 overloaded/overloaded-index-autoderef.rs	error: rust-js does not support a `&mut` of this in a variable yet
 overloaded/overloaded-index.rs	error: rust-js does not support a `&mut` of this in a variable yet
@@ -303,7 +298,7 @@ traits/trait-implementation-restriction-5988.rs	error: rust-js does not support 
 traits/trait-upcasting/correct-supertrait-substitution.rs	error: rust-js does not support implementation evidence for `<T as std::fmt::Display>` yet
 traits/trait-upcasting/multiple-supertraits-modulo-normalization.rs	error: rust-js does not support this trait upcast yet
 traits/trait-upcasting/struct.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet
-traits/with-bounds-default.rs	error: rust-js does not support this call, for an `Option` of what could look like `None` yet
+traits/with-bounds-default.rs	error: rust-js does not support implementation evidence for `<std::option::Option<T> as Getter<T>>` yet
 transmute/transmute-array-to-scalar.rs	error: rust-js does not support calling `std::intrinsics::transmute` yet
 try-trait/try-operator-various-contexts.rs	error: rust-js does not support `parse` to a `T` yet
 type-inference/issue-113283-alllocator-trait-eq.rs	error: rust-js does not support values of type `(*const alloc::sync::ArcInner<i32>) is !null` yet

@@ -418,12 +418,10 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         out: &mut Vec<Stmt>,
     ) -> R<Expr> {
         let subject_ty = self.thir[args[0]].ty.peel_refs();
-        // An `Option` of a generic `T` may be boxed (ADR 0051): not these yet.
-        if let Some(inner) = self.option_of(subject_ty)
-            && self.boxed_payload(inner)
-        {
-            return Err(self.unsupported(span, "this method of an `Option` of what could look like `None`"));
-        }
+        // An `Option` whose `Some` may be boxed (ADR 0051).
+        let boxed = self
+            .option_of(subject_ty)
+            .is_some_and(|inner| self.boxed_payload(inner));
         let mut values = self.operands(args, out)?;
         if let Comb::Then | Comb::ThenSome = comb {
             let some = generic_args.type_at(0);
@@ -471,6 +469,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let none = || Expr::bin(Op::LooseEq, subject.clone(), Expr::null());
         let tag = |t: &str| Expr::bin(Op::Eq, Expr::member(subject.clone(), "TAG"), Expr::str(t));
         let inside = || Expr::member(subject.clone(), "_0");
+        // What a `Some` holds: the value, or what's in its box.
+        let value = if boxed {
+            self.some_value(subject.clone())
+        } else {
+            subject.clone()
+        };
         // A value Rust computes either way, that JS would only compute when
         // it's needed: in a `const` first if it has effects.
         let eager = |this: &mut Self, value: Expr, out: &mut Vec<Stmt>| {
@@ -486,48 +490,55 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         };
         Ok(match comb {
             Comb::Then | Comb::ThenSome => unreachable!("handled above"),
+            // `??` would give a box for the value in it.
             Comb::UnwrapOrElse => {
                 let f = next();
                 let fallback = self.call_with(f, Vec::new(), "fallback", out);
-                Expr::bin(Op::Coalesce, subject, fallback)
+                match boxed {
+                    true => Expr::cond(some, value, fallback),
+                    false => Expr::bin(Op::Coalesce, subject, fallback),
+                }
             }
             Comb::UnwrapOrDefault => {
                 let inner = self.option_of(subject_ty).expect("an `Option`");
                 let fallback = self.default_value(inner, span)?;
-                Expr::bin(Op::Coalesce, subject, fallback)
+                match boxed {
+                    true => Expr::cond(some, value, fallback),
+                    false => Expr::bin(Op::Coalesce, subject, fallback),
+                }
             }
             Comb::MapOr => {
                 let fallback = next();
                 let fallback = eager(self, fallback, out);
                 let f = next();
-                let mapped = self.call_with(f, vec![subject.clone()], "map", out);
+                let mapped = self.call_with(f, vec![value], "map", out);
                 Expr::cond(some, mapped, fallback)
             }
             Comb::MapOrElse => {
                 let (g, f) = (next(), next());
-                let mapped = self.call_with(f, vec![subject.clone()], "map", out);
+                let mapped = self.call_with(f, vec![value], "map", out);
                 let fallback = self.call_with(g, Vec::new(), "fallback", out);
                 Expr::cond(some, mapped, fallback)
             }
             Comb::AndThen => {
                 let f = next();
-                let then = self.call_with(f, vec![subject.clone()], "then", out);
+                let then = self.call_with(f, vec![value], "then", out);
                 Expr::cond(some, then, Expr::undefined())
             }
             Comb::Filter => {
                 let p = next();
-                let keep = self.call_with(p, vec![subject.clone()], "keep", out);
+                let keep = self.call_with(p, vec![value], "keep", out);
                 Expr::cond(Expr::bin(Op::And, some, keep), subject, Expr::undefined())
             }
             Comb::OkOr => {
                 let e = next();
                 let e = eager(self, e, out);
-                Expr::cond(some, Self::ok(subject), Self::err(e))
+                Expr::cond(some, Self::ok(value), Self::err(e))
             }
             Comb::OkOrElse => {
                 let f = next();
                 let e = self.call_with(f, Vec::new(), "error", out);
-                Expr::cond(some, Self::ok(subject), Self::err(e))
+                Expr::cond(some, Self::ok(value), Self::err(e))
             }
             Comb::Or => {
                 let other = next();
@@ -541,12 +552,12 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             Comb::IsSomeAnd => {
                 let p = next();
-                let holds = self.call_with(p, vec![subject.clone()], "holds", out);
+                let holds = self.call_with(p, vec![value], "holds", out);
                 Expr::bin(Op::And, some, holds)
             }
             Comb::IsNoneOr => {
                 let p = next();
-                let holds = self.call_with(p, vec![subject.clone()], "holds", out);
+                let holds = self.call_with(p, vec![value], "holds", out);
                 Expr::bin(Op::Or, none(), holds)
             }
             Comb::ResultMap => {

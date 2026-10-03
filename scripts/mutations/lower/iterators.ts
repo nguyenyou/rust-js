@@ -245,4 +245,12 @@ export const mutations: Mutation[] = [
     replace: "            false => {\n",
     tests: ["test/corpus.test.ts", "-t", "stepped_nested"],
   },
+  {
+    name: "boxed-last-unboxed",
+    breaks: "`last()` of `()`s is `undefined`, and reads as `None`",
+    file: "src/lower/iterators.rs",
+    find: "                // An item that looks like `None` is boxed (ADR 0051).\n                Some(item) if self.boxed_payload(item) => {",
+    replace: "                // An item that looks like `None` is boxed (ADR 0051).\n                Some(item) if false && self.boxed_payload(item) => {",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
 ];

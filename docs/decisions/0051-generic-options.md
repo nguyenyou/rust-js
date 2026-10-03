@@ -36,7 +36,10 @@ function $some(x) {
   a box is an object.
 - **Taking the value out is `$someValue(o)`,** which unboxes one level. It
   appears in a `Some(v)` pattern, `?`, `unwrap`, `unwrap_or`
-  (`$someValue(o ?? $some(d))`) and `map`.
+  (`$someValue(o ?? $some(d))`), `map`, and the closures of `map_or`,
+  `and_then`, `filter`, `is_some_and` and the like. `unwrap_or_else` and
+  `unwrap_or_default` are `o != null ? $someValue(o) : fallback`, as `??`
+  would give the box.
 - **It costs nothing for ordinary values.** `$some(5)` is `5`, so a generic
   function called with numbers, strings or structs returns plain values,
   and a JS caller sees what it would without generics. Only a `None`-like
@@ -52,8 +55,9 @@ function $some(x) {
   - `Vec::pop` is `$pop(v)`;
   - a slice's `first`, `last` and `get`, and an iterator's `find`, are
     `$someAt(v, i)`;
-  - `bool::then` and `then_some` box their value, and `copied` and
-    `cloned` keep the box they're given;
+  - `bool::then` and `then_some` box their value, and `copied`, `cloned`,
+    `as_ref`, `filter`, `or` and `or_else` keep the box they're given;
+  - an iterator's `last` is `$someAt(items, items.length - 1)`;
   - `Result::ok` wraps its value in `$some`.
 
   Any other std call that would make one is a compile error, not JS that's

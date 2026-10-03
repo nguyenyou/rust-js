@@ -805,7 +805,19 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     }
                 }
             }
-            Std::Last => method(items, "at", vec![Expr::int(-1)]),
+            Std::Last => match generic_args.types().next().and_then(|i| self.iterator_item(i)) {
+                // An item that looks like `None` is boxed (ADR 0051).
+                Some(item) if self.boxed_payload(item) => {
+                    let items = if items.reads_same() {
+                        items
+                    } else {
+                        self.spill("items", items, out)
+                    };
+                    let last = Expr::bin(Op::Sub, Expr::member(items.clone(), "length"), Expr::int(1));
+                    self.some_at(items, last)
+                }
+                _ => method(items, "at", vec![Expr::int(-1)]),
+            },
             Std::Cloned => {
                 let item = generic_args.types().nth(1).expect("`cloned` names its item");
                 if self.needs_clone(item) {

@@ -381,6 +381,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     | Std::SliceGet
                     | Std::OptionCloned
                     | Std::Comb(Comb::Then | Comb::ThenSome)
+                    // An `Option` of the same type, or the closure's own.
+                    | Std::Comb(Comb::Filter | Comb::Or | Comb::OrElse | Comb::AndThen)
+                    | Std::Last
+                    // `as_ref()`: the same value, box and all.
+                    | Std::Pointee
                     | Std::ResultOk
                     | Std::ArrayMethod("find")
                     | Std::Extreme(_)

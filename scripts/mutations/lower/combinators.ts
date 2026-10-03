@@ -66,4 +66,28 @@ export const mutations: Mutation[] = [
     replace: "            StepOp::Peekable => {\n                if false {",
     tests: ["test/traits.test.ts", "-t", "peekable after"],
   },
+  {
+    name: "boxed-subject-unopened",
+    breaks: "`map_or` of `Some(None)` gives its closure the box, not the `None` in it",
+    file: "src/lower/combinators.rs",
+    find: "        let value = if boxed {\n            self.some_value(subject.clone())\n        } else {",
+    replace: "        let value = if false {\n            self.some_value(subject.clone())\n        } else {",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
+  {
+    name: "boxed-unwrap-or-else-coalesced",
+    breaks: "`unwrap_or_else` of `Some(None)` gives the box, `??`'s, not the `None` in it",
+    file: "src/lower/combinators.rs",
+    find: "                let fallback = self.call_with(f, Vec::new(), \"fallback\", out);\n                match boxed {",
+    replace: "                let fallback = self.call_with(f, Vec::new(), \"fallback\", out);\n                match false {",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
+  {
+    name: "boxed-unwrap-or-default-coalesced",
+    breaks: "`unwrap_or_default` of `Some(None)` gives the box, not the `None` in it",
+    file: "src/lower/combinators.rs",
+    find: "                let fallback = self.default_value(inner, span)?;\n                match boxed {",
+    replace: "                let fallback = self.default_value(inner, span)?;\n                match false {",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
 ];

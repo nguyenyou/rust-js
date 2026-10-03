@@ -23,6 +23,11 @@ function depth(o) {
   }
 }
 
+function describe(o) {
+  const value = $someValue(o);
+  return o != null ? (value == null ? "None" : `Some(${value})`) : "none";
+}
+
 function main() {
   const table = [1, undefined];
   for (let i = 0; i < 3; i++) {
@@ -82,6 +87,29 @@ function main() {
   console.log(
     `${((value) => (value == null ? "None" : `Some(${((value) => (value == null ? "None" : `Some(${value})`))($someValue(value))})`))(NOTHING_FOUND)} ${depth(DEEP)} ${FOUND_UNIT == null ? "None" : `Some(${unitDebug_fmt($someValue(FOUND_UNIT))})`} ${$eq(NOTHING_FOUND, lookup(table, 1))}`,
   );
+  console.log(`${describe(undefined)} ${describe($some(undefined))} ${describe(2)}`);
+  const o = $some(undefined);
+  const tmp$1 = o != null ? $someValue(o) : undefined;
+  const tmp$2 = o != null ? $someValue(o) : 1;
+  const value$2 = $someValue(o);
+  const tmp$3 = o != null ? value$2 : undefined;
+  const value$3 = $someValue(o);
+  const arg$6 = o != null && value$3 == null ? o : undefined;
+  console.log(
+    `${tmp$1 == null ? "None" : `Some(${tmp$1})`} ${tmp$2 == null ? "None" : `Some(${tmp$2})`} ${tmp$3 == null ? "None" : `Some(${tmp$3})`} ${((value) => (value == null ? "None" : `Some(${((value) => (value == null ? "None" : `Some(${value})`))($someValue(value))})`))(arg$6)}`,
+  );
+  const tmp$4 = o != null ? { TAG: "Ok", _0: $someValue(o) } : { TAG: "Err", _0: "e" };
+  const value$4 = $someValue(o);
+  const arg$7 = o != null ? $someValue(o) != null : undefined;
+  console.log(
+    `${tmp$4.TAG === "Ok" ? `Ok(${tmp$4._0 == null ? "None" : `Some(${tmp$4._0})`})` : `Err(${$debugStr(tmp$4._0)})`} ${o != null && value$4 == null} ${arg$7 == null ? "None" : `Some(${arg$7})`}`,
+  );
+  const units$1 = [undefined, undefined];
+  const items = units$1.map(() => {});
+  const tmp$5 = $someAt(items, items.length - 1);
+  const items$1 = [];
+  const arg$8 = $someAt(items$1, items$1.length - 1);
+  console.log(`${tmp$5 == null ? "None" : "Some(())"} ${arg$8 == null ? "None" : "Some(())"}`);
   let stack = [$some(undefined), undefined];
   while (true) {
     const top = $pop(stack);

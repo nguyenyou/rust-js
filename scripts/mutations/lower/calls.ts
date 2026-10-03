@@ -66,4 +66,20 @@ export const mutations: Mutation[] = [
     replace: "            let _ = receiver;",
     tests: ["test/corpus.test.ts", "-t", "collect_drops"],
   },
+  {
+    name: "boxed-as-ref-refused",
+    breaks: "`as_ref()` of an `Option` of an `Option` is an error, where it's the same value",
+    file: "src/lower/calls.rs",
+    find: "                    // `as_ref()`: the same value, box and all.\n                    | Std::Pointee\n",
+    replace: "",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
+  {
+    name: "boxed-filter-refused",
+    breaks: "`filter` of an `Option` of an `Option` is an error, where it keeps its own box",
+    file: "src/lower/calls.rs",
+    find: "                    | Std::Comb(Comb::Filter | Comb::Or | Comb::OrElse | Comb::AndThen)\n",
+    replace: "                    | Std::Comb(Comb::Or | Comb::OrElse | Comb::AndThen)\n",
+    tests: ["test/corpus.test.ts", "-t", "nested_options"],
+  },
 ];

@@ -28,6 +28,10 @@ fn depth(o: Option<Option<Option<u8>>>) -> u8 {
     }
 }
 
+fn describe(o: Option<Option<i32>>) -> String {
+    o.map_or("none".to_string(), |inner| format!("{inner:?}"))
+}
+
 fn main() {
     let table = [Some(1), None];
     for i in 0..3 {
@@ -56,6 +60,18 @@ fn main() {
     }
     println!("{:?} {:?}", kept, grid);
     println!("{:?} {} {:?} {:?}", NOTHING_FOUND, depth(DEEP), FOUND_UNIT, NOTHING_FOUND == lookup(&table, 1));
+    println!("{} {} {}", describe(None), describe(Some(None)), describe(Some(Some(2))));
+    let o: Option<Option<i32>> = Some(None);
+    println!(
+        "{:?} {:?} {:?} {:?}",
+        o.unwrap_or_default(),
+        o.unwrap_or_else(|| Some(1)),
+        o.and_then(|x| x),
+        o.filter(|x| x.is_none())
+    );
+    println!("{:?} {} {:?}", o.ok_or("e"), o.is_some_and(|x| x.is_none()), o.as_ref().map(|x| x.is_some()));
+    let units = vec![(), ()];
+    println!("{:?} {:?}", units.iter().map(|_| ()).last(), Vec::<()>::new().into_iter().last());
     let mut stack = vec![Some(Unit), None];
     while let Some(top) = stack.pop() {
         println!("{:?}", top);
