@@ -270,7 +270,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if self.serde_attrs(field.did)?.skip_deserializing {
                     return Err(self.unsupported(span, "a newtype struct whose field is skipped"));
                 }
-                let read = self.json_reader(field.ty(self.tcx, args).skip_normalization(), span)?;
+                let read = self.json_reader(self.field_ty(field, args), span)?;
                 let value = Expr::call(read, vec![Expr::var(json)]);
                 Ok(self.construct(adt, variant, args, vec![value]))
             }
@@ -313,7 +313,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let mut items = Vec::new();
         for field in &variant.fields {
             let attrs = self.serde_attrs(field.did)?;
-            let field_ty = field.ty(self.tcx, args).skip_normalization();
+            let field_ty = self.field_ty(field, args);
             items.push(match attrs.default {
                 // serde's `transparent` is the field without a default, which
                 // a skipped one has.
@@ -359,7 +359,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let (mut flattened, mut flat_params) = (Vec::new(), Vec::new());
         for (i, field) in variant.fields.iter().enumerate() {
             let attrs = self.serde_attrs(field.did)?;
-            let field_ty = field.ty(self.tcx, args).skip_normalization();
+            let field_ty = self.field_ty(field, args);
             if attrs.flatten && !attrs.skip_deserializing {
                 flattened.push(self.json_reader(field_ty, span)?);
                 let param = self.fresh(&keys[i]);
@@ -710,7 +710,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             Some(CtorKind::Fn) if variant.fields.len() == 1 => {
                 let field = variant.fields.iter().next().expect("a field");
                 let attrs = self.serde_attrs(field.did)?;
-                let field_ty = field.ty(self.tcx, args).skip_normalization();
+                let field_ty = self.field_ty(field, args);
                 // A newtype whose field is skipped holds nothing, and its
                 // field is its default.
                 if attrs.skip_deserializing {

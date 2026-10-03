@@ -652,9 +652,8 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                             .fields
                             .iter()
                             .nth(i)
-                            .expect("a field")
-                            .ty(self.tcx, args)
-                            .skip_normalization(),
+                            .map(|field| self.field_ty(field, args))
+                            .expect("a field"),
                     )
                 })
                 .collect();
@@ -722,7 +721,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .map(|(i, f)| {
                         (
                             Expr::member(value.clone(), variant_field(self.tcx, variant, i)),
-                            f.ty(self.tcx, args).skip_normalization(),
+                            self.field_ty(f, args),
                         )
                     })
                     .collect();
@@ -819,12 +818,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .fields
             .iter()
             .enumerate()
-            .map(|(i, field)| {
-                (
-                    self.project(value.clone(), ty, i),
-                    field.ty(self.tcx, args).skip_normalization(),
-                )
-            })
+            .map(|(i, field)| (self.project(value.clone(), ty, i), self.field_ty(field, args)))
             .collect();
         if attrs.transparent || (variant.ctor_kind() == Some(CtorKind::Fn) && fields.len() == 1) {
             let (value, ty) = self

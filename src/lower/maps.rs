@@ -401,7 +401,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     && self.recognition().derives(self.partial_eq_trait(), ty)
                     && adt
                         .all_fields()
-                        .all(|field| self.compares_by_value(field.ty(self.tcx, args).skip_normalization(), seen))
+                        .all(|field| self.compares_by_value(self.field_ty(field, args), seen))
             }
             _ => false,
         }

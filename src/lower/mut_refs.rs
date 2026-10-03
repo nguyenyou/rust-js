@@ -265,10 +265,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 if let ty::Adt(adt, args) = *part.kind()
                     && !self.is_std(adt.did())
                 {
-                    todo.extend(
-                        adt.all_fields()
-                            .map(|field| field.ty(self.tcx, args).skip_normalization()),
-                    );
+                    todo.extend(adt.all_fields().map(|field| self.field_ty(field, args)));
                 }
             }
         }

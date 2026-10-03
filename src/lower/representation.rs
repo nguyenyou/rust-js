@@ -234,12 +234,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             .fields
             .iter()
             .enumerate()
-            .map(|(i, f)| {
-                (
-                    variant_field(self.tcx, variant, i),
-                    f.ty(self.tcx, args).skip_normalization(),
-                )
-            })
+            .map(|(i, f)| (variant_field(self.tcx, variant, i), self.field_ty(f, args)))
             .collect()
     }
 
@@ -255,7 +250,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 let fields = variant
                     .fields
                     .iter()
-                    .map(|f| (field_key(self.tcx, f), f.ty(self.tcx, args).skip_normalization()));
+                    .map(|f| (field_key(self.tcx, f), self.field_ty(f, args)));
                 match variant.ctor_kind() {
                     None => Shape::Object(fields.collect()),
                     Some(CtorKind::Fn) => Shape::Array(fields.map(|(_, ty)| ty).collect()),

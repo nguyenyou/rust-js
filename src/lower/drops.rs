@@ -204,11 +204,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         .adt_destructor(adt.did())
                         .is_some_and(|d| self.runs_drop(d.did)),
                 );
-                let (parts, recursive) = sum(
-                    self,
-                    &mut adt.all_fields().map(|f| f.ty(self.tcx, args).skip_normalization()),
-                    stack,
-                );
+                let (parts, recursive) = sum(self, &mut adt.all_fields().map(|f| self.field_ty(f, args)), stack);
                 (own + parts, recursive)
             }
             _ => (1, false),
@@ -353,20 +349,14 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 } else if adt.is_struct() {
                     for (i, field) in adt.non_enum_variant().fields.iter().enumerate() {
                         let part = self.project(value.clone(), ty, i);
-                        self.drop_in(part, field.ty(self.tcx, args).skip_normalization(), span, made, out)?;
+                        self.drop_in(part, self.field_ty(field, args), span, made, out)?;
                     }
                 } else if adt.is_enum() {
                     for variant in adt.variants() {
                         let mut fields = Vec::new();
                         for (i, field) in variant.fields.iter().enumerate() {
                             let part = Expr::member(value.clone(), variant_field(self.tcx, variant, i));
-                            self.drop_in(
-                                part,
-                                field.ty(self.tcx, args).skip_normalization(),
-                                span,
-                                made,
-                                &mut fields,
-                            )?;
+                            self.drop_in(part, self.field_ty(field, args), span, made, &mut fields)?;
                         }
                         if fields.is_empty() {
                             continue;
@@ -434,13 +424,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(adt, args) if adt.is_struct() => {
                 for (i, field) in adt.non_enum_variant().fields.iter().enumerate() {
                     let part = self.project(value.clone(), ty, i);
-                    self.drop_owned(
-                        part,
-                        field.ty(self.tcx, args).skip_normalization(),
-                        &under((None, i)),
-                        span,
-                        out,
-                    )?;
+                    self.drop_owned(part, self.field_ty(field, args), &under((None, i)), span, out)?;
                 }
             }
             // `Some(x)` is `x` itself (ADR 0030).
@@ -459,7 +443,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                         let part = Expr::member(value.clone(), variant_field(self.tcx, variant, i));
                         self.drop_owned(
                             part,
-                            field.ty(self.tcx, args).skip_normalization(),
+                            self.field_ty(field, args),
                             &under((Some(index as u32), i)),
                             span,
                             &mut fields,
@@ -590,7 +574,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     };
                     let f = def.fields.iter().nth(field).expect("the field");
                     names.push(f.name.to_string());
-                    at = f.ty(self.tcx, args).skip_normalization();
+                    at = self.field_ty(f, args);
                 }
                 ty::Tuple(items) => {
                     names.push(field.to_string());
@@ -1176,9 +1160,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                     .adt_destructor(adt.did())
                     .is_some_and(|d| self.runs_drop(d.did))
                     && adt.is_struct()
-                    && adt
-                        .all_fields()
-                        .all(|f| !self.has_drops(f.ty(self.tcx, args).skip_normalization()))
+                    && adt.all_fields().all(|f| !self.has_drops(self.field_ty(f, args)))
             }
             _ => false,
         }

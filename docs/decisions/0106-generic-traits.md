@@ -61,6 +61,13 @@ an impl's signature, it's that type.
   bound's, `LabelDisplay`: rustc proves `<L as Labeled>::Label: Display`
   from the trait, so generic code finds it in `L`'s `Labeled`.
 - **A `dyn` of a trait with one says what it is**, `dyn Source<Item = u32>`.
+- **A field of one is the type it stands for where its struct is used:**
+  `Node<i32>`'s `value: K::Value` is an `Option<u32>`, as rustc's own
+  types of places are. A field's type is normalized where it has one, so
+  the struct's shape, what an `Option` of it is, and its clones and drops
+  are the type's own; in generic code it's still a caller's.
+  (Amended: a value of such a struct was an error, `<i32 as Key>::Value`,
+  in 17 rustc tests.)
 - **A value of one has nothing to drop only where nothing does**, the
   crate's own types and a library's: no drop function is given for one, as
   a type parameter's is (ADR 0098). Elsewhere it's an error.

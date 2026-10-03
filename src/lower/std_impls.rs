@@ -68,7 +68,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
                 .is_some_and(|index| self.needs_clone_in(index, seen)),
             ty::Adt(adt, args) if ty.is_box() || !self.is_std(adt.did()) || self.is_known_std(ty) => adt
                 .all_fields()
-                .any(|f| self.needs_clone_in(f.ty(self.tcx, args).skip_normalization(), seen)),
+                .any(|f| self.needs_clone_in(self.field_ty(f, args), seen)),
             // Another std type: `clone_value` says it can't.
             ty::Adt(..) => true,
             _ => false,
@@ -184,10 +184,9 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
     /// Does `outer` hold `target` anywhere inside it?
     fn holds(&self, outer: Ty<'tcx>, target: Ty<'tcx>, seen: &mut Vec<Ty<'tcx>>) -> bool {
         let parts: Vec<Ty<'tcx>> = match outer.kind() {
-            ty::Adt(adt, args) if self.is_rust_adt(adt.did()) => adt
-                .all_fields()
-                .map(|f| f.ty(self.tcx, args).skip_normalization())
-                .collect(),
+            ty::Adt(adt, args) if self.is_rust_adt(adt.did()) => {
+                adt.all_fields().map(|f| self.field_ty(f, args)).collect()
+            }
             ty::Adt(_, args) => args.types().collect(),
             ty::Tuple(tys) => tys.to_vec(),
             ty::Array(item, _) | ty::Slice(item) | ty::Ref(_, item, _) => vec![*item],
@@ -489,7 +488,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(_, args) if self.is_std_wrapper(ty) => args.types().any(|t| self.custom_eq_in(t, seen)),
             ty::Adt(adt, args) => adt
                 .all_fields()
-                .any(|f| self.custom_eq_in(f.ty(self.tcx, args).skip_normalization(), seen)),
+                .any(|f| self.custom_eq_in(self.field_ty(f, args), seen)),
             _ => false,
         };
         seen.pop();

@@ -155,7 +155,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             ty::Adt(adt, args) => {
                 let own = self.tcx.adt_destructor(adt.did());
                 let parts = |walk: &mut Walk<'tcx>| {
-                    let mut fields = adt.all_fields().map(|f| f.ty(self.tcx, args).skip_normalization());
+                    let mut fields = adt.all_fields().map(|f| self.field_ty(f, args));
                     all(self, &mut fields, walk)
                 };
                 match own {

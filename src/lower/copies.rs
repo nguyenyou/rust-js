@@ -281,7 +281,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             }
             ty::Adt(adt, args) => adt
                 .all_fields()
-                .all(|f| self.structural_clone_in(f.ty(self.tcx, args).skip_normalization(), seen)),
+                .all(|f| self.structural_clone_in(self.field_ty(f, args), seen)),
             _ => true,
         };
         seen.pop();

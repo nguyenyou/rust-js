@@ -170,4 +170,12 @@ export const mutations: Mutation[] = [
     replace: "            \"len\" if owner.is_str() => Std::Text(TextOp::ByteLen),",
     tests: ["test/corpus.test.ts", "-t", "string_bytes"],
   },
+  {
+    name: "field-projection-kept",
+    breaks: "a field whose type is `K::Value` stays that projection where its struct is used, and a value of the struct is an error",
+    file: "src/lower/recognition.rs",
+    find: "        if !rustc_middle::ty::TypeVisitableExt::has_aliases(&ty) {\n            return ty;\n        }",
+    replace: "        if true {\n            return ty;\n        }",
+    tests: ["test/corpus.test.ts", "-t", "associated_type_fields"],
+  },
 ];

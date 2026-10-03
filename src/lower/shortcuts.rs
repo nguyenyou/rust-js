@@ -111,6 +111,11 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         self.recognition().is_str_split(ty)
     }
 
+    /// A field's type, given `args`, with its projections normalized.
+    pub(super) fn field_ty(&self, field: &ty::FieldDef, args: ty::GenericArgsRef<'tcx>) -> Ty<'tcx> {
+        self.recognition().field_ty(field, args)
+    }
+
     /// The type an `impl Trait` stands for, which rustc knows after type
     /// checking (ADR 0061); any other type is itself.
     pub(super) fn reveal(&self, ty: Ty<'tcx>) -> Ty<'tcx> {

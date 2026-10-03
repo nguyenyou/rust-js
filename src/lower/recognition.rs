@@ -1093,11 +1093,7 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         }
         // `PhantomData<JsObject>`, then only more markers, for a generic one
         // like `Promise<T>`.
-        let mut fields = adt
-            .non_enum_variant()
-            .fields
-            .iter()
-            .map(|f| f.ty(self.tcx, args).skip_normalization());
+        let mut fields = adt.non_enum_variant().fields.iter().map(|f| self.field_ty(f, args));
         let first = fields.next();
         first.is_some_and(|field| {
             matches!(field.kind(), ty::Adt(marker, marked) if marker.is_phantom_data()
@@ -1573,6 +1569,20 @@ impl<'a, 'tcx> Recognition<'a, 'tcx> {
         matches!(ty.kind(), ty::Adt(adt, _) if self.tcx.crate_name(adt.did().krate) == sym::core
             && self.tcx.item_name(adt.did()).as_str() == "Split"
             && self.tcx.def_path_str(adt.did()).contains("str::"))
+    }
+
+    /// A field's type, of an ADT given `args`: a projection in it, `K::Value`,
+    /// is the type it stands for, `Option<u32>`, where that's known, as in
+    /// rustc's own types of places. Only a type with one is normalized, which
+    /// erases its lifetimes, so one without stays the type it was.
+    pub(super) fn field_ty(&self, field: &ty::FieldDef, args: ty::GenericArgsRef<'tcx>) -> Ty<'tcx> {
+        let ty = field.ty(self.tcx, args).skip_normalization();
+        if !rustc_middle::ty::TypeVisitableExt::has_aliases(&ty) {
+            return ty;
+        }
+        self.tcx
+            .try_normalize_erasing_regions(self.typing_env, ty::Unnormalized::new_wip(ty))
+            .unwrap_or(ty)
     }
 
     pub(super) fn reveal(&self, ty: Ty<'tcx>) -> Ty<'tcx> {

@@ -184,10 +184,7 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
         let found = match (ty.kind(), self.shape(ty)) {
             // An enum with fields (ADR 0033): every variant's fields.
             (ty::Adt(adt, args), _) if adt.is_enum() => {
-                let fields: Vec<Ty<'tcx>> = adt
-                    .all_fields()
-                    .map(|f| f.ty(self.tcx, args).skip_normalization())
-                    .collect();
+                let fields: Vec<Ty<'tcx>> = adt.all_fields().map(|f| self.field_ty(f, args)).collect();
                 fields.into_iter().find_map(|t| self.unsupported_in(t, seen))
             }
             (_, Shape::Object(fields)) => fields.iter().find_map(|&(_, t)| self.unsupported_in(t, seen)),

@@ -55,8 +55,8 @@ export const mutations: Mutation[] = [
     name: "nested-mut-object-fields-unread",
     breaks: "a generic struct's `r: &mut T` field, built of an object by the caller, is read as a cell",
     file: "src/lower/mut_refs.rs",
-    find: "                            .map(|field| field.ty(self.tcx, args).skip_normalization()),\n",
-    replace: "                            .map(|field| field.ty(self.tcx, args).skip_normalization())\n                            .filter(|_| false),\n",
+    find: "                    todo.extend(adt.all_fields().map(|field| self.field_ty(field, args)));",
+    replace: "                    todo.extend(adt.all_fields().map(|field| self.field_ty(field, args)).filter(|_| false));",
     tests: ["test/diagnostics.test.ts","-t","in a struct"],
   },
   {
