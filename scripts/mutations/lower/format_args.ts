@@ -26,4 +26,21 @@ export const mutations: Mutation[] = [
     replace: "            if false && (!made_here || !plain_dyn.is_empty()) {",
     tests: ["test/traits.test.ts", "-t", "kept &dyn Debug"],
   },
+  {
+    name: "format-arg-read-after-change",
+    breaks: "`v.len()` before `v.pop()` shown with `{:?}` is read after it pops, one too short",
+    file: "src/lower/format_args.rs",
+    find: "(!settled && (changed_later || (effects_here && last_named.is_some_and(|last| i < last))))",
+    replace: "(!settled && effects_here && last_named.is_some_and(|last| i < last))",
+    tests: ["test/corpus.test.ts", "-t", "format_args_order"],
+  },
+  {
+    name: "format-arg-const-copied",
+    breaks: "a `const` already made, a call's result, is copied into another before a later argument runs",
+    file: "src/lower/format_args.rs",
+    find: " || made(&values[i]);",
+    replace: ";",
+    tests: ["test/corpus.test.ts", "-t", "generic_traits"],
+    snapshots: true,
+  },
 ];

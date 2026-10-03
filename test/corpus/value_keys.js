@@ -19,10 +19,11 @@ function main() {
   let walls = new $KeyMap();
   walls.set({ x: 1, y: 2 }, "stone");
   walls.set({ x: 1, y: 2 }, "brick");
-  const arg = walls.get({ x: 1, y: 2 });
-  const arg$1 = walls.get({ x: 2, y: 1 });
+  const arg = walls.size;
+  const arg$1 = walls.get({ x: 1, y: 2 });
+  const arg$2 = walls.get({ x: 2, y: 1 });
   console.log(
-    `${walls.size} ${arg == null ? "None" : `Some(${$debugStr(arg)})`} ${arg$1 == null ? "None" : `Some(${$debugStr(arg$1)})`}`,
+    `${arg} ${arg$1 == null ? "None" : `Some(${$debugStr(arg$1)})`} ${arg$2 == null ? "None" : `Some(${$debugStr(arg$2)})`}`,
   );
   console.log(
     `${$unwrap(walls.get({ x: 1, y: 2 }), "key not found")} ${walls.has({ x: 1, y: 2 })}`,
@@ -43,22 +44,23 @@ function main() {
     const current = $orInsert(counts, shape, 0);
     counts.set(shape, (current + 1) >>> 0);
   }
-  const arg$2 = counts.get({ TAG: "Circle", _0: 2 });
-  const arg$3 = counts.get("Dot");
-  const arg$4 = counts.get({ TAG: "Rect", w: 1, h: 3 });
-  const arg$5 = counts.get({ TAG: "Rect", w: 3, h: 1 });
+  const arg$3 = counts.size;
+  const arg$4 = counts.get({ TAG: "Circle", _0: 2 });
+  const arg$5 = counts.get("Dot");
+  const arg$6 = counts.get({ TAG: "Rect", w: 1, h: 3 });
+  const arg$7 = counts.get({ TAG: "Rect", w: 3, h: 1 });
   console.log(
-    `${counts.size} ${arg$2 == null ? "None" : `Some(${arg$2})`} ${arg$3 == null ? "None" : `Some(${arg$3})`} ${arg$4 == null ? "None" : `Some(${arg$4})`} ${arg$5 == null ? "None" : `Some(${arg$5})`}`,
+    `${arg$3} ${arg$4 == null ? "None" : `Some(${arg$4})`} ${arg$5 == null ? "None" : `Some(${arg$5})`} ${arg$6 == null ? "None" : `Some(${arg$6})`} ${arg$7 == null ? "None" : `Some(${arg$7})`}`,
   );
   let byParent = new Map();
   $orInsertWith(byParent, undefined, () => []).push("root");
   $orInsertWith(byParent, 1, () => []).push("leaf");
   $orInsertWith(byParent, undefined, () => []).push("other root");
-  const arg$6 = byParent.get(undefined);
-  const arg$7 = byParent.get(1);
-  const arg$8 = byParent.get(2);
+  const arg$8 = byParent.get(undefined);
+  const arg$9 = byParent.get(1);
+  const arg$10 = byParent.get(2);
   console.log(
-    `${arg$6 == null ? "None" : `Some([${arg$6.map((item) => $debugStr(item)).join(", ")}])`} ${arg$7 == null ? "None" : `Some([${arg$7.map((item) => $debugStr(item)).join(", ")}])`} ${arg$8 == null ? "None" : `Some([${arg$8.map((item) => $debugStr(item)).join(", ")}])`}`,
+    `${arg$8 == null ? "None" : `Some([${arg$8.map((item) => $debugStr(item)).join(", ")}])`} ${arg$9 == null ? "None" : `Some([${arg$9.map((item) => $debugStr(item)).join(", ")}])`} ${arg$10 == null ? "None" : `Some([${arg$10.map((item) => $debugStr(item)).join(", ")}])`}`,
   );
   const ann = { owner: "ann", id: BigInt.asUintN(64, 1n << 40n), at: { x: 0, y: 0 } };
   let balances = new $KeyMap([[{ ...ann, at: { ...ann.at } }, 10]]);
@@ -67,10 +69,10 @@ function main() {
   const id = BigInt.asUintN(64, 1n << 41n);
   const base = { ...ann, at: { ...ann.at } };
   const other = { owner: base.owner, id, at: { ...base.at } };
-  const arg$9 = balances.get(ann);
-  const arg$10 = balances.get(other);
+  const arg$11 = balances.get(ann);
+  const arg$12 = balances.get(other);
   console.log(
-    `${arg$9 == null ? "None" : `Some(${arg$9})`} ${arg$10 == null ? "None" : `Some(${arg$10})`}`,
+    `${arg$11 == null ? "None" : `Some(${arg$11})`} ${arg$12 == null ? "None" : `Some(${arg$12})`}`,
   );
   let p = { x: 5, y: 5 };
   let marks = new $KeySet();
@@ -87,11 +89,11 @@ function main() {
     key.x = (key.x + 100) | 0;
     console.log(`${pointDebug_fmt({ ...key })} ${item[1]}`);
   }
-  const arg$11 = copy.get({ x: 1, y: 2 });
+  const arg$13 = copy.get({ x: 1, y: 2 });
   console.log(
     `{${Array.from(copy)
       .map(([key, value]) => `${pointDebug_fmt(key)}: ${$debugStr(value)}`)
-      .join(", ")}} ${arg$11 == null ? "None" : `Some(${$debugStr(arg$11)})`}`,
+      .join(", ")}} ${arg$13 == null ? "None" : `Some(${$debugStr(arg$13)})`}`,
   );
   const kept = new $KeyMap(
     Array.from(balances).map(([key, value]) => [{ ...key, at: { ...key.at } }, value]),
@@ -110,10 +112,11 @@ function main() {
     [["a", false], 2],
     [["a", true], 3],
   ]);
-  const arg$12 = pairs.get(["a", true]);
-  const arg$13 = pairs.get(["a", false]);
+  const arg$14 = pairs.size;
+  const arg$15 = pairs.get(["a", true]);
+  const arg$16 = pairs.get(["a", false]);
   console.log(
-    `${pairs.size} ${arg$12 == null ? "None" : `Some(${arg$12})`} ${arg$13 == null ? "None" : `Some(${arg$13})`}`,
+    `${arg$14} ${arg$15 == null ? "None" : `Some(${arg$15})`} ${arg$16 == null ? "None" : `Some(${arg$16})`}`,
   );
 }
 

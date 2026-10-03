@@ -257,15 +257,28 @@ impl<'a, 'tcx> FnCx<'a, 'tcx> {
             })
             .collect();
         let last_named = named.iter().rposition(|&n| n);
-        for (i, value) in values.iter_mut().enumerate() {
-            let settled = value.is_constant() || self.is_place_expr(f.values[i]);
-            let spill = if in_order {
-                named[i] || last_named.is_some_and(|last| i < last && value.has_effects() && !settled)
+        // Named first, an argument runs before those ahead of it: one of them
+        // that reads what it changes, `v.len()` before `v.pop()`, is too.
+        let mut spills = vec![false; values.len()];
+        let mut changed_later = false;
+        // A `const` already made, as a call's result is, can't change either.
+        let made = |value: &Expr| {
+            matches!(&value.kind, js::ExprKind::Var(name)
+                if out.iter().any(|s| matches!(&s.kind, StmtKind::Const(made, _) if made == name)))
+        };
+        for i in (0..values.len()).rev() {
+            let settled = values[i].is_constant() || self.is_place_expr(f.values[i]) || made(&values[i]);
+            let effects_here = values[i].has_effects();
+            spills[i] = if in_order {
+                named[i] || (!settled && (changed_later || (effects_here && last_named.is_some_and(|last| i < last))))
             } else if effects {
                 !settled
             } else {
                 named[i]
             };
+            changed_later |= spills[i] && effects_here;
+        }
+        for (value, spill) in values.iter_mut().zip(spills) {
             if spill {
                 let v = std::mem::replace(value, Expr::undefined());
                 *value = self.spill("arg", v, out);

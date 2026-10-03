@@ -100,16 +100,17 @@ function main() {
   );
   const tmp$4 = o != null ? { TAG: "Ok", _0: $someValue(o) } : { TAG: "Err", _0: "e" };
   const value$4 = $someValue(o);
-  const arg$7 = o != null ? $someValue(o) != null : undefined;
+  const arg$7 = o != null && value$4 == null;
+  const arg$8 = o != null ? $someValue(o) != null : undefined;
   console.log(
-    `${tmp$4.TAG === "Ok" ? `Ok(${tmp$4._0 == null ? "None" : `Some(${tmp$4._0})`})` : `Err(${$debugStr(tmp$4._0)})`} ${o != null && value$4 == null} ${arg$7 == null ? "None" : `Some(${arg$7})`}`,
+    `${tmp$4.TAG === "Ok" ? `Ok(${tmp$4._0 == null ? "None" : `Some(${tmp$4._0})`})` : `Err(${$debugStr(tmp$4._0)})`} ${arg$7} ${arg$8 == null ? "None" : `Some(${arg$8})`}`,
   );
   const units$1 = [undefined, undefined];
   const items = units$1.map(() => {});
   const tmp$5 = $someAt(items, items.length - 1);
   const items$1 = [];
-  const arg$8 = $someAt(items$1, items$1.length - 1);
-  console.log(`${tmp$5 == null ? "None" : "Some(())"} ${arg$8 == null ? "None" : "Some(())"}`);
+  const arg$9 = $someAt(items$1, items$1.length - 1);
+  console.log(`${tmp$5 == null ? "None" : "Some(())"} ${arg$9 == null ? "None" : "Some(())"}`);
   let stack = [$some(undefined), undefined];
   while (true) {
     const top = $pop(stack);

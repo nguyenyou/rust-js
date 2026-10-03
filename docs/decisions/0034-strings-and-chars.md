@@ -68,7 +68,10 @@ then used in the string:
   constant, so that it runs once. So is one `{:?}` shows by its parts, as
   it does an `Option`, a `Result` or a tuple: `const arg = first_dup(s);`
   and then `arg == null ? "None" : ..`. Values before it that have effects
-  go in `const`s first, in their order.
+  go in `const`s first, in their order, and so do those that aren't places
+  before one with effects: `v.len()` before `v.pop()` is read before it
+  pops. A `const` made already, a call's result, stays as it is: nothing
+  can change it. (Amended: it was read after, a length too short.)
 - **Values shown in another order than they're written,** when one of them
   has effects: `format!("{1} {0}", tick(&c), tick(&c))`. Each value that
   isn't a place goes in a `const`, in the order Rust runs them.
